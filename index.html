@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mridul Malani | Digital Identity</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --fluid-spacing: clamp(1.5rem, 5vw, 4rem);
+        }
+
+        body {
+            background-color: #050505;
+            color: #ffffff;
+            margin: 0;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .font-cinzel { font-family: 'Cinzel', serif; }
+        .font-playfair { font-family: 'Playfair Display', serif; }
+        .font-montserrat { font-family: 'Montserrat', sans-serif; }
+        
+        /* Hide scrollbar but keep functionality */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        * {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+
+        /* Fluid Typography Hardened for Production */
+        .text-fluid-title {
+            font-size: clamp(3rem, 12vw, 9rem);
+            line-height: 0.85;
+        }
+        .text-fluid-h2 {
+            font-size: clamp(2.25rem, 8vw, 6rem);
+            line-height: 1.1;
+        }
+        .text-fluid-body {
+            font-size: clamp(0.9rem, 2vw, 1.25rem);
+        }
+
+        /* Container standardization */
+        .section-container {
+            width: 100%;
+            max-width: 1440px;
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: var(--fluid-spacing);
+            padding-right: var(--fluid-spacing);
+        }
+
+        .section-padding {
+            padding-top: clamp(4rem, 10vh, 10rem);
+            padding-bottom: clamp(4rem, 10vh, 10rem);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.26"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>
