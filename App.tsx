@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import Background from './components/Background.tsx';
-import Hero from './components/Hero.tsx';
-import Projects from './components/Projects.tsx';
-import VideoStory from './components/VideoStory.tsx';
-import Resume from './components/Resume.tsx';
-import Hobbies from './components/Hobbies.tsx';
-import Contact from './components/Contact.tsx';
-import Navbar from './components/Navbar.tsx';
+import Background from './components/Background';
+import Hero from './components/Hero';
+import Projects from './components/Projects';
+import VideoStory from './components/VideoStory';
+import Resume from './components/Resume';
+import Hobbies from './components/Hobbies';
+import Contact from './components/Contact';
+import Navbar from './components/Navbar';
 import { motion, useScroll, useSpring, AnimatePresence } from 'framer-motion';
 
 const App: React.FC = () => {
@@ -90,7 +90,6 @@ const App: React.FC = () => {
               </section>
             </main>
 
-            {/* Global Aesthetic Overlays */}
             <div className="fixed inset-0 pointer-events-none z-[100] ring-1 ring-white/5" />
             <div className="fixed inset-0 pointer-events-none z-[100] shadow-[inset_0_0_150px_rgba(0,0,0,0.4)]" />
           </motion.div>
