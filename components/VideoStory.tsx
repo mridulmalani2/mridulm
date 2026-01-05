@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 
@@ -6,23 +5,23 @@ const VideoStory: React.FC = () => {
   const VIDEO_EMBED_URL = "https://www.youtube.com/embed/yglApEB7qlk";
 
   return (
-    <div id="video-story" className="relative min-h-screen flex items-center justify-center section-padding bg-neutral-900/10 backdrop-blur-[2px]">
-      <div className="section-container flex flex-col lg:flex-row items-center justify-center gap-16 lg:gap-24">
+    <div className="w-full page-container section-v-padding bg-neutral-900/10 backdrop-blur-sm">
+      <div className="flex flex-col lg:flex-row items-center justify-center gap-16 lg:gap-24">
         
-        {/* Text Content - Robust Hierarchy */}
+        {/* Text Content */}
         <div className="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: "easeOut" }}
             viewport={{ once: true }}
-            className="max-w-xl w-full"
+            className="max-w-xl"
           >
-            <h2 className="font-montserrat text-amber-500 text-[10px] md:text-xs tracking-[0.6em] font-black uppercase mb-8">
+            <h2 className="font-montserrat text-amber-500 text-[10px] md:text-xs tracking-[0.8em] font-black uppercase mb-8">
               CHAPTER III: THE ECHO
             </h2>
             
-            <h3 className="font-playfair text-fluid-h2 italic leading-tight mb-10 text-white/95">
+            <h3 className="font-playfair text-fluid-h2 italic leading-tight mb-8 md:mb-12 text-white">
               My 3-Min AI <br className="hidden md:block"/> HireVue
             </h3>
             
@@ -32,15 +31,15 @@ const VideoStory: React.FC = () => {
           </motion.div>
         </div>
 
-        {/* Video Player - Adaptive Aspect Container */}
+        {/* Video Player - Adaptive Container */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.98 }}
           whileInView={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2, delay: 0.2 }}
           viewport={{ once: true }}
-          className="w-full lg:w-1/2 max-w-2xl xl:max-w-3xl"
+          className="w-full lg:w-1/2 max-w-2xl"
         >
-          <div className="relative aspect-video rounded-[2rem] overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.6)] border border-white/5 group bg-black">
+          <div className="relative aspect-video rounded-[2rem] overflow-hidden shadow-[0_20px_100px_rgba(0,0,0,0.6)] border border-white/5 group bg-black">
             <iframe 
               src={VIDEO_EMBED_URL}
               className="absolute inset-0 w-full h-full"
@@ -49,9 +48,9 @@ const VideoStory: React.FC = () => {
               allowFullScreen
               title="Mridul Malani 3-Min AI HireVue"
             />
-            {/* Cinematic Frame Detail */}
-            <div className="absolute inset-0 pointer-events-none border border-white/10 rounded-[2rem] transition-all duration-1000 group-hover:border-amber-500/20" />
-            <div className="absolute top-0 left-0 w-16 h-16 border-t border-l border-amber-500/30 rounded-tl-[2rem] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
+            {/* Cinematic Frame */}
+            <div className="absolute inset-0 pointer-events-none border border-white/10 rounded-[2rem] transition-colors duration-1000 group-hover:border-amber-500/20" />
+            <div className="absolute top-0 left-0 w-12 h-12 border-t border-l border-amber-500/30 rounded-tl-[2rem] pointer-events-none" />
           </div>
         </motion.div>
         
