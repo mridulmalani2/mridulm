@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CHAPTERS } from '../constants.tsx';
+import { CHAPTERS } from '../constants';
 import { Menu, X } from 'lucide-react';
 
 const Navbar: React.FC = () => {

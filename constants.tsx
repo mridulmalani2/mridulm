@@ -1,13 +1,13 @@
 
-import { ChapterData, ThemeContext } from './types';
+import { ChapterData } from './types';
 
 export const CHAPTERS: ChapterData[] = [
-  { id: 'hero', title: 'Chapter I', subtitle: 'Mridul Malani', theme: ThemeContext.DARK },
-  { id: 'projects', title: 'Chapter II', subtitle: 'Websites and Projects', theme: ThemeContext.DARK },
-  { id: 'video-story', title: 'Chapter III', subtitle: 'My 3-Min AI HireVue', theme: ThemeContext.DARK },
-  { id: 'resume', title: 'Chapter IV', subtitle: 'Curriculum Vitae', theme: ThemeContext.LIGHT },
-  { id: 'hobbies', title: 'Chapter V', subtitle: 'Through My Lens', theme: ThemeContext.WARM },
-  { id: 'contact', title: 'Chapter VI', subtitle: 'Contact Me', theme: ThemeContext.DARK },
+  { id: 'hero', title: 'Welcome', subtitle: 'Mridul Malani' },
+  { id: 'projects', title: 'Featured Work', subtitle: 'Projects' },
+  { id: 'video-story', title: 'Video Introduction', subtitle: 'Quick Introduction' },
+  { id: 'resume', title: 'Curriculum Vitae', subtitle: 'Career Timeline' },
+  { id: 'hobbies', title: 'Through My Lens', subtitle: 'Photography' },
+  { id: 'contact', title: 'Let\'s Connect', subtitle: 'Contact' },
 ];
 
 /**

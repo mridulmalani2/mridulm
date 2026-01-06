@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Project } from '../types.ts';
+import { Project } from '../types';
 
 interface FluidProjectStripProps {
   project: Project;
