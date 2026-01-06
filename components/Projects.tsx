@@ -23,13 +23,13 @@ const Projects: React.FC = () => {
 
   if (isLoading) {
     return (
-      <section id="projects" className="relative h-screen bg-black flex items-center justify-center">
+      <div className="relative h-screen bg-black flex items-center justify-center">
         <div className="flex gap-4">
           {[1, 2, 3].map(i => (
             <div key={i} className="w-64 h-96 bg-white/5 animate-pulse rounded-2xl" />
           ))}
         </div>
-      </section>
+      </div>
     );
   }
 
