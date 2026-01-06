@@ -45,7 +45,7 @@ const Navbar: React.FC = () => {
               <button
                 key={chapter.id}
                 onClick={() => scrollToSection(chapter.id)}
-                className="px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-[0.2em] text-white/30 hover:text-white hover:bg-white/10 transition-all uppercase whitespace-nowrap"
+                className="px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all uppercase whitespace-nowrap"
               >
                 {chapter.subtitle}
               </button>
@@ -55,10 +55,11 @@ const Navbar: React.FC = () => {
 
         {/* Mobile Toggle */}
         <div className="lg:hidden relative z-[170]">
-          <button 
+          <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-3 text-white/50 hover:text-white transition-all active:scale-90"
-            aria-label="Toggle Menu"
+            className="p-3 text-white/60 hover:text-white transition-all active:scale-90 min-w-[48px] min-h-[48px] flex items-center justify-center"
+            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={isMobileMenuOpen}
           >
             {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
           </button>
@@ -83,14 +84,14 @@ const Navbar: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.08 }}
                   onClick={() => scrollToSection(chapter.id)}
-                  className="font-montserrat text-lg font-black tracking-[0.5em] text-white/30 hover:text-amber-500 transition-all uppercase w-full py-4 border-b border-white/5 text-center"
+                  className="font-montserrat text-lg font-black tracking-widest text-white/60 hover:text-amber-500 transition-all uppercase w-full py-4 border-b border-white/5 text-center min-h-[48px]"
                 >
                   {chapter.subtitle}
                 </motion.button>
               ))}
             </div>
             <div className="absolute bottom-12 text-center w-full">
-               <p className="font-montserrat text-[9px] tracking-[0.5em] text-white/10 uppercase font-black">Digital Portfolio • 2025</p>
+              <p className="font-montserrat text-[9px] tracking-widest text-white/40 uppercase font-black">Mridul Malani • Portfolio</p>
             </div>
           </motion.div>
         )}
