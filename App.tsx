@@ -7,6 +7,7 @@ import Resume from './components/Resume';
 import Hobbies from './components/Hobbies';
 import Contact from './components/Contact';
 import Navbar from './components/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
 import { motion, useScroll, useSpring } from 'framer-motion';
 
 const App: React.FC = () => {
@@ -50,19 +51,27 @@ const App: React.FC = () => {
         </section>
 
         <section id="projects" className="min-h-screen flex flex-col justify-center bg-black/40">
-          <Projects />
+          <ErrorBoundary>
+            <Projects />
+          </ErrorBoundary>
         </section>
 
         <section id="video-story" className="min-h-screen flex items-center justify-center">
-          <VideoStory />
+          <ErrorBoundary>
+            <VideoStory />
+          </ErrorBoundary>
         </section>
 
         <section id="resume" className="min-h-screen flex flex-col justify-center">
-          <Resume />
+          <ErrorBoundary>
+            <Resume />
+          </ErrorBoundary>
         </section>
 
         <section id="hobbies" className="min-h-screen flex flex-col justify-center">
-          <Hobbies />
+          <ErrorBoundary>
+            <Hobbies />
+          </ErrorBoundary>
         </section>
       </main>
 
