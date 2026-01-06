@@ -40,6 +40,8 @@ const FluidProjectStrip: React.FC<FluidProjectStripProps> = ({ project, isHovere
       <motion.img
         src={displayImage}
         alt={project.name}
+        loading="lazy"
+        decoding="async"
         className="absolute inset-0 w-full h-full object-cover"
         animate={{ 
           scale: isHovered ? 1.03 : 1,
