@@ -15,15 +15,8 @@ export interface Album {
   footerText: string;
 }
 
-export enum ThemeContext {
-  DARK = 'dark',
-  LIGHT = 'light',
-  WARM = 'warm'
-}
-
 export interface ChapterData {
   id: string;
   title: string;
   subtitle: string;
-  theme: ThemeContext;
 }

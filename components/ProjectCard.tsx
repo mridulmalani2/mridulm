@@ -27,9 +27,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index }) => {
       className="relative group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm aspect-[4/5]"
     >
       {/* Background Image - Grayscale removed per user request */}
-      <img 
-        src={project.imageUrl} 
-        alt={project.name} 
+      <img
+        src={project.imageUrl}
+        alt={project.name}
+        loading="lazy"
+        decoding="async"
         className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-1000 group-hover:scale-110"
       />
       

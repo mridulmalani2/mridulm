@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Project } from '../types.ts';
+import { Project } from '../types';
 
 interface FluidProjectStripProps {
   project: Project;
@@ -29,7 +29,9 @@ const FluidProjectStrip: React.FC<FluidProjectStripProps> = ({ project, isHovere
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       onClick={handleClick}
-      animate={{ 
+      role="article"
+      aria-label={`Project: ${project.name}`}
+      animate={{
         flex: isHovered ? 2.8 : 1,
       }}
       transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1.0] }}
@@ -40,6 +42,8 @@ const FluidProjectStrip: React.FC<FluidProjectStripProps> = ({ project, isHovere
       <motion.img
         src={displayImage}
         alt={project.name}
+        loading="lazy"
+        decoding="async"
         className="absolute inset-0 w-full h-full object-cover"
         animate={{ 
           scale: isHovered ? 1.03 : 1,
@@ -77,11 +81,11 @@ const FluidProjectStrip: React.FC<FluidProjectStripProps> = ({ project, isHovere
                 scale: isHovered ? 1 : 0.8,
                 paddingLeft: isHovered ? "2.5rem" : "1.5rem",
                 paddingRight: isHovered ? "2.5rem" : "1.5rem",
-                opacity: isHovered ? 1 : 0.3
+                opacity: isHovered ? 1 : 0.5
               }}
-              className="bg-white text-black font-montserrat text-[10px] tracking-[0.5em] font-black uppercase py-3 border border-white transition-all duration-300"
+              className="bg-white text-black font-montserrat text-[10px] tracking-widest font-black uppercase py-3 border border-white transition-all duration-300 min-h-[48px]"
             >
-              ENTER
+              View Project →
             </motion.button>
           </div>
         </motion.div>

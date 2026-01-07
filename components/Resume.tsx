@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, useScroll } from 'framer-motion';
-import { MapPin, Calendar, Briefcase, GraduationCap, ArrowRight, Zap } from 'lucide-react';
+import { MapPin, Calendar, Briefcase, GraduationCap, ArrowRight, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface TimelineEvent {
   company: string;
@@ -90,7 +90,10 @@ const timelineData: TimelineEvent[] = ([
 
 const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event, index }) => {
   return (
-    <div className="flex-shrink-0 w-[85vw] sm:w-[420px] md:w-[480px] px-4 snap-center relative group">
+    <article
+      className="flex-shrink-0 w-[85vw] sm:w-[420px] md:w-[480px] px-4 snap-center relative group"
+      aria-label={`${event.company} - ${event.role}`}
+    >
       {/* Horizontal Connector */}
       <div className="absolute top-[50%] left-0 w-full h-px bg-white/5 group-hover:bg-amber-500/20 transition-all duration-700 pointer-events-none" />
       <div className="absolute top-[50%] left-0 -translate-y-1/2 w-4 h-4 rounded-full bg-black border border-white/20 z-20 group-hover:bg-amber-500 group-hover:scale-125 transition-all duration-500 pointer-events-none" />
@@ -103,10 +106,10 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         className="relative bg-neutral-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 md:p-12 flex flex-col gap-8 hover:bg-neutral-800/60 hover:border-amber-500/20 transition-all duration-500 h-full min-h-[480px] shadow-2xl"
       >
         <div className="flex justify-between items-start">
-          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-[0.2em] uppercase border ${event.type === 'education' ? 'text-purple-300 border-purple-500/20 bg-purple-500/5' : 'text-amber-500 border-amber-500/20 bg-amber-500/5'}`}>
+          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border ${event.type === 'education' ? 'text-purple-300 border-purple-500/20 bg-purple-500/5' : 'text-amber-500 border-amber-500/20 bg-amber-500/5'}`}>
             {event.type}
           </span>
-          <div className="text-white/10 group-hover:text-amber-500/40 transition-colors">
+          <div className="text-white/40 group-hover:text-amber-500/60 transition-colors" aria-hidden="true">
             {event.type === 'education' ? <GraduationCap size={22} /> : <Briefcase size={22} />}
           </div>
         </div>
@@ -115,8 +118,8 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
           <h4 className="font-playfair text-3xl sm:text-4xl text-white italic leading-tight">
             {event.company}
           </h4>
-          <p className="font-montserrat text-amber-500 text-[10px] font-black tracking-[0.4em] uppercase flex items-center gap-3">
-            <Zap size={12} className="opacity-50" />
+          <p className="font-montserrat text-amber-500 text-[10px] font-black tracking-widest uppercase flex items-center gap-3">
+            <Zap size={12} className="opacity-60" aria-hidden="true" />
             {event.role}
           </p>
         </div>
@@ -124,8 +127,8 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         <div className="flex-1 space-y-5 pt-8 border-t border-white/5">
           {event.description.map((desc, i) => (
             <div key={i} className="flex gap-4">
-              <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-amber-500/30 shrink-0" />
-              <p className="text-white/50 font-montserrat text-xs sm:text-sm leading-relaxed font-normal">
+              <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-amber-500/50 shrink-0" aria-hidden="true" />
+              <p className="text-white/60 font-montserrat text-xs sm:text-sm leading-relaxed font-normal">
                 {desc}
               </p>
             </div>
@@ -133,24 +136,32 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         </div>
 
         <div className="pt-8 border-t border-white/5 grid grid-cols-2 gap-4 mt-auto">
-          <div className="flex items-center gap-3 text-white/20 text-[10px] font-black tracking-widest uppercase">
-            <MapPin size={14} className="text-amber-500/30" />
+          <div className="flex items-center gap-3 text-white/50 text-[10px] font-black tracking-widest uppercase">
+            <MapPin size={14} className="text-amber-500/50" aria-hidden="true" />
             {event.location}
           </div>
-          <div className="flex items-center gap-3 text-white/20 text-[10px] font-black tracking-widest uppercase justify-end">
-            <Calendar size={14} className="text-amber-500/30" />
+          <div className="flex items-center gap-3 text-white/50 text-[10px] font-black tracking-widest uppercase justify-end">
+            <Calendar size={14} className="text-amber-500/50" aria-hidden="true" />
             {event.period}
           </div>
         </div>
       </motion.div>
-    </div>
+    </article>
   );
 };
 
 const Resume: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollXProgress } = useScroll({ container: containerRef });
-  
+
+  const scrollLeft = () => {
+    containerRef.current?.scrollBy({ left: -400, behavior: 'smooth' });
+  };
+
+  const scrollRight = () => {
+    containerRef.current?.scrollBy({ left: 400, behavior: 'smooth' });
+  };
+
   return (
     <div className="w-full section-v-padding flex flex-col justify-center overflow-hidden bg-black">
       <div className="page-container mb-16 md:mb-24 text-center">
@@ -161,8 +172,8 @@ const Resume: React.FC = () => {
           viewport={{ once: true }}
           className="space-y-8"
         >
-          <h2 className="font-montserrat text-amber-500 text-[10px] tracking-[1em] font-black uppercase inline-block border-b border-amber-500/20 pb-4">
-            Curriculum Vitae
+          <h2 className="font-montserrat text-amber-500 text-[10px] tracking-widest font-black uppercase inline-block border-b border-amber-500/20 pb-4">
+            Career Timeline
           </h2>
           <h3 className="font-playfair text-fluid-h2 italic text-white leading-tight">
             Education & <br className="hidden sm:block"/> Professional Journey
@@ -173,20 +184,40 @@ const Resume: React.FC = () => {
       <div className="relative">
         {/* Timeline Header - Adaptive Progress */}
         <div className="page-container mb-12 md:mb-16 flex items-center gap-8 md:gap-12">
-          <span className="font-montserrat text-[10px] font-black tracking-[0.5em] text-amber-500 uppercase shrink-0">PRESENT</span>
-          <div className="flex-1 h-px bg-white/5 relative overflow-hidden">
-            <motion.div 
-              style={{ scaleX: scrollXProgress }} 
+          <span className="font-montserrat text-[10px] font-black tracking-widest text-amber-500 uppercase shrink-0">PRESENT</span>
+          <div className="flex-1 h-px bg-white/5 relative overflow-hidden" role="progressbar" aria-label="Timeline scroll progress">
+            <motion.div
+              style={{ scaleX: scrollXProgress }}
               className="absolute inset-0 h-full bg-amber-500 origin-left"
             />
           </div>
-          <span className="font-montserrat text-[10px] font-black tracking-[0.5em] text-white/20 uppercase shrink-0">PAST</span>
+          <span className="font-montserrat text-[10px] font-black tracking-widest text-white/40 uppercase shrink-0">PAST</span>
         </div>
 
+        {/* Navigation Arrows - Desktop */}
+        <button
+          onClick={scrollLeft}
+          className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-black/80 border border-white/10 rounded-full items-center justify-center hover:border-amber-500 transition-colors"
+          aria-label="Scroll timeline left"
+        >
+          <ChevronLeft className="text-white" size={20} />
+        </button>
+
+        <button
+          onClick={scrollRight}
+          className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-black/80 border border-white/10 rounded-full items-center justify-center hover:border-amber-500 transition-colors"
+          aria-label="Scroll timeline right"
+        >
+          <ChevronRight className="text-white" size={20} />
+        </button>
+
         {/* Scrollable Timeline */}
-        <div 
+        <div
           ref={containerRef}
-          className="flex overflow-x-auto pb-16 pt-10 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing"
+          role="region"
+          aria-label="Career timeline"
+          tabIndex={0}
+          className="flex overflow-x-auto pb-16 pt-10 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-amber-500"
         >
           {timelineData.map((event, i) => (
             <TimelineCard key={`${event.company}-${i}`} event={event} index={i} />
@@ -195,9 +226,9 @@ const Resume: React.FC = () => {
         </div>
 
         <div className="mt-8 flex justify-center lg:hidden">
-          <div className="flex items-center gap-4 bg-white/5 px-6 py-2.5 rounded-full border border-white/10 opacity-60">
-             <span className="font-montserrat text-[8px] tracking-[0.5em] text-white/60 uppercase font-black">Scroll to explore</span>
-             <ArrowRight size={14} className="text-amber-500" />
+          <div className="flex items-center gap-4 bg-white/5 px-6 py-2.5 rounded-full border border-white/10">
+            <span className="font-montserrat text-[8px] tracking-widest text-white/60 uppercase font-black">Swipe to explore</span>
+            <ArrowRight size={14} className="text-amber-500" />
           </div>
         </div>
       </div>
