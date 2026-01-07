@@ -24,31 +24,34 @@ const Navbar: React.FC = () => {
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isScrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-8 md:py-12'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isScrolled ? 'py-4 bg-black/60 backdrop-blur-2xl border-b border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)]' : 'py-8 md:py-12'}`}>
       <div className="page-container flex justify-between items-center">
         {/* Logo */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
+          whileHover={{ scale: 1.02 }}
           className="cursor-pointer relative z-[170]"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         >
-          <span className="font-playfair text-2xl md:text-3xl italic font-bold tracking-tighter text-white/90">
+          <span className="font-playfair text-2xl md:text-3xl italic font-bold tracking-tighter text-white/90 drop-shadow-lg">
             Mridul <span className="text-amber-500">Malani</span>
           </span>
         </motion.div>
 
         {/* Desktop Navigation */}
         <div className="hidden lg:flex items-center">
-          <div className={`flex gap-1 p-1.5 rounded-full transition-all duration-700 ${isScrolled ? 'bg-white/5 border border-white/10 shadow-lg' : 'bg-transparent'}`}>
+          <div className={`flex gap-1 p-1.5 rounded-full transition-all duration-700 ${isScrolled ? 'bg-white/5 border border-white/10 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.3)]' : 'bg-transparent'}`}>
             {CHAPTERS.map((chapter) => (
-              <button
+              <motion.button
                 key={chapter.id}
                 onClick={() => scrollToSection(chapter.id)}
-                className="px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-widest text-white/60 hover:text-white hover:bg-white/10 transition-all uppercase whitespace-nowrap"
+                whileHover={{ scale: 1.05, backgroundColor: 'rgba(245, 158, 11, 0.1)' }}
+                whileTap={{ scale: 0.98 }}
+                className="px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-widest text-white/60 hover:text-amber-500 transition-all uppercase whitespace-nowrap"
               >
                 {chapter.subtitle}
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>

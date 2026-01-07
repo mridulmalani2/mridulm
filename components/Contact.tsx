@@ -21,24 +21,28 @@ const Contact: React.FC = () => {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-8 md:gap-12 pt-12">
-          <a
+          <motion.a
             href="https://in.linkedin.com/in/mridulmalani"
             target="_blank"
             rel="noopener noreferrer"
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.98 }}
             className="flex items-center gap-4 group border-b border-white/10 pb-2 hover:border-amber-500 transition-all duration-500 min-h-[48px]"
             aria-label="Connect on LinkedIn"
           >
             <Linkedin size={20} className="text-white/60 group-hover:text-amber-500 transition-colors" />
             <span className="font-montserrat text-[10px] tracking-widest font-black uppercase text-white/60 group-hover:text-white">LINKEDIN</span>
-          </a>
-          <a
+          </motion.a>
+          <motion.a
             href="mailto:mridul.malani@alumni.ashoka.edu.in"
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.98 }}
             className="flex items-center gap-4 group border-b border-white/10 pb-2 hover:border-amber-500 transition-all duration-500 min-h-[48px]"
             aria-label="Send email"
           >
             <Mail size={20} className="text-white/60 group-hover:text-amber-500 transition-colors" />
             <span className="font-montserrat text-[10px] tracking-widest font-black uppercase text-white/60 group-hover:text-white">EMAIL ME</span>
-          </a>
+          </motion.a>
         </div>
       </motion.div>
 

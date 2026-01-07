@@ -103,7 +103,12 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.1, duration: 0.8 }}
         viewport={{ once: true }}
-        className="relative bg-neutral-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 md:p-12 flex flex-col gap-8 hover:bg-neutral-800/60 hover:border-amber-500/20 transition-all duration-500 h-full min-h-[480px] shadow-2xl"
+        whileHover={{
+          y: -8,
+          boxShadow: '0 20px 60px rgba(245, 158, 11, 0.15)',
+          borderColor: 'rgba(245, 158, 11, 0.3)'
+        }}
+        className="relative bg-neutral-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 md:p-12 flex flex-col gap-8 hover:bg-neutral-800/60 transition-all duration-500 h-full min-h-[480px] shadow-2xl"
       >
         <div className="flex justify-between items-start">
           <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border ${event.type === 'education' ? 'text-purple-300 border-purple-500/20 bg-purple-500/5' : 'text-amber-500 border-amber-500/20 bg-amber-500/5'}`}>

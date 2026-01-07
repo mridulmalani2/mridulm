@@ -2,12 +2,15 @@ import React from 'react';
 import Background from './components/Background';
 import Hero from './components/Hero';
 import Projects from './components/Projects';
+import DashboardPreview from './components/DashboardPreview';
 import VideoStory from './components/VideoStory';
 import Resume from './components/Resume';
 import Hobbies from './components/Hobbies';
 import Contact from './components/Contact';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
+import CursorGlow from './components/CursorGlow';
+import AnimatedOrbs from './components/AnimatedOrbs';
 import { motion, useScroll, useSpring } from 'framer-motion';
 
 const App: React.FC = () => {
@@ -34,11 +37,16 @@ const App: React.FC = () => {
       </a>
 
       <Background />
+      <AnimatedOrbs />
+      <CursorGlow />
 
-      {/* Progress bar */}
+      {/* Enhanced Progress bar with glow */}
       <motion.div
-        className="fixed top-0 left-0 right-0 h-0.5 bg-amber-500 origin-left z-[150]"
-        style={{ scaleX }}
+        className="fixed top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 origin-left z-[150]"
+        style={{
+          scaleX,
+          boxShadow: '0 0 10px rgba(245, 158, 11, 0.5)'
+        }}
       />
 
       <header>
@@ -53,6 +61,12 @@ const App: React.FC = () => {
         <section id="projects" className="min-h-screen flex flex-col justify-center bg-black/40">
           <ErrorBoundary>
             <Projects />
+          </ErrorBoundary>
+        </section>
+
+        <section id="dashboard" className="min-h-screen flex items-center justify-center bg-black/20">
+          <ErrorBoundary>
+            <DashboardPreview />
           </ErrorBoundary>
         </section>
 
