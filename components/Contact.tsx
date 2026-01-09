@@ -17,7 +17,7 @@ const Contact: React.FC = () => {
         <h2 className="font-montserrat text-amber-500/60 tracking-widest text-[10px] md:text-xs font-black uppercase">LET'S CONNECT</h2>
         <h3 className="font-playfair text-fluid-h2 italic text-white/95">Thank You!</h3>
 
-        <p className="text-base md:text-2xl text-white/60 font-normal leading-relaxed tracking-tight">
+        <p className="font-playfair italic text-base md:text-2xl text-white/60 leading-relaxed">
           Interested in working together or just want to say hello?
           <br className="hidden sm:block" /> I'd love to hear from you.
         </p>
