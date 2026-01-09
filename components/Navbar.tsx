@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { CHAPTERS } from '../constants';
 import { Menu, X } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,10 +19,35 @@ const Navbar: React.FC = () => {
   }, []);
 
   const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+    // If we're not on the home page, navigate there first
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Wait for navigation to complete, then scroll
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
     }
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleLogoClick = () => {
+    if (location.pathname === '/') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleFinanceXClick = () => {
+    navigate('/financex');
     setIsMobileMenuOpen(false);
   };
 
@@ -27,11 +55,11 @@ const Navbar: React.FC = () => {
     <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isScrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-8 md:py-12'}`}>
       <div className="page-container flex justify-between items-center">
         {/* Logo */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           className="cursor-pointer relative z-[170]"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={handleLogoClick}
         >
           <span className="font-playfair text-2xl md:text-3xl font-bold text-white">
             Mridul <span className="text-amber-500">Malani</span>
@@ -39,7 +67,7 @@ const Navbar: React.FC = () => {
         </motion.div>
 
         {/* Desktop Navigation */}
-        <div className="hidden lg:flex items-center">
+        <div className="hidden lg:flex items-center gap-3">
           <div className={`flex gap-1 p-1.5 rounded-full transition-all duration-700 ${isScrolled ? 'bg-white/5 border border-white/10 shadow-lg' : 'bg-transparent'}`}>
             {CHAPTERS.map((chapter) => (
               <button
@@ -51,6 +79,17 @@ const Navbar: React.FC = () => {
               </button>
             ))}
           </div>
+          {/* FinanceX Button */}
+          <button
+            onClick={handleFinanceXClick}
+            className={`px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-widest transition-all uppercase whitespace-nowrap ${
+              location.pathname === '/financex'
+                ? 'bg-amber-500 text-black'
+                : 'bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            FINANCEX
+          </button>
         </div>
 
         {/* Mobile Toggle */}
@@ -89,6 +128,17 @@ const Navbar: React.FC = () => {
                   {chapter.subtitle}
                 </motion.button>
               ))}
+              <motion.button
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + CHAPTERS.length * 0.08 }}
+                onClick={handleFinanceXClick}
+                className={`font-montserrat text-lg font-black tracking-widest transition-all uppercase w-full py-4 border-b border-white/5 text-center min-h-[48px] ${
+                  location.pathname === '/financex' ? 'text-amber-500' : 'text-white/60 hover:text-amber-500'
+                }`}
+              >
+                FINANCEX
+              </motion.button>
             </div>
             <div className="absolute bottom-12 text-center w-full">
               <p className="font-montserrat text-[9px] tracking-widest text-white/40 uppercase font-black">Mridul Malani • Portfolio</p>
