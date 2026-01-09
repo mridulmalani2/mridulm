@@ -29,7 +29,7 @@ const Hero: React.FC = () => {
 
         {/* Value Proposition - Immediately Clear */}
         <p className="font-montserrat text-sm md:text-base tracking-widest text-amber-500/80 uppercase mb-6">
-          HEC Paris MiM '27 • Corporate Finance and Private Markets
+          HEC Paris MiM '27/28 • Corporate Finance and Private Markets
         </p>
 
         <p className="font-playfair italic text-white/70 text-base md:text-lg max-w-xl leading-relaxed mb-10">
