@@ -589,26 +589,6 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </motion.div>
 
-      {/* Infographic Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        className="mb-12"
-      >
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 overflow-hidden">
-          <img
-            src="/financex-infographic.png"
-            alt="FinanceX workflow infographic"
-            className="w-full h-auto rounded-xl"
-            onError={(e) => {
-              // Hide image if it doesn't exist
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        </div>
-      </motion.div>
-
       {/* Video Section */}
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -644,10 +624,10 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         >
           <div>
             <h2 className="text-2xl md:text-3xl font-playfair italic text-white mb-2">
-              Help improve the system (optional)
+              Help improve the system
             </h2>
             <p className="font-montserrat text-white/60">
-              If you'd like to contribute, one of the most helpful things right now is clean financial data.
+              If you'd like to contribute, the most helpful thing right now is data.
             </p>
           </div>
           <span className="text-amber-500 text-2xl ml-4">
@@ -663,65 +643,87 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               transition={{ duration: 0.5 }}
               className="overflow-hidden"
             >
-              <div className="bg-white/5 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl p-6 md:p-8 mt-[-1px] space-y-6">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl p-6 md:p-8 mt-[-1px] space-y-8">
+                {/* Data Point 1 - Network */}
                 <div>
-                  <h3 className="font-montserrat font-bold text-white text-lg mb-3">
-                    OCR Tool Link
+                  <h3 className="font-montserrat font-bold text-white text-xl mb-4">
+                    Data Point 1 - Network
                   </h3>
-                  <a
-                    href="https://chatgpt.com/g/g-wETMBcESv-ocr"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-montserrat text-amber-500 hover:text-amber-400 transition-colors break-all"
-                  >
-                    https://chatgpt.com/g/g-wETMBcESv-ocr
-                  </a>
+                  <p className="font-montserrat text-white/80 leading-relaxed">
+                    If you know someone with coding experience, especially someone who also understands finance, a referral would mean a lot.
+                  </p>
                 </div>
 
+                {/* Data Point 2 - The Three Financial Statements */}
                 <div>
-                  <h3 className="font-montserrat font-bold text-white text-lg mb-3">
-                    Prompt to use
+                  <h3 className="font-montserrat font-bold text-white text-xl mb-4">
+                    Data Point 2 - The Three Financial Statements (from Annual Statements and 10-Ks)
                   </h3>
-                  <div className="bg-black/40 border border-white/10 rounded-xl p-4 font-montserrat text-sm text-white/80">
-                    <p className="mb-4">I have a PDF of financial statements. Please extract the data into 3 separate CSV blocks:</p>
-                    <ol className="list-decimal list-inside space-y-2 mb-4">
-                      <li>Income Statement</li>
-                      <li>Balance Sheet</li>
-                      <li>Cash Flow Statement</li>
-                    </ol>
-                    <p className="mb-2">Formatting Rules:</p>
-                    <ul className="list-disc list-inside space-y-1 mb-4 ml-4">
-                      <li>Column A must contain the Line Item Labels.</li>
-                      <li>Row 1 must contain the Dates (e.g., '2023', 'FY24').</li>
-                      <li>Do not merge cells. Ensure numbers are clean (no currency symbols).</li>
-                      <li>If a statement spans multiple pages, merge them into one CSV block.</li>
-                    </ul>
-                  </div>
-                </div>
+                  <p className="font-montserrat text-white/80 leading-relaxed mb-4">
+                    You can help by cleaning financial statements using a free OCR tool and sending them to me. Even small contributions help me improve the system.
+                  </p>
 
-                <div>
-                  <h3 className="font-montserrat font-bold text-white text-lg mb-3">
-                    Email Instructions (CRITICAL)
-                  </h3>
-                  <div className="space-y-3 font-montserrat text-white/80">
-                    <p>Send the output to: <span className="text-amber-500 font-semibold">mridulgptid@gmail.com</span></p>
-                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
-                      <p className="font-semibold text-white mb-2">Email rules:</p>
-                      <ul className="list-disc list-inside space-y-1 ml-4">
-                        <li>Subject must be: <span className="font-montserrat bg-black/40 px-2 py-1 rounded">Data</span></li>
-                        <li>Email body must be completely empty</li>
-                        <li>Attach ONE Excel file only</li>
-                        <li>The Excel file must contain EXACTLY three tabs named:
-                          <ul className="list-circle list-inside ml-6 mt-1">
-                            <li className="font-montserrat">Income Statement</li>
-                            <li className="font-montserrat">Balance Sheet</li>
-                            <li className="font-montserrat">Cashflow Statement</li>
+                  <div className="space-y-6 mt-6">
+                    <div>
+                      <h4 className="font-montserrat font-bold text-white text-lg mb-3">
+                        OCR Tool Link
+                      </h4>
+                      <a
+                        href="https://chatgpt.com/g/g-wETMBcESv-ocr"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-montserrat text-amber-500 hover:text-amber-400 transition-colors break-all"
+                      >
+                        https://chatgpt.com/g/g-wETMBcESv-ocr
+                      </a>
+                    </div>
+
+                    <div>
+                      <h4 className="font-montserrat font-bold text-white text-lg mb-3">
+                        Prompt to use
+                      </h4>
+                      <div className="bg-black/40 border border-white/10 rounded-xl p-4 font-montserrat text-sm text-white/80">
+                        <p className="mb-4">I have a PDF of financial statements. Please extract the data into 3 separate CSV blocks:</p>
+                        <ol className="list-decimal list-inside space-y-2 mb-4">
+                          <li>Income Statement</li>
+                          <li>Balance Sheet</li>
+                          <li>Cash Flow Statement</li>
+                        </ol>
+                        <p className="mb-2">Formatting Rules:</p>
+                        <ul className="list-disc list-inside space-y-1 mb-4 ml-4">
+                          <li>Column A must contain the Line Item Labels.</li>
+                          <li>Row 1 must contain the Dates (e.g., '2023', 'FY24').</li>
+                          <li>Do not merge cells. Ensure numbers are clean (no currency symbols).</li>
+                          <li>If a statement spans multiple pages, merge them into one CSV block.</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-montserrat font-bold text-white text-lg mb-3">
+                        Email Instructions (CRITICAL)
+                      </h4>
+                      <div className="space-y-3 font-montserrat text-white/80">
+                        <p>Send the output to: <span className="text-amber-500 font-semibold">mridulgptid@gmail.com</span></p>
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                          <p className="font-semibold text-white mb-2">Email rules:</p>
+                          <ul className="list-disc list-inside space-y-1 ml-4">
+                            <li>Subject must be: <span className="font-montserrat bg-black/40 px-2 py-1 rounded">Data</span></li>
+                            <li>Email body must be completely empty</li>
+                            <li>Attach ONE Excel file only</li>
+                            <li>The Excel file must contain EXACTLY three tabs named:
+                              <ul className="list-circle list-inside ml-6 mt-1">
+                                <li className="font-montserrat">Income Statement</li>
+                                <li className="font-montserrat">Balance Sheet</li>
+                                <li className="font-montserrat">Cashflow Statement</li>
+                              </ul>
+                            </li>
                           </ul>
-                        </li>
-                      </ul>
-                      <p className="mt-3 text-sm italic">
-                        Formatting and naming must be precise. Submissions that do not follow these rules cannot be used.
-                      </p>
+                          <p className="mt-3 text-sm italic">
+                            Formatting and naming must be precise. Submissions that do not follow these rules cannot be used.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
