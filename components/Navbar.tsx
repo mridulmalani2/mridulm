@@ -33,8 +33,8 @@ const Navbar: React.FC = () => {
           className="cursor-pointer relative z-[170]"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         >
-          <span className="font-playfair text-2xl md:text-3xl italic font-bold tracking-tighter text-white/90">
-            Mridul <span className="text-amber-500">Malani</span>
+          <span className="font-playfair text-2xl md:text-3xl font-bold text-white">
+            Me
           </span>
         </motion.div>
 
