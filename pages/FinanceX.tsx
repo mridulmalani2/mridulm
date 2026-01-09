@@ -44,7 +44,7 @@ const FinanceX: React.FC = () => {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
-                className="text-fluid-body text-white/60 max-w-3xl mx-auto px-4"
+                className="text-fluid-body font-montserrat text-white/60 max-w-3xl mx-auto px-4"
               >
                 A hands-on systems project in financial data standardization and analyst-aligned automation.
               </motion.p>
@@ -65,7 +65,7 @@ const FinanceX: React.FC = () => {
                   <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
                     Explore FinanceX
                   </h2>
-                  <p className="text-base md:text-lg text-white/60 leading-relaxed">
+                  <p className="text-base md:text-lg font-montserrat text-white/60 leading-relaxed">
                     Learn what it does, how it works, and how you can use or contribute.
                   </p>
                 </div>
@@ -85,7 +85,7 @@ const FinanceX: React.FC = () => {
                   <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
                     For Finance Professionals
                   </h2>
-                  <p className="text-base md:text-lg text-white/60 leading-relaxed">
+                  <p className="text-base md:text-lg font-montserrat text-white/60 leading-relaxed">
                     System design, analytical philosophy, and practical applications.
                   </p>
                 </div>
@@ -126,10 +126,10 @@ const FinanceX: React.FC = () => {
               </h3>
               <div className="space-y-4">
                 <div>
-                  <p className="text-white/60 mb-2">Email:</p>
+                  <p className="font-montserrat text-white/60 mb-2">Email:</p>
                   <a
                     href="mailto:mridul.malani@alumni.ashoka.edu.in"
-                    className="text-amber-500 hover:text-amber-400 transition-colors text-lg break-all"
+                    className="font-montserrat text-amber-500 hover:text-amber-400 transition-colors text-lg break-all"
                   >
                     mridul.malani@alumni.ashoka.edu.in
                   </a>
@@ -179,10 +179,10 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
         transition={{ delay: 0.3 }}
         className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 mb-8"
       >
-        <p className="text-lg md:text-xl text-white/90 leading-relaxed mb-6">
+        <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed mb-6">
           FinanceX is a hands-on systems project designed to reduce friction in financial analysis by automating repetitive, error-prone data workflows while keeping analyst judgment central.
         </p>
-        <p className="text-lg md:text-xl text-white/90 leading-relaxed">
+        <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed">
           The system focuses on deterministic, analyst-aligned logic — not black-box generation and not analyst replacement. It is one example of how I approach financial problems, learn quickly, and translate theory into usable tools. If this kind of work feels relevant to your team, I would genuinely value a conversation.
         </p>
       </motion.div>
@@ -194,7 +194,7 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
         transition={{ delay: 0.4 }}
         className="bg-amber-500/10 backdrop-blur-xl border border-amber-500/30 rounded-2xl p-6 md:p-8 mb-12"
       >
-        <p className="text-base md:text-lg text-white/80 leading-relaxed">
+        <p className="text-base md:text-lg font-montserrat text-white/80 leading-relaxed">
           FinanceX is not a commercial product or a sales pitch. It is a working system built to demonstrate how I think, learn, and build in finance-adjacent systems.
         </p>
       </motion.div>
@@ -249,7 +249,7 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
                   {item.title}
                 </h3>
               </div>
-              <p className="text-white/60 leading-relaxed">
+              <p className="font-montserrat text-white/60 leading-relaxed">
                 {item.description}
               </p>
             </motion.div>
@@ -267,10 +267,10 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
         <h2 className="text-2xl md:text-3xl font-playfair italic text-amber-500 mb-6">
           Feature Spotlight: The Analyst Brain (BYOB)
         </h2>
-        <p className="text-lg md:text-xl text-white/90 leading-relaxed">
+        <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed">
           The Analyst Brain (Bring Your Own Brain) is a portable, user-owned configuration file that stores mappings, corrections, and preferences.
         </p>
-        <p className="text-lg md:text-xl text-white/90 leading-relaxed mt-4">
+        <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed mt-4">
           It remains fully local, reusable across sessions, and shareable across teams — preserving analyst judgment without centralizing proprietary logic.
         </p>
       </motion.div>
@@ -311,7 +311,7 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
               <h3 className="font-montserrat font-bold text-white text-lg mb-3">
                 {item.title}
               </h3>
-              <p className="text-white/60 leading-relaxed">
+              <p className="font-montserrat text-white/60 leading-relaxed">
                 {item.description}
               </p>
             </motion.div>
@@ -369,7 +369,7 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
               className="overflow-hidden"
             >
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl p-6 md:p-8 mt-[-1px]">
-                <div className="prose prose-invert max-w-none text-white/80 leading-relaxed space-y-4">
+                <div className="prose prose-invert max-w-none font-montserrat text-white/80 leading-relaxed space-y-4">
                   {/*
                     TODO: Add the full long-form FinanceX blog text here.
                     The text should be added exactly as provided, with no editing or summarizing.
@@ -437,7 +437,7 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         transition={{ delay: 0.3 }}
         className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 mb-12"
       >
-        <p className="text-lg md:text-xl text-white/90 leading-relaxed">
+        <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed">
           FinanceX is a project built to explore how real financial systems work — beyond theory and into practice.
         </p>
       </motion.div>
@@ -561,7 +561,7 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <h2 className="text-2xl md:text-3xl font-playfair italic text-white mb-2">
               Help improve the system (optional)
             </h2>
-            <p className="text-white/60">
+            <p className="font-montserrat text-white/60">
               If you'd like to contribute, one of the most helpful things right now is clean financial data.
             </p>
           </div>
@@ -587,7 +587,7 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     href="https://chatgpt.com/g/g-wETMBcESv-ocr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-amber-500 hover:text-amber-400 transition-colors break-all"
+                    className="font-montserrat text-amber-500 hover:text-amber-400 transition-colors break-all"
                   >
                     https://chatgpt.com/g/g-wETMBcESv-ocr
                   </a>
@@ -597,7 +597,7 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <h3 className="font-montserrat font-bold text-white text-lg mb-3">
                     Prompt to use
                   </h3>
-                  <div className="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-sm text-white/80">
+                  <div className="bg-black/40 border border-white/10 rounded-xl p-4 font-montserrat text-sm text-white/80">
                     <p className="mb-4">I have a PDF of financial statements. Please extract the data into 3 separate CSV blocks:</p>
                     <ol className="list-decimal list-inside space-y-2 mb-4">
                       <li>Income Statement</li>
@@ -618,19 +618,19 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <h3 className="font-montserrat font-bold text-white text-lg mb-3">
                     Email Instructions (CRITICAL)
                   </h3>
-                  <div className="space-y-3 text-white/80">
+                  <div className="space-y-3 font-montserrat text-white/80">
                     <p>Send the output to: <span className="text-amber-500 font-semibold">mridulgptid@gmail.com</span></p>
                     <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
                       <p className="font-semibold text-white mb-2">Email rules:</p>
                       <ul className="list-disc list-inside space-y-1 ml-4">
-                        <li>Subject must be: <span className="font-mono bg-black/40 px-2 py-1 rounded">Data</span></li>
+                        <li>Subject must be: <span className="font-montserrat bg-black/40 px-2 py-1 rounded">Data</span></li>
                         <li>Email body must be completely empty</li>
                         <li>Attach ONE Excel file only</li>
                         <li>The Excel file must contain EXACTLY three tabs named:
                           <ul className="list-circle list-inside ml-6 mt-1">
-                            <li className="font-mono">Income Statement</li>
-                            <li className="font-mono">Balance Sheet</li>
-                            <li className="font-mono">Cashflow Statement</li>
+                            <li className="font-montserrat">Income Statement</li>
+                            <li className="font-montserrat">Balance Sheet</li>
+                            <li className="font-montserrat">Cashflow Statement</li>
                           </ul>
                         </li>
                       </ul>
