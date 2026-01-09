@@ -162,16 +162,14 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
       className="min-h-screen page-container section-v-padding"
     >
       {/* Back Button */}
-      <motion.button
+      <button
         type="button"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.2 }}
         onClick={onBack}
-        className="mb-12 py-2 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer relative z-50"
+        className="mb-12 py-3 px-4 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer bg-transparent border-none outline-none"
+        style={{ zIndex: 999 }}
       >
         <span>←</span> Back to selection
-      </motion.button>
+      </button>
 
       {/* Primary Principle Card */}
       <motion.div
@@ -501,16 +499,14 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       className="min-h-screen page-container section-v-padding"
     >
       {/* Back Button */}
-      <motion.button
+      <button
         type="button"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.2 }}
         onClick={onBack}
-        className="mb-12 py-2 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer relative z-50"
+        className="mb-12 py-3 px-4 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer bg-transparent border-none outline-none"
+        style={{ zIndex: 999 }}
       >
         <span>←</span> Back to selection
-      </motion.button>
+      </button>
 
       {/* Intro Card */}
       <motion.div
