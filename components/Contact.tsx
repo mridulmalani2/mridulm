@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Linkedin, Mail, ArrowUp } from 'lucide-react';
+import { Linkedin, Mail, ArrowUp, X } from 'lucide-react';
 
 const Contact: React.FC = () => {
+  const [showEmailPopup, setShowEmailPopup] = useState(false);
+
   return (
     <div className="w-full page-container section-v-padding flex flex-col items-center justify-center text-center relative">
       <motion.div
@@ -31,14 +33,14 @@ const Contact: React.FC = () => {
             <Linkedin size={20} className="text-white/60 group-hover:text-amber-500 transition-colors" />
             <span className="font-montserrat text-[10px] tracking-widest font-black uppercase text-white/60 group-hover:text-white">LINKEDIN</span>
           </a>
-          <a
-            href="mailto:mridul.malani@alumni.ashoka.edu.in"
+          <button
+            onClick={() => setShowEmailPopup(true)}
             className="flex items-center gap-4 group border-b border-white/10 pb-2 hover:border-amber-500 transition-all duration-500 min-h-[48px]"
-            aria-label="Send email"
+            aria-label="Show email address"
           >
             <Mail size={20} className="text-white/60 group-hover:text-amber-500 transition-colors" />
             <span className="font-montserrat text-[10px] tracking-widest font-black uppercase text-white/60 group-hover:text-white">EMAIL ME</span>
-          </a>
+          </button>
         </div>
       </motion.div>
 
@@ -56,6 +58,39 @@ const Contact: React.FC = () => {
           © 2025 Mridul Malani
         </p>
       </div>
+
+      {/* Email Popup */}
+      {showEmailPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setShowEmailPopup(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-zinc-900 border border-amber-500/20 rounded-lg p-8 max-w-md mx-4 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowEmailPopup(false)}
+              className="absolute top-4 right-4 text-white/60 hover:text-amber-500 transition-colors"
+              aria-label="Close popup"
+            >
+              <X size={24} />
+            </button>
+            <p className="text-white/90 text-lg text-center mt-2">
+              You can reach me at<br />
+              <a
+                href="mailto:mridul.malani@alumni.ashoka.edu.in"
+                className="text-amber-500 hover:text-amber-400 transition-colors font-montserrat mt-2 inline-block"
+              >
+                mridul.malani@alumni.ashoka.edu.in
+              </a>
+            </p>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
