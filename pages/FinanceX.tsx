@@ -519,8 +519,11 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         transition={{ delay: 0.3 }}
         className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 mb-12"
       >
+        <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed mb-4">
+          FinanceX is a project I'm building while learning how real financial systems work - not just in theory, but in practice. If you're a student, curious learner, or just exploring, this page explains what the tool does, how it might help you, and how you can contribute if you'd like.
+        </p>
         <p className="text-lg md:text-xl font-montserrat text-white/90 leading-relaxed">
-          FinanceX is a project built to explore how real financial systems work — beyond theory and into practice.
+          At its core, FinanceX helps clean, structure, and standardize messy financial data. Instead of manually fixing statements, formats, or classifications again and again, the system applies clear, rule-based logic so outputs stay consistent and traceable. In the future, I also plan to extend this into modeling workflows, where structured inputs and past modeling patterns can reduce repetitive setup work.
         </p>
       </motion.div>
 
