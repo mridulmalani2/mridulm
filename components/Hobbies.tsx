@@ -9,6 +9,11 @@ const Hobbies: React.FC = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  const INITIAL_DISPLAY_COUNT = 3;
+  const displayedAlbums = showAll ? albums : albums.slice(0, INITIAL_DISPLAY_COUNT);
+  const hasMore = albums.length > INITIAL_DISPLAY_COUNT;
 
   useEffect(() => {
     fetchAlbums()
@@ -59,14 +64,14 @@ const Hobbies: React.FC = () => {
                   viewport={{ once: true }}
                   className="space-y-4"
                 >
-                  <h2 className="font-montserrat text-amber-500/60 tracking-widest text-xs font-bold uppercase">PHOTOGRAPHY</h2>
+                  <h2 className="font-montserrat text-amber-500/60 tracking-widest text-xs font-bold uppercase">FAVORITES AND MORE</h2>
                   <h3 className="font-playfair text-5xl md:text-8xl italic leading-none tracking-tighter">Through My Lens</h3>
                 </motion.div>
               </div>
 
               {/* Album Stacks Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-12">
-                {albums.map((album, i) => (
+                {displayedAlbums.map((album, i) => (
                   <motion.div
                     key={`${album.name}-${i}`}
                     initial={{ opacity: 0, y: 40 }}
@@ -80,7 +85,7 @@ const Hobbies: React.FC = () => {
                     aria-label={`View ${album.name} album with ${album.images.length} images`}
                     onKeyDown={(e) => e.key === 'Enter' && openAlbum(album)}
                   >
-                    <div className="relative w-full aspect-[4/5] mb-8">
+                    <div className="relative w-full max-w-sm aspect-[4/5] mb-8">
                       {/* Stack Visuals */}
                       <div className="absolute inset-0 bg-white/5 border border-white/10 rounded-2xl translate-y-4 -rotate-2 scale-[0.98] transition-transform duration-700 group-hover:translate-y-6 group-hover:-rotate-4" />
                       <div className="absolute inset-0 bg-white/5 border border-white/10 rounded-2xl translate-y-2 rotate-1 scale-[0.99] transition-transform duration-700 group-hover:translate-y-3 group-hover:rotate-2" />
@@ -109,6 +114,24 @@ const Hobbies: React.FC = () => {
                   </motion.div>
                 ))}
               </div>
+
+              {/* Load More Albums Button */}
+              {hasMore && !showAll && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8 }}
+                  viewport={{ once: true }}
+                  className="mt-20 flex justify-center"
+                >
+                  <button
+                    onClick={() => setShowAll(true)}
+                    className="px-12 py-4 border border-white/20 rounded-full font-montserrat text-[10px] tracking-widest font-bold text-white/60 hover:text-white hover:border-amber-500 hover:bg-amber-500/10 transition-all uppercase min-h-[48px]"
+                  >
+                    Load More Albums
+                  </button>
+                </motion.div>
+              )}
             </motion.div>
           ) : (
             <motion.div

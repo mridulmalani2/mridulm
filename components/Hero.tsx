@@ -14,7 +14,7 @@ const Hero: React.FC = () => {
         <div className="relative mb-8 md:mb-12">
           <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-2 border-amber-500/20 shadow-2xl">
             <img
-              src="/profile.jpg"
+              src="https://media.licdn.com/dms/image/v2/D4E03AQEAD7kxQrToiQ/profile-displayphoto-crop_800_800/B4EZsQwy85HcAI-/0/1765512786319?e=1769644800&v=beta&t=Ak0vCYLDyjekeSrlZFSIRP31p4qxfG2BTbqAjkDuEvM"
               alt="Mridul Malani"
               className="w-full h-full object-cover"
               loading="eager"
@@ -29,12 +29,11 @@ const Hero: React.FC = () => {
 
         {/* Value Proposition - Immediately Clear */}
         <p className="font-montserrat text-sm md:text-base tracking-widest text-amber-500/80 uppercase mb-6">
-          HEC Paris MiM '27 • Finance & Venture Capital
+          HEC Paris MiM '27/28 • Corporate Finance and Private Markets
         </p>
 
-        <p className="text-white/70 text-base md:text-lg max-w-xl leading-relaxed mb-10">
-          Building at the intersection of finance, technology, and entrepreneurship.
-          Previously at Reliance Industries, IndiaMart, and Chanakya Wealth.
+        <p className="font-playfair italic text-white/70 text-base md:text-lg max-w-xl leading-relaxed mb-10">
+          I learn by building, and I build by doing. Currently at the intersection of finance, technology and entrepreneurship.
         </p>
 
         {/* Clear CTAs */}

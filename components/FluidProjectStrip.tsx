@@ -19,10 +19,11 @@ const FluidProjectStrip: React.FC<FluidProjectStripProps> = ({ project, isHovere
 
   const displayImage = project.highlightImageUrl || project.imageUrl;
   
-  // Production-grade font scaling: Adjusts based on character length and container width
+  // Adaptive font scaling: Ensures text fits in single line with 10% margins on each side
   const charCount = project.name.length;
-  // cqw = container query width units
-  const fontScale = isHovered ? (85 / (charCount * 0.7)) : (45 / (charCount * 0.7));
+  // Calculate font size to fit text in 80% width (10% margin each side)
+  // More aggressive scaling for longer text to ensure single-line display
+  const fontScale = isHovered ? (65 / (charCount * 0.55)) : (35 / (charCount * 0.55));
 
   return (
     <motion.div
@@ -52,18 +53,18 @@ const FluidProjectStrip: React.FC<FluidProjectStripProps> = ({ project, isHovere
         transition={{ duration: 1.2 }}
       />
 
-      {/* Content Overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 md:px-8">
+      {/* Content Overlay with 10% margins */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-[10%]">
         <motion.div
           animate={{ y: isHovered ? -15 : 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="w-full h-full flex flex-col items-center justify-center"
         >
-          {/* Dynamic Scaling Title */}
+          {/* Dynamic Scaling Title - Single Line with Adaptive Font */}
           <div className="w-full flex items-center justify-center mb-6 md:mb-12 min-h-[12vh] md:min-h-[18vh]">
-            <motion.h3 
-              className="font-montserrat font-black text-white uppercase drop-shadow-[0_10px_40px_rgba(0,0,0,1)] tracking-[0.05em] text-center whitespace-nowrap overflow-hidden text-ellipsis px-2"
-              animate={{ 
+            <motion.h3
+              className="font-montserrat font-black text-white uppercase drop-shadow-[0_10px_40px_rgba(0,0,0,1)] tracking-[0.05em] text-center whitespace-nowrap"
+              animate={{
                 fontSize: `clamp(0.85rem, ${fontScale}cqw, ${isHovered ? '10vh' : '4vh'})`,
                 opacity: 1,
                 lineHeight: 1

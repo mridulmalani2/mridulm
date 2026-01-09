@@ -2,11 +2,11 @@
 import { ChapterData } from './types';
 
 export const CHAPTERS: ChapterData[] = [
-  { id: 'hero', title: 'Welcome', subtitle: 'Mridul Malani' },
+  { id: 'hero', title: 'Welcome', subtitle: 'Me' },
   { id: 'projects', title: 'Featured Work', subtitle: 'Projects' },
-  { id: 'video-story', title: 'Video Introduction', subtitle: 'Quick Introduction' },
+  { id: 'video-story', title: 'Video Introduction', subtitle: 'My 3-Min AI HireVue' },
   { id: 'resume', title: 'Curriculum Vitae', subtitle: 'Career Timeline' },
-  { id: 'hobbies', title: 'Through My Lens', subtitle: 'Photography' },
+  { id: 'hobbies', title: 'Through My Lens', subtitle: 'Favorites and More' },
   { id: 'contact', title: 'Let\'s Connect', subtitle: 'Contact' },
 ];
 
