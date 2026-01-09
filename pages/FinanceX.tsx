@@ -1,0 +1,652 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+type PathType = 'professionals' | 'explore' | null;
+
+const FinanceX: React.FC = () => {
+  const [selectedPath, setSelectedPath] = useState<PathType>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
+
+  const handlePathSelect = (path: PathType) => {
+    setSelectedPath(path);
+    // Scroll to top when path is selected
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBackToStart = () => {
+    setSelectedPath(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="min-h-screen">
+      <AnimatePresence mode="wait">
+        {selectedPath === null && (
+          <motion.div
+            key="hero"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.6 }}
+            className="min-h-screen flex flex-col items-center justify-center page-container"
+          >
+            {/* Hero Section */}
+            <div className="text-center mb-16 md:mb-24">
+              <motion.h1
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="text-fluid-h2 font-playfair italic text-white mb-6"
+              >
+                FinanceX
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+                className="text-fluid-body text-white/60 max-w-3xl mx-auto px-4"
+              >
+                A hands-on systems project in financial data standardization and analyst-aligned automation.
+              </motion.p>
+            </div>
+
+            {/* CTA Cards */}
+            <div className="grid md:grid-cols-2 gap-6 md:gap-8 w-full max-w-5xl px-4">
+              <motion.button
+                initial={{ opacity: 0, x: -30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+                whileHover={{ scale: 1.02, y: -8 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handlePathSelect('explore')}
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-500 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
+              >
+                <div className="relative z-10">
+                  <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
+                    Explore FinanceX
+                  </h2>
+                  <p className="text-base md:text-lg text-white/60 leading-relaxed">
+                    Learn what it does, how it works, and how you can use or contribute.
+                  </p>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/0 via-amber-500/0 to-amber-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              </motion.button>
+
+              <motion.button
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+                whileHover={{ scale: 1.02, y: -8 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handlePathSelect('professionals')}
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-500 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
+              >
+                <div className="relative z-10">
+                  <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
+                    For Finance Professionals
+                  </h2>
+                  <p className="text-base md:text-lg text-white/60 leading-relaxed">
+                    System design, analytical philosophy, and practical applications.
+                  </p>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/0 via-amber-500/0 to-amber-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+
+        {selectedPath === 'professionals' && (
+          <ProfessionalsPath onBack={handleBackToStart} onShowContact={() => setShowContactModal(true)} />
+        )}
+
+        {selectedPath === 'explore' && (
+          <ExplorePath onBack={handleBackToStart} />
+        )}
+      </AnimatePresence>
+
+      {/* Contact Modal */}
+      <AnimatePresence>
+        {showContactModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowContactModal(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-black border border-white/20 rounded-2xl p-8 md:p-12 max-w-lg w-full"
+            >
+              <h3 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-6">
+                Start a conversation
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-white/60 mb-2">Email:</p>
+                  <a
+                    href="mailto:mridul.malani@alumni.ashoka.edu.in"
+                    className="text-amber-500 hover:text-amber-400 transition-colors text-lg break-all"
+                  >
+                    mridul.malani@alumni.ashoka.edu.in
+                  </a>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowContactModal(false)}
+                className="mt-8 w-full bg-amber-500 hover:bg-amber-600 text-black font-montserrat font-bold py-3 px-6 rounded-xl transition-colors duration-300"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// Professionals Path Component
+const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => void }> = ({ onBack, onShowContact }) => {
+  const [expandedDeepDive, setExpandedDeepDive] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6 }}
+      className="min-h-screen page-container section-v-padding"
+    >
+      {/* Back Button */}
+      <motion.button
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.2 }}
+        onClick={onBack}
+        className="mb-12 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat"
+      >
+        <span>←</span> Back to selection
+      </motion.button>
+
+      {/* Primary Principle Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 mb-8"
+      >
+        <p className="text-lg md:text-xl text-white/90 leading-relaxed mb-6">
+          FinanceX is a hands-on systems project designed to reduce friction in financial analysis by automating repetitive, error-prone data workflows while keeping analyst judgment central.
+        </p>
+        <p className="text-lg md:text-xl text-white/90 leading-relaxed">
+          The system focuses on deterministic, analyst-aligned logic — not black-box generation and not analyst replacement. It is one example of how I approach financial problems, learn quickly, and translate theory into usable tools. If this kind of work feels relevant to your team, I would genuinely value a conversation.
+        </p>
+      </motion.div>
+
+      {/* Secondary Clarification Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-amber-500/10 backdrop-blur-xl border border-amber-500/30 rounded-2xl p-6 md:p-8 mb-12"
+      >
+        <p className="text-base md:text-lg text-white/80 leading-relaxed">
+          FinanceX is not a commercial product or a sales pitch. It is a working system built to demonstrate how I think, learn, and build in finance-adjacent systems.
+        </p>
+      </motion.div>
+
+      {/* System Workflow Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="mb-12"
+      >
+        <h2 className="text-3xl md:text-4xl font-playfair italic text-white mb-8">
+          The FinanceX Workflow
+        </h2>
+        <div className="grid md:grid-cols-2 gap-6">
+          {[
+            {
+              stage: 'Stage 1',
+              title: 'Extraction',
+              description: 'Raw Excel files or OCR\'d PDFs are cleaned and structured automatically.'
+            },
+            {
+              stage: 'Stage 2',
+              title: 'Mapping & Normalization',
+              description: 'Each line item is mapped to a standard accounting concept, prioritizing user-defined logic.'
+            },
+            {
+              stage: 'Stage 3',
+              title: 'Financial Modeling',
+              description: 'DCF, LBO, and trading comparables are generated using iterative, rule-based logic.'
+            },
+            {
+              stage: 'Stage 4',
+              title: 'Validation & Audit',
+              description: '100+ checks verify accounting identities, data integrity, and internal consistency.'
+            }
+          ].map((item, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 hover:border-amber-500/30 transition-colors duration-500"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-amber-500 font-montserrat font-bold text-sm">
+                  {item.stage}
+                </span>
+                <span className="text-white/30">—</span>
+                <h3 className="font-montserrat font-bold text-white text-lg">
+                  {item.title}
+                </h3>
+              </div>
+              <p className="text-white/60 leading-relaxed">
+                {item.description}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Feature Spotlight: The Analyst Brain */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="bg-gradient-to-br from-amber-500/10 to-white/5 backdrop-blur-xl border border-amber-500/20 rounded-2xl p-8 md:p-12 mb-12"
+      >
+        <h2 className="text-2xl md:text-3xl font-playfair italic text-amber-500 mb-6">
+          Feature Spotlight: The Analyst Brain (BYOB)
+        </h2>
+        <p className="text-lg md:text-xl text-white/90 leading-relaxed">
+          The Analyst Brain (Bring Your Own Brain) is a portable, user-owned configuration file that stores mappings, corrections, and preferences.
+        </p>
+        <p className="text-lg md:text-xl text-white/90 leading-relaxed mt-4">
+          It remains fully local, reusable across sessions, and shareable across teams — preserving analyst judgment without centralizing proprietary logic.
+        </p>
+      </motion.div>
+
+      {/* Transparency & Control Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-12"
+      >
+        <h2 className="text-3xl md:text-4xl font-playfair italic text-white mb-8">
+          Transparency & Control
+        </h2>
+        <div className="space-y-4">
+          {[
+            {
+              title: 'Decision Hierarchy',
+              description: 'Mapping follows a strict priority order where explicit analyst inputs always override defaults.'
+            },
+            {
+              title: 'Non-Blocking Validation',
+              description: 'Partial models are generated even when issues exist, enabling iterative correction.'
+            },
+            {
+              title: 'Full Traceability',
+              description: 'Every output can be traced back to its source data and transformation logic.'
+            }
+          ].map((item, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8"
+            >
+              <h3 className="font-montserrat font-bold text-white text-lg mb-3">
+                {item.title}
+              </h3>
+              <p className="text-white/60 leading-relaxed">
+                {item.description}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Video Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-12"
+      >
+        <h2 className="text-2xl md:text-3xl font-playfair italic text-white mb-6">
+          Watch the system in action
+        </h2>
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 overflow-hidden">
+          <video
+            controls
+            className="w-full rounded-xl"
+            preload="metadata"
+          >
+            <source src="/FinanceX__Automated_Analysis.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </motion.div>
+
+      {/* Deep Dive Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-12"
+      >
+        <button
+          onClick={() => setExpandedDeepDive(!expandedDeepDive)}
+          className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 text-left hover:border-amber-500/30 transition-colors duration-500 flex items-center justify-between"
+        >
+          <h2 className="text-2xl md:text-3xl font-playfair italic text-white">
+            Read the full system write-up
+          </h2>
+          <span className="text-amber-500 text-2xl">
+            {expandedDeepDive ? '−' : '+'}
+          </span>
+        </button>
+        <AnimatePresence>
+          {expandedDeepDive && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl p-6 md:p-8 mt-[-1px]">
+                <div className="prose prose-invert max-w-none text-white/80 leading-relaxed space-y-4">
+                  {/*
+                    TODO: Add the full long-form FinanceX blog text here.
+                    The text should be added exactly as provided, with no editing or summarizing.
+                    Use proper paragraph breaks and formatting as needed.
+                  */}
+                  <p>
+                    This section will contain the complete system write-up explaining the technical details,
+                    design decisions, and implementation approach of the FinanceX system.
+                  </p>
+                  <p>
+                    The full content should be inserted here verbatim from the provided blog text.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Contact CTA */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="text-center"
+      >
+        <button
+          onClick={onShowContact}
+          className="bg-amber-500 hover:bg-amber-600 text-black font-montserrat font-bold py-4 px-8 rounded-xl transition-colors duration-300 text-lg"
+        >
+          Start a conversation
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// Explore Path Component
+const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const [expandedOCR, setExpandedOCR] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6 }}
+      className="min-h-screen page-container section-v-padding"
+    >
+      {/* Back Button */}
+      <motion.button
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.2 }}
+        onClick={onBack}
+        className="mb-12 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat"
+      >
+        <span>←</span> Back to selection
+      </motion.button>
+
+      {/* Intro Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 mb-12"
+      >
+        <p className="text-lg md:text-xl text-white/90 leading-relaxed">
+          FinanceX is a project built to explore how real financial systems work — beyond theory and into practice.
+        </p>
+      </motion.div>
+
+      {/* Student Workflow */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="mb-12"
+      >
+        <h2 className="text-3xl md:text-4xl font-playfair italic text-white mb-8">
+          From raw files to clean financial data
+        </h2>
+        <div className="space-y-4">
+          {[
+            {
+              number: '1',
+              title: 'Prepare your files',
+              description: 'Start with Excel or convert PDFs using OCR.'
+            },
+            {
+              number: '2',
+              title: 'Upload & process',
+              description: 'Upload your files and optionally your saved Analyst Brain.'
+            },
+            {
+              number: '3',
+              title: 'Review results',
+              description: 'Inspect clean data, models, and audit flags.'
+            },
+            {
+              number: '4',
+              title: 'Fix & teach',
+              description: 'Correct unmapped items — the system learns your logic.'
+            },
+            {
+              number: '5',
+              title: 'Download & reuse',
+              description: 'Export outputs and your updated Brain for next time.'
+            }
+          ].map((step, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 flex gap-4 md:gap-6 hover:border-amber-500/30 transition-colors duration-500"
+            >
+              <div className="flex-shrink-0 w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center font-montserrat font-bold text-black text-xl">
+                {step.number}
+              </div>
+              <div>
+                <h3 className="font-montserrat font-bold text-white text-lg mb-2">
+                  {step.title}
+                </h3>
+                <p className="text-white/60 leading-relaxed">
+                  {step.description}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Infographic Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-12"
+      >
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 overflow-hidden">
+          <img
+            src="/financex-infographic.png"
+            alt="FinanceX workflow infographic"
+            className="w-full h-auto rounded-xl"
+            onError={(e) => {
+              // Hide image if it doesn't exist
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      </motion.div>
+
+      {/* Video Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-12"
+      >
+        <h2 className="text-2xl md:text-3xl font-playfair italic text-white mb-6">
+          See how it works
+        </h2>
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 overflow-hidden">
+          <video
+            controls
+            className="w-full rounded-xl"
+            preload="metadata"
+          >
+            <source src="/FinanceX__Automated_Analysis.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </motion.div>
+
+      {/* OCR Contribution Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mb-12"
+      >
+        <button
+          onClick={() => setExpandedOCR(!expandedOCR)}
+          className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 text-left hover:border-amber-500/30 transition-colors duration-500 flex items-center justify-between"
+        >
+          <div>
+            <h2 className="text-2xl md:text-3xl font-playfair italic text-white mb-2">
+              Help improve the system (optional)
+            </h2>
+            <p className="text-white/60">
+              If you'd like to contribute, one of the most helpful things right now is clean financial data.
+            </p>
+          </div>
+          <span className="text-amber-500 text-2xl ml-4">
+            {expandedOCR ? '−' : '+'}
+          </span>
+        </button>
+        <AnimatePresence>
+          {expandedOCR && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl p-6 md:p-8 mt-[-1px] space-y-6">
+                <div>
+                  <h3 className="font-montserrat font-bold text-white text-lg mb-3">
+                    OCR Tool Link
+                  </h3>
+                  <a
+                    href="https://chatgpt.com/g/g-wETMBcESv-ocr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-500 hover:text-amber-400 transition-colors break-all"
+                  >
+                    https://chatgpt.com/g/g-wETMBcESv-ocr
+                  </a>
+                </div>
+
+                <div>
+                  <h3 className="font-montserrat font-bold text-white text-lg mb-3">
+                    Prompt to use
+                  </h3>
+                  <div className="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-sm text-white/80">
+                    <p className="mb-4">I have a PDF of financial statements. Please extract the data into 3 separate CSV blocks:</p>
+                    <ol className="list-decimal list-inside space-y-2 mb-4">
+                      <li>Income Statement</li>
+                      <li>Balance Sheet</li>
+                      <li>Cash Flow Statement</li>
+                    </ol>
+                    <p className="mb-2">Formatting Rules:</p>
+                    <ul className="list-disc list-inside space-y-1 mb-4 ml-4">
+                      <li>Column A must contain the Line Item Labels.</li>
+                      <li>Row 1 must contain the Dates (e.g., '2023', 'FY24').</li>
+                      <li>Do not merge cells. Ensure numbers are clean (no currency symbols).</li>
+                      <li>If a statement spans multiple pages, merge them into one CSV block.</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-montserrat font-bold text-white text-lg mb-3">
+                    Email Instructions (CRITICAL)
+                  </h3>
+                  <div className="space-y-3 text-white/80">
+                    <p>Send the output to: <span className="text-amber-500 font-semibold">mridulgptid@gmail.com</span></p>
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                      <p className="font-semibold text-white mb-2">Email rules:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-4">
+                        <li>Subject must be: <span className="font-mono bg-black/40 px-2 py-1 rounded">Data</span></li>
+                        <li>Email body must be completely empty</li>
+                        <li>Attach ONE Excel file only</li>
+                        <li>The Excel file must contain EXACTLY three tabs named:
+                          <ul className="list-circle list-inside ml-6 mt-1">
+                            <li className="font-mono">Income Statement</li>
+                            <li className="font-mono">Balance Sheet</li>
+                            <li className="font-mono">Cashflow Statement</li>
+                          </ul>
+                        </li>
+                      </ul>
+                      <p className="mt-3 text-sm italic">
+                        Formatting and naming must be precise. Submissions that do not follow these rules cannot be used.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+export default FinanceX;
