@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 
 type PathType = 'professionals' | 'explore' | null;
 
 const FinanceX: React.FC = () => {
   const [selectedPath, setSelectedPath] = useState<PathType>(null);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const cursorX = useMotionValue(0);
+  const cursorY = useMotionValue(0);
+  const springConfig = { damping: 25, stiffness: 400 };
+  const cursorXSpring = useSpring(cursorX, springConfig);
+  const cursorYSpring = useSpring(cursorY, springConfig);
 
   const handlePathSelect = (path: PathType) => {
     setSelectedPath(path);
@@ -18,8 +24,58 @@ const FinanceX: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Mouse tracking for parallax and custom cursor
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+      cursorX.set(e.clientX);
+      cursorY.set(e.clientY);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Generate floating particles - slower, calmer animation
+  const particles = Array.from({ length: 30 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 4 + 1,
+    duration: Math.random() * 20 + 40, // Slower: 40-60 seconds instead of 20-30
+    delay: Math.random() * 10,
+  }));
+
   return (
-    <div id="main-content" className="min-h-screen">
+    <div id="main-content" className="min-h-screen" style={{ cursor: 'none' }}>
+      {/* Custom Cursor */}
+      {selectedPath === null && (
+        <>
+          <motion.div
+            className="fixed pointer-events-none z-[9999] mix-blend-difference"
+            style={{
+              left: cursorXSpring,
+              top: cursorYSpring,
+              x: '-50%',
+              y: '-50%',
+            }}
+          >
+            <div className="w-8 h-8 border-2 border-amber-500 rounded-full" />
+          </motion.div>
+          <motion.div
+            className="fixed pointer-events-none z-[9999]"
+            style={{
+              left: mousePosition.x,
+              top: mousePosition.y,
+              x: '-50%',
+              y: '-50%',
+            }}
+          >
+            <div className="w-2 h-2 bg-amber-500 rounded-full" />
+          </motion.div>
+        </>
+      )}
+
       <AnimatePresence mode="wait">
         {selectedPath === null && (
           <motion.div
@@ -28,10 +84,52 @@ const FinanceX: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.6 }}
-            className="min-h-screen flex flex-col items-center justify-center page-container"
+            className="min-h-screen flex flex-col items-center justify-center page-container relative overflow-hidden"
+            style={{ perspective: '1000px' }}
           >
+            {/* Background Image - Enhanced 3D parallax */}
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-100 ease-out"
+              style={{
+                backgroundImage: 'url(/pexels-jimbear-3327505.jpg)',
+                transform: `
+                  translate(${(mousePosition.x - window.innerWidth / 2) * 0.04}px, ${(mousePosition.y - window.innerHeight / 2) * 0.04}px)
+                  scale(1.15)
+                `,
+                transformStyle: 'preserve-3d',
+              }}
+            />
+
+            {/* Dark overlay for better text readability */}
+            <div className="absolute inset-0 bg-black/70" />
+
+            {/* Floating Night Sky Particles - Slower, calmer animation */}
+            {particles.map((particle) => (
+              <motion.div
+                key={particle.id}
+                className="absolute rounded-full bg-white pointer-events-none"
+                style={{
+                  left: `${particle.x}%`,
+                  top: `${particle.y}%`,
+                  width: particle.size,
+                  height: particle.size,
+                  transform: `translate(${(mousePosition.x - window.innerWidth / 2) * (particle.size / 150)}px, ${(mousePosition.y - window.innerHeight / 2) * (particle.size / 150)}px)`,
+                  opacity: 0.2,
+                }}
+                animate={{
+                  y: [0, -15, 0],
+                  opacity: [0.2, 0.5, 0.2],
+                }}
+                transition={{
+                  duration: particle.duration,
+                  delay: particle.delay,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              />
+            ))}
             {/* Hero Section */}
-            <div className="text-center mb-16 md:mb-24">
+            <div className="text-center mb-16 md:mb-24 relative z-10">
               <motion.h1
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -51,15 +149,23 @@ const FinanceX: React.FC = () => {
             </div>
 
             {/* CTA Cards */}
-            <div className="grid md:grid-cols-2 gap-6 md:gap-8 w-full max-w-5xl px-4">
+            <div className="grid md:grid-cols-2 gap-6 md:gap-8 w-full max-w-5xl px-4 relative z-10">
               <motion.button
                 initial={{ opacity: 0, x: -30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
-                whileHover={{ scale: 1.02, y: -8 }}
+                whileHover={{ scale: 1.05, z: 50 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handlePathSelect('explore')}
-                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-500 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
+                style={{
+                  transformStyle: 'preserve-3d',
+                  transform: `
+                    rotateX(${((mousePosition.y - window.innerHeight / 2) / window.innerHeight) * -10}deg)
+                    rotateY(${((mousePosition.x - window.innerWidth / 2) / window.innerWidth) * 10}deg)
+                    translateZ(20px)
+                  `,
+                }}
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-300 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
               >
                 <div className="relative z-10">
                   <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
@@ -76,10 +182,18 @@ const FinanceX: React.FC = () => {
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
-                whileHover={{ scale: 1.02, y: -8 }}
+                whileHover={{ scale: 1.05, z: 50 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handlePathSelect('professionals')}
-                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-500 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
+                style={{
+                  transformStyle: 'preserve-3d',
+                  transform: `
+                    rotateX(${((mousePosition.y - window.innerHeight / 2) / window.innerHeight) * -10}deg)
+                    rotateY(${((mousePosition.x - window.innerWidth / 2) / window.innerWidth) * 10}deg)
+                    translateZ(20px)
+                  `,
+                }}
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-300 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
               >
                 <div className="relative z-10">
                   <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
