@@ -19,7 +19,7 @@ const FinanceX: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    <div id="main-content" className="min-h-screen">
       <AnimatePresence mode="wait">
         {selectedPath === null && (
           <motion.div
@@ -163,11 +163,12 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
     >
       {/* Back Button */}
       <motion.button
+        type="button"
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.2 }}
         onClick={onBack}
-        className="mb-12 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat"
+        className="mb-12 py-2 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer relative z-50"
       >
         <span>←</span> Back to selection
       </motion.button>
@@ -501,11 +502,12 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     >
       {/* Back Button */}
       <motion.button
+        type="button"
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.2 }}
         onClick={onBack}
-        className="mb-12 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat"
+        className="mb-12 py-2 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer relative z-50"
       >
         <span>←</span> Back to selection
       </motion.button>
