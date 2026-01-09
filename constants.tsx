@@ -2,7 +2,7 @@
 import { ChapterData } from './types';
 
 export const CHAPTERS: ChapterData[] = [
-  { id: 'hero', title: 'Welcome', subtitle: 'Mridul Malani' },
+  { id: 'hero', title: 'Welcome', subtitle: 'Me' },
   { id: 'projects', title: 'Featured Work', subtitle: 'Projects' },
   { id: 'video-story', title: 'Video Introduction', subtitle: 'Quick Introduction' },
   { id: 'resume', title: 'Curriculum Vitae', subtitle: 'Career Timeline' },
