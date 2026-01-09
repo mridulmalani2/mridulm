@@ -369,18 +369,98 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
               className="overflow-hidden"
             >
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl p-6 md:p-8 mt-[-1px]">
-                <div className="prose prose-invert max-w-none font-montserrat text-white/80 leading-relaxed space-y-4">
-                  {/*
-                    TODO: Add the full long-form FinanceX blog text here.
-                    The text should be added exactly as provided, with no editing or summarizing.
-                    Use proper paragraph breaks and formatting as needed.
-                  */}
+                <div className="prose prose-invert max-w-none font-montserrat text-white/80 leading-relaxed space-y-6">
+                  <h3 className="text-2xl font-bold text-white mt-0">Forget Black-Box AI. Build Tools That Make Experts Better.</h3>
+
                   <p>
-                    This section will contain the complete system write-up explaining the technical details,
-                    design decisions, and implementation approach of the FinanceX system.
+                    Modern finance depends on precision. Yet much of an analyst's time is still spent on work that is repetitive, manual, and fragile: converting PDFs into usable data, mapping thousands of idiosyncratic line items to standard accounting concepts, and rebuilding foundational models from scratch for every new company.
                   </p>
+
                   <p>
-                    The full content should be inserted here verbatim from the provided blog text.
+                    FinanceX is a systems project designed to reduce this friction. It automates the transformation of raw financial statements into structured, analysis-ready outputs while preserving analyst judgment at every step. What typically takes hours can be reduced to minutes — not by replacing the analyst, but by aligning automation with how analysts actually think and work.
+                  </p>
+
+                  <p>
+                    Speed matters, but it isn't the point. The defining idea behind FinanceX is that automation should amplify expertise, not obscure it.
+                  </p>
+
+                  <h4 className="text-xl font-bold text-white mt-8">1. Automation That Learns Your Logic</h4>
+
+                  <p>
+                    Most financial automation tools centralize intelligence in the cloud. FinanceX takes a different approach.
+                  </p>
+
+                  <p>
+                    At the core of the system is the Analyst Brain — a portable, user-owned configuration file that stores mapping decisions, corrections, and validation preferences. After each session, the file is downloaded and reused in future sessions, allowing the system to behave consistently with the analyst's prior judgment.
+                  </p>
+
+                  <p>This design has three important implications:</p>
+
+                  <div className="ml-6 space-y-4">
+                    <div>
+                      <p className="font-bold text-white">Control and privacy</p>
+                      <p>All custom logic remains local. No proprietary mappings or decisions are stored centrally or used to train external models.</p>
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-white">Consistency over time</p>
+                      <p>When an analyst resolves an ambiguous line item once, that decision becomes the highest-priority rule in future analyses. The system improves deterministically, not probabilistically.</p>
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-white">Portability across teams</p>
+                      <p>Because the "brain" is a single file, teams can share a common analytical standard without enforcing it through rigid templates.</p>
+                    </div>
+                  </div>
+
+                  <p>
+                    Rather than absorbing expertise into a black box, FinanceX treats analyst judgment as durable intellectual capital.
+                  </p>
+
+                  <h4 className="text-xl font-bold text-white mt-8">2. Designed to Work With Analysts, Not Around Them</h4>
+
+                  <p>
+                    FinanceX is intentionally interactive. It does not silently fail when ambiguity appears, nor does it force blind trust in automated outputs.
+                  </p>
+
+                  <p>
+                    Unmapped or unclear line items are surfaced directly to the user, who can resolve them by selecting the appropriate standard accounting concept. These corrections are stored and reused, turning friction into learning rather than error.
+                  </p>
+
+                  <p>
+                    Crucially, the system uses non-blocking validation. Even when issues are detected, partial models are still generated, allowing analysts to inspect results, identify gaps, and iteratively improve outcomes. This reflects how real analysis happens: imperfect inputs, progressive refinement, and human oversight at every stage.
+                  </p>
+
+                  <p>
+                    Automation handles repetition. Judgment remains human.
+                  </p>
+
+                  <h4 className="text-xl font-bold text-white mt-8">3. Transparent Reasoning, Not Hidden Logic</h4>
+
+                  <p>
+                    Trust in financial systems comes from traceability.
+                  </p>
+
+                  <p>
+                    FinanceX makes its internal logic explicit through a clear hierarchy of decision-making when mapping data, prioritizing user-defined rules over defaults and progressively relaxing constraints only when necessary. Each step is assigned a confidence level, and every mapping decision is logged.
+                  </p>
+
+                  <p>
+                    When models are constructed, the system follows an iterative approach: starting with strict assumptions and expanding only when required. Analysts can inspect how each figure was derived, trace it back to its source, and understand exactly why a given assumption was made.
+                  </p>
+
+                  <p>
+                    This transparency is deliberate. The goal is not to "produce an answer," but to make the process legible enough that an analyst can confidently stand behind it.
+                  </p>
+
+                  <h4 className="text-xl font-bold text-white mt-8">Conclusion: A Different Direction for Financial Automation</h4>
+
+                  <p>
+                    FinanceX is not positioned as a finished product, nor as a replacement for human expertise. It is a working example of how financial systems can be built differently — with deterministic logic, user-controlled learning, and full transparency.
+                  </p>
+
+                  <p>
+                    As automation becomes more prevalent in complex analytical work, the question is not whether machines will be involved, but how. FinanceX explores a path where tools remain accountable, analysts remain central, and expertise compounds rather than disappears.
                   </p>
                 </div>
               </div>
