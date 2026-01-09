@@ -59,7 +59,7 @@ const Hobbies: React.FC = () => {
                   viewport={{ once: true }}
                   className="space-y-4"
                 >
-                  <h2 className="font-montserrat text-amber-500/60 tracking-widest text-xs font-bold uppercase">PHOTOGRAPHY</h2>
+                  <h2 className="font-montserrat text-amber-500/60 tracking-widest text-xs font-bold uppercase">FAVORITES AND MORE</h2>
                   <h3 className="font-playfair text-5xl md:text-8xl italic leading-none tracking-tighter">Through My Lens</h3>
                 </motion.div>
               </div>
