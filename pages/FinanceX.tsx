@@ -36,14 +36,14 @@ const FinanceX: React.FC = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Generate floating particles
+  // Generate floating particles - slower, calmer animation
   const particles = Array.from({ length: 30 }, (_, i) => ({
     id: i,
     x: Math.random() * 100,
     y: Math.random() * 100,
     size: Math.random() * 4 + 1,
-    duration: Math.random() * 10 + 20,
-    delay: Math.random() * 5,
+    duration: Math.random() * 20 + 40, // Slower: 40-60 seconds instead of 20-30
+    delay: Math.random() * 10,
   }));
 
   return (
@@ -87,20 +87,23 @@ const FinanceX: React.FC = () => {
             className="min-h-screen flex flex-col items-center justify-center page-container relative overflow-hidden"
             style={{ perspective: '1000px' }}
           >
-            {/* Background Image */}
+            {/* Background Image - Enhanced 3D parallax */}
             <div
-              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-100 ease-out"
               style={{
                 backgroundImage: 'url(/pexels-jimbear-3327505.jpg)',
-                transform: `translate(${(mousePosition.x - window.innerWidth / 2) * 0.01}px, ${(mousePosition.y - window.innerHeight / 2) * 0.01}px)`,
-                scale: '1.1',
+                transform: `
+                  translate(${(mousePosition.x - window.innerWidth / 2) * 0.04}px, ${(mousePosition.y - window.innerHeight / 2) * 0.04}px)
+                  scale(1.15)
+                `,
+                transformStyle: 'preserve-3d',
               }}
             />
 
             {/* Dark overlay for better text readability */}
             <div className="absolute inset-0 bg-black/70" />
 
-            {/* Floating Night Sky Particles */}
+            {/* Floating Night Sky Particles - Slower, calmer animation */}
             {particles.map((particle) => (
               <motion.div
                 key={particle.id}
@@ -110,12 +113,12 @@ const FinanceX: React.FC = () => {
                   top: `${particle.y}%`,
                   width: particle.size,
                   height: particle.size,
-                  transform: `translate(${(mousePosition.x - window.innerWidth / 2) * (particle.size / 100)}px, ${(mousePosition.y - window.innerHeight / 2) * (particle.size / 100)}px)`,
-                  opacity: 0.3 + Math.random() * 0.5,
+                  transform: `translate(${(mousePosition.x - window.innerWidth / 2) * (particle.size / 150)}px, ${(mousePosition.y - window.innerHeight / 2) * (particle.size / 150)}px)`,
+                  opacity: 0.2,
                 }}
                 animate={{
-                  y: [0, -30, 0],
-                  opacity: [0.3, 0.8, 0.3],
+                  y: [0, -15, 0],
+                  opacity: [0.2, 0.5, 0.2],
                 }}
                 transition={{
                   duration: particle.duration,
