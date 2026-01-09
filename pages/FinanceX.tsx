@@ -159,7 +159,7 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
-      className="min-h-screen page-container section-v-padding"
+      className="min-h-screen page-container section-v-padding pt-32 md:pt-40"
     >
       {/* Back Button */}
       <button
@@ -496,7 +496,7 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
-      className="min-h-screen page-container section-v-padding"
+      className="min-h-screen page-container section-v-padding pt-32 md:pt-40"
     >
       {/* Back Button */}
       <button
