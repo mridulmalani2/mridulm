@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 const VideoStory: React.FC = () => {
-  const VIDEO_EMBED_URL = "https://www.youtube.com/embed/yglApEB7qlk";
+  const VIDEO_EMBED_URL = "https://www.youtube.com/embed/TMJQhnNwm-E?si=XldR3Vg9Peq3Bnab";
 
   return (
     <div className="w-full page-container section-v-padding bg-neutral-900/10 backdrop-blur-sm">
@@ -22,7 +22,7 @@ const VideoStory: React.FC = () => {
             </h2>
 
             <h3 className="font-playfair text-fluid-h2 italic leading-tight mb-8 md:mb-12 text-white">
-              Quick <br className="hidden md:block" /> Introduction
+              My 3-Min <br className="hidden md:block" /> AI HireVue
             </h3>
 
             <p className="text-white/60 text-sm md:text-lg leading-relaxed font-normal font-montserrat tracking-wide">
