@@ -7,22 +7,11 @@ const FinanceX: React.FC = () => {
   const [selectedPath, setSelectedPath] = useState<PathType>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [isMobile, setIsMobile] = useState(false);
   const cursorX = useMotionValue(0);
   const cursorY = useMotionValue(0);
   const springConfig = { damping: 25, stiffness: 400 };
   const cursorXSpring = useSpring(cursorX, springConfig);
   const cursorYSpring = useSpring(cursorY, springConfig);
-
-  // Detect mobile devices
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const handlePathSelect = (path: PathType) => {
     setSelectedPath(path);
@@ -58,12 +47,12 @@ const FinanceX: React.FC = () => {
   }));
 
   return (
-    <div id="main-content" className="min-h-screen" style={{ cursor: isMobile ? 'auto' : 'none' }}>
-      {/* Custom Cursor - Desktop Only */}
-      {selectedPath === null && !isMobile && (
+    <div id="main-content" className="min-h-screen" style={{ cursor: 'none' }}>
+      {/* Custom Cursor */}
+      {selectedPath === null && (
         <>
           <motion.div
-            className="fixed pointer-events-none z-[9999] mix-blend-difference hidden md:block"
+            className="fixed pointer-events-none z-[9999] mix-blend-difference"
             style={{
               left: cursorXSpring,
               top: cursorYSpring,
@@ -74,7 +63,7 @@ const FinanceX: React.FC = () => {
             <div className="w-8 h-8 border-2 border-amber-500 rounded-full" />
           </motion.div>
           <motion.div
-            className="fixed pointer-events-none z-[9999] hidden md:block"
+            className="fixed pointer-events-none z-[9999]"
             style={{
               left: mousePosition.x,
               top: mousePosition.y,
@@ -98,14 +87,15 @@ const FinanceX: React.FC = () => {
             className="min-h-screen flex flex-col items-center justify-center page-container relative overflow-hidden"
             style={{ perspective: '1000px' }}
           >
-            {/* Background Image - Enhanced 3D parallax (desktop only) */}
+            {/* Background Image - Enhanced 3D parallax */}
             <div
               className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-100 ease-out"
               style={{
                 backgroundImage: 'url(/pexels-jimbear-3327505.jpg)',
-                transform: isMobile
-                  ? 'scale(1.15)'
-                  : `translate(${(mousePosition.x - window.innerWidth / 2) * 0.04}px, ${(mousePosition.y - window.innerHeight / 2) * 0.04}px) scale(1.15)`,
+                transform: `
+                  translate(${(mousePosition.x - window.innerWidth / 2) * 0.04}px, ${(mousePosition.y - window.innerHeight / 2) * 0.04}px)
+                  scale(1.15)
+                `,
                 transformStyle: 'preserve-3d',
               }}
             />
@@ -123,9 +113,7 @@ const FinanceX: React.FC = () => {
                   top: `${particle.y}%`,
                   width: particle.size,
                   height: particle.size,
-                  transform: isMobile
-                    ? 'translate(0, 0)'
-                    : `translate(${(mousePosition.x - window.innerWidth / 2) * (particle.size / 150)}px, ${(mousePosition.y - window.innerHeight / 2) * (particle.size / 150)}px)`,
+                  transform: `translate(${(mousePosition.x - window.innerWidth / 2) * (particle.size / 150)}px, ${(mousePosition.y - window.innerHeight / 2) * (particle.size / 150)}px)`,
                   opacity: 0.2,
                 }}
                 animate={{
@@ -169,7 +157,7 @@ const FinanceX: React.FC = () => {
                 whileHover={{ scale: 1.05, z: 50 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handlePathSelect('explore')}
-                style={isMobile ? {} : {
+                style={{
                   transformStyle: 'preserve-3d',
                   transform: `
                     rotateX(${((mousePosition.y - window.innerHeight / 2) / window.innerHeight) * -10}deg)
@@ -177,7 +165,7 @@ const FinanceX: React.FC = () => {
                     translateZ(20px)
                   `,
                 }}
-                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 md:p-12 text-left transition-all duration-300 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[240px] sm:min-h-[280px] flex flex-col justify-center"
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-300 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
               >
                 <div className="relative z-10">
                   <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
@@ -197,7 +185,7 @@ const FinanceX: React.FC = () => {
                 whileHover={{ scale: 1.05, z: 50 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handlePathSelect('professionals')}
-                style={isMobile ? {} : {
+                style={{
                   transformStyle: 'preserve-3d',
                   transform: `
                     rotateX(${((mousePosition.y - window.innerHeight / 2) / window.innerHeight) * -10}deg)
@@ -205,7 +193,7 @@ const FinanceX: React.FC = () => {
                     translateZ(20px)
                   `,
                 }}
-                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 md:p-12 text-left transition-all duration-300 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[240px] sm:min-h-[280px] flex flex-col justify-center"
+                className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 md:p-12 text-left transition-all duration-300 hover:bg-white/10 hover:border-amber-500/50 hover:shadow-2xl hover:shadow-amber-500/20 min-h-[280px] flex flex-col justify-center"
               >
                 <div className="relative z-10">
                   <h2 className="text-2xl md:text-3xl font-montserrat font-bold text-white mb-4 group-hover:text-amber-500 transition-colors duration-500">
@@ -285,13 +273,13 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
-      className="min-h-screen page-container section-v-padding pt-24 sm:pt-32 md:pt-40 px-4"
+      className="min-h-screen page-container section-v-padding pt-32 md:pt-40"
     >
       {/* Back Button */}
       <button
         type="button"
         onClick={onBack}
-        className="mb-8 sm:mb-12 py-3 px-4 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer bg-transparent border-none outline-none min-h-[48px]"
+        className="mb-12 py-3 px-4 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer bg-transparent border-none outline-none"
         style={{ zIndex: 999 }}
       >
         <span>←</span> Back to selection
@@ -475,12 +463,12 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
       >
         <button
           onClick={() => setExpandedDeepDive(!expandedDeepDive)}
-          className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 text-left hover:border-amber-500/30 transition-colors duration-500 flex items-center justify-between min-h-[72px]"
+          className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 text-left hover:border-amber-500/30 transition-colors duration-500 flex items-center justify-between"
         >
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-playfair italic text-white pr-4">
+          <h2 className="text-2xl md:text-3xl font-playfair italic text-white">
             Read the full system write-up
           </h2>
-          <span className="text-amber-500 text-2xl flex-shrink-0">
+          <span className="text-amber-500 text-2xl">
             {expandedDeepDive ? '−' : '+'}
           </span>
         </button>
@@ -603,7 +591,7 @@ const ProfessionalsPath: React.FC<{ onBack: () => void; onShowContact: () => voi
       >
         <button
           onClick={onShowContact}
-          className="bg-amber-500 hover:bg-amber-600 text-black font-montserrat font-bold py-4 px-8 rounded-xl transition-colors duration-300 text-base sm:text-lg min-h-[56px]"
+          className="bg-amber-500 hover:bg-amber-600 text-black font-montserrat font-bold py-4 px-8 rounded-xl transition-colors duration-300 text-lg"
         >
           Start a conversation
         </button>
@@ -622,13 +610,13 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
-      className="min-h-screen page-container section-v-padding pt-24 sm:pt-32 md:pt-40 px-4"
+      className="min-h-screen page-container section-v-padding pt-32 md:pt-40"
     >
       {/* Back Button */}
       <button
         type="button"
         onClick={onBack}
-        className="mb-8 sm:mb-12 py-3 px-4 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer bg-transparent border-none outline-none min-h-[48px]"
+        className="mb-12 py-3 px-4 text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-2 font-montserrat cursor-pointer bg-transparent border-none outline-none"
         style={{ zIndex: 999 }}
       >
         <span>←</span> Back to selection
@@ -742,17 +730,17 @@ const ExplorePath: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       >
         <button
           onClick={() => setExpandedOCR(!expandedOCR)}
-          className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 text-left hover:border-amber-500/30 transition-colors duration-500 flex items-center justify-between min-h-[100px]"
+          className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 text-left hover:border-amber-500/30 transition-colors duration-500 flex items-center justify-between"
         >
-          <div className="pr-4">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-playfair italic text-white mb-2">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-playfair italic text-white mb-2">
               Help improve the system
             </h2>
-            <p className="font-montserrat text-sm sm:text-base text-white/60">
+            <p className="font-montserrat text-white/60">
               If you'd like to contribute, the most helpful thing right now is data.
             </p>
           </div>
-          <span className="text-amber-500 text-2xl flex-shrink-0">
+          <span className="text-amber-500 text-2xl ml-4">
             {expandedOCR ? '−' : '+'}
           </span>
         </button>
