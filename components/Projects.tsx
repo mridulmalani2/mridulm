@@ -34,7 +34,7 @@ const Projects: React.FC = () => {
   }
 
   return (
-    <section className="relative h-screen md:min-h-screen bg-black overflow-hidden flex flex-col">
+    <section className="relative min-h-[100svh] md:min-h-screen bg-black overflow-hidden flex flex-col">
       <AnimatePresence mode="wait">
         {!isExpanded ? (
           <motion.div
@@ -43,7 +43,7 @@ const Projects: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8 }}
-            className="h-full w-full flex relative flex-col md:flex-row"
+            className="h-full min-h-[100svh] md:min-h-screen w-full flex relative flex-col md:flex-row"
           >
             {highlightProjects.map((p, i) => (
               <FluidProjectStrip
@@ -56,12 +56,12 @@ const Projects: React.FC = () => {
             ))}
 
             {/* Load More Trigger */}
-            <div className="absolute bottom-12 left-0 right-0 z-30 flex justify-center px-6 pointer-events-none">
+            <div className="absolute bottom-8 md:bottom-12 left-0 right-0 z-30 flex justify-center px-6 pointer-events-none">
               <motion.button
                 onClick={() => setIsExpanded(true)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex flex-col items-center gap-2 group cursor-pointer pointer-events-auto min-h-[48px]"
+                className="flex flex-col items-center gap-2 group cursor-pointer pointer-events-auto min-h-[48px] py-3 px-6"
                 aria-label="Explore more projects"
               >
                 <div className="flex flex-col items-center gap-1">
@@ -77,9 +77,9 @@ const Projects: React.FC = () => {
             </div>
 
             {/* Section Label */}
-            <div className="absolute top-28 md:top-36 left-0 right-0 md:left-12 md:right-auto z-30 pointer-events-none text-center md:text-left px-6">
+            <div className="absolute top-24 md:top-36 left-0 right-0 md:left-12 md:right-auto z-30 pointer-events-none text-center md:text-left px-6">
               <h2 className="font-montserrat text-amber-500 tracking-widest text-[10px] md:text-[12px] font-black mb-2 uppercase drop-shadow-lg">FEATURED WORK</h2>
-              <h3 className="font-playfair text-3xl md:text-5xl text-white italic opacity-95 drop-shadow-2xl">The Highlights</h3>
+              <h3 className="font-playfair text-2xl sm:text-3xl md:text-5xl text-white italic opacity-95 drop-shadow-2xl">The Highlights</h3>
             </div>
           </motion.div>
         ) : (
