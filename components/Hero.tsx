@@ -3,12 +3,12 @@ import { motion } from 'framer-motion';
 
 const Hero: React.FC = () => {
   return (
-    <div className="page-container section-v-padding flex flex-col items-center justify-center relative min-h-[100svh] md:min-h-screen px-4">
+    <div className="page-container section-v-padding flex flex-col items-center justify-center relative min-h-screen">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1 }}
-        className="text-center flex flex-col items-center max-w-3xl w-full"
+        className="text-center flex flex-col items-center max-w-3xl"
       >
         {/* Profile Image */}
         <div className="relative mb-8 md:mb-12">
@@ -37,16 +37,16 @@ const Hero: React.FC = () => {
         </p>
 
         {/* Clear CTAs */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center w-full sm:w-auto px-4 sm:px-0">
+        <div className="flex flex-wrap gap-4 justify-center">
           <a
             href="#projects"
-            className="px-6 py-4 bg-amber-500 text-black font-montserrat text-sm font-bold tracking-wider rounded hover:bg-amber-400 transition-colors min-h-[48px] flex items-center justify-center"
+            className="px-6 py-3 bg-amber-500 text-black font-montserrat text-sm font-bold tracking-wider rounded hover:bg-amber-400 transition-colors min-h-[48px] flex items-center"
           >
             View Projects
           </a>
           <a
             href="#contact"
-            className="px-6 py-4 border border-white/20 text-white font-montserrat text-sm font-medium tracking-wider rounded hover:border-amber-500 hover:text-amber-500 transition-colors min-h-[48px] flex items-center justify-center"
+            className="px-6 py-3 border border-white/20 text-white font-montserrat text-sm font-medium tracking-wider rounded hover:border-amber-500 hover:text-amber-500 transition-colors min-h-[48px] flex items-center"
           >
             Get in Touch
           </a>
