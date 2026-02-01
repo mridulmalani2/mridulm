@@ -15,75 +15,87 @@ interface TimelineEvent {
 const timelineData: TimelineEvent[] = ([
   {
     company: "HEC Paris",
-    role: "Master in Management (Finance)",
+    role: "Master in Management (International Finance)",
     location: "Paris, France",
     period: "08/2025 - 05/2027",
     type: 'education',
     startDate: new Date(2025, 7),
     description: [
-      "GPA: 3.67 / 4.0 (HEC Foundation Excellence Scholar)",
-      "Head of Partnerships at HEC Investment Club"
+      "GPA: 3.67 / 4.0 (HEC Foundation Trust Merit Excellence Scholar); ranked #2 globally by FT",
+      "Head of Partnerships at HEC Investment Club & Stanford ASES France (Sustainable Ventures)"
     ]
   },
   {
-    company: "Global Innovation Hub",
-    role: "Project Associate, Fund",
+    company: "Global HealthX",
+    role: "Project Associate; Accelerator and Fund",
     location: "Hyderabad, India",
     period: "03/2025 - 07/2025",
     type: 'work',
     startDate: new Date(2025, 2),
     description: [
-      "Executed financial analysis for 5+ startups",
-      "Supported healthcare venture capital allocation"
+      "Supported in-house healthtech ventures through ecosystem research and startup evaluation",
+      "Previously with the same team at Mantra Launchspace (EU-India Innocenter), consulted for 5+ startups, building go-to-market strategies with a focus on optimal pricing for agri-tech products"
     ]
   },
   {
     company: "Ashoka University",
-    role: "B.Sc. Economics & Finance",
+    role: "B.Sc. (Hons) in Economics and Finance",
     location: "Sonipat, India",
     period: "09/2022 - 05/2025",
     type: 'education',
     startDate: new Date(2022, 8),
     description: [
-      "GPA: 3.3 / 4.0; minor in Entrepreneurship",
-      "Recipient of Service Excellence Award",
-      "Research Assistant for Prof. Mukesh Sud"
+      "GPA: 3.3 / 4.0; coursework in Corporate Finance, Private Equity, and Real Estate",
+      "Centre for Entrepreneurship: Teaching Assistant (3 terms); only sophomore TA for 800+ students; youngest recipient of the Service Excellence Award",
+      "Vice President, Ashoka Entrepreneurship Club; Founding Director, Venture Capital Vertical",
+      "Team Lead and Research Assistant to Prof. Mukesh Sud; consulted for Himachal Pradesh Cricket Association on socio-economic impact analysis of Dharamshala Stadium"
     ]
   },
   {
-    company: "Chanakya Wealth",
-    role: "Equity Investments Intern",
+    company: "Chanakya Wealth Capital",
+    role: "Summer Intern; Portfolio Management Service",
     location: "Mumbai, India",
     period: "07/2024 - 08/2024",
     type: 'work',
     startDate: new Date(2024, 6),
     description: [
-      "Built research models (DCF, Comps) for $30M+ fund",
-      "Drafted portfolio allocation investment memos"
+      "Built equity research models (DCF, Comps) for 2 listed companies within a $30M+ AUM fund",
+      "Conducted downside risk assessment and drafted investment memos for internal portfolio reviews"
     ]
   },
   {
-    company: "India Mart",
-    role: "Investments Intern",
+    company: "IndiaMART InterMESH Ltd",
+    role: "Summer Intern; Corporate Strategy Department",
     location: "New Delhi, India",
     period: "05/2024 - 07/2024",
     type: 'work',
     startDate: new Date(2024, 4),
     description: [
-      "Performed due diligence on startups in MSME ecosystem",
-      "Conducted consumer behavior sectoral research"
+      "Performed financial modeling, valuation, and due diligence on 10+ startups in the MSME ecosystem",
+      "Conducted primary research and consumer behavior analysis in the payments technology sector"
     ]
   },
   {
-    company: "Reliance Industries",
-    role: "Intern (FC&A)",
+    company: "Earlyseed Ventures",
+    role: "Intern; Deal Sourcing Team",
     location: "Mumbai, India",
+    period: "12/2023 - 04/2024",
+    type: 'work',
+    startDate: new Date(2023, 11),
+    description: [
+      "Consulted on market research, competitor benchmarking, and preliminary valuation for 5+ startups"
+    ]
+  },
+  {
+    company: "Reliance Industries Limited",
+    role: "Summer Intern; FC&A Team and Reliance Green Energy",
+    location: "Jamnagar, India",
     period: "06/2023 - 07/2023",
     type: 'work',
     startDate: new Date(2023, 5),
     description: [
-      "Optimized Investment Analysis efficiency by 12x",
-      "Supported Green Energy and Scheduling teams"
+      "Developed an Excel-based investment analysis module (VBA/Macros) for capital budgeting projections of CBG plants",
+      "Worked with the Financial Compliance and Accounting team"
     ]
   }
 ] as TimelineEvent[]).sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
