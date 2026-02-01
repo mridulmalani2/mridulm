@@ -14,7 +14,7 @@ const Hero: React.FC = () => {
         <div className="relative mb-8 md:mb-12">
           <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-2 border-amber-500/20 shadow-2xl">
             <img
-              src="https://media.licdn.com/dms/image/v2/D4E03AQEAD7kxQrToiQ/profile-displayphoto-crop_800_800/B4EZsQwy85HcAI-/0/1765512786319?e=1769644800&v=beta&t=Ak0vCYLDyjekeSrlZFSIRP31p4qxfG2BTbqAjkDuEvM"
+              src="/mridul-photo.jpeg"
               alt="Mridul Malani"
               className="w-full h-full object-cover"
               loading="eager"
