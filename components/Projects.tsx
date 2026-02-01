@@ -34,7 +34,7 @@ const Projects: React.FC = () => {
   }
 
   return (
-    <section className="relative h-screen md:min-h-screen bg-black overflow-hidden flex flex-col">
+    <section className={`relative bg-black flex flex-col ${isExpanded ? 'min-h-screen overflow-visible' : 'h-screen md:min-h-screen overflow-hidden'}`}>
       <AnimatePresence mode="wait">
         {!isExpanded ? (
           <motion.div
