@@ -8,13 +8,13 @@ import { ArrowRight } from 'lucide-react';
 const SECTIONS = [
   {
     num: '01',
-    title: 'The Deal',
-    titleItalic: 'Room',
+    title: 'The Research',
+    titleItalic: 'Report',
     tag: 'Research Reports',
     byline:
       'Investment memos, deal analyses, and deep-dive research on the transactions reshaping industries.',
     to: '/research/reports',
-    cta: 'Enter the Deal Room',
+    cta: 'Read the Research Report',
     accentColor: '#CC0000',
     accentGlow: 'rgba(204,0,0,0.15)',
   },
@@ -33,12 +33,12 @@ const SECTIONS = [
   {
     num: '03',
     title: 'The',
-    titleItalic: 'Dispatch',
+    titleItalic: 'Newsletter',
     tag: 'Weekly Analysis',
     byline:
       'One story. Every angle. Weekly essays connecting markets, geopolitics, and business strategy into critical perspective.',
-    to: '/research/dispatch',
-    cta: 'Read the Dispatch',
+    to: '/research/newsletter',
+    cta: 'Read the Newsletter',
     accentColor: '#F5F5F0',
     accentGlow: 'rgba(245,245,240,0.08)',
   },
@@ -46,7 +46,7 @@ const SECTIONS = [
 
 /* ─── 3‑D Prism CTA ──────────────────────────────────────────── */
 
-const DEPTH = 14; // px – visible 3D edge thickness
+const DEPTH = 10; // px – visible 3D edge thickness
 
 interface PrismProps {
   section: (typeof SECTIONS)[number];
@@ -57,22 +57,20 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
 
-  // Mouse‑tracking rotation
   const rawX = useMotionValue(0);
   const rawY = useMotionValue(0);
   const rotateY = useSpring(rawX, { stiffness: 150, damping: 20 });
   const rotateX = useSpring(rawY, { stiffness: 150, damping: 20 });
 
-  // Floating idle animation offset (subtle bob)
   const floatY = useMotionValue(0);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width - 0.5; // -0.5 → 0.5
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
       const y = (e.clientY - rect.top) / rect.height - 0.5;
-      rawX.set(x * 20); // max ±10°
+      rawX.set(x * 20);
       rawY.set(-y * 14);
     },
     [rawX, rawY],
@@ -84,29 +82,28 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
     setHovered(false);
   }, [rawX, rawY]);
 
-  // Shadow reacts to tilt
   const shadowX = useTransform(rotateY, [-10, 10], [12, -12]);
   const shadowY = useTransform(rotateX, [-7, 7], [-8, 8]);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 80, rotateX: 8 }}
+      initial={{ opacity: 0, y: 60, rotateX: 8 }}
       animate={{ opacity: 1, y: 0, rotateX: 0 }}
       transition={{
         delay: 0.35 + index * 0.18,
         duration: 1,
         ease: [0.16, 1, 0.3, 1],
       }}
-      className="w-full"
+      className="w-full h-full"
     >
-      <Link to={section.to} className="block group outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-4 focus-visible:ring-offset-black rounded">
+      <Link to={section.to} className="block group outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-4 focus-visible:ring-offset-black rounded h-full">
         <div
           ref={containerRef}
           onMouseMove={handleMouseMove}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={handleMouseLeave}
           style={{ perspective: '900px' }}
-          className="relative"
+          className="relative h-full"
         >
           <motion.div
             style={{
@@ -123,11 +120,11 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 ? { type: 'spring', stiffness: 300, damping: 22 }
                 : { duration: 4 + index, repeat: Infinity, ease: 'easeInOut' }
             }
-            className="relative"
+            className="relative h-full"
           >
             {/* ── FRONT FACE ──────────────────────────── */}
             <div
-              className="relative overflow-hidden transition-colors duration-500"
+              className="relative overflow-hidden transition-colors duration-500 h-full flex flex-col"
               style={{
                 background: hovered
                   ? `linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.015) 100%)`
@@ -142,7 +139,7 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 style={{
                   height: '2px',
                   background: section.accentColor,
-                  opacity: hovered ? 1 : 0.35,
+                  opacity: hovered ? 1 : 0.5,
                   boxShadow: hovered ? `0 0 20px ${section.accentGlow}` : 'none',
                 }}
               />
@@ -156,21 +153,21 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 }}
               />
 
-              <div className="relative z-10 p-8 md:p-10 lg:p-12">
+              <div className="relative z-10 p-6 md:p-7 lg:p-8 flex flex-col flex-1">
                 {/* Number + Tag row */}
-                <div className="flex items-center gap-4 mb-10">
+                <div className="flex items-center gap-3 mb-6">
                   <span
                     className="font-mono text-[11px] font-medium tracking-[0.3em] transition-colors duration-500"
-                    style={{ color: hovered ? section.accentColor : 'rgba(255,255,255,0.2)' }}
+                    style={{ color: hovered ? section.accentColor : 'rgba(255,255,255,0.45)' }}
                   >
                     {section.num}
                   </span>
-                  <span className="w-8 h-px bg-white/10" />
+                  <span className="w-6 h-px bg-white/20" />
                   <span
-                    className="font-mono text-[9px] tracking-[0.25em] uppercase px-3 py-1 border transition-all duration-500"
+                    className="font-mono text-[9px] tracking-[0.2em] uppercase px-2.5 py-1 border transition-all duration-500"
                     style={{
-                      borderColor: hovered ? section.accentColor + '60' : 'rgba(255,255,255,0.1)',
-                      color: hovered ? section.accentColor : 'rgba(255,255,255,0.25)',
+                      borderColor: hovered ? section.accentColor + '60' : 'rgba(255,255,255,0.15)',
+                      color: hovered ? section.accentColor : 'rgba(255,255,255,0.45)',
                     }}
                   >
                     {section.tag}
@@ -178,25 +175,25 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 </div>
 
                 {/* Title */}
-                <div className="mb-6">
-                  <h2 className="font-playfair text-4xl md:text-5xl lg:text-[3.5rem] font-bold text-white leading-[0.95] tracking-tight">
-                    {section.title}{' '}
-                    <span className="italic font-normal text-white/50 group-hover:text-white/70 transition-colors duration-500">
+                <div className="mb-4">
+                  <h2 className="font-playfair text-2xl md:text-3xl lg:text-[2rem] font-bold text-white leading-[1] tracking-tight">
+                    {section.title}<br />
+                    <span className="italic font-normal text-white/60 group-hover:text-white/80 transition-colors duration-500">
                       {section.titleItalic}
                     </span>
                   </h2>
                 </div>
 
                 {/* Byline */}
-                <p className="font-lora text-[14px] md:text-[15px] leading-[1.7] text-white/35 group-hover:text-white/50 transition-colors duration-500 max-w-lg mb-10">
+                <p className="font-lora text-[13px] leading-[1.65] text-white/55 group-hover:text-white/70 transition-colors duration-500 mb-8 flex-1">
                   {section.byline}
                 </p>
 
                 {/* CTA */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 mt-auto">
                   <span
                     className="font-mono text-[10px] tracking-[0.2em] uppercase transition-all duration-500"
-                    style={{ color: hovered ? section.accentColor : 'rgba(255,255,255,0.3)' }}
+                    style={{ color: hovered ? section.accentColor : 'rgba(255,255,255,0.5)' }}
                   >
                     {section.cta}
                   </span>
@@ -206,7 +203,7 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                   >
                     <ArrowRight
                       size={13}
-                      style={{ color: hovered ? section.accentColor : 'rgba(255,255,255,0.3)' }}
+                      style={{ color: hovered ? section.accentColor : 'rgba(255,255,255,0.5)' }}
                       className="transition-colors duration-500"
                     />
                   </motion.div>
@@ -289,55 +286,57 @@ const ResearchLanding: React.FC = () => {
         }}
       />
 
-      <main id="main-content" className="relative z-10 pt-32 md:pt-40 pb-20 md:pb-28">
+      <main id="main-content" className="relative z-10 pt-28 md:pt-32 pb-8 md:pb-12 min-h-screen flex flex-col">
         {/* ── Masthead ─────────────────────────────── */}
-        <div className="max-w-5xl mx-auto px-5 md:px-8 mb-20 md:mb-28">
+        <div className="max-w-6xl mx-auto px-5 md:px-8 w-full mb-10 md:mb-14">
           <motion.div
             initial={{ opacity: 0, y: -15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="border-t border-white/10 mb-6" />
+            <div className="border-t border-white/15 mb-5" />
 
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-3">
               <div>
-                <span className="font-mono text-[9px] tracking-[0.35em] uppercase text-white/20 block mb-3">
+                <span className="font-mono text-[9px] tracking-[0.35em] uppercase text-white/40 block mb-2">
                   Mridul Malani &middot; Research
                 </span>
-                <h1 className="font-playfair text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[0.9] tracking-tight">
+                <h1 className="font-playfair text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-[0.9] tracking-tight">
                   Research<br />
-                  <span className="italic font-normal text-white/40">& Analysis</span>
+                  <span className="italic font-normal text-white/55">& Analysis</span>
                 </h1>
               </div>
 
-              <p className="font-lora text-[13px] md:text-[14px] leading-relaxed text-white/25 max-w-xs md:text-right">
+              <p className="font-lora text-[13px] leading-relaxed text-white/45 max-w-xs md:text-right">
                 Institutional-quality thinking across deals, models, and the forces shaping markets.
               </p>
             </div>
 
-            <div className="border-t border-white/10 mt-2" />
+            <div className="border-t border-white/15 mt-2" />
           </motion.div>
         </div>
 
-        {/* ── 3D Section CTAs ──────────────────────── */}
-        <div className="max-w-5xl mx-auto px-5 md:px-8 space-y-8 md:space-y-10">
-          {SECTIONS.map((section, i) => (
-            <Prism3D key={section.num} section={section} index={i} />
-          ))}
+        {/* ── 3D Section CTAs — 3-column grid ──────── */}
+        <div className="max-w-6xl mx-auto px-5 md:px-8 w-full flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 h-full">
+            {SECTIONS.map((section, i) => (
+              <Prism3D key={section.num} section={section} index={i} />
+            ))}
+          </div>
         </div>
 
         {/* ── Footer ───────────────────────────────── */}
-        <div className="max-w-5xl mx-auto px-5 md:px-8 mt-20 md:mt-28">
+        <div className="max-w-6xl mx-auto px-5 md:px-8 w-full mt-10 md:mt-14">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.2, duration: 0.8 }}
           >
-            <div className="border-t border-white/8 pt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <span className="font-mono text-[9px] tracking-[0.25em] uppercase text-white/15">
+            <div className="border-t border-white/12 pt-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <span className="font-mono text-[9px] tracking-[0.25em] uppercase text-white/30">
                 Vol. 1 &middot; 2025
               </span>
-              <span className="font-lora text-[12px] italic text-white/15">
+              <span className="font-lora text-[12px] italic text-white/30">
                 In pursuit of better questions, not just better answers.
               </span>
             </div>
