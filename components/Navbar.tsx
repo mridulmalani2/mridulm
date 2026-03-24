@@ -51,8 +51,15 @@ const Navbar: React.FC = () => {
     setIsMobileMenuOpen(false);
   };
 
+  const handleResearchClick = () => {
+    navigate('/research');
+    setIsMobileMenuOpen(false);
+  };
+
+  const isResearch = location.pathname.startsWith('/research');
+
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isScrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-8 md:py-12'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isResearch ? (isScrolled ? 'py-4 bg-black/95 backdrop-blur-xl border-b border-white/5' : 'py-4 md:py-6 bg-black/90 backdrop-blur-xl') : (isScrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-8 md:py-12')}`}>
       <div className="page-container flex justify-between items-center">
         {/* Logo */}
         <motion.div
@@ -89,6 +96,17 @@ const Navbar: React.FC = () => {
             }`}
           >
             FINANCEX
+          </button>
+          {/* Research Button */}
+          <button
+            onClick={handleResearchClick}
+            className={`px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-widest transition-all uppercase whitespace-nowrap ${
+              isResearch
+                ? 'bg-amber-500 text-black'
+                : 'bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            RESEARCH
           </button>
         </div>
 
@@ -138,6 +156,17 @@ const Navbar: React.FC = () => {
                 }`}
               >
                 FINANCEX
+              </motion.button>
+              <motion.button
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + (CHAPTERS.length + 1) * 0.08 }}
+                onClick={handleResearchClick}
+                className={`font-montserrat text-lg font-black tracking-widest transition-all uppercase w-full py-4 border-b border-white/5 text-center min-h-[48px] ${
+                  isResearch ? 'text-amber-500' : 'text-white/60 hover:text-amber-500'
+                }`}
+              >
+                RESEARCH
               </motion.button>
             </div>
             <div className="absolute bottom-12 text-center w-full">
