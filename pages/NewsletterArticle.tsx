@@ -189,7 +189,7 @@ const NewsletterArticle: React.FC = () => {
             <p className="font-lora text-[15px] md:text-[16px] leading-[1.8] text-[#111]/55">
               This issue takes one article and pulls it apart into a web of connected
               angles. The center node is the article. The satellites are the assumptions,
-              findings, and counter-narratives buried inside it — each backed by a separate
+              findings, and counter-narratives buried inside it - each backed by a separate
               source. The essay at the bottom ties it all together.
             </p>
           </motion.div>
