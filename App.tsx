@@ -3,9 +3,6 @@ import { Routes, Route, useLocation } from 'react-router-dom';
 import Background from './components/Background';
 import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
-import FinanceX from './pages/FinanceX';
-import ResearchIndex from './pages/ResearchIndex';
-import ResearchArticle from './pages/ResearchArticle';
 import { motion, useScroll, useSpring } from 'framer-motion';
 
 const App: React.FC = () => {
@@ -47,9 +44,6 @@ const App: React.FC = () => {
 
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/financex" element={<FinanceX />} />
-        <Route path="/research" element={<ResearchIndex />} />
-        <Route path="/research/:slug" element={<ResearchArticle />} />
       </Routes>
 
       {!isResearch && <div className="fixed inset-0 pointer-events-none z-[100] ring-1 ring-white/5" />}
