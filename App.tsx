@@ -6,6 +6,8 @@ import HomePage from './pages/HomePage';
 import ResearchLanding from './pages/ResearchLanding';
 import ResearchIndex from './pages/ResearchIndex';
 import ResearchArticle from './pages/ResearchArticle';
+import NewsletterIndex from './pages/NewsletterIndex';
+import NewsletterArticle from './pages/NewsletterArticle';
 import { motion, useScroll, useSpring } from 'framer-motion';
 
 const App: React.FC = () => {
@@ -17,7 +19,7 @@ const App: React.FC = () => {
   });
   const location = useLocation();
   const isResearch = location.pathname.startsWith('/research');
-  const isResearchArticles = location.pathname.startsWith('/research/reports');
+  const isResearchArticles = location.pathname.startsWith('/research/reports') || location.pathname.startsWith('/research/newsletter');
 
   return (
     <motion.div
@@ -51,6 +53,8 @@ const App: React.FC = () => {
         <Route path="/research" element={<ResearchLanding />} />
         <Route path="/research/reports" element={<ResearchIndex />} />
         <Route path="/research/reports/:slug" element={<ResearchArticle />} />
+        <Route path="/research/newsletter" element={<NewsletterIndex />} />
+        <Route path="/research/newsletter/:slug" element={<NewsletterArticle />} />
       </Routes>
 
       {!isResearchArticles && <div className="fixed inset-0 pointer-events-none z-[100] ring-1 ring-white/5" />}
