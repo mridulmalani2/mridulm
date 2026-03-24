@@ -47,7 +47,7 @@ const Navbar: React.FC = () => {
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isScrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-8 md:py-12'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-[160] transition-all duration-700 ${isResearch ? (isScrolled ? 'py-4 bg-black/95 backdrop-blur-xl border-b border-white/5' : 'py-4 md:py-6 bg-black/90 backdrop-blur-xl') : (isScrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-8 md:py-12')}`}>
       <div className="page-container flex justify-between items-center">
         {/* Logo */}
         <motion.div
