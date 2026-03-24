@@ -7,6 +7,7 @@ import CategoryBadge from '../components/research/CategoryBadge';
 import StatCard from '../components/research/StatCard';
 import SectionRenderer from '../components/research/SectionRenderer';
 import { ARTICLES } from '../data/research/articles';
+import { ssrInitial } from '../ssg/utils';
 
 // Article data imports - add new articles here
 import { ARTICLE_CONTENT as broadcomContent } from '../data/research/broadcom-vmware/content';
@@ -54,7 +55,7 @@ const ResearchArticle: React.FC = () => {
         {/* ── Article Header ───────────────────────────────────── */}
         <div className="max-w-3xl mx-auto px-5 md:px-8">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={ssrInitial({ opacity: 0, y: -10 })}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
@@ -101,7 +102,7 @@ const ResearchArticle: React.FC = () => {
         {/* ── Key Metrics Strip ────────────────────────────────── */}
         <div className="max-w-3xl mx-auto px-5 md:px-8">
           <motion.div
-            initial={{ opacity: 0, y: 15 }}
+            initial={ssrInitial({ opacity: 0, y: 15 })}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.5 }}
             className="grid grid-cols-2 md:grid-cols-4 gap-3 my-8 md:my-10"
@@ -116,7 +117,7 @@ const ResearchArticle: React.FC = () => {
         {toc.length > 0 && (
           <div className="max-w-3xl mx-auto px-5 md:px-8 mb-8">
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={ssrInitial({ opacity: 0 })}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.25, duration: 0.4 }}
               className="border border-[#111]/10 p-4 md:p-5"

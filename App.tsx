@@ -10,6 +10,9 @@ import NewsletterIndex from './pages/NewsletterIndex';
 import NewsletterArticle from './pages/NewsletterArticle';
 import { motion, useScroll, useSpring } from 'framer-motion';
 
+// Detect server-side rendering to prevent hydration mismatches with Framer Motion
+const isClient = typeof window !== 'undefined';
+
 const App: React.FC = () => {
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
@@ -23,7 +26,7 @@ const App: React.FC = () => {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={isClient ? { opacity: 0 } : false}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
       className={`relative min-h-screen ${isResearchArticles ? 'bg-[#F9F9F7]' : 'selection:bg-amber-500 selection:text-black bg-black'}`}

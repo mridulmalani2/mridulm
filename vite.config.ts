@@ -7,5 +7,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true
-  }
+  },
+  // SSR build configuration used by `vite build --ssr entry-server.tsx`
+  ssr: {
+    noExternal: ['framer-motion', 'lucide-react'],
+  },
 });

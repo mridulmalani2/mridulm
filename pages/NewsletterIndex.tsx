@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import ResearchLayout from '../components/research/ResearchLayout';
 import { NEWSLETTERS } from '../data/research/newsletters';
+import { ssrInitial } from '../ssg/utils';
 
 const NewsletterIndex: React.FC = () => {
   const today = new Date();
@@ -20,7 +21,7 @@ const NewsletterIndex: React.FC = () => {
         {/* ── Masthead ─────────────────────────────────────────── */}
         <div className="max-w-5xl mx-auto px-5 md:px-8">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={ssrInitial({ opacity: 0, y: -10 })}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
@@ -57,7 +58,7 @@ const NewsletterIndex: React.FC = () => {
         {/* ── Format description ──────────────────────────────── */}
         <div className="max-w-5xl mx-auto px-5 md:px-8 mt-8 md:mt-10">
           <motion.p
-            initial={{ opacity: 0 }}
+            initial={ssrInitial({ opacity: 0 })}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
             className="font-lora text-[14px] md:text-[15px] leading-relaxed text-[#111]/50 max-w-2xl"
@@ -73,7 +74,7 @@ const NewsletterIndex: React.FC = () => {
           {NEWSLETTERS.map((newsletter, i) => (
             <motion.div
               key={newsletter.slug}
-              initial={{ opacity: 0, y: 20 }}
+              initial={ssrInitial({ opacity: 0, y: 20 })}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + i * 0.1, duration: 0.5 }}
             >

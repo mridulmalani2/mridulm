@@ -1,3 +1,5 @@
+# SPA fallback for non-prerendered routes.
+# Pre-rendered routes are served directly as static files by Netlify.
 [[redirects]]
   from = "/*"
   to = "/index.html"

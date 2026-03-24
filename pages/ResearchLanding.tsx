@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
+import { ssrInitial } from '../ssg/utils';
 
 /* ─── Section data ────────────────────────────────────────────── */
 
@@ -87,7 +88,7 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 60, rotateX: 8 }}
+      initial={ssrInitial({ opacity: 0, y: 60, rotateX: 8 })}
       animate={{ opacity: 1, y: 0, rotateX: 0 }}
       transition={{
         delay: 0.35 + index * 0.18,
@@ -290,7 +291,7 @@ const ResearchLanding: React.FC = () => {
         {/* ── Masthead ─────────────────────────────── */}
         <div className="max-w-6xl mx-auto px-5 md:px-8 w-full mb-10 md:mb-14">
           <motion.div
-            initial={{ opacity: 0, y: -15 }}
+            initial={ssrInitial({ opacity: 0, y: -15 })}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           >
@@ -328,7 +329,7 @@ const ResearchLanding: React.FC = () => {
         {/* ── Footer ───────────────────────────────── */}
         <div className="max-w-6xl mx-auto px-5 md:px-8 w-full mt-10 md:mt-14">
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={ssrInitial({ opacity: 0 })}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.2, duration: 0.8 }}
           >

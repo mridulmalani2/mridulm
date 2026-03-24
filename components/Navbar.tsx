@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CHAPTERS } from '../constants';
 import { Menu, X } from 'lucide-react';
+import { ssrInitial } from '../ssg/utils';
 
 const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -52,7 +53,7 @@ const Navbar: React.FC = () => {
       <div className="page-container flex justify-between items-center">
         {/* Logo */}
         <motion.div
-          initial={{ opacity: 0, x: -10 }}
+          initial={ssrInitial({ opacity: 0, x: -10 })}
           animate={{ opacity: 1, x: 0 }}
           className="cursor-pointer relative z-[170]"
           onClick={handleLogoClick}

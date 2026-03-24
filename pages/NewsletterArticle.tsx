@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import ResearchLayout from '../components/research/ResearchLayout';
 import { NEWSLETTERS } from '../data/research/newsletters';
 import type { NewsletterNode } from '../data/research/newsletters';
+import { ssrInitial } from '../ssg/utils';
 
 /* ─── Node component for the web visualization ──────────────── */
 
@@ -18,7 +19,7 @@ interface NodeCardProps {
 
 const NodeCard: React.FC<NodeCardProps> = ({ node, index, isExpanded, onToggle }) => (
   <motion.div
-    initial={{ opacity: 0, y: 20 }}
+    initial={ssrInitial({ opacity: 0, y: 20 })}
     whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true }}
     transition={{ delay: 0.1 + index * 0.08, duration: 0.5 }}
@@ -125,7 +126,7 @@ const NewsletterArticle: React.FC = () => {
         <div className="max-w-4xl mx-auto px-5 md:px-8">
           {/* ── Back nav ─────────────────────────────────── */}
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={ssrInitial({ opacity: 0 })}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
             className="mb-8"
@@ -141,7 +142,7 @@ const NewsletterArticle: React.FC = () => {
 
           {/* ── Article header ───────────────────────────── */}
           <motion.header
-            initial={{ opacity: 0, y: -10 }}
+            initial={ssrInitial({ opacity: 0, y: -10 })}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
@@ -181,7 +182,7 @@ const NewsletterArticle: React.FC = () => {
 
           {/* ── The Format ───────────────────────────────── */}
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={ssrInitial({ opacity: 0 })}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
             className="mt-10 mb-12"
@@ -196,7 +197,7 @@ const NewsletterArticle: React.FC = () => {
 
           {/* ── Center node ──────────────────────────────── */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
+            initial={ssrInitial({ opacity: 0, scale: 0.97 })}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}

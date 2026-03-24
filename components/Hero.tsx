@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { ssrInitial } from '../ssg/utils';
 
 const Hero: React.FC = () => {
   return (
     <div className="page-container section-v-padding flex flex-col items-center justify-center relative min-h-screen">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={ssrInitial({ opacity: 0, y: 20 })}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1 }}
         className="text-center flex flex-col items-center max-w-3xl"
@@ -55,7 +56,7 @@ const Hero: React.FC = () => {
 
       {/* Scroll Indicator */}
       <motion.div
-        initial={{ opacity: 0 }}
+        initial={ssrInitial({ opacity: 0 })}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.5 }}
         className="absolute bottom-8 left-1/2 -translate-x-1/2"

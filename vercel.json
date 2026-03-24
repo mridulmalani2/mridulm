@@ -1,8 +1,11 @@
 {
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "src": "^/$", "dest": "/index.html" },
+    { "src": "^/research$", "dest": "/research/index.html" },
+    { "src": "^/research/reports$", "dest": "/research/reports/index.html" },
+    { "src": "^/research/reports/([^/]+)$", "dest": "/research/reports/$1/index.html" },
+    { "src": "^/research/newsletter$", "dest": "/research/newsletter/index.html" },
+    { "src": "^/research/newsletter/([^/]+)$", "dest": "/research/newsletter/$1/index.html" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
