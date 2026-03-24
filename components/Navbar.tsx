@@ -9,6 +9,7 @@ const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const isResearch = location.pathname.startsWith('/research');
 
   useEffect(() => {
     const handleScroll = () => {
