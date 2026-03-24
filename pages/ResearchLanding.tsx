@@ -8,19 +8,19 @@ import { ArrowRight } from 'lucide-react';
 const SECTIONS = [
   {
     num: '01',
-    title: 'The Deal',
-    titleItalic: 'Room',
+    title: 'The Research',
+    titleItalic: 'Report',
     tag: 'Research Reports',
     byline:
       'Investment memos, deal analyses, and deep-dive research on the transactions reshaping industries.',
     to: '/research/reports',
-    cta: 'Enter the Deal Room',
+    cta: 'Read the Research Report',
     accentColor: '#CC0000',
     accentGlow: 'rgba(204,0,0,0.15)',
   },
   {
     num: '02',
-    title: 'The',
+    title: '',
     titleItalic: 'Toolkit',
     tag: 'Models & Frameworks',
     byline:
@@ -32,13 +32,13 @@ const SECTIONS = [
   },
   {
     num: '03',
-    title: 'The',
-    titleItalic: 'Dispatch',
+    title: '',
+    titleItalic: 'Newsletter',
     tag: 'Weekly Analysis',
     byline:
       'One story. Every angle. Weekly essays connecting markets, geopolitics, and business strategy into critical perspective.',
-    to: '/research/dispatch',
-    cta: 'Read the Dispatch',
+    to: '/research/newsletter',
+    cta: 'Read the Newsletter',
     accentColor: '#F5F5F0',
     accentGlow: 'rgba(245,245,240,0.08)',
   },
@@ -180,7 +180,7 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 {/* Title */}
                 <div className="mb-6">
                   <h2 className="font-playfair text-4xl md:text-5xl lg:text-[3.5rem] font-bold text-white leading-[0.95] tracking-tight">
-                    {section.title}{' '}
+                    {section.title}{section.title ? ' ' : ''}
                     <span className="italic font-normal text-white/50 group-hover:text-white/70 transition-colors duration-500">
                       {section.titleItalic}
                     </span>
