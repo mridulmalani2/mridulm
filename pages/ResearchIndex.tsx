@@ -67,7 +67,7 @@ const ResearchIndex: React.FC = () => {
               transition={{ delay: 0.2 + i * 0.1, duration: 0.5 }}
             >
               <Link
-                to={`/research/${article.slug}`}
+                to={`/research/reports/${article.slug}`}
                 className="group block border border-[#111]/10 transition-all duration-300 hover:shadow-[4px_4px_0px_#111111] hover:translate-x-[-2px] hover:translate-y-[-2px]"
               >
                 <div className="p-6 md:p-8 lg:p-10">
