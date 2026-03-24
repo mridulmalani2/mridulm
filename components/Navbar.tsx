@@ -74,6 +74,12 @@ const Navbar: React.FC = () => {
                 {chapter.subtitle}
               </button>
             ))}
+            <button
+              onClick={() => navigate('/research')}
+              className={`px-6 py-2 rounded-full font-montserrat text-[10px] font-black tracking-widest transition-all uppercase whitespace-nowrap ${isResearch ? 'text-white bg-white/10' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              Research
+            </button>
           </div>
         </div>
 
@@ -113,6 +119,15 @@ const Navbar: React.FC = () => {
                   {chapter.subtitle}
                 </motion.button>
               ))}
+              <motion.button
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + CHAPTERS.length * 0.08 }}
+                onClick={() => { navigate('/research'); setIsMobileMenuOpen(false); }}
+                className={`font-montserrat text-lg font-black tracking-widest transition-all uppercase w-full py-4 border-b border-white/5 text-center min-h-[48px] ${isResearch ? 'text-amber-500' : 'text-white/60 hover:text-amber-500'}`}
+              >
+                Research
+              </motion.button>
             </div>
             <div className="absolute bottom-12 text-center w-full">
               <p className="font-montserrat text-[9px] tracking-widest text-white/40 uppercase font-black">Mridul Malani • Portfolio</p>
