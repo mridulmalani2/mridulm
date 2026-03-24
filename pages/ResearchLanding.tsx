@@ -20,7 +20,7 @@ const SECTIONS = [
   },
   {
     num: '02',
-    title: '',
+    title: 'The',
     titleItalic: 'Toolkit',
     tag: 'Models & Frameworks',
     byline:
@@ -32,7 +32,7 @@ const SECTIONS = [
   },
   {
     num: '03',
-    title: '',
+    title: 'The',
     titleItalic: 'Newsletter',
     tag: 'Weekly Analysis',
     byline:
@@ -177,7 +177,7 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 {/* Title */}
                 <div className="mb-4">
                   <h2 className="font-playfair text-2xl md:text-3xl lg:text-[2rem] font-bold text-white leading-[1] tracking-tight">
-                    {section.title}{section.title ? ' ' : ''}
+                    {section.title}<br />
                     <span className="italic font-normal text-white/60 group-hover:text-white/80 transition-colors duration-500">
                       {section.titleItalic}
                     </span>
