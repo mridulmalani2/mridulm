@@ -178,7 +178,7 @@ const Prism3D: React.FC<PrismProps> = ({ section, index }) => {
                 <div className="mb-4">
                   <h2 className="font-playfair text-2xl md:text-3xl lg:text-[2rem] font-bold text-white leading-[1] tracking-tight">
                     {section.title}<br />
-                    <span className="italic font-normal text-white/60 group-hover:text-white/80 transition-colors duration-500">
+                    <span className="transition-colors duration-500">
                       {section.titleItalic}
                     </span>
                   </h2>
