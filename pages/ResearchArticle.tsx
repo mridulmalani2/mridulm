@@ -29,7 +29,7 @@ const ResearchArticle: React.FC = () => {
         <div className="pt-36 pb-24 text-center">
           <p className="font-playfair text-2xl text-[#111]/60">Article not found.</p>
           <button
-            onClick={() => navigate('/research')}
+            onClick={() => navigate('/research/reports')}
             className="mt-4 font-mono text-sm text-[#CC0000] hover:underline"
           >
             Back to Research
@@ -60,7 +60,7 @@ const ResearchArticle: React.FC = () => {
           >
             {/* Back link */}
             <Link
-              to="/research"
+              to="/research/reports"
               className="inline-flex items-center gap-2 font-mono text-[11px] tracking-wider uppercase text-[#111]/40 hover:text-[#CC0000] transition-colors mb-8 group"
             >
               <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
@@ -150,7 +150,7 @@ const ResearchArticle: React.FC = () => {
         <div className="max-w-3xl mx-auto px-5 md:px-8 mt-12 md:mt-16">
           <div className="border-t border-[#111]/15 pt-6 flex items-center justify-between">
             <Link
-              to="/research"
+              to="/research/reports"
               className="inline-flex items-center gap-2 font-mono text-[11px] tracking-wider uppercase text-[#111]/40 hover:text-[#CC0000] transition-colors group"
             >
               <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
