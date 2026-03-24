@@ -316,7 +316,7 @@ const ResearchLanding: React.FC = () => {
           </motion.div>
         </div>
 
-        {/* ── 3D Section CTAs — 3-column grid ──────── */}
+        {/* ── 3D Section CTAs - 3-column grid ──────── */}
         <div className="max-w-6xl mx-auto px-5 md:px-8 w-full flex-1">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 h-full">
             {SECTIONS.map((section, i) => (

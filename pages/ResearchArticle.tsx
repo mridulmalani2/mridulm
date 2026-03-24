@@ -8,7 +8,7 @@ import StatCard from '../components/research/StatCard';
 import SectionRenderer from '../components/research/SectionRenderer';
 import { ARTICLES } from '../data/research/articles';
 
-// Article data imports — add new articles here
+// Article data imports - add new articles here
 import { ARTICLE_CONTENT as broadcomContent } from '../data/research/broadcom-vmware/content';
 import { MODEL_SHEETS as broadcomModel } from '../data/research/broadcom-vmware/model';
 
