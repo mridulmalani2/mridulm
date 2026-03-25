@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
-import { fmtPct, fmtCurrency, irrColor } from '../../../lib/formatters';
+import { fmtPct, irrColor } from '../../../lib/formatters';
 
 const ReturnsSummary: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);

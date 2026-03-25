@@ -39,7 +39,7 @@ const ValueBridge: React.FC = () => {
           <Tooltip
             contentStyle={{ background: '#0a0d13', border: '1px solid #1e2a3a', fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}
             labelStyle={{ color: '#e8edf5' }}
-            formatter={(val: number) => [`£${val.toFixed(1)}m`, '']}
+            formatter={(val) => val != null ? [`£${Number(val).toFixed(1)}m`, ''] : ['—', '']}
           />
           {/* Invisible base bar */}
           <Bar dataKey="base" stackId="a" fill="transparent" />

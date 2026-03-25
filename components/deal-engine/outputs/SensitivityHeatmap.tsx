@@ -14,8 +14,6 @@ const SensitivityHeatmap: React.FC = () => {
   const setActive = useDealEngineStore((s) => s.setActiveSensitivityTable);
   const loadSensitivity = useDealEngineStore((s) => s.loadSensitivity);
   const tables = useDealEngineStore((s) => s.sensitivityTables);
-  const isCalc = useDealEngineStore((s) => s.isCalculating);
-
   const table = tables.find((t) => t.table_id === activeTable);
 
   useEffect(() => {

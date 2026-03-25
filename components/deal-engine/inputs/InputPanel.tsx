@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import InputField from './InputField';
-import { fmtCurrency, fmtMultiple, fmtPct } from '../../../lib/formatters';
 
 const SECTORS = [
   'Technology', 'Healthcare', 'Industrials', 'Consumer',
@@ -39,11 +38,9 @@ const Section: React.FC<SectionProps> = ({ title, children, defaultOpen = true }
 
 const InputPanel: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
-  const updateField = useDealEngineStore((s) => s.updateField);
 
   if (!ms) return null;
 
-  const hp = ms.exit.holding_period;
   const entryMultWarn = ms.entry.entry_ebitda_multiple > 15 ? 'High entry — flag for IC' : undefined;
   const levWarn = ms.entry.leverage_ratio > 7 ? 'Covenant breach risk' : undefined;
 

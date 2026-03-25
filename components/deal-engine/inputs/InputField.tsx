@@ -19,11 +19,12 @@ interface InputFieldProps {
 
 const InputField: React.FC<InputFieldProps> = ({
   label, path, value, type = 'number', options, suffix, readOnly,
-  aiToggleable, min, max, step, warning, formatter,
+  aiToggleable: _aiToggleable, min: _min, max: _max, step: _step, warning, formatter,
 }) => {
+  void _aiToggleable; void _min; void _max; void _step;
   const updateField = useDealEngineStore((s) => s.updateField);
   const [localVal, setLocalVal] = useState(String(value));
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     setLocalVal(String(value));
