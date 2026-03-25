@@ -21,7 +21,7 @@ const App: React.FC = () => {
   const location = useLocation();
   const isResearch = location.pathname.startsWith('/research');
   const isResearchArticles = location.pathname.startsWith('/research/reports') || location.pathname.startsWith('/research/newsletter');
-  const isDealEngine = location.pathname.startsWith('/deal-engine');
+  const isDealEngine = location.pathname.startsWith('/deal-engine') || location.pathname.startsWith('/research/toolkit');
 
   return (
     <motion.div
@@ -57,6 +57,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/deal-engine" element={<DealEngine />} />
+        <Route path="/research/toolkit" element={<DealEngine />} />
         <Route path="/research" element={<ResearchLanding />} />
         <Route path="/research/reports" element={<ResearchIndex />} />
         <Route path="/research/reports/:slug" element={<ResearchArticle />} />
