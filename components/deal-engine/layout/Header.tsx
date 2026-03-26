@@ -21,35 +21,49 @@ const Header: React.FC = () => {
 
   return (
     <div
-      className="flex items-center justify-between px-4 h-10 flex-shrink-0"
-      style={{ background: '#0a0d13', borderBottom: '1px solid #1e2a3a' }}
+      className="relative z-10 flex items-center justify-between px-5 h-11 flex-shrink-0"
+      style={{ background: '#F9F9F7', borderBottom: '1px solid rgba(17,17,17,0.1)' }}
     >
-      <div className="flex items-center gap-3">
-        <span
-          className="text-xs font-medium tracking-wide"
-          style={{ color: '#00d4ff', fontFamily: "'IBM Plex Mono', monospace" }}
-        >
-          {modelState?.deal_name || 'Deal Engine'}
-        </span>
-        <span className="text-xs" style={{ color: '#6b7a96', fontFamily: "'IBM Plex Mono', monospace" }}>
+      <div className="flex items-center gap-4">
+        <div className="border-l-[2px] border-[#CC0000] pl-3">
+          <span
+            className="text-[11px] font-medium tracking-widest uppercase"
+            style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            {modelState?.deal_name || 'Deal Engine'}
+          </span>
+        </div>
+        <span className="text-[10px] tracking-widest" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>
           {modelState?.currency || 'GBP'}
         </span>
         {isCalculating && (
-          <span className="text-xs animate-pulse" style={{ color: '#ffaa00', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <span className="text-[10px] tracking-widest uppercase animate-pulse" style={{ color: '#b45309', fontFamily: "'JetBrains Mono', monospace" }}>
             Calculating...
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {modelState && (
           <>
-            <button onClick={exportExcel} className="px-2 py-1 text-xs transition-colors hover:text-white" style={{ color: '#6b7a96', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <button
+              onClick={exportExcel}
+              className="px-2.5 py-1 text-[10px] tracking-wider uppercase transition-colors hover:text-[#111]"
+              style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
+            >
               Export .xlsx
             </button>
-            <button onClick={saveModel} className="px-2 py-1 text-xs transition-colors hover:text-white" style={{ color: '#6b7a96', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <button
+              onClick={saveModel}
+              className="px-2.5 py-1 text-[10px] tracking-wider uppercase transition-colors hover:text-[#111]"
+              style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
+            >
               Save
             </button>
-            <button onClick={handleLoadFile} className="px-2 py-1 text-xs transition-colors hover:text-white" style={{ color: '#6b7a96', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <button
+              onClick={handleLoadFile}
+              className="px-2.5 py-1 text-[10px] tracking-wider uppercase transition-colors hover:text-[#111]"
+              style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
+            >
               Load
             </button>
           </>

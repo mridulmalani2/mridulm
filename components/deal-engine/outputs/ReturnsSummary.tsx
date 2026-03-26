@@ -11,32 +11,34 @@ const ReturnsSummary: React.FC = () => {
   const ret = ms.returns;
   const displayIrr = showUnlevered ? ret.irr_unlevered : showGross ? ret.irr_gross : ret.irr;
 
+  const toggleBtnStyle = (active: boolean) => ({
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    color: active ? '#CC0000' : 'rgba(17,17,17,0.4)',
+    border: `1px solid ${active ? 'rgba(204,0,0,0.3)' : 'rgba(17,17,17,0.12)'}`,
+    background: 'transparent',
+  });
+
   return (
-    <div className="p-4 mb-3" style={{ background: '#0f1420', border: '1px solid #1e2a3a' }}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium tracking-widest uppercase" style={{ color: '#6b7a96', fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-5 mb-3" style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
           Returns
         </span>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <button
             onClick={() => { setShowGross(!showGross); setShowUnlevered(false); }}
-            className="text-xs px-1.5 py-0.5"
-            style={{
-              fontFamily: "'IBM Plex Mono', monospace",
-              color: showGross ? '#00d4ff' : '#6b7a96',
-              border: `1px solid ${showGross ? '#00d4ff' : '#1e2a3a'}`,
-            }}
+            className="text-xs px-2 py-0.5 transition-colors"
+            style={toggleBtnStyle(showGross)}
           >
             Gross
           </button>
           <button
             onClick={() => { setShowUnlevered(!showUnlevered); setShowGross(false); }}
-            className="text-xs px-1.5 py-0.5"
-            style={{
-              fontFamily: "'IBM Plex Mono', monospace",
-              color: showUnlevered ? '#00d4ff' : '#6b7a96',
-              border: `1px solid ${showUnlevered ? '#00d4ff' : '#1e2a3a'}`,
-            }}
+            className="text-xs px-2 py-0.5 transition-colors"
+            style={toggleBtnStyle(showUnlevered)}
           >
             Unlev
           </button>
@@ -44,35 +46,35 @@ const ReturnsSummary: React.FC = () => {
       </div>
 
       {/* Hero IRR */}
-      <div className="mb-3">
-        <div className="text-3xl font-bold" style={{ color: irrColor(displayIrr), fontFamily: "'IBM Plex Mono', monospace" }}>
+      <div className="mb-5">
+        <div className="font-playfair text-5xl font-bold mb-1" style={{ color: irrColor(displayIrr) }}>
           {displayIrr != null ? fmtPct(displayIrr) : 'N/C'}
         </div>
-        <div className="text-xs" style={{ color: '#6b7a96', fontFamily: 'Inter, sans-serif' }}>
+        <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
           {showUnlevered ? 'Unlevered' : showGross ? 'Gross' : 'Equity'} IRR
           {ret.irr_convergence_failed && ' (non-convergent)'}
         </div>
       </div>
 
       {/* Secondary metrics */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-4" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 16 }}>
         <div>
-          <div className="text-sm font-semibold" style={{ color: '#e8edf5', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
             {ret.moic.toFixed(2)}x
           </div>
-          <div className="text-xs" style={{ color: '#6b7a96' }}>MOIC</div>
+          <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>MOIC</div>
         </div>
         <div>
-          <div className="text-sm font-semibold" style={{ color: '#e8edf5', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
             {ret.payback_years.toFixed(1)}yr
           </div>
-          <div className="text-xs" style={{ color: '#6b7a96' }}>Payback</div>
+          <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Payback</div>
         </div>
         <div>
-          <div className="text-sm font-semibold" style={{ color: '#e8edf5', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
             {fmtPct(ret.cash_yield_avg)}
           </div>
-          <div className="text-xs" style={{ color: '#6b7a96' }}>Cash Yield</div>
+          <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Cash Yield</div>
         </div>
       </div>
     </div>

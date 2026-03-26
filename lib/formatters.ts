@@ -23,8 +23,8 @@ export function fmtNumber(v: number, dp = 1): string {
 }
 
 export function irrColor(irr: number | null | undefined): string {
-  if (irr == null) return '#6b7a96';
-  if (irr > 0.25) return '#00c896';
-  if (irr >= 0.15) return '#ffaa00';
-  return '#ff4757';
+  if (irr == null) return 'rgba(17,17,17,0.35)';
+  if (irr > 0.25) return '#15803d';
+  if (irr >= 0.15) return '#b45309';
+  return '#b91c1c';
 }
