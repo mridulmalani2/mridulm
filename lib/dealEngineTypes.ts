@@ -240,10 +240,17 @@ export interface ModelState {
   fees: FeeStructure;
   mip: ManagementIncentive;
   exit: ExitAssumptions;
+  // New: segments and add-ons
+  revenue_segments: RevenueSegment[];
+  add_on_acquisitions: AddOnAcquisition[];
+  // Computed outputs
   projections: { years: AnnualProjectionYear[] };
   debt_schedule: DebtScheduleResult;
   returns: Returns;
   value_drivers: ValueDriverDecomposition;
+  sources_and_uses: SourcesAndUses;
+  credit_analysis: CreditAnalysis;
+  ebitda_bridge: EBITDABridge;
   scenarios: ScenarioSet[];
   sensitivity_tables: SensitivityTable[];
   exit_reality_check: ExitRealityCheck;
@@ -256,4 +263,88 @@ export interface AppliedDiff {
   field: string;
   old: unknown;
   new: unknown;
+}
+
+// ── Sources & Uses ───────────────────────────────────────────────────────
+
+export interface SourcesAndUses {
+  // Uses
+  enterprise_value: number;
+  transaction_fees: number;
+  financing_fees: number;
+  cash_to_balance_sheet: number;
+  total_uses: number;
+  // Sources
+  debt_sources: { name: string; amount: number }[];
+  total_debt: number;
+  rollover_equity: number;
+  sponsor_equity: number;
+  total_sources: number;
+  // Derived
+  equity_pct_of_total: number;
+  debt_pct_of_total: number;
+  implied_leverage: number;
+}
+
+// ── Credit Analysis ──────────────────────────────────────────────────────
+
+export interface CreditMetricsYear {
+  year: number;
+  fccr: number;                    // (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Amort)
+  interest_coverage: number;       // EBITDA / Cash Interest
+  dscr: number;                    // FCF pre-debt / (Cash Interest + Mandatory Amort)
+  leverage: number;                // Net Debt / EBITDA
+  senior_leverage: number;         // Senior Debt / EBITDA
+  total_debt: number;
+  cumulative_debt_paydown: number;
+  debt_paydown_pct: number;
+}
+
+export interface CreditAnalysis {
+  metrics_by_year: CreditMetricsYear[];
+  max_debt_capacity_at_4x: number;
+  max_debt_capacity_at_5x: number;
+  max_debt_capacity_at_6x: number;
+  covenant_headroom_by_year: number[];  // leverage headroom vs 6x covenant
+  refinancing_risk: boolean;
+  refinancing_risk_detail: string;
+  recovery_waterfall: { tranche: string; recovery_pct: number }[];
+  credit_rating_estimate: string;
+}
+
+// ── Revenue Segments ─────────────────────────────────────────────────────
+
+export interface RevenueSegment {
+  name: string;
+  base_revenue: number;
+  growth_rates: number[];
+  margin_override: number | null;  // segment-level EBITDA margin if different
+}
+
+// ── Add-On Acquisitions ──────────────────────────────────────────────────
+
+export interface AddOnAcquisition {
+  name: string;
+  year: number;                  // acquisition year (1-indexed)
+  revenue: number;               // LTM revenue at acquisition
+  ebitda_margin: number;
+  purchase_multiple: number;
+  funding: 'debt' | 'equity' | 'mixed';
+  debt_pct: number;              // % funded by debt (if mixed)
+  synergy_revenue: number;
+  synergy_cost: number;          // cost synergies (positive = savings)
+  integration_cost: number;      // one-time integration cost
+}
+
+// ── EBITDA Bridge ────────────────────────────────────────────────────────
+
+export interface EBITDABridge {
+  entry_ebitda: number;
+  organic_revenue_contribution: number;
+  margin_expansion_contribution: number;
+  cost_synergies: number;
+  add_on_ebitda: number;
+  integration_costs: number;
+  monitoring_fees: number;
+  exit_ebitda: number;
 }

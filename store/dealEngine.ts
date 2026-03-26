@@ -11,7 +11,9 @@ import type {
 } from '../lib/dealEngineTypes';
 import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
 import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
-import { callAnthropic } from '../lib/engine/aiGateway';
+import { callAI } from '../lib/engine/ai/gateway';
+import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
+import type { AIProvider, ProviderConfig } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
 
 /** Apply a dot-notation update to a nested object. */
@@ -40,6 +42,7 @@ interface DealEngineStore {
   isCalculating: boolean;
   chatHistory: ChatMessage[];
   apiKey: string | null;
+  aiProvider: AIProvider;
   activeScenario: string;
   activeSensitivityTable: number;
   scenarios: ScenarioSet[];
@@ -49,6 +52,8 @@ interface DealEngineStore {
   error: string | null;
 
   setApiKey: (key: string) => void;
+  setAiProvider: (provider: AIProvider) => void;
+  setProviderAndKey: (provider: AIProvider, key: string) => void;
   initializeModel: (inputs: {
     deal_name: string;
     revenue: number;
@@ -74,6 +79,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   isCalculating: false,
   chatHistory: [],
   apiKey: typeof window !== 'undefined' ? sessionStorage.getItem('deal-engine-api-key') : null,
+  aiProvider: (typeof window !== 'undefined' ? sessionStorage.getItem('deal-engine-ai-provider') as AIProvider : null) || 'anthropic',
   activeScenario: 'base',
   activeSensitivityTable: 1,
   scenarios: [],
@@ -84,7 +90,20 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
 
   setApiKey: (key) => {
     sessionStorage.setItem('deal-engine-api-key', key);
-    set({ apiKey: key });
+    const detected = detectProvider(key);
+    sessionStorage.setItem('deal-engine-ai-provider', detected);
+    set({ apiKey: key, aiProvider: detected });
+  },
+
+  setAiProvider: (provider) => {
+    sessionStorage.setItem('deal-engine-ai-provider', provider);
+    set({ aiProvider: provider });
+  },
+
+  setProviderAndKey: (provider, key) => {
+    sessionStorage.setItem('deal-engine-api-key', key);
+    sessionStorage.setItem('deal-engine-ai-provider', provider);
+    set({ apiKey: key, aiProvider: provider });
   },
 
   initializeModel: async (inputs) => {
@@ -155,18 +174,19 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   },
 
   sendChatMessage: async (message) => {
-    const { modelState, apiKey, chatHistory } = get();
+    const { modelState, apiKey, aiProvider, chatHistory } = get();
     if (!modelState || !apiKey) return;
 
     const userMsg: ChatMessage = { role: 'user', content: message, timestamp: new Date().toISOString() };
     set({ chatHistory: [...chatHistory, userMsg], isCalculating: true, error: null });
 
     try {
-      const result = await callAnthropic(
+      const config = buildProviderConfig(aiProvider, apiKey);
+      const result = await callAI(
         message,
         modelState,
         chatHistory.map((m) => ({ role: m.role, content: m.content })),
-        apiKey,
+        config,
       );
 
       if (result.error) {
@@ -206,12 +226,13 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   },
 
   generateAssumptions: async () => {
-    const { modelState, apiKey } = get();
+    const { modelState, apiKey, aiProvider } = get();
     if (!modelState || !apiKey) return;
     set({ isCalculating: true, error: null });
     try {
       const message = `Generate realistic assumptions for the following AI-toggled fields: ${modelState.ai_toggle_fields.join(', ')}. Use sector-appropriate values for ${modelState.sector}.`;
-      const result = await callAnthropic(message, modelState, [], apiKey);
+      const config = buildProviderConfig(aiProvider, apiKey);
+      const result = await callAI(message, modelState, [], config);
 
       if (result.error) {
         set({ error: result.error, isCalculating: false });

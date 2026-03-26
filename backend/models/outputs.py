@@ -155,6 +155,111 @@ class ExitRealityCheck(BaseModel):
     narrative: str = ""
 
 
+# ── Sources & Uses ────────────────────────────────────────────────────────
+
+class DebtSource(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    name: str = ""
+    amount: float = 0.0
+
+
+class SourcesAndUses(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    enterprise_value: float = 0.0
+    transaction_fees: float = 0.0
+    financing_fees: float = 0.0
+    cash_to_balance_sheet: float = 0.0
+    total_uses: float = 0.0
+    debt_sources: list[DebtSource] = Field(default_factory=list)
+    total_debt: float = 0.0
+    rollover_equity: float = 0.0
+    sponsor_equity: float = 0.0
+    total_sources: float = 0.0
+    equity_pct_of_total: float = 0.0
+    debt_pct_of_total: float = 0.0
+    implied_leverage: float = 0.0
+
+
+# ── Credit Analysis ──────────────────────────────────────────────────────
+
+class CreditMetricsYear(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    year: int = 0
+    fccr: float = 0.0
+    interest_coverage: float = 0.0
+    dscr: float = 0.0
+    leverage: float = 0.0
+    senior_leverage: float = 0.0
+    total_debt: float = 0.0
+    cumulative_debt_paydown: float = 0.0
+    debt_paydown_pct: float = 0.0
+
+
+class RecoveryTranche(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    tranche: str = ""
+    recovery_pct: float = 0.0
+
+
+class CreditAnalysis(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    metrics_by_year: list[CreditMetricsYear] = Field(default_factory=list)
+    max_debt_capacity_at_4x: float = 0.0
+    max_debt_capacity_at_5x: float = 0.0
+    max_debt_capacity_at_6x: float = 0.0
+    covenant_headroom_by_year: list[float] = Field(default_factory=list)
+    refinancing_risk: bool = False
+    refinancing_risk_detail: str = ""
+    recovery_waterfall: list[RecoveryTranche] = Field(default_factory=list)
+    credit_rating_estimate: str = ""
+
+
+# ── EBITDA Bridge ────────────────────────────────────────────────────────
+
+class EBITDABridge(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    entry_ebitda: float = 0.0
+    organic_revenue_contribution: float = 0.0
+    margin_expansion_contribution: float = 0.0
+    cost_synergies: float = 0.0
+    add_on_ebitda: float = 0.0
+    integration_costs: float = 0.0
+    monitoring_fees: float = 0.0
+    exit_ebitda: float = 0.0
+
+
+# ── Revenue Segments ─────────────────────────────────────────────────────
+
+class RevenueSegment(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: str = ""
+    base_revenue: float = 0.0
+    growth_rates: list[float] = Field(default_factory=list)
+    margin_override: Optional[float] = None
+
+
+# ── Add-On Acquisitions ──────────────────────────────────────────────────
+
+class AddOnAcquisition(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: str = ""
+    year: int = 1
+    revenue: float = 0.0
+    ebitda_margin: float = 0.2
+    purchase_multiple: float = 8.0
+    funding: Literal["debt", "equity", "mixed"] = "equity"
+    debt_pct: float = 0.0
+    synergy_revenue: float = 0.0
+    synergy_cost: float = 0.0
+    integration_cost: float = 0.0
+
+
 # ── Chat ──────────────────────────────────────────────────────────────────
 
 class ChatMessage(BaseModel):

@@ -8,6 +8,9 @@ import DebtScheduleTable from '../components/deal-engine/outputs/DebtScheduleTab
 import SensitivityHeatmap from '../components/deal-engine/outputs/SensitivityHeatmap';
 import ScenarioPanel from '../components/deal-engine/outputs/ScenarioPanel';
 import ExitRealityCheck from '../components/deal-engine/outputs/ExitRealityCheck';
+import SourcesUsesTable from '../components/deal-engine/outputs/SourcesUsesTable';
+import CreditPanel from '../components/deal-engine/outputs/CreditPanel';
+import EBITDABridgeChart from '../components/deal-engine/outputs/EBITDABridgeChart';
 import ChatPanel from '../components/deal-engine/chat/ChatPanel';
 import ApiKeyModal from '../components/deal-engine/ApiKeyModal';
 
@@ -154,7 +157,7 @@ const InitializeForm: React.FC = () => {
   );
 };
 
-type OutputTab = 'returns' | 'debt' | 'sensitivity' | 'scenarios' | 'reality';
+type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'sensitivity' | 'scenarios' | 'reality';
 
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
@@ -168,7 +171,9 @@ const DealEngine: React.FC = () => {
 
   const tabs: { id: OutputTab; label: string }[] = [
     { id: 'returns', label: 'Returns' },
+    { id: 'su', label: 'S&U' },
     { id: 'debt', label: 'Debt' },
+    { id: 'credit', label: 'Credit' },
     { id: 'sensitivity', label: 'Sensitivity' },
     { id: 'scenarios', label: 'Scenarios' },
     { id: 'reality', label: 'Reality Check' },
@@ -244,12 +249,15 @@ const DealEngine: React.FC = () => {
           {/* Output content */}
           <div className="flex-1 overflow-y-auto p-4">
             {activeTab === 'returns' && (
-              <>
+              <div className="space-y-4">
                 <ReturnsSummary />
                 <ValueBridge />
-              </>
+                <EBITDABridgeChart />
+              </div>
             )}
+            {activeTab === 'su' && <SourcesUsesTable />}
             {activeTab === 'debt' && <DebtScheduleTable />}
+            {activeTab === 'credit' && <CreditPanel />}
             {activeTab === 'sensitivity' && <SensitivityHeatmap />}
             {activeTab === 'scenarios' && <ScenarioPanel />}
             {activeTab === 'reality' && <ExitRealityCheck />}

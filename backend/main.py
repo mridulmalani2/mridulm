@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 
-from backend.ai.gateway import call_ai
+from backend.ai.gateway import call_ai, detect_provider
 from backend.ai.intent import classify_intent
 from backend.engine.debt_schedule import build_debt_schedule
 from backend.engine.projections import build_projections, update_projections_with_debt
@@ -212,9 +212,14 @@ async def ai_chat(
     req: ChatRequest,
     x_session_id: Optional[str] = Header(None),
     x_anthropic_key: Optional[str] = Header(None),
+    x_ai_key: Optional[str] = Header(None),
+    x_ai_provider: Optional[str] = Header(None),
 ):
-    if not x_anthropic_key:
-        raise HTTPException(status_code=401, detail="X-Anthropic-Key header required")
+    api_key = x_ai_key or x_anthropic_key
+    if not api_key:
+        raise HTTPException(status_code=401, detail="X-AI-Key or X-Anthropic-Key header required")
+
+    provider = x_ai_provider or detect_provider(api_key)
 
     session_id, state = _get_or_create_session(x_session_id)
 
@@ -225,7 +230,7 @@ async def ai_chat(
         except ValidationError:
             pass  # fall back to session state
 
-    result = await call_ai(req.message, state, req.chat_history, x_anthropic_key)
+    result = await call_ai(req.message, state, req.chat_history, api_key, provider)
 
     if "error" in result:
         return {"session_id": session_id, "error": result["error"], "intent": result.get("intent")}
@@ -257,9 +262,14 @@ async def generate_assumptions(
     req: GenerateAssumptionsRequest,
     x_session_id: Optional[str] = Header(None),
     x_anthropic_key: Optional[str] = Header(None),
+    x_ai_key: Optional[str] = Header(None),
+    x_ai_provider: Optional[str] = Header(None),
 ):
-    if not x_anthropic_key:
-        raise HTTPException(status_code=401, detail="X-Anthropic-Key header required")
+    api_key = x_ai_key or x_anthropic_key
+    if not api_key:
+        raise HTTPException(status_code=401, detail="X-AI-Key or X-Anthropic-Key header required")
+
+    provider = x_ai_provider or detect_provider(api_key)
 
     session_id, state = _get_or_create_session(x_session_id)
     if req.model_state:
@@ -269,7 +279,7 @@ async def generate_assumptions(
             pass
 
     message = f"Generate realistic assumptions for the following AI-toggled fields: {', '.join(req.toggled_fields)}. Use sector-appropriate values for {state.sector}."
-    result = await call_ai(message, state, [], x_anthropic_key)
+    result = await call_ai(message, state, [], api_key, provider)
 
     if "error" in result:
         return {"session_id": session_id, "error": result["error"]}
