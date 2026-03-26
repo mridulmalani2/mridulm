@@ -1,6 +1,6 @@
 /** Add-on acquisition modeling — injects bolt-on revenue/EBITDA into projections. */
 
-import type { ModelState, AddOnAcquisition } from '../dealEngineTypes';
+import type { ModelState } from '../dealEngineTypes';
 
 export interface AddOnImpact {
   /** Additional revenue injected per year (cumulative from all acquisitions closed by that year). */

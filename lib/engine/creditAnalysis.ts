@@ -64,7 +64,6 @@ export function computeCreditAnalysis(
   }
 
   // Debt capacity at various leverage thresholds
-  const exitEbitda = projections.length > 0 ? projections[projections.length - 1].ebitda_adj : entryEbitda;
   const maxDebt4x = entryEbitda * 4;
   const maxDebt5x = entryEbitda * 5;
   const maxDebt6x = entryEbitda * 6;

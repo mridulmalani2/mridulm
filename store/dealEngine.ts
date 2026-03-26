@@ -13,7 +13,7 @@ import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
 import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
 import { callAI } from '../lib/engine/ai/gateway';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
-import type { AIProvider, ProviderConfig } from '../lib/engine/ai/providers';
+import type { AIProvider } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
 
 /** Apply a dot-notation update to a nested object. */
