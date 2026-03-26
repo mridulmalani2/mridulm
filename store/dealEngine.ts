@@ -1,8 +1,39 @@
-/** Zustand store for Deal Engine state management — Section 8. */
+/** Zustand store for Deal Engine state management — fully client-side. */
 
 import { create } from 'zustand';
-import type { ModelState, ChatMessage, ScenarioSet, SensitivityTable, AppliedDiff, AIAnalysis } from '../lib/dealEngineTypes';
-import * as api from '../lib/api';
+import type {
+  ModelState,
+  ChatMessage,
+  ScenarioSet,
+  SensitivityTable,
+  AppliedDiff,
+  AIAnalysis,
+} from '../lib/dealEngineTypes';
+import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
+import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
+import { callAnthropic } from '../lib/engine/aiGateway';
+import { buildExcel } from '../lib/engine/excelExport';
+
+/** Apply a dot-notation update to a nested object. */
+function applyUpdate(obj: Record<string, unknown>, path: string, value: unknown): void {
+  const keys = path.split('.');
+  let current: Record<string, unknown> = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    if (/^\d+$/.test(key)) {
+      current = (current as unknown as unknown[])[parseInt(key)] as Record<string, unknown>;
+    } else {
+      if (!(key in current)) current[key] = {};
+      current = current[key] as Record<string, unknown>;
+    }
+  }
+  const finalKey = keys[keys.length - 1];
+  if (/^\d+$/.test(finalKey)) {
+    (current as unknown as unknown[])[parseInt(finalKey)] = value;
+  } else {
+    current[finalKey] = value;
+  }
+}
 
 interface DealEngineStore {
   modelState: ModelState | null;
@@ -59,20 +90,67 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   initializeModel: async (inputs) => {
     set({ isCalculating: true, error: null });
     try {
-      const { model_state } = await api.initializeModel(inputs);
-      set({ modelState: model_state, isCalculating: false });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+      const state = createDefaultModelState();
+      state.deal_name = inputs.deal_name;
+      state.currency = inputs.currency as ModelState['currency'];
+      state.sector = inputs.sector;
+      state.revenue.base_revenue = inputs.revenue;
+
+      if (inputs.ebitda_or_margin < 1) {
+        state.margins.base_ebitda_margin = inputs.ebitda_or_margin;
+      } else {
+        state.margins.base_ebitda_margin = inputs.revenue > 0 ? inputs.ebitda_or_margin / inputs.revenue : 0.2;
+      }
+
+      state.entry.entry_ebitda_multiple = inputs.entry_multiple;
+      state.exit.exit_ebitda_multiple = inputs.entry_multiple;
+
+      const ebitda = inputs.revenue * state.margins.base_ebitda_margin;
+      const defaultDebt = ebitda * 4.0;
+      state.debt_tranches = [
+        {
+          name: 'Senior Term Loan A',
+          principal: defaultDebt,
+          interest_rate: 0.05,
+          rate_type: 'fixed',
+          base_rate: 0,
+          spread: 0,
+          amortization_type: 'bullet',
+          amortization_schedule: [],
+          pik_rate: 0,
+          cash_interest: true,
+          commitment_fee: 0,
+          floor: 0,
+          cash_sweep_pct: 0.5,
+        },
+      ];
+
+      const result = fullRecalc(state);
+      set({ modelState: result, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
   updateField: async (path, value) => {
     set({ isCalculating: true, error: null });
     try {
-      const { model_state } = await api.updateField(path, value);
-      set({ modelState: model_state, isCalculating: false });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+      const { modelState } = get();
+      if (!modelState) throw new Error('No model initialized');
+
+      const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
+      applyUpdate(stateDict, path, value);
+      const state = stateDict as unknown as ModelState;
+
+      // Reset EV if entry multiple changed to allow re-derivation
+      if (path === 'entry.entry_ebitda_multiple') {
+        state.entry.enterprise_value = 0;
+      }
+
+      const result = fullRecalc(state);
+      set({ modelState: result, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
@@ -84,32 +162,46 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     set({ chatHistory: [...chatHistory, userMsg], isCalculating: true, error: null });
 
     try {
-      const result = await api.sendChat(
+      const result = await callAnthropic(
         message,
         modelState,
         chatHistory.map((m) => ({ role: m.role, content: m.content })),
         apiKey,
       );
+
       if (result.error) {
         set({ error: result.error, isCalculating: false });
         return;
       }
+
+      // Apply AI updates to state
+      let updatedState = modelState;
+      if (result.updatedStateDict) {
+        updatedState = result.updatedStateDict as unknown as ModelState;
+      }
+      if (result.triggerRecalculation) {
+        updatedState = fullRecalc(updatedState);
+      }
+
       const aiMsg: ChatMessage = {
         role: 'assistant',
-        content: result.ai_response?.return_decomposition || '',
+        content: result.analysis?.return_decomposition || '',
         timestamp: new Date().toISOString(),
-        assumption_updates: result.applied_diffs?.length ? Object.fromEntries(result.applied_diffs.map(d => [d.field, d.new])) : undefined,
-        analysis: result.ai_response,
+        assumption_updates: result.appliedDiffs.length
+          ? Object.fromEntries(result.appliedDiffs.map((d) => [d.field, d.new]))
+          : undefined,
+        analysis: result.analysis || undefined,
       };
+
       set({
-        modelState: result.model_state,
+        modelState: updatedState,
         chatHistory: [...get().chatHistory, aiMsg],
-        lastDiffs: result.applied_diffs || [],
-        lastAnalysis: result.ai_response,
+        lastDiffs: result.appliedDiffs,
+        lastAnalysis: result.analysis,
         isCalculating: false,
       });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
@@ -118,51 +210,71 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     if (!modelState || !apiKey) return;
     set({ isCalculating: true, error: null });
     try {
-      const { model_state } = await api.generateAssumptions(
-        modelState.ai_toggle_fields,
-        modelState,
-        apiKey,
-      );
-      set({ modelState: model_state, isCalculating: false });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+      const message = `Generate realistic assumptions for the following AI-toggled fields: ${modelState.ai_toggle_fields.join(', ')}. Use sector-appropriate values for ${modelState.sector}.`;
+      const result = await callAnthropic(message, modelState, [], apiKey);
+
+      if (result.error) {
+        set({ error: result.error, isCalculating: false });
+        return;
+      }
+
+      let updatedState = modelState;
+      if (result.updatedStateDict) {
+        updatedState = result.updatedStateDict as unknown as ModelState;
+      }
+      updatedState = fullRecalc(updatedState);
+      set({ modelState: updatedState, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
   loadScenarios: async () => {
     set({ isCalculating: true });
     try {
-      const { scenarios } = await api.getScenarios();
+      const { modelState } = get();
+      if (!modelState) throw new Error('No model initialized');
+      // Use setTimeout to avoid blocking UI on heavy computation
+      const scenarios = await new Promise<ScenarioSet[]>((resolve) => {
+        setTimeout(() => resolve(generateScenarios(modelState)), 0);
+      });
       set({ scenarios, isCalculating: false });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
   loadSensitivity: async (tableId) => {
     set({ isCalculating: true });
     try {
-      const { table } = await api.getSensitivity(tableId);
+      const { modelState } = get();
+      if (!modelState) throw new Error('No model initialized');
+      // Use setTimeout to avoid blocking UI on heavy computation
+      const table = await new Promise<SensitivityTable>((resolve) => {
+        setTimeout(() => resolve(generateSensitivityTable(modelState, tableId)), 0);
+      });
       set((s) => {
         const existing = s.sensitivityTables.filter((t) => t.table_id !== tableId);
         return { sensitivityTables: [...existing, table], isCalculating: false, activeSensitivityTable: tableId };
       });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
   exportExcel: async () => {
     try {
-      const blob = await api.exportExcel();
+      const { modelState } = get();
+      if (!modelState) return;
+      const blob = await buildExcel(modelState);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${get().modelState?.deal_name || 'model'}_export.xlsx`;
+      a.download = `${modelState.deal_name || 'model'}_export.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      set({ error: e.message });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message });
     }
   },
 
@@ -180,13 +292,13 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
 
   loadModel: async (file) => {
     const text = await file.text();
-    const data = JSON.parse(text);
+    const data = JSON.parse(text) as ModelState;
     set({ isCalculating: true });
     try {
-      const { model_state } = await api.importJson(data);
-      set({ modelState: model_state, isCalculating: false });
-    } catch (e: any) {
-      set({ error: e.message, isCalculating: false });
+      const result = fullRecalc(data);
+      set({ modelState: result, isCalculating: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
     }
   },
 
