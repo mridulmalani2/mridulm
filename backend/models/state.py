@@ -9,12 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .debt import DebtSchedule, DebtTranche
 from .outputs import (
+    AddOnAcquisition,
     AnnualProjection,
     ChatMessage,
+    CreditAnalysis,
+    EBITDABridge,
     ExitRealityCheck,
     Returns,
+    RevenueSegment,
     ScenarioSet,
     SensitivityTable,
+    SourcesAndUses,
     ValueDriverDecomposition,
 )
 
@@ -146,6 +151,10 @@ class ModelState(BaseModel):
     mip: ManagementIncentive = Field(default_factory=ManagementIncentive)
     exit: ExitAssumptions = Field(default_factory=ExitAssumptions)
 
+    # Revenue segments and add-on acquisitions
+    revenue_segments: list[RevenueSegment] = Field(default_factory=list)
+    add_on_acquisitions: list[AddOnAcquisition] = Field(default_factory=list)
+
     # Computed outputs
     projections: AnnualProjection = Field(default_factory=AnnualProjection)
     debt_schedule: DebtSchedule = Field(default_factory=DebtSchedule)
@@ -153,6 +162,9 @@ class ModelState(BaseModel):
     value_drivers: ValueDriverDecomposition = Field(
         default_factory=ValueDriverDecomposition
     )
+    sources_and_uses: SourcesAndUses = Field(default_factory=SourcesAndUses)
+    credit_analysis: CreditAnalysis = Field(default_factory=CreditAnalysis)
+    ebitda_bridge: EBITDABridge = Field(default_factory=EBITDABridge)
     scenarios: list[ScenarioSet] = Field(default_factory=list)
     sensitivity_tables: list[SensitivityTable] = Field(default_factory=list)
     exit_reality_check: ExitRealityCheck = Field(default_factory=ExitRealityCheck)

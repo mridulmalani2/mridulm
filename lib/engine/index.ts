@@ -6,10 +6,20 @@ import { buildProjections, updateProjectionsWithDebt } from './projections';
 import { buildDebtSchedule } from './debtSchedule';
 import { calculateReturns, decomposeValueDrivers } from './returns';
 import { runRealityCheck } from './realityCheck';
+import { computeSourcesAndUses } from './sourcesUses';
+import { computeCreditAnalysis } from './creditAnalysis';
+import { computeEBITDABridge } from './ebitdaBridge';
 
 export function fullRecalc(state: ModelState): ModelState {
+  // Ensure new fields exist (backwards compatibility for older saved models)
+  if (!state.revenue_segments) state.revenue_segments = [];
+  if (!state.add_on_acquisitions) state.add_on_acquisitions = [];
+
   deriveEntryFields(state);
   ensureListLengths(state);
+
+  // Sources & Uses (computed from entry assumptions)
+  state.sources_and_uses = computeSourcesAndUses(state);
 
   const proj = buildProjections(state);
   const ds = buildDebtSchedule(state, proj);
@@ -34,6 +44,12 @@ export function fullRecalc(state: ModelState): ModelState {
   const ret = calculateReturns(state, updatedProj, ds);
   const vd = decomposeValueDrivers(state, updatedProj, ds, ret);
   const rc = runRealityCheck(state, updatedProj, ds, ret);
+
+  // Credit analysis (from projections + debt schedule)
+  state.credit_analysis = computeCreditAnalysis(state, updatedProj, ds);
+
+  // EBITDA bridge
+  state.ebitda_bridge = computeEBITDABridge(state, updatedProj);
 
   state.projections = { years: updatedProj };
   state.debt_schedule = ds;
