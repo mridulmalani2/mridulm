@@ -86,21 +86,26 @@ export interface AnnualProjectionYear {
   year: number;
   revenue: number;
   revenue_growth: number;
+  organic_revenue: number;
+  acquisition_revenue: number;
   ebitda: number;
   ebitda_margin: number;
   ebitda_adj: number;
   da: number;
   ebit: number;
   interest_expense: number;
+  financing_fee_amort: number;
   ebt: number;
   tax: number;
+  nol_used: number;
   net_income: number;
-  fcf_pre_debt: number;
-  fcf_to_equity: number;
+  nopat: number;
   maintenance_capex: number;
   growth_capex: number;
   total_capex: number;
   delta_nwc: number;
+  fcf_pre_debt: number;
+  fcf_to_equity: number;
 }
 
 export interface DebtScheduleYear {
@@ -114,6 +119,20 @@ export interface DebtScheduleYear {
   total_repayment: number;
   ending_balance: number;
   effective_rate: number;
+  interest_tax_shield: number;
+  commitment_fee_paid: number;
+}
+
+export interface DebtScheduleResult {
+  tranche_schedules: DebtScheduleYear[][];
+  total_debt_by_year: number[];
+  net_debt_by_year: number[];
+  leverage_ratio_by_year: number[];
+  interest_coverage_by_year: number[];
+  dscr_by_year: number[];
+  total_cash_interest_by_year: number[];
+  total_repayment_by_year: number[];
+  total_interest_tax_shield_by_year: number[];
 }
 
 export interface Returns {
@@ -148,6 +167,7 @@ export interface ValueDriverDecomposition {
   entry_equity: number;
   exit_equity: number;
   total_equity_gain: number;
+  reconciliation_delta: number;
 }
 
 export interface ScenarioSet {
@@ -184,6 +204,7 @@ export interface ExitRealityCheck {
   implied_buyer_irr: number | null;
   ev_revenue_at_exit: number;
   ev_ebitda_at_exit: number;
+  public_comps_multiple_range: [number, number];
   multiple_delta: number;
   verdict: 'aggressive' | 'realistic' | 'conservative';
   narrative: string;
@@ -220,14 +241,7 @@ export interface ModelState {
   mip: ManagementIncentive;
   exit: ExitAssumptions;
   projections: { years: AnnualProjectionYear[] };
-  debt_schedule: {
-    tranche_schedules: DebtScheduleYear[][];
-    total_debt_by_year: number[];
-    leverage_ratio_by_year: number[];
-    interest_coverage_by_year: number[];
-    dscr_by_year: number[];
-    total_cash_interest_by_year: number[];
-  };
+  debt_schedule: DebtScheduleResult;
   returns: Returns;
   value_drivers: ValueDriverDecomposition;
   scenarios: ScenarioSet[];
