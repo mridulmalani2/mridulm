@@ -44,14 +44,22 @@ const InputField: React.FC<InputFieldProps> = ({
     ? formatter(value)
     : undefined;
 
+  const fieldStyle = {
+    background: readOnly ? '#F9F9F7' : '#ffffff',
+    border: `1px solid ${warning ? '#b91c1c' : 'rgba(17,17,17,0.12)'}`,
+    color: readOnly ? 'rgba(17,17,17,0.4)' : '#111111',
+    fontFamily: "'JetBrains Mono', monospace",
+    outline: 'none',
+  };
+
   return (
-    <div className="mb-2">
+    <div className="mb-2.5">
       <div className="flex items-center justify-between mb-0.5">
-        <label className="text-xs" style={{ color: '#6b7a96', fontFamily: 'Inter, sans-serif' }}>
+        <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
           {label}
         </label>
         {suffix && (
-          <span className="text-xs" style={{ color: '#3d4f6a', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
             {suffix}
           </span>
         )}
@@ -60,11 +68,8 @@ const InputField: React.FC<InputFieldProps> = ({
         <select
           value={String(value)}
           onChange={(e) => handleChange(e.target.value)}
-          className="w-full px-2 py-1.5 text-xs outline-none"
-          style={{
-            background: '#0a0d13', border: '1px solid #1e2a3a', color: '#e8edf5',
-            fontFamily: "'IBM Plex Mono', monospace",
-          }}
+          className="w-full px-2 py-1.5 text-xs"
+          style={fieldStyle}
         >
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -74,17 +79,12 @@ const InputField: React.FC<InputFieldProps> = ({
           value={displayVal ?? localVal}
           onChange={(e) => handleChange(e.target.value)}
           readOnly={readOnly}
-          className="w-full px-2 py-1.5 text-xs outline-none"
-          style={{
-            background: readOnly ? '#080b10' : '#0a0d13',
-            border: `1px solid ${warning ? '#ff4757' : '#1e2a3a'}`,
-            color: readOnly ? '#6b7a96' : '#e8edf5',
-            fontFamily: "'IBM Plex Mono', monospace",
-          }}
+          className="w-full px-2 py-1.5 text-xs"
+          style={fieldStyle}
         />
       )}
       {warning && (
-        <p className="text-xs mt-0.5" style={{ color: '#ff4757', fontFamily: 'Inter, sans-serif' }}>
+        <p className="text-[10px] mt-0.5" style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>
           {warning}
         </p>
       )}

@@ -21,17 +21,17 @@ interface SectionProps {
 const Section: React.FC<SectionProps> = ({ title, children, defaultOpen = true }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="mb-1" style={{ borderBottom: '1px solid #1e2a3a' }}>
+    <div className="mb-0" style={{ borderBottom: '1px solid rgba(17,17,17,0.08)' }}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left"
+        className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-[rgba(17,17,17,0.02)]"
       >
-        <span className="text-xs font-medium tracking-widest uppercase" style={{ color: '#6b7a96', fontFamily: 'Inter, sans-serif' }}>
+        <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
           {title}
         </span>
-        <span className="text-xs" style={{ color: '#3d4f6a' }}>{open ? '−' : '+'}</span>
+        <span className="text-xs" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>{open ? '−' : '+'}</span>
       </button>
-      {open && <div className="px-3 pb-3">{children}</div>}
+      {open && <div className="px-4 pb-4">{children}</div>}
     </div>
   );
 };
@@ -47,7 +47,7 @@ const InputPanel: React.FC = () => {
   return (
     <div
       className="h-full overflow-y-auto flex-shrink-0"
-      style={{ width: 320, background: '#0f1420', borderRight: '1px solid #1e2a3a' }}
+      style={{ width: 320, background: '#ffffff', borderRight: '1px solid rgba(17,17,17,0.1)' }}
     >
       {/* Entry */}
       <Section title="Entry">
@@ -65,7 +65,7 @@ const InputPanel: React.FC = () => {
       {/* Debt Structure */}
       <Section title="Debt Structure" defaultOpen={false}>
         {ms.debt_tranches.map((t, i) => (
-          <div key={i} className="mb-3 p-2" style={{ background: '#0a0d13', border: '1px solid #1e2a3a' }}>
+          <div key={i} className="mb-4 p-3" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
             <InputField label="Name" path={`debt_tranches.${i}.name`} value={t.name} type="text" />
             <InputField label="Principal" path={`debt_tranches.${i}.principal`} value={t.principal} suffix="£m" />
             <InputField label="Rate Type" path={`debt_tranches.${i}.rate_type`} value={t.rate_type} type="select" options={[{ value: 'fixed', label: 'Fixed' }, { value: 'floating', label: 'Floating' }]} />

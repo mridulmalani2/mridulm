@@ -3,29 +3,29 @@ import { useDealEngineStore } from '../../../store/dealEngine';
 import type { ChatMessage, AIAnalysis } from '../../../lib/dealEngineTypes';
 
 const AnalysisCard: React.FC<{ analysis: AIAnalysis }> = ({ analysis }) => (
-  <div className="mt-2 p-2 text-xs space-y-1.5" style={{ background: '#0a0d13', border: '1px solid #1e2a3a' }}>
+  <div className="mt-2 p-2.5 text-xs space-y-1.5" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
     {analysis.primary_driver && (
       <div>
-        <span style={{ color: '#00d4ff', fontFamily: "'IBM Plex Mono', monospace" }}>Primary Driver: </span>
-        <span style={{ color: '#e8edf5' }}>{analysis.primary_driver}</span>
+        <span style={{ color: '#1d4ed8', fontFamily: "'JetBrains Mono', monospace" }}>Primary Driver: </span>
+        <span style={{ color: '#111111' }}>{analysis.primary_driver}</span>
       </div>
     )}
     {analysis.risk_concentration && (
       <div>
-        <span style={{ color: '#ffaa00', fontFamily: "'IBM Plex Mono', monospace" }}>Risk: </span>
-        <span style={{ color: '#e8edf5' }}>{analysis.risk_concentration}</span>
+        <span style={{ color: '#b45309', fontFamily: "'JetBrains Mono', monospace" }}>Risk: </span>
+        <span style={{ color: '#111111' }}>{analysis.risk_concentration}</span>
       </div>
     )}
     {analysis.fragility_test && (
       <div>
-        <span style={{ color: '#ff4757', fontFamily: "'IBM Plex Mono', monospace" }}>Fragility: </span>
-        <span style={{ color: '#e8edf5' }}>{analysis.fragility_test}</span>
+        <span style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>Fragility: </span>
+        <span style={{ color: '#111111' }}>{analysis.fragility_test}</span>
       </div>
     )}
     {analysis.improvement_levers?.length > 0 && (
       <div>
-        <span style={{ color: '#00c896', fontFamily: "'IBM Plex Mono', monospace" }}>Levers: </span>
-        <span style={{ color: '#e8edf5' }}>{analysis.improvement_levers.join('; ')}</span>
+        <span style={{ color: '#15803d', fontFamily: "'JetBrains Mono', monospace" }}>Levers: </span>
+        <span style={{ color: '#111111' }}>{analysis.improvement_levers.join('; ')}</span>
       </div>
     )}
   </div>
@@ -36,8 +36,8 @@ const DiffBadges: React.FC<{ updates: Record<string, unknown> }> = ({ updates })
     {Object.entries(updates).map(([field, val]) => (
       <span
         key={field}
-        className="text-xs px-1.5 py-0.5"
-        style={{ background: '#1e2a3a', color: '#00d4ff', fontFamily: "'IBM Plex Mono', monospace" }}
+        className="text-[10px] px-1.5 py-0.5"
+        style={{ background: '#eff6ff', color: '#1d4ed8', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(29,78,216,0.2)' }}
       >
         {field.split('.').pop()}: {String(val)}
       </span>
@@ -50,14 +50,14 @@ const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       <div
-        className="max-w-[85%] px-3 py-2"
+        className="max-w-[88%] px-3 py-2.5"
         style={{
-          background: isUser ? '#1a2740' : '#0f1420',
-          border: `1px solid ${isUser ? '#1e2a3a' : '#1e2a3a'}`,
-          borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+          background: isUser ? '#eff6ff' : '#ffffff',
+          border: `1px solid ${isUser ? 'rgba(29,78,216,0.15)' : 'rgba(17,17,17,0.1)'}`,
+          borderRadius: isUser ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
         }}
       >
-        <p className="text-xs whitespace-pre-wrap" style={{ color: '#e8edf5', fontFamily: 'Inter, sans-serif', lineHeight: '1.6' }}>
+        <p className="text-xs whitespace-pre-wrap" style={{ color: '#111111', fontFamily: 'Lora, serif', lineHeight: '1.65', fontSize: 12 }}>
           {msg.content}
         </p>
         {msg.assumption_updates && Object.keys(msg.assumption_updates).length > 0 && (
@@ -97,10 +97,10 @@ const ChatPanel: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col h-full" style={{ borderLeft: '1px solid #1e2a3a' }}>
+    <div className="flex flex-col h-full" style={{ borderLeft: '1px solid rgba(17,17,17,0.1)', background: '#F9F9F7' }}>
       {/* Header */}
-      <div className="px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid #1e2a3a' }}>
-        <span className="text-xs font-medium tracking-widest uppercase" style={{ color: '#6b7a96', fontFamily: 'Inter, sans-serif' }}>
+      <div className="px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(17,17,17,0.1)', background: '#ffffff' }}>
+        <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
           AI Chat
         </span>
       </div>
@@ -109,7 +109,7 @@ const ChatPanel: React.FC = () => {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3">
         {chatHistory.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
-            <p className="text-xs mb-4 text-center" style={{ color: '#6b7a96', fontFamily: 'Inter, sans-serif' }}>
+            <p className="text-xs mb-4 text-center" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: 'Lora, serif', lineHeight: '1.6', maxWidth: 220 }}>
               {apiKey
                 ? 'Ask the AI to analyse your deal, update assumptions, or stress test scenarios.'
                 : 'Set your API key to enable AI chat.'}
@@ -120,8 +120,14 @@ const ChatPanel: React.FC = () => {
                   <button
                     key={s}
                     onClick={() => { setInput(s); }}
-                    className="w-full text-left px-2.5 py-1.5 text-xs transition-colors hover:bg-[#1e2a3a]"
-                    style={{ color: '#6b7a96', border: '1px solid #1e2a3a', fontFamily: 'Inter, sans-serif' }}
+                    className="w-full text-left px-3 py-2 text-xs transition-colors"
+                    style={{
+                      color: 'rgba(17,17,17,0.5)',
+                      border: '1px solid rgba(17,17,17,0.1)',
+                      fontFamily: 'Lora, serif',
+                      background: '#ffffff',
+                      fontSize: 11,
+                    }}
                   >
                     {s}
                   </button>
@@ -134,8 +140,8 @@ const ChatPanel: React.FC = () => {
         )}
         {isCalculating && chatHistory.length > 0 && (
           <div className="flex justify-start mb-3">
-            <div className="px-3 py-2" style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: '12px 12px 12px 2px' }}>
-              <span className="text-xs animate-pulse" style={{ color: '#00d4ff', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div className="px-3 py-2" style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)', borderRadius: '10px 10px 10px 2px' }}>
+              <span className="text-[10px] tracking-widest animate-pulse" style={{ color: '#CC0000', fontFamily: "'JetBrains Mono', monospace" }}>
                 Thinking...
               </span>
             </div>
@@ -145,13 +151,13 @@ const ChatPanel: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="px-3 py-1.5 flex-shrink-0" style={{ background: '#1a0a0a', borderTop: '1px solid #3a1e1e' }}>
-          <p className="text-xs" style={{ color: '#ff4757', fontFamily: 'Inter, sans-serif' }}>{error}</p>
+        <div className="px-3 py-1.5 flex-shrink-0" style={{ background: '#fff5f5', borderTop: '1px solid rgba(185,28,28,0.2)' }}>
+          <p className="text-[10px]" style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>{error}</p>
         </div>
       )}
 
       {/* Input */}
-      <div className="flex-shrink-0 p-2" style={{ borderTop: '1px solid #1e2a3a' }}>
+      <div className="flex-shrink-0 p-2.5" style={{ borderTop: '1px solid rgba(17,17,17,0.1)', background: '#ffffff' }}>
         <div className="flex gap-1.5">
           <input
             type="text"
@@ -162,20 +168,22 @@ const ChatPanel: React.FC = () => {
             disabled={!apiKey}
             className="flex-1 px-2.5 py-1.5 text-xs outline-none"
             style={{
-              background: '#0a0d13',
-              border: '1px solid #1e2a3a',
-              color: '#e8edf5',
-              fontFamily: "'IBM Plex Mono', monospace",
+              background: '#F9F9F7',
+              border: '1px solid rgba(17,17,17,0.12)',
+              color: '#111111',
+              fontFamily: 'Lora, serif',
+              fontSize: 12,
             }}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isCalculating || !apiKey}
-            className="px-3 py-1.5 text-xs font-medium transition-colors"
+            className="px-3 py-1.5 text-[10px] font-medium tracking-widest uppercase transition-colors"
             style={{
-              background: input.trim() && apiKey ? '#00d4ff' : '#1e2a3a',
-              color: input.trim() && apiKey ? '#0a0d13' : '#6b7a96',
-              fontFamily: 'Inter, sans-serif',
+              background: input.trim() && apiKey ? '#CC0000' : 'rgba(17,17,17,0.05)',
+              color: input.trim() && apiKey ? '#ffffff' : 'rgba(17,17,17,0.3)',
+              fontFamily: "'JetBrains Mono', monospace",
+              border: input.trim() && apiKey ? '1px solid #CC0000' : '1px solid rgba(17,17,17,0.1)',
             }}
           >
             Send
