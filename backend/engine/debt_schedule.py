@@ -79,7 +79,9 @@ def build_debt_schedule(
             year_entries.append(entry)
 
         # Second pass: cash sweep (applied only to cash-pay, cash_sweep-type tranches)
-        available_for_sweep = fcf_pre_debt - total_mandatory_amort - total_cash_interest
+        # Respect minimum cash balance — only excess above min_cash can be swept
+        min_cash = getattr(state.entry, "min_cash_balance", 0.0)
+        available_for_sweep = fcf_pre_debt - total_mandatory_amort - total_cash_interest - min_cash
         for t_idx, tranche in enumerate(tranches):
             entry = year_entries[t_idx]
             if tranche.amortization_type == "cash_sweep" and available_for_sweep > 0:
@@ -137,8 +139,8 @@ def build_debt_schedule(
         net_debt_by_year.append(tot_debt)  # no cash on BS modelled
         leverage_by_year.append(tot_debt / ebitda_adj if ebitda_adj > 0 else 0.0)
         coverage_by_year.append(ebitda_adj / tot_cash_int if tot_cash_int > 0 else 99.0)
-        debt_service = tot_cash_int + mandatory_amort
-        dscr_by_year.append(fcf_pre / debt_service if debt_service > 0 else 99.0)
+        # DSCR: (EBITDA – Capex – ΔNWC – Taxes) / Interest only — principal excluded per IC convention
+        dscr_by_year.append(fcf_pre / tot_cash_int if tot_cash_int > 0 else 99.0)
         cash_interest_by_year.append(tot_cash_int)
         repayment_by_year.append(tot_repay)
         shield_by_year.append(tot_shield)

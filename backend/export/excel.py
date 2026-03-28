@@ -419,11 +419,38 @@ def _build_sources_uses_sheet(wb: Workbook, state: ModelState, ccy: str):
         if c > 5:
             cell.number_format = FMT_CCY if c == 6 else FMT_PCT
 
-    row = max(ur, sr) + 3
+    row = max(ur, sr) + 1
+
+    # ── Audit check: Sources = Uses (hard reconciliation) ──
+    recon_delta = su.total_sources - su.total_uses
+    balanced = abs(recon_delta) < 0.01
+    audit_label = "AUDIT CHECK: Sources = Uses" if balanced else "AUDIT CHECK: Sources \u2260 Uses — RECONCILIATION ERROR"
+    audit_font = F_GREEN if balanced else F_RED
+    audit_fill = GREEN_BG_FILL if balanced else RED_BG_FILL
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    audit_cell = ws.cell(row=row, column=1, value=audit_label)
+    audit_cell.font = audit_font
+    audit_cell.fill = audit_fill
+    audit_cell.border = MED_BOTTOM
+    audit_cell.alignment = Alignment(horizontal="left", vertical="center")
+    delta_cell = ws.cell(row=row, column=4, value=recon_delta if not balanced else 0.0)
+    delta_cell.font = audit_font
+    delta_cell.fill = audit_fill
+    delta_cell.number_format = FMT_CCY
+    delta_cell.border = MED_BOTTOM
+    row += 2
+
     row = _write_section_header(ws, row, "CAPITALISATION METRICS", 2)
     row = _write_kv_row(ws, row, "Implied Leverage (Debt / EBITDA)", su.implied_leverage, fmt=FMT_MULT)
     row = _write_kv_row(ws, row, "Equity as % of Total", su.equity_pct_of_total, fmt=FMT_PCT, alt=True)
     row = _write_kv_row(ws, row, "Debt as % of Total", su.debt_pct_of_total, fmt=FMT_PCT)
+    # Breakdown of Uses for auditability
+    row += 1
+    row = _write_section_header(ws, row, "USES BREAKDOWN (for audit)", 2)
+    row = _write_kv_row(ws, row, "Enterprise Value", su.enterprise_value, fmt=FMT_CCY)
+    row = _write_kv_row(ws, row, "Transaction & Advisory Fees", su.transaction_fees, fmt=FMT_CCY, alt=True)
+    row = _write_kv_row(ws, row, "Financing Fees", su.financing_fees, fmt=FMT_CCY)
+    row = _write_kv_row(ws, row, "Total Uses (= Sponsor Equity + Debt)", su.total_uses, fmt=FMT_CCY, alt=True)
 
     _set_print(ws)
 
@@ -748,6 +775,184 @@ def _build_returns_sheet(wb: Workbook, state: ModelState, ccy: str, hp: int):
                 ws.cell(row=row, column=1).fill = LIGHT_FILL
                 ws.cell(row=row, column=2).fill = LIGHT_FILL
             row += 1
+
+    # ── IRR cross-check audit ──
+    row += 1
+    row = _write_section_header(ws, row, "AUDIT CHECKS", 3)
+    # Check 1: MOIC consistency with entry/exit equity
+    moic_check = ret.exit_equity / ret.entry_equity if ret.entry_equity > 0 else 0.0
+    moic_ok = abs(moic_check - ret.moic) < 0.001
+    ws.cell(row=row, column=1, value="MOIC = Exit Equity / Entry Equity").font = F_GREEN if moic_ok else F_RED
+    ws.cell(row=row, column=1).fill = GREEN_BG_FILL if moic_ok else RED_BG_FILL
+    ws.cell(row=row, column=1).border = THIN_BOTTOM
+    ws.cell(row=row, column=2, value=moic_check).number_format = FMT_MULT
+    ws.cell(row=row, column=2).font = F_GREEN if moic_ok else F_RED
+    ws.cell(row=row, column=2).fill = GREEN_BG_FILL if moic_ok else RED_BG_FILL
+    ws.cell(row=row, column=2).border = THIN_BOTTOM
+    ws.cell(row=row, column=2).alignment = Alignment(horizontal="right")
+    ws.cell(row=row, column=3, value="OK" if moic_ok else "ERROR").font = F_GREEN if moic_ok else F_RED
+    ws.cell(row=row, column=3).fill = GREEN_BG_FILL if moic_ok else RED_BG_FILL
+    ws.cell(row=row, column=3).border = THIN_BOTTOM
+    row += 1
+    # Check 2: Value bridge closes (reconciliation_delta near 0)
+    bridge_ok = vd.reconciliation_delta < 0.1
+    ws.cell(row=row, column=1, value="Value Bridge Reconciliation").font = F_GREEN if bridge_ok else F_RED
+    ws.cell(row=row, column=1).fill = GREEN_BG_FILL if bridge_ok else RED_BG_FILL
+    ws.cell(row=row, column=1).border = THIN_BOTTOM
+    ws.cell(row=row, column=2, value=vd.reconciliation_delta).number_format = FMT_CCY
+    ws.cell(row=row, column=2).font = F_GREEN if bridge_ok else F_RED
+    ws.cell(row=row, column=2).fill = GREEN_BG_FILL if bridge_ok else RED_BG_FILL
+    ws.cell(row=row, column=2).border = THIN_BOTTOM
+    ws.cell(row=row, column=2).alignment = Alignment(horizontal="right")
+    ws.cell(row=row, column=3, value="OK" if bridge_ok else "GAP").font = F_GREEN if bridge_ok else F_RED
+    ws.cell(row=row, column=3).fill = GREEN_BG_FILL if bridge_ok else RED_BG_FILL
+    ws.cell(row=row, column=3).border = THIN_BOTTOM
+    row += 1
+
+    # ── Panel 1: Ranked Value Creation Bridge ──────────────────────────
+    if vd.ranked_drivers:
+        row += 1
+        row = _write_section_header(ws, row, "DRIVER DECOMPOSITION (RANKED)", 3)
+        ws.cell(row=row, column=1, value="Driver").font = F_HEADER
+        ws.cell(row=row, column=2, value=f"{ccy}m Contribution").font = F_HEADER
+        ws.cell(row=row, column=3, value="% of Equity Gain").font = F_HEADER
+        _style_header_row(ws, row, 1, 3)
+        row += 1
+        for i, dr in enumerate(vd.ranked_drivers):
+            is_neg = dr.abs_contribution < 0
+            f = F_RED if is_neg else F_BODY
+            alt = i % 2 == 1
+            ws.cell(row=row, column=1, value=f"#{dr.rank}  {dr.name}").font = f
+            ws.cell(row=row, column=1).border = THIN_BOTTOM
+            if alt:
+                ws.cell(row=row, column=1).fill = LIGHT_FILL
+            vc = ws.cell(row=row, column=2, value=dr.abs_contribution)
+            vc.number_format = FMT_CCY
+            vc.font = F_RED if is_neg else F_BODY
+            vc.border = THIN_BOTTOM
+            vc.alignment = Alignment(horizontal="right")
+            if alt:
+                vc.fill = LIGHT_FILL
+            pc = ws.cell(row=row, column=3, value=dr.pct_of_gain / 100)
+            pc.number_format = FMT_PCT
+            pc.font = F_RED if is_neg else F_BODY
+            pc.border = THIN_BOTTOM
+            pc.alignment = Alignment(horizontal="right")
+            if alt:
+                pc.fill = LIGHT_FILL
+            row += 1
+        # Operational vs financial split
+        row += 1
+        split_rows = [
+            ("Operational (Revenue + Margin)", vd.operational_value_pct / 100),
+            ("Financial Engineering (Multiple + Deleverage)", vd.financial_engineering_pct / 100),
+        ]
+        for label, pct_val in split_rows:
+            ws.cell(row=row, column=1, value=label).font = F_SM_BOLD
+            ws.cell(row=row, column=1).border = THIN_BOTTOM
+            pv = ws.cell(row=row, column=3, value=pct_val)
+            pv.number_format = FMT_PCT
+            pv.font = F_SM_BOLD
+            pv.border = THIN_BOTTOM
+            pv.alignment = Alignment(horizontal="right")
+            row += 1
+        # IC insight rows
+        if vd.insight_primary_driver:
+            row += 1
+            row = _write_section_header(ws, row, "IC INSIGHTS — DRIVER DECOMPOSITION", 3)
+            for insight in [vd.insight_primary_driver, vd.insight_weak_thesis, vd.insight_overreliance_multiple]:
+                if not insight:
+                    continue
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+                ic = ws.cell(row=row, column=1, value=insight)
+                ic.font = Font(name="Calibri", size=9, color="111111", italic=True)
+                ic.alignment = Alignment(wrap_text=True, vertical="top")
+                ic.border = THIN_BOTTOM
+                ws.row_dimensions[row].height = 32
+                row += 1
+
+    # ── Panel 2: Fragility Dashboard ───────────────────────────────────
+    fa = state.fragility_analysis
+    if fa.stress_scenarios:
+        row += 1
+        row = _write_section_header(ws, row, "FRAGILITY DASHBOARD", 3)
+
+        # Classification badge
+        cls_fill = {"Robust": GREEN_BG_FILL, "Moderate Risk": AMBER_BG_FILL, "Fragile": RED_BG_FILL}
+        cls_font = {"Robust": F_GREEN, "Moderate Risk": F_AMBER, "Fragile": F_RED}
+        f_fill = cls_fill.get(fa.classification, LIGHT_FILL)
+        f_font = cls_font.get(fa.classification, F_BODY)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+        cc = ws.cell(
+            row=row, column=1,
+            value=f"Classification: {fa.classification}  |  Fragility Score: {fa.fragility_score:.0%}  |  Dominant Risk: {fa.dominant_stress_driver}"
+        )
+        cc.font = f_font
+        cc.fill = f_fill
+        cc.border = MED_BOTTOM
+        cc.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[row].height = 18
+        row += 1
+
+        # Stress scenario table
+        ws.cell(row=row, column=1, value="Stress Scenario").font = F_HEADER
+        ws.cell(row=row, column=2, value="IRR").font = F_HEADER
+        ws.cell(row=row, column=3, value="ΔIRR vs Base").font = F_HEADER
+        _style_header_row(ws, row, 1, 3)
+        row += 1
+
+        base_irr_str = f"{fa.base_irr:.1%}" if fa.base_irr is not None else "N/A"
+        ws.cell(row=row, column=1, value=f"Base Case").font = F_BODY_BOLD
+        ws.cell(row=row, column=1).border = THIN_BOTTOM
+        ws.cell(row=row, column=2, value=fa.base_irr).number_format = FMT_PCT
+        ws.cell(row=row, column=2).font = F_BODY_BOLD
+        ws.cell(row=row, column=2).border = THIN_BOTTOM
+        ws.cell(row=row, column=2).alignment = Alignment(horizontal="right")
+        ws.cell(row=row, column=3, value=0.0).number_format = FMT_PCT
+        ws.cell(row=row, column=3).font = F_BODY_BOLD
+        ws.cell(row=row, column=3).border = THIN_BOTTOM
+        ws.cell(row=row, column=3).alignment = Alignment(horizontal="right")
+        row += 1
+
+        for i, sc in enumerate(fa.stress_scenarios):
+            is_combined = sc.name == "combined"
+            alt = i % 2 == 0
+            label = sc.description
+            irr_font = F_RED if (sc.irr is not None and sc.irr < 0.12) else (F_AMBER if (sc.irr is not None and sc.irr < 0.18) else F_BODY)
+            ws.cell(row=row, column=1, value=label).font = F_BODY_BOLD if is_combined else F_BODY
+            ws.cell(row=row, column=1).border = MED_BOTTOM if is_combined else THIN_BOTTOM
+            if alt:
+                ws.cell(row=row, column=1).fill = LIGHT_FILL
+            vc = ws.cell(row=row, column=2, value=sc.irr)
+            vc.number_format = FMT_PCT
+            vc.font = irr_font
+            vc.border = MED_BOTTOM if is_combined else THIN_BOTTOM
+            vc.alignment = Alignment(horizontal="right")
+            if alt:
+                vc.fill = LIGHT_FILL
+            dc = ws.cell(row=row, column=3, value=sc.delta_irr)
+            dc.number_format = FMT_PCT
+            dc.font = F_RED if (sc.delta_irr is not None and sc.delta_irr < 0) else F_BODY
+            dc.border = MED_BOTTOM if is_combined else THIN_BOTTOM
+            dc.alignment = Alignment(horizontal="right")
+            if alt:
+                dc.fill = LIGHT_FILL
+            row += 1
+
+        # Fragility insight callouts
+        if any([fa.insight_irr_drop, fa.insight_dominant_driver, fa.insight_classification]):
+            row += 1
+            row = _write_section_header(ws, row, "IC INSIGHTS — FRAGILITY", 3)
+            for insight in [fa.insight_irr_drop, fa.insight_dominant_driver, fa.insight_classification]:
+                if not insight:
+                    continue
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+                ic = ws.cell(row=row, column=1, value=insight)
+                ic.font = Font(name="Calibri", size=9, color="111111", italic=True)
+                ic.alignment = Alignment(wrap_text=True, vertical="top")
+                ic.border = THIN_BOTTOM
+                ws.row_dimensions[row].height = 32
+                row += 1
 
     _set_print(ws, landscape=False)
 
