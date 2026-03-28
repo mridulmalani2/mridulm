@@ -219,11 +219,12 @@ export interface ChatMessage {
 }
 
 export interface AIAnalysis {
-  return_decomposition: string;
-  primary_driver: string;
-  risk_concentration: string;
-  fragility_test: string;
-  improvement_levers: string[];
+  message: string;
+  return_decomposition?: string;
+  primary_driver?: string;
+  risk_concentration?: string;
+  fragility_test?: string;
+  improvement_levers?: string[];
   assumption_rationale?: string;
 }
 

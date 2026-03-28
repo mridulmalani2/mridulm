@@ -205,7 +205,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
 
       const aiMsg: ChatMessage = {
         role: 'assistant',
-        content: result.analysis?.return_decomposition || '',
+        content: result.analysis?.message || result.analysis?.return_decomposition || 'Model updated.',
         timestamp: new Date().toISOString(),
         assumption_updates: result.appliedDiffs.length
           ? Object.fromEntries(result.appliedDiffs.map((d) => [d.field, d.new]))

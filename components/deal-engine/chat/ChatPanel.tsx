@@ -63,7 +63,9 @@ const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
         {msg.assumption_updates && Object.keys(msg.assumption_updates).length > 0 && (
           <DiffBadges updates={msg.assumption_updates} />
         )}
-        {msg.analysis && <AnalysisCard analysis={msg.analysis} />}
+        {msg.analysis && (msg.analysis.primary_driver || msg.analysis.risk_concentration || msg.analysis.fragility_test || (msg.analysis.improvement_levers?.length ?? 0) > 0) && (
+          <AnalysisCard analysis={msg.analysis} />
+        )}
       </div>
     </div>
   );
