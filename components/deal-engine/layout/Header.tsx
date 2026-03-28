@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../../../store/dealEngine';
 
 const Header: React.FC = () => {
@@ -25,6 +26,13 @@ const Header: React.FC = () => {
       style={{ background: '#F9F9F7', borderBottom: '1px solid rgba(17,17,17,0.1)' }}
     >
       <div className="flex items-center gap-4">
+        <Link
+          to="/"
+          className="text-[10px] tracking-widest uppercase transition-colors hover:text-[#111]"
+          style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", textDecoration: 'none' }}
+        >
+          ←
+        </Link>
         <div className="border-l-[2px] border-[#CC0000] pl-3">
           <span
             className="text-[11px] font-medium tracking-widest uppercase"

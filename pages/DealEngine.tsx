@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../store/dealEngine';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
@@ -49,7 +50,7 @@ const STEPS: { n: string; title: string; body: React.ReactNode }[] = [
       <>
         Connected to the live model. Say{' '}
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'rgba(17,17,17,0.65)' }}>"make revenue growth more conservative"</span>
-        {' '}and watch it recalculate. Free API key at{' '}
+        {' '}and watch it recalculate. Ask it to explain what drives returns, flag risks, or walk through any assumption. Free API key at{' '}
         <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" style={{ color: '#CC0000', textDecoration: 'none' }}>console.groq.com/keys</a>.
       </>
     ),
@@ -61,11 +62,49 @@ const STEPS: { n: string; title: string; body: React.ReactNode }[] = [
   },
 ];
 
+const SuggestionsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div
+    className="fixed inset-0 z-[300] flex items-center justify-center"
+    style={{ background: 'rgba(249,249,247,0.94)' }}
+    onClick={onClose}
+  >
+    <div
+      className="p-8 max-w-md w-full relative"
+      style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-[11px] transition-colors hover:text-[#111]"
+        style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}
+        aria-label="Close"
+      >
+        ✕
+      </button>
+      <div className="border-t-[2px] border-[#111] mb-5" />
+      <h2 className="font-playfair text-2xl font-bold mb-4" style={{ color: '#111111' }}>
+        Suggestions
+      </h2>
+      <p style={{ color: 'rgba(17,17,17,0.6)', fontFamily: 'Lora, serif', fontSize: 13, lineHeight: 1.85 }}>
+        Anyone with suggestions or improvements, please feel free to reach out at{' '}
+        <a
+          href="mailto:mridul.malani@alumni.ashoka.edu.in"
+          style={{ color: '#CC0000', textDecoration: 'none' }}
+        >
+          mridul.malani@alumni.ashoka.edu.in
+        </a>
+        . If there are any specific assumptions or levers you want added, or if you find faults or scopes for improvement, I am very open to suggestions.
+      </p>
+    </div>
+  </div>
+);
+
 const InitializeForm: React.FC = () => {
   const initializeModel = useDealEngineStore((s) => s.initializeModel);
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
   const [form, setForm] = useState(INIT_DEFAULTS);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,10 +122,23 @@ const InitializeForm: React.FC = () => {
         }}
       />
 
+      {showSuggestions && <SuggestionsModal onClose={() => setShowSuggestions(false)} />}
+
       <div className="relative z-10 w-full max-w-5xl mx-auto px-8 flex items-center gap-16">
 
         {/* ── Left: editorial explanation ───────────────────── */}
         <div className="flex-1 py-12">
+          {/* Back link */}
+          <div className="mb-5">
+            <Link
+              to="/"
+              className="text-[10px] tracking-widest uppercase transition-colors hover:text-[#111]"
+              style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", textDecoration: 'none' }}
+            >
+              ← mridulmalani.com
+            </Link>
+          </div>
+
           <div className="border-t-[3px] border-[#111] mb-6" />
           <h1 className="font-playfair text-5xl font-bold mb-3" style={{ color: '#111111' }}>
             Deal Engine
@@ -117,12 +169,6 @@ const InitializeForm: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="border-t border-[#111]/10 mt-10 pt-4">
-            <span className="text-[9px] tracking-[0.2em] uppercase" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
-              Deal Engine &middot; Private Equity Intelligence
-            </span>
           </div>
         </div>
 
@@ -233,6 +279,21 @@ const InitializeForm: React.FC = () => {
             >
               {isCalculating ? 'Initializing...' : 'Build Model'}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShowSuggestions(true)}
+              className="w-full mt-2.5 py-1.5 text-[10px] tracking-widest uppercase transition-colors hover:border-[rgba(17,17,17,0.2)]"
+              style={{
+                background: 'transparent',
+                color: 'rgba(17,17,17,0.35)',
+                fontFamily: "'JetBrains Mono', monospace",
+                border: '1px solid rgba(17,17,17,0.1)',
+                letterSpacing: '0.12em',
+              }}
+            >
+              Suggestions
+            </button>
           </form>
         </div>
 
@@ -275,7 +336,7 @@ const DealEngine: React.FC = () => {
       />
 
       {/* API Key Modal */}
-      {showApiKeyModal && !apiKey && <ApiKeyModal />}
+      {showApiKeyModal && !apiKey && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
 
       {/* Header */}
       <Header />
