@@ -10,7 +10,7 @@ const CreditPanel: React.FC = () => {
 
   if (!ca || ca.metrics_by_year.length === 0) return null;
 
-  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'CHF' ? 'CHF ' : '\u00A3';
+  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'INR' ? '\u20B9' : currency === 'JPY' ? '\u00A5' : '\u00A3';
 
   const headerStyle = {
     fontFamily: "'JetBrains Mono', monospace",

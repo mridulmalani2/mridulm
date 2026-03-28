@@ -63,6 +63,13 @@ RULES:
 - When modifying assumptions: use the exact dot-notation path from ModelState.
 - When generating AI assumptions (toggled fields): generate realistic values based on sector, size, and current model context. State why.
 - Reference current IRR, MOIC, and key ratios in your analysis. Use the numbers.
+- Always put your main response in the analysis.message field. This is what the user reads. Write it as natural prose.
+- Write naturally — match the depth and style to the question. A simple question gets a concise answer. A critique request gets a detailed breakdown.
+- You are not filling out a form. You are talking to an investment professional.
+- If the user asks to change assumptions: make the change, confirm what you did and what the impact is (reference the new IRR/MOIC), keep it to 2-3 sentences in analysis.message.
+- If the user asks "what drives returns" or "critique this": go deep in analysis.message, reference specific numbers, name the variables and thresholds.
+- Only populate return_decomposition, primary_driver, risk_concentration, fragility_test, and improvement_levers when you are delivering a full deal critique — not on every message.
+- Never repeat the same boilerplate. Every response must contain information the user did not already have.
 
 OUTPUT TONE:
 - Direct, critical, professional
@@ -70,7 +77,7 @@ OUTPUT TONE:
 - Every sentence must contain information.
 - Write like a senior VP giving a 60-second verbal IC verdict.
 
-EXAMPLE RESPONSE STYLE:
+EXAMPLE RESPONSE STYLE (analysis.message):
 "Reducing margin expansion from 500bps to 200bps lowers IRR from 28% to 17%. Returns shift from margin-driven to multiple-driven, which increases fragility — exit multiple compression of 1x drops IRR below 12%. Primary lever to recover: introduce 1.0x additional leverage at entry (adds ~300bps IRR). Secondary: maintain at least 300bps margin expansion as a hard floor."`;
 
 // ── Tool Definition ─────────────────────────────────────────────────────
@@ -93,18 +100,18 @@ const DEAL_ENGINE_TOOL = {
       analysis: {
         type: 'object',
         properties: {
-          return_decomposition: { type: 'string', description: 'What is currently driving returns. Be specific. Reference numbers.' },
-          primary_driver: { type: 'string', description: 'Single clearest driver of returns. One sentence.' },
-          risk_concentration: { type: 'string', description: 'Where the model is most fragile. Name the variable and the threshold.' },
-          fragility_test: { type: 'string', description: 'What specific change breaks the deal. Quantify the break point.' },
-          improvement_levers: { type: 'array', items: { type: 'string' }, description: 'Ranked list of levers to improve IRR. Actionable. Specific.' },
+          message: { type: 'string', description: 'Your natural language response to the user. Write like a senior PE analyst — direct, specific, referencing actual numbers from the model. No templates. No filler. Adapt your response length and style to what the user asked.' },
+          return_decomposition: { type: 'string', description: 'What is currently driving returns. Be specific. Reference numbers. Only include for full deal critiques.' },
+          primary_driver: { type: 'string', description: 'Single clearest driver of returns. One sentence. Only include for full deal critiques.' },
+          risk_concentration: { type: 'string', description: 'Where the model is most fragile. Name the variable and the threshold. Only include for full deal critiques.' },
+          fragility_test: { type: 'string', description: 'What specific change breaks the deal. Quantify the break point. Only include for full deal critiques.' },
+          improvement_levers: { type: 'array', items: { type: 'string' }, description: 'Ranked list of levers to improve IRR. Actionable. Specific. Only include for full deal critiques.' },
           assumption_rationale: { type: 'string', description: 'If assumptions were updated: explain why these values and not others. Reference sector context.' },
         },
-        required: ['return_decomposition', 'primary_driver', 'risk_concentration', 'fragility_test', 'improvement_levers'],
+        required: ['message'],
       },
       scenario_request: {
         type: 'object',
-        nullable: true,
         description: 'If user requested a named scenario, specify it here',
         properties: {
           scenario_name: { type: 'string' },

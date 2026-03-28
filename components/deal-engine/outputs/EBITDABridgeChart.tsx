@@ -9,7 +9,7 @@ const EBITDABridgeChart: React.FC = () => {
 
   if (!bridge || bridge.entry_ebitda === 0) return null;
 
-  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'CHF' ? 'CHF ' : '\u00A3';
+  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'INR' ? '₹' : currency === 'JPY' ? '¥' : '\u00A3';
 
   const headerStyle = {
     fontFamily: "'JetBrains Mono', monospace",

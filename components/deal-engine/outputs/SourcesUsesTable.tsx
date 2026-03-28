@@ -10,7 +10,7 @@ const SourcesUsesTable: React.FC = () => {
 
   if (!su || su.total_uses === 0) return null;
 
-  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'CHF' ? 'CHF ' : '\u00A3';
+  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'INR' ? '₹' : currency === 'JPY' ? '¥' : '\u00A3';
 
   const rowStyle = {
     fontFamily: "'JetBrains Mono', monospace",

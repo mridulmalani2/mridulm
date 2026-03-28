@@ -1,7 +1,7 @@
 /** Number, currency, percentage formatters. */
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  GBP: '£', EUR: '€', USD: '$', CHF: 'CHF ',
+  INR: '₹', EUR: '€', USD: '$', GBP: '£', JPY: '¥',
 };
 
 export function fmtCurrency(v: number, currency = 'GBP'): string {

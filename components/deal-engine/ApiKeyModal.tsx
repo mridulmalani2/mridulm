@@ -3,7 +3,7 @@ import { useDealEngineStore } from '../../store/dealEngine';
 import { ALL_PROVIDERS, PROVIDER_DEFAULTS, PROVIDER_KEY_HINTS, detectProvider } from '../../lib/engine/ai/providers';
 import type { AIProvider } from '../../lib/engine/ai/providers';
 
-const ApiKeyModal: React.FC = () => {
+const ApiKeyModal: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const [key, setKey] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('anthropic');
   const setProviderAndKey = useDealEngineStore((s) => s.setProviderAndKey);
@@ -25,8 +25,26 @@ const ApiKeyModal: React.FC = () => {
   const hint = PROVIDER_KEY_HINTS[selectedProvider];
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(249,249,247,0.92)' }}>
-      <div className="p-8 max-w-md w-full" style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}>
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background: 'rgba(249,249,247,0.92)' }}
+      onClick={onClose}
+    >
+      <div
+        className="p-8 max-w-md w-full relative"
+        style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-[11px] transition-colors hover:text-[#111]"
+            style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        )}
         <div className="border-t-[2px] border-[#111] mb-5" />
         <h2 className="font-playfair text-2xl font-bold mb-2" style={{ color: '#111111' }}>
           Connect AI Provider

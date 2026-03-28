@@ -7,7 +7,7 @@ const SECTORS = [
   'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other',
 ].map((s) => ({ value: s, label: s }));
 
-const CURRENCIES = ['GBP', 'EUR', 'USD', 'CHF'].map((c) => ({ value: c, label: c }));
+const CURRENCIES = ['INR', 'EUR', 'USD', 'GBP', 'JPY'].map((c) => ({ value: c, label: c }));
 const TRAJECTORIES = ['linear', 'front_loaded', 'back_loaded', 'step'].map((t) => ({ value: t, label: t.replace('_', ' ') }));
 const EXIT_METHODS = ['strategic', 'secondary_buyout', 'ipo', 'recapitalization'].map((m) => ({ value: m, label: m.replace('_', ' ') }));
 const AMORT_TYPES = ['bullet', 'straight_line', 'cash_sweep', 'PIK'].map((a) => ({ value: a, label: a.replace('_', ' ') }));

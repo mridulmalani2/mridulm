@@ -19,7 +19,7 @@ type WB = import('exceljs').Workbook;
 
 // ── Design System ────────────────────────────────────────────────────────
 
-const CCY_SYMBOLS: Record<string, string> = { GBP: '\u00a3', EUR: '\u20ac', USD: '$', CHF: 'CHF ' };
+const CCY_SYMBOLS: Record<string, string> = { GBP: '\u00a3', EUR: '\u20ac', USD: '$', INR: '₹', JPY: '¥' };
 
 // Colors
 const NAVY = 'FF1a2744';
@@ -184,7 +184,8 @@ function freezeAndPrint(ws: WS, freezeRow: number, freezeCol: number, landscape 
       : ySplit > 0 ? 'bottomLeft'
       : 'topRight';
 
-    ws.views = [{ state: 'frozen', xSplit, ySplit, topLeftCell, activePane }];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ws.views = [{ state: 'frozen', xSplit, ySplit, topLeftCell, activePane } as any];
   }
 
   ws.pageSetup = {

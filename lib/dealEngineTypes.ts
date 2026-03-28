@@ -67,7 +67,7 @@ export interface EntryAssumptions {
   equity_check: number;
   total_debt_raised: number;
   leverage_ratio: number;
-  currency: 'GBP' | 'EUR' | 'USD' | 'CHF';
+  currency: 'INR' | 'EUR' | 'USD' | 'GBP' | 'JPY';
 }
 
 export interface ExitAssumptions {
@@ -219,11 +219,12 @@ export interface ChatMessage {
 }
 
 export interface AIAnalysis {
-  return_decomposition: string;
-  primary_driver: string;
-  risk_concentration: string;
-  fragility_test: string;
-  improvement_levers: string[];
+  message: string;
+  return_decomposition?: string;
+  primary_driver?: string;
+  risk_concentration?: string;
+  fragility_test?: string;
+  improvement_levers?: string[];
   assumption_rationale?: string;
 }
 
@@ -231,7 +232,7 @@ export interface ModelState {
   deal_name: string;
   company_description: string;
   sector: string;
-  currency: 'GBP' | 'EUR' | 'USD' | 'CHF';
+  currency: 'INR' | 'EUR' | 'USD' | 'GBP' | 'JPY';
   revenue: RevenueAssumptions;
   margins: MarginAssumptions;
   tax: TaxAssumptions;
