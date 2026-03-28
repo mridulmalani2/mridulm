@@ -2,6 +2,22 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import type { ChatMessage, AIAnalysis } from '../../../lib/dealEngineTypes';
 
+// ── Web Speech API type shims (not in default TS lib) ──────────────────
+interface SpeechRecognitionResultItem { readonly transcript: string; }
+interface SpeechRecognitionResult { readonly length: number; [index: number]: SpeechRecognitionResultItem; }
+interface SpeechRecognitionResultList { readonly length: number; [index: number]: SpeechRecognitionResult; }
+interface SpeechRecognitionEvent extends Event { readonly results: SpeechRecognitionResultList; }
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
 // ── SVG icons ──────────────────────────────────────────────────────────
 
 const MicIcon: React.FC<{ active: boolean }> = ({ active }) => (
@@ -99,8 +115,8 @@ const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
 function getSpeechRecognitionClass(): (new () => SpeechRecognition) | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as Record<string, unknown>;
-  return (w['SpeechRecognition'] as (new () => SpeechRecognition)) ||
-         (w['webkitSpeechRecognition'] as (new () => SpeechRecognition)) ||
+  return (w['SpeechRecognition'] as (new () => SpeechRecognition) | undefined) ||
+         (w['webkitSpeechRecognition'] as (new () => SpeechRecognition) | undefined) ||
          null;
 }
 
@@ -181,9 +197,10 @@ const ChatPanel: React.FC = () => {
     rec.lang = 'en-US';
 
     rec.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((r) => r[0].transcript)
-        .join('');
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
       setInput(transcript);
     };
 
