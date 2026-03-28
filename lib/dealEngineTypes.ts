@@ -67,7 +67,7 @@ export interface EntryAssumptions {
   equity_check: number;
   total_debt_raised: number;
   leverage_ratio: number;
-  currency: 'GBP' | 'EUR' | 'USD' | 'CHF';
+  currency: 'INR' | 'EUR' | 'USD' | 'GBP' | 'JPY';
 }
 
 export interface ExitAssumptions {
@@ -232,7 +232,7 @@ export interface ModelState {
   deal_name: string;
   company_description: string;
   sector: string;
-  currency: 'GBP' | 'EUR' | 'USD' | 'CHF';
+  currency: 'INR' | 'EUR' | 'USD' | 'GBP' | 'JPY';
   revenue: RevenueAssumptions;
   margins: MarginAssumptions;
   tax: TaxAssumptions;

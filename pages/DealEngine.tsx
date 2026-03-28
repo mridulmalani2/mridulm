@@ -19,7 +19,7 @@ const INIT_DEFAULTS = {
   revenue: 100,
   ebitda_or_margin: 0.25,
   entry_multiple: 10,
-  currency: 'GBP',
+  currency: 'INR',
   sector: 'Technology',
 };
 
@@ -30,6 +30,36 @@ const inputStyle = {
   fontFamily: "'JetBrains Mono', monospace",
   outline: 'none',
 };
+
+const STEPS: { n: string; title: string; body: React.ReactNode }[] = [
+  {
+    n: '01',
+    title: 'Initialize',
+    body: 'Enter deal name, revenue, EBITDA margin, entry multiple, currency, and sector. The engine builds a full leveraged buyout model — debt schedule, return attribution, sensitivity tables.',
+  },
+  {
+    n: '02',
+    title: 'Edit Assumptions',
+    body: 'A detailed panel lets you adjust every lever — year-by-year revenue growth, margins, leverage, exit multiple — with instant recalculation on every change.',
+  },
+  {
+    n: '03',
+    title: 'AI Chat',
+    body: (
+      <>
+        Connected to the live model. Say{' '}
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'rgba(17,17,17,0.65)' }}>"make revenue growth more conservative"</span>
+        {' '}and watch it recalculate. Free API key at{' '}
+        <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" style={{ color: '#CC0000', textDecoration: 'none' }}>console.groq.com/keys</a>.
+      </>
+    ),
+  },
+  {
+    n: '04',
+    title: 'Export',
+    body: 'Download your calibrated model as a formatted Excel file — ready to share or continue offline.',
+  },
+];
 
 const InitializeForm: React.FC = () => {
   const initializeModel = useDealEngineStore((s) => s.initializeModel);
@@ -52,107 +82,161 @@ const InitializeForm: React.FC = () => {
           backgroundRepeat: 'repeat',
         }}
       />
-      <form onSubmit={handleSubmit} className="relative z-10 w-full max-w-md p-8" style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}>
-        <div className="border-t-[2px] border-[#111] mb-6" />
-        <h1 className="font-playfair text-3xl font-bold mb-1" style={{ color: '#111111' }}>
-          Deal Engine
-        </h1>
-        <p className="mb-6" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14 }}>
-          Initialize a new LBO model with basic entry assumptions.
-        </p>
 
-        <label className="block mb-4">
-          <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Deal Name</span>
-          <input
-            type="text"
-            value={form.deal_name}
-            onChange={(e) => setForm({ ...form, deal_name: e.target.value })}
-            className="w-full px-3 py-2 text-sm"
-            style={inputStyle}
-          />
-        </label>
+      <div className="relative z-10 w-full max-w-5xl mx-auto px-8 flex items-center gap-16">
 
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <label className="block">
-            <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>LTM Revenue (m)</span>
-            <input
-              type="number"
-              value={form.revenue}
-              onChange={(e) => setForm({ ...form, revenue: Number(e.target.value) })}
-              className="w-full px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </label>
-          <label className="block">
-            <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>EBITDA Margin (%)</span>
-            <input
-              type="number"
-              value={(form.ebitda_or_margin * 100).toFixed(1)}
-              onChange={(e) => setForm({ ...form, ebitda_or_margin: Number(e.target.value) / 100 })}
-              step={0.5}
-              className="w-full px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </label>
-        </div>
+        {/* ── Left: editorial explanation ───────────────────── */}
+        <div className="flex-1 py-12">
+          <div className="border-t-[3px] border-[#111] mb-6" />
+          <h1 className="font-playfair text-5xl font-bold mb-3" style={{ color: '#111111' }}>
+            Deal Engine
+          </h1>
+          <p className="mb-10" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 360 }}>
+            A live LBO model with AI reasoning built in. Enter your deal, interrogate every assumption, and let the AI re-calibrate the numbers in plain English.
+          </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <label className="block">
-            <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Entry Multiple (x)</span>
-            <input
-              type="number"
-              value={form.entry_multiple}
-              onChange={(e) => setForm({ ...form, entry_multiple: Number(e.target.value) })}
-              step={0.5}
-              className="w-full px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </label>
-          <label className="block">
-            <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Currency</span>
-            <select
-              value={form.currency}
-              onChange={(e) => setForm({ ...form, currency: e.target.value })}
-              className="w-full px-3 py-2 text-sm"
-              style={inputStyle}
-            >
-              {['GBP', 'EUR', 'USD', 'CHF'].map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-        </div>
-
-        <label className="block mb-6">
-          <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Sector</span>
-          <select
-            value={form.sector}
-            onChange={(e) => setForm({ ...form, sector: e.target.value })}
-            className="w-full px-3 py-2 text-sm"
-            style={inputStyle}
-          >
-            {['Technology', 'Healthcare', 'Industrials', 'Consumer', 'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other'].map((s) => (
-              <option key={s} value={s}>{s}</option>
+          <div className="space-y-6">
+            {STEPS.map(({ n, title, body }) => (
+              <div key={n} className="flex gap-5">
+                <span
+                  className="flex-shrink-0 pt-0.5"
+                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#CC0000', letterSpacing: '0.12em', width: 20 }}
+                >
+                  {n}
+                </span>
+                <div>
+                  <div
+                    className="mb-1 text-[10px] tracking-widest uppercase"
+                    style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    {title}
+                  </div>
+                  <p style={{ color: 'rgba(17,17,17,0.55)', fontFamily: 'Lora, serif', fontSize: 13, lineHeight: 1.72 }}>
+                    {body}
+                  </p>
+                </div>
+              </div>
             ))}
-          </select>
-        </label>
+          </div>
 
-        {error && (
-          <p className="text-xs mb-3" style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>{error}</p>
-        )}
+          <div className="border-t border-[#111]/10 mt-10 pt-4">
+            <span className="text-[9px] tracking-[0.2em] uppercase" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Deal Engine &middot; Private Equity Intelligence
+            </span>
+          </div>
+        </div>
 
-        <button
-          type="submit"
-          disabled={isCalculating}
-          className="w-full py-2.5 text-sm font-medium transition-colors"
-          style={{
-            background: isCalculating ? 'rgba(17,17,17,0.05)' : '#CC0000',
-            color: isCalculating ? 'rgba(17,17,17,0.3)' : '#ffffff',
-            fontFamily: "'JetBrains Mono', monospace",
-            border: isCalculating ? '1px solid rgba(17,17,17,0.1)' : '1px solid #CC0000',
-          }}
-        >
-          {isCalculating ? 'Initializing...' : 'Build Model'}
-        </button>
-      </form>
+        {/* ── Right: form card ───────────────────────────────── */}
+        <div className="flex-shrink-0" style={{ width: 390 }}>
+          <form
+            onSubmit={handleSubmit}
+            className="p-8"
+            style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}
+          >
+            <div className="border-t-[2px] border-[#111] mb-5" />
+            <p
+              className="mb-5 text-[10px] tracking-widest uppercase"
+              style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              Initialize Model
+            </p>
+
+            <label className="block mb-4">
+              <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Deal Name</span>
+              <input
+                type="text"
+                value={form.deal_name}
+                onChange={(e) => setForm({ ...form, deal_name: e.target.value })}
+                className="w-full px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <label className="block">
+                <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>LTM Revenue (m)</span>
+                <input
+                  type="number"
+                  value={form.revenue}
+                  onChange={(e) => setForm({ ...form, revenue: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </label>
+              <label className="block">
+                <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>EBITDA Margin (%)</span>
+                <input
+                  type="number"
+                  value={(form.ebitda_or_margin * 100).toFixed(1)}
+                  onChange={(e) => setForm({ ...form, ebitda_or_margin: Number(e.target.value) / 100 })}
+                  step={0.5}
+                  className="w-full px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <label className="block">
+                <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Entry Multiple (x)</span>
+                <input
+                  type="number"
+                  value={form.entry_multiple}
+                  onChange={(e) => setForm({ ...form, entry_multiple: Number(e.target.value) })}
+                  step={0.5}
+                  className="w-full px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </label>
+              <label className="block">
+                <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Currency</span>
+                <select
+                  value={form.currency}
+                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                  className="w-full px-3 py-2 text-sm"
+                  style={inputStyle}
+                >
+                  {['INR', 'EUR', 'USD', 'GBP', 'JPY'].map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <label className="block mb-5">
+              <span className="block mb-1 text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Sector</span>
+              <select
+                value={form.sector}
+                onChange={(e) => setForm({ ...form, sector: e.target.value })}
+                className="w-full px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                {['Technology', 'Healthcare', 'Industrials', 'Consumer', 'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other'].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+
+            {error && (
+              <p className="text-xs mb-3" style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isCalculating}
+              className="w-full py-2.5 text-sm font-medium tracking-widest uppercase transition-colors"
+              style={{
+                background: isCalculating ? 'rgba(17,17,17,0.05)' : '#CC0000',
+                color: isCalculating ? 'rgba(17,17,17,0.3)' : '#ffffff',
+                fontFamily: "'JetBrains Mono', monospace",
+                border: isCalculating ? '1px solid rgba(17,17,17,0.1)' : '1px solid #CC0000',
+                letterSpacing: '0.12em',
+              }}
+            >
+              {isCalculating ? 'Initializing...' : 'Build Model'}
+            </button>
+          </form>
+        </div>
+
+      </div>
     </div>
   );
 };

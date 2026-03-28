@@ -19,7 +19,7 @@ type WB = import('exceljs').Workbook;
 
 // ── Design System ────────────────────────────────────────────────────────
 
-const CCY_SYMBOLS: Record<string, string> = { GBP: '\u00a3', EUR: '\u20ac', USD: '$', CHF: 'CHF ' };
+const CCY_SYMBOLS: Record<string, string> = { GBP: '\u00a3', EUR: '\u20ac', USD: '$', INR: '₹', JPY: '¥' };
 
 // Colors
 const NAVY = 'FF1a2744';
