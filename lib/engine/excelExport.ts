@@ -184,7 +184,8 @@ function freezeAndPrint(ws: WS, freezeRow: number, freezeCol: number, landscape 
       : ySplit > 0 ? 'bottomLeft'
       : 'topRight';
 
-    ws.views = [{ state: 'frozen', xSplit, ySplit, topLeftCell, activePane }];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ws.views = [{ state: 'frozen', xSplit, ySplit, topLeftCell, activePane } as any];
   }
 
   ws.pageSetup = {

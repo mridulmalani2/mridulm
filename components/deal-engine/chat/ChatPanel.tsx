@@ -22,10 +22,10 @@ const AnalysisCard: React.FC<{ analysis: AIAnalysis }> = ({ analysis }) => (
         <span style={{ color: '#111111' }}>{analysis.fragility_test}</span>
       </div>
     )}
-    {analysis.improvement_levers?.length > 0 && (
+    {(analysis.improvement_levers?.length ?? 0) > 0 && (
       <div>
         <span style={{ color: '#15803d', fontFamily: "'JetBrains Mono', monospace" }}>Levers: </span>
-        <span style={{ color: '#111111' }}>{analysis.improvement_levers.join('; ')}</span>
+        <span style={{ color: '#111111' }}>{analysis.improvement_levers?.join('; ')}</span>
       </div>
     )}
   </div>
