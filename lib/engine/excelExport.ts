@@ -173,7 +173,20 @@ function writeKvRow(
 }
 
 function freezeAndPrint(ws: WS, freezeRow: number, freezeCol: number, landscape = true) {
-  ws.views = [{ state: 'frozen', xSplit: freezeCol - 1, ySplit: freezeRow - 1, topLeftCell: 'B2' }];
+  const ySplit = Math.max(0, freezeRow - 1);
+  const xSplit = Math.max(0, freezeCol - 1);
+
+  if (ySplit > 0 || xSplit > 0) {
+    // Compute correct topLeftCell (the first unfrozen cell)
+    const colLetter = String.fromCharCode(65 + xSplit); // A=0, B=1, etc.
+    const topLeftCell = `${colLetter}${ySplit + 1}`;
+    const activePane = xSplit > 0 && ySplit > 0 ? 'bottomRight'
+      : ySplit > 0 ? 'bottomLeft'
+      : 'topRight';
+
+    ws.views = [{ state: 'frozen', xSplit, ySplit, topLeftCell, activePane }];
+  }
+
   ws.pageSetup = {
     orientation: landscape ? 'landscape' : 'portrait',
     fitToPage: true,
