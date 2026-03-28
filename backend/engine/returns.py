@@ -9,6 +9,7 @@ from typing import Optional
 from backend.models.debt import DebtSchedule
 from backend.models.outputs import (
     AnnualProjection,
+    DriverRank,
     Returns,
     ValueDriverDecomposition,
 )
@@ -248,6 +249,63 @@ def decompose_value_drivers(
     def pct(x: float) -> float:
         return (x / total_gain * 100.0) if total_gain != 0 else 0.0
 
+    # ── Ranked driver bridge ──────────────────────────────────────────────
+    # Positive contributors only get a rank; fees is always last (it's drag)
+    raw_drivers = [
+        ("Revenue Growth",      delta_rev),
+        ("Margin Expansion",    delta_margin),
+        ("Multiple Expansion",  delta_multiple),
+        ("Deleveraging",        delta_debt),
+        ("Fees & Leakage",      -fees_drag),
+    ]
+    # Sort positives descending, negatives last
+    positive = sorted(
+        [(n, v) for n, v in raw_drivers if v > 0], key=lambda x: -x[1]
+    )
+    negatives = [(n, v) for n, v in raw_drivers if v <= 0]
+    ordered = positive + negatives
+
+    ranked_drivers = [
+        DriverRank(
+            name=name,
+            abs_contribution=value,
+            pct_of_gain=pct(value),
+            rank=i + 1,
+        )
+        for i, (name, value) in enumerate(ordered)
+    ]
+
+    primary_driver = ordered[0][0] if ordered else ""
+
+    # Operational value = revenue + margin; financial engineering = multiple + debt
+    operational_pct = pct(delta_rev) + pct(delta_margin)
+    financial_pct = pct(delta_multiple) + pct(delta_debt)
+
+    # ── IC-level insight text (data-derived, no generic statements) ──────
+    top_pct = pct(ordered[0][1]) if ordered else 0.0
+    insight_primary = (
+        f"Returns are primarily driven by {primary_driver} ({top_pct:.0f}% of equity gain). "
+        f"Revenue growth: {pct(delta_rev):.0f}%, margin expansion: {pct(delta_margin):.0f}%, "
+        f"multiple expansion: {pct(delta_multiple):.0f}%, deleveraging: {pct(delta_debt):.0f}%."
+    ) if total_gain != 0 else ""
+
+    insight_weak_thesis = ""
+    if total_gain > 0 and operational_pct < 20.0:
+        insight_weak_thesis = (
+            f"Only {operational_pct:.0f}% of value creation is operational (revenue + margin). "
+            f"This deal is financial-engineering heavy — {financial_pct:.0f}% from multiple expansion "
+            f"and deleveraging. Returns are highly sensitive to exit conditions."
+        )
+
+    insight_overreliance_multiple = ""
+    mult_pct = pct(delta_multiple)
+    if mult_pct > 40.0:
+        insight_overreliance_multiple = (
+            f"Multiple expansion contributes {mult_pct:.0f}% of equity gain. "
+            f"A 1x compression in exit multiple from {exit_multiple:.1f}x would materially reduce returns. "
+            f"Exit risk is elevated — validate buyer universe at this multiple."
+        )
+
     return ValueDriverDecomposition(
         revenue_growth_contribution_pct=pct(delta_rev),
         margin_expansion_contribution_pct=pct(delta_margin),
@@ -263,4 +321,11 @@ def decompose_value_drivers(
         exit_equity=exit_equity,
         total_equity_gain=total_gain,
         reconciliation_delta=recon_delta,
+        ranked_drivers=ranked_drivers,
+        primary_driver=primary_driver,
+        operational_value_pct=operational_pct,
+        financial_engineering_pct=financial_pct,
+        insight_primary_driver=insight_primary,
+        insight_weak_thesis=insight_weak_thesis,
+        insight_overreliance_multiple=insight_overreliance_multiple,
     )

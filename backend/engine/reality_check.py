@@ -11,6 +11,8 @@ from backend.models.outputs import (
     CreditMetricsYear,
     ExitFlag,
     ExitRealityCheck,
+    FragilityAnalysis,
+    FragilityStressResult,
     RecoveryTranche,
     Returns,
 )
@@ -27,6 +29,8 @@ def run_reality_check(
     """Execute all 8 exit reality check rules."""
     flags: list[ExitFlag] = []
     hp = state.exit.holding_period
+    _CCY = {"GBP": "£", "EUR": "€", "USD": "$", "CHF": "CHF "}
+    ccy = _CCY.get(state.currency, "£")
 
     entry_multiple = state.entry.entry_ebitda_multiple
     exit_multiple = state.exit.exit_ebitda_multiple
@@ -82,11 +86,31 @@ def run_reality_check(
         state, exit_ev, exit_ebitda, exit_margin, exit_growth, entry_multiple
     )
     if implied_buyer_irr is not None and implied_buyer_irr < 0.15:
+        gap_bps = int((0.15 - implied_buyer_irr) * 10000)
+        # Compute what exit EV discount would restore a 15% buyer IRR
+        # Buyer equity = EV - debt, so to get 15%: buyer_equity_req is smaller → lower EV
+        buyer_leverage = state.entry.leverage_ratio
+        buyer_debt = exit_ebitda * buyer_leverage
+        # At 15% IRR: exit_equity_15 = (entry_equity_at_15) * (1.15)^hold
+        # Approximate: EV reduction needed ≈ gap in returns * holding period
+        buyer_equity_current = max(0.0, exit_ev - buyer_debt)
+        ev_pct_discount_for_hurdle = gap_bps / 10000 * 5  # rough linear approx over 5yr hold
+        implied_discount_ev = exit_ev * ev_pct_discount_for_hurdle
         flags.append(ExitFlag(
             flag_type="implied_buyer_return_too_low",
             severity="critical",
-            description=f"Implied buyer IRR of {implied_buyer_irr:.1%} is below 15% — no rational financial buyer pays this price.",
-            quantified_impact=f"Buyer IRR: {implied_buyer_irr:.1%}",
+            description=(
+                f"At {exit_multiple:.1f}x exit EBITDA ({ccy}{exit_ev:.0f}m EV), an acquirer assuming "
+                f"{exit_growth:.1%} growth and {buyer_leverage:.1f}x leverage earns {implied_buyer_irr:.1%} IRR "
+                f"— {gap_bps}bps below a standard 15% PE hurdle. Achieving hurdle returns would require "
+                f"approximately {ev_pct_discount_for_hurdle:.0%} lower exit EV ({ccy}{implied_discount_ev:.0f}m discount) "
+                f"or materially higher post-exit growth. Buyer pool at this price is likely limited to "
+                f"strategics with cost synergies or a strategic premium."
+            ),
+            quantified_impact=(
+                f"Buyer IRR {implied_buyer_irr:.1%} vs 15% hurdle; "
+                f"{gap_bps}bps gap. EV discount required for 15% hurdle: ~{ccy}{implied_discount_ev:.0f}m."
+            ),
         ))
 
     # RULE 4 — Growth Deceleration Inconsistency
@@ -367,4 +391,169 @@ def compute_credit_analysis(
         refinancing_risk_detail=refinancing_detail,
         recovery_waterfall=recovery_waterfall,
         credit_rating_estimate="",
+    )
+
+
+# ── Fragility Engine ──────────────────────────────────────────────────────
+
+def compute_fragility(
+    state: ModelState,
+    base_irr: Optional[float],
+    base_moic: float,
+) -> FragilityAnalysis:
+    """Stress-test the deal under 3 independent shocks + combined case.
+
+    Shocks (per upgrademodel.md Section 3.2):
+      1. Growth shock  : all growth rates -2%
+      2. Margin shock  : EBITDA margin -100bps (base + target)
+      3. Multiple shock: exit multiple -1.0x
+      4. Combined      : all three applied simultaneously
+
+    Fragility score = combined IRR drop / base IRR.
+    Classification: <20% Robust | 20-40% Moderate Risk | >40% Fragile.
+    """
+    import copy
+    # Lazy import avoids circular dependency
+    from backend.engine.scenarios import _run_full_model
+
+    def _run_shock(s: ModelState) -> tuple[Optional[float], float]:
+        try:
+            ret, _, _ = _run_full_model(s)
+            return ret.irr, ret.moic
+        except Exception:
+            return None, 0.0
+
+    def _delta_irr(stressed: Optional[float]) -> Optional[float]:
+        if base_irr is not None and stressed is not None:
+            return stressed - base_irr
+        return None
+
+    # ── Shock 1: Growth -2% ──
+    g_state = copy.deepcopy(state)
+    g_state.revenue.growth_rates = [
+        max(r - 0.02, -0.10) for r in state.revenue.growth_rates
+    ]
+    g_state.margins.margin_by_year = []
+    g_state.ensure_list_lengths()
+    g_state.derive_entry_fields()
+    g_irr, g_moic = _run_shock(g_state)
+
+    # ── Shock 2: Margin -100bps ──
+    m_state = copy.deepcopy(state)
+    m_state.margins.base_ebitda_margin = max(state.margins.base_ebitda_margin - 0.01, 0.01)
+    m_state.margins.target_ebitda_margin = max(state.margins.target_ebitda_margin - 0.01, 0.01)
+    m_state.margins.margin_by_year = []
+    m_state.ensure_list_lengths()
+    m_state.derive_entry_fields()
+    m_irr, m_moic = _run_shock(m_state)
+
+    # ── Shock 3: Exit multiple -1.0x ──
+    x_state = copy.deepcopy(state)
+    x_state.exit.exit_ebitda_multiple = max(state.exit.exit_ebitda_multiple - 1.0, 1.0)
+    x_state.margins.margin_by_year = list(state.margins.margin_by_year)
+    x_state.ensure_list_lengths()
+    x_state.derive_entry_fields()
+    x_irr, x_moic = _run_shock(x_state)
+
+    # ── Shock 4: Combined ──
+    c_state = copy.deepcopy(state)
+    c_state.revenue.growth_rates = [
+        max(r - 0.02, -0.10) for r in state.revenue.growth_rates
+    ]
+    c_state.margins.base_ebitda_margin = max(state.margins.base_ebitda_margin - 0.01, 0.01)
+    c_state.margins.target_ebitda_margin = max(state.margins.target_ebitda_margin - 0.01, 0.01)
+    c_state.exit.exit_ebitda_multiple = max(state.exit.exit_ebitda_multiple - 1.0, 1.0)
+    c_state.margins.margin_by_year = []
+    c_state.ensure_list_lengths()
+    c_state.derive_entry_fields()
+    c_irr, c_moic = _run_shock(c_state)
+
+    stress_scenarios = [
+        FragilityStressResult(
+            name="growth_shock",
+            description="-2% revenue growth (all years)",
+            irr=g_irr,
+            moic=g_moic,
+            delta_irr=_delta_irr(g_irr),
+            delta_moic=g_moic - base_moic,
+        ),
+        FragilityStressResult(
+            name="margin_shock",
+            description="-100bps EBITDA margin (base and target)",
+            irr=m_irr,
+            moic=m_moic,
+            delta_irr=_delta_irr(m_irr),
+            delta_moic=m_moic - base_moic,
+        ),
+        FragilityStressResult(
+            name="multiple_shock",
+            description=f"-1.0x exit multiple ({state.exit.exit_ebitda_multiple:.1f}x → {max(state.exit.exit_ebitda_multiple - 1.0, 1.0):.1f}x)",
+            irr=x_irr,
+            moic=x_moic,
+            delta_irr=_delta_irr(x_irr),
+            delta_moic=x_moic - base_moic,
+        ),
+        FragilityStressResult(
+            name="combined",
+            description="-2% growth, -100bps margin, -1.0x exit multiple",
+            irr=c_irr,
+            moic=c_moic,
+            delta_irr=_delta_irr(c_irr),
+            delta_moic=c_moic - base_moic,
+        ),
+    ]
+
+    # ── Fragility score ──
+    combined_drop = abs(_delta_irr(c_irr) or 0.0)
+    fragility_score = combined_drop / base_irr if (base_irr and base_irr > 0) else 0.0
+
+    if fragility_score < 0.20:
+        classification = "Robust"
+    elif fragility_score < 0.40:
+        classification = "Moderate Risk"
+    else:
+        classification = "Fragile"
+
+    # Dominant individual shock (largest IRR drop)
+    individual = [
+        ("Revenue Growth", abs(_delta_irr(g_irr) or 0.0)),
+        ("Margin",         abs(_delta_irr(m_irr) or 0.0)),
+        ("Exit Multiple",  abs(_delta_irr(x_irr) or 0.0)),
+    ]
+    dominant = max(individual, key=lambda x: x[1])[0]
+    dominant_drop = max(individual, key=lambda x: x[1])[1]
+
+    # ── Structured insight text (data-only, no generic statements) ──
+    base_irr_str = f"{base_irr:.1%}" if base_irr else "N/A"
+    c_irr_str = f"{c_irr:.1%}" if c_irr else "N/A"
+    insight_irr_drop = (
+        f"IRR drops from {base_irr_str} → {c_irr_str} under combined stress "
+        f"({fragility_score:.0%} decline). "
+        f"Base MOIC {base_moic:.2f}x → {c_moic:.2f}x stressed."
+    )
+
+    # What fraction of combined IRR drop is from the dominant shock?
+    combined_drop_val = abs(_delta_irr(c_irr) or 0.0)
+    dominant_share = dominant_drop / combined_drop_val if combined_drop_val > 0 else 0.0
+    insight_dominant = (
+        f"{dominant_share:.0%} of combined downside driven by {dominant} compression "
+        f"({dominant_drop * 100:.0f}bps IRR impact in isolation)."
+    )
+
+    insight_class = (
+        f"Deal classified as {classification}: combined IRR drop of "
+        f"{fragility_score:.0%} vs base under mild stress (-2% growth, "
+        f"-100bps margin, -1x exit multiple)."
+    )
+
+    return FragilityAnalysis(
+        base_irr=base_irr,
+        base_moic=base_moic,
+        stress_scenarios=stress_scenarios,
+        fragility_score=fragility_score,
+        classification=classification,
+        dominant_stress_driver=dominant,
+        insight_irr_drop=insight_irr_drop,
+        insight_dominant_driver=insight_dominant,
+        insight_classification=insight_class,
     )

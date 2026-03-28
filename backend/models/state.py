@@ -15,6 +15,7 @@ from .outputs import (
     CreditAnalysis,
     EBITDABridge,
     ExitRealityCheck,
+    FragilityAnalysis,
     Returns,
     RevenueSegment,
     ScenarioSet,
@@ -165,6 +166,7 @@ class ModelState(BaseModel):
     )
     sources_and_uses: SourcesAndUses = Field(default_factory=SourcesAndUses)
     credit_analysis: CreditAnalysis = Field(default_factory=CreditAnalysis)
+    fragility_analysis: FragilityAnalysis = Field(default_factory=FragilityAnalysis)
     ebitda_bridge: EBITDABridge = Field(default_factory=EBITDABridge)
     scenarios: list[ScenarioSet] = Field(default_factory=list)
     sensitivity_tables: list[SensitivityTable] = Field(default_factory=list)

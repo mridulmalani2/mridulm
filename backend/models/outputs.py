@@ -71,6 +71,16 @@ class Returns(BaseModel):
 
 # ── Value Driver Decomposition ────────────────────────────────────────────
 
+class DriverRank(BaseModel):
+    """Single ranked value-creation driver."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: str = ""                  # e.g. "Revenue Growth"
+    abs_contribution: float = 0.0  # £m equity gain from this driver
+    pct_of_gain: float = 0.0       # % of total equity gain (signed)
+    rank: int = 0                   # 1 = largest positive contributor
+
+
 class ValueDriverDecomposition(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -90,6 +100,50 @@ class ValueDriverDecomposition(BaseModel):
     exit_equity: float = 0.0
     total_equity_gain: float = 0.0
     reconciliation_delta: float = 0.0  # should be ~0
+
+    # ── IC-grade additions ──────────────────────────────────────────────
+    ranked_drivers: list[DriverRank] = Field(default_factory=list)
+    primary_driver: str = ""           # name of top positive contributor
+    operational_value_pct: float = 0.0  # revenue + margin % of gain
+    financial_engineering_pct: float = 0.0  # multiple + deleveraging % of gain
+
+    # Structured insight text (data-derived, not generic AI text)
+    insight_primary_driver: str = ""     # "Returns are primarily driven by X (Y%)"
+    insight_weak_thesis: str = ""        # set if operational < 20% of gain
+    insight_overreliance_multiple: str = ""  # set if multiple > 40% of gain
+
+
+# ── Fragility Engine ──────────────────────────────────────────────────────
+
+class FragilityStressResult(BaseModel):
+    """IRR/MOIC outcome for a single stress scenario."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: str = ""           # "growth_shock" | "margin_shock" | "multiple_shock" | "combined"
+    description: str = ""   # human-readable parameter change
+    irr: Optional[float] = None
+    moic: float = 0.0
+    delta_irr: Optional[float] = None   # stressed IRR − base IRR (negative = worse)
+    delta_moic: float = 0.0             # stressed MOIC − base MOIC
+
+
+class FragilityAnalysis(BaseModel):
+    """Fragility engine output: stress tests + score + classification."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    base_irr: Optional[float] = None
+    base_moic: float = 0.0
+    stress_scenarios: list[FragilityStressResult] = Field(default_factory=list)
+
+    # Fragility score = combined IRR drop / base IRR
+    fragility_score: float = 0.0
+    classification: str = ""    # "Robust" | "Moderate Risk" | "Fragile"
+    dominant_stress_driver: str = ""   # which individual shock hurts most
+
+    # Structured insight strings (derived strictly from model data)
+    insight_irr_drop: str = ""         # "IRR drops from X% → Y% under mild stress"
+    insight_dominant_driver: str = ""  # "X% of combined downside from [driver]"
+    insight_classification: str = ""   # classification with numeric backing
 
 
 # ── Scenarios ─────────────────────────────────────────────────────────────
