@@ -37,6 +37,26 @@ function applyUpdate(obj: Record<string, unknown>, path: string, value: unknown)
   }
 }
 
+// ── Sector-specific starting assumptions ────────────────────────────────
+
+const SECTOR_DEFAULTS: Record<string, {
+  growthRates: number[];
+  marginExpansion: number;
+  leverage: number;
+  seniorRate: number;
+  exitMultipleAdj: number;
+}> = {
+  Technology:          { growthRates: [0.12, 0.10, 0.08, 0.07, 0.06], marginExpansion: 0.06, leverage: 4.5, seniorRate: 0.060, exitMultipleAdj:  0.0 },
+  Healthcare:          { growthRates: [0.08, 0.07, 0.07, 0.06, 0.06], marginExpansion: 0.04, leverage: 4.0, seniorRate: 0.055, exitMultipleAdj: -0.5 },
+  Industrials:         { growthRates: [0.05, 0.05, 0.04, 0.04, 0.04], marginExpansion: 0.03, leverage: 3.5, seniorRate: 0.055, exitMultipleAdj: -1.0 },
+  Consumer:            { growthRates: [0.06, 0.05, 0.05, 0.04, 0.04], marginExpansion: 0.03, leverage: 3.5, seniorRate: 0.055, exitMultipleAdj: -0.5 },
+  'Financial Services':{ growthRates: [0.07, 0.06, 0.06, 0.05, 0.05], marginExpansion: 0.03, leverage: 3.0, seniorRate: 0.065, exitMultipleAdj:  0.0 },
+  'Real Estate':       { growthRates: [0.04, 0.04, 0.04, 0.03, 0.03], marginExpansion: 0.03, leverage: 5.0, seniorRate: 0.050, exitMultipleAdj:  0.0 },
+  Energy:              { growthRates: [0.04, 0.04, 0.03, 0.03, 0.03], marginExpansion: 0.02, leverage: 3.5, seniorRate: 0.065, exitMultipleAdj: -1.0 },
+  'Business Services': { growthRates: [0.08, 0.07, 0.07, 0.06, 0.05], marginExpansion: 0.04, leverage: 4.0, seniorRate: 0.055, exitMultipleAdj: -0.5 },
+  Other:               { growthRates: [0.06, 0.06, 0.05, 0.05, 0.04], marginExpansion: 0.03, leverage: 4.0, seniorRate: 0.060, exitMultipleAdj: -0.5 },
+};
+
 interface DealEngineStore {
   modelState: ModelState | null;
   isCalculating: boolean;
@@ -61,7 +81,9 @@ interface DealEngineStore {
     entry_multiple: number;
     currency: string;
     sector: string;
+    apiKey?: string;
   }) => Promise<void>;
+  resetModel: () => void;
   updateField: (path: string, value: unknown) => Promise<void>;
   sendChatMessage: (message: string) => Promise<void>;
   generateAssumptions: () => Promise<void>;
@@ -78,8 +100,8 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   modelState: null,
   isCalculating: false,
   chatHistory: [],
-  apiKey: typeof window !== 'undefined' ? sessionStorage.getItem('deal-engine-api-key') : null,
-  aiProvider: (typeof window !== 'undefined' ? sessionStorage.getItem('deal-engine-ai-provider') as AIProvider : null) || 'anthropic',
+  apiKey: typeof window !== 'undefined' ? localStorage.getItem('deal-engine-api-key') : null,
+  aiProvider: (typeof window !== 'undefined' ? localStorage.getItem('deal-engine-ai-provider') as AIProvider : null) || 'anthropic',
   activeScenario: 'base',
   activeSensitivityTable: 1,
   scenarios: [],
@@ -89,48 +111,77 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   error: null,
 
   setApiKey: (key) => {
-    sessionStorage.setItem('deal-engine-api-key', key);
+    localStorage.setItem('deal-engine-api-key', key);
     const detected = detectProvider(key);
-    sessionStorage.setItem('deal-engine-ai-provider', detected);
+    localStorage.setItem('deal-engine-ai-provider', detected);
     set({ apiKey: key, aiProvider: detected });
   },
 
   setAiProvider: (provider) => {
-    sessionStorage.setItem('deal-engine-ai-provider', provider);
+    localStorage.setItem('deal-engine-ai-provider', provider);
     set({ aiProvider: provider });
   },
 
   setProviderAndKey: (provider, key) => {
-    sessionStorage.setItem('deal-engine-api-key', key);
-    sessionStorage.setItem('deal-engine-ai-provider', provider);
+    localStorage.setItem('deal-engine-api-key', key);
+    localStorage.setItem('deal-engine-ai-provider', provider);
     set({ apiKey: key, aiProvider: provider });
   },
+
+  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, error: null }),
 
   initializeModel: async (inputs) => {
     set({ isCalculating: true, error: null });
     try {
+      // Store API key immediately if provided
+      const rawKey = inputs.apiKey?.trim();
+      if (rawKey) {
+        const detected = detectProvider(rawKey);
+        localStorage.setItem('deal-engine-api-key', rawKey);
+        localStorage.setItem('deal-engine-ai-provider', detected);
+        set({ apiKey: rawKey, aiProvider: detected });
+      }
+
       const state = createDefaultModelState();
       state.deal_name = inputs.deal_name;
       state.currency = inputs.currency as ModelState['currency'];
       state.sector = inputs.sector;
       state.revenue.base_revenue = inputs.revenue;
 
-      if (inputs.ebitda_or_margin < 1) {
-        state.margins.base_ebitda_margin = inputs.ebitda_or_margin;
-      } else {
-        state.margins.base_ebitda_margin = inputs.revenue > 0 ? inputs.ebitda_or_margin / inputs.revenue : 0.2;
-      }
+      const baseMarg = inputs.ebitda_or_margin < 1
+        ? inputs.ebitda_or_margin
+        : (inputs.revenue > 0 ? inputs.ebitda_or_margin / inputs.revenue : 0.2);
+      state.margins.base_ebitda_margin = baseMarg;
 
-      state.entry.entry_ebitda_multiple = inputs.entry_multiple;
-      state.exit.exit_ebitda_multiple = inputs.entry_multiple;
+      // Apply sector defaults
+      const sd = SECTOR_DEFAULTS[inputs.sector] || SECTOR_DEFAULTS['Other'];
+      state.revenue.growth_rates = [...sd.growthRates];
+      state.margins.target_ebitda_margin = Math.min(baseMarg + sd.marginExpansion, 0.55);
+      state.exit.exit_ebitda_multiple = Math.max(1, inputs.entry_multiple + sd.exitMultipleAdj);
 
-      const ebitda = inputs.revenue * state.margins.base_ebitda_margin;
-      const defaultDebt = ebitda * 4.0;
+      // 2-tranche debt structure based on sector leverage
+      const ebitda = inputs.revenue * baseMarg;
+      const totalDebt = ebitda * sd.leverage;
       state.debt_tranches = [
         {
           name: 'Senior Term Loan A',
-          principal: defaultDebt,
-          interest_rate: 0.05,
+          principal: Math.round(totalDebt * 0.65 * 10) / 10,
+          interest_rate: sd.seniorRate,
+          rate_type: 'fixed',
+          base_rate: 0,
+          spread: 0,
+          amortization_type: 'straight_line',
+          amortization_schedule: [],
+          pik_rate: 0,
+          cash_interest: true,
+          commitment_fee: 0,
+          floor: 0,
+          cash_sweep_pct: 0,
+        },
+        {
+          name: 'Senior Term Loan B',
+          principal: Math.round(totalDebt * 0.35 * 10) / 10,
+          interest_rate: sd.seniorRate + 0.02,
           rate_type: 'fixed',
           base_rate: 0,
           spread: 0,
@@ -144,8 +195,53 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
         },
       ];
 
-      const result = fullRecalc(state);
-      set({ modelState: result, isCalculating: false });
+      state.entry.entry_ebitda_multiple = inputs.entry_multiple;
+      state.entry.enterprise_value = 0;
+
+      const initialResult = fullRecalc(state);
+
+      // If API key available, use AI to enhance assumptions based on company name + sector
+      const { apiKey: storedKey, aiProvider } = get();
+      const effectiveKey = rawKey || storedKey;
+
+      if (effectiveKey) {
+        set({ modelState: initialResult });
+        try {
+          const provider = rawKey ? detectProvider(rawKey) : aiProvider;
+          const config = buildProviderConfig(provider, effectiveKey);
+          const ebitdaM = (inputs.revenue * baseMarg).toFixed(1);
+          const evM = (inputs.revenue * baseMarg * inputs.entry_multiple).toFixed(0);
+
+          const aiMessage = `Initialize comprehensive LBO assumptions for ${inputs.deal_name} (${inputs.sector} sector).
+
+Entry snapshot:
+- LTM Revenue: ${inputs.revenue}M ${inputs.currency}
+- EBITDA: ${ebitdaM}M (${(baseMarg * 100).toFixed(1)}% margin)
+- Entry Multiple: ${inputs.entry_multiple}x — Implied EV: ${evM}M ${inputs.currency}
+
+Using the company name and sector context, set realistic LBO assumptions. Update these paths:
+- revenue.growth_rates: 5-year array — tailor to this company type and sector growth profile
+- margins.target_ebitda_margin: realistic target after 5-year hold
+- margins.margin_trajectory: linear/front_loaded/back_loaded
+- margins.da_pct_revenue: sector-appropriate D&A as % of revenue
+- margins.capex_pct_revenue: maintenance capex as % of revenue
+- margins.nwc_pct_revenue: NWC as % of revenue
+- exit.exit_ebitda_multiple: realistic exit given entry, sector comps, 5-year hold
+
+Be specific. Use the company name to infer business type and calibrate accordingly. Set trigger_recalculation to true.`;
+
+          const result = await callAI(aiMessage, initialResult, [], config);
+          if (!result.error && result.updatedStateDict && result.appliedDiffs.length > 0) {
+            const aiState = fullRecalc(result.updatedStateDict as unknown as ModelState);
+            set({ modelState: aiState, isCalculating: false });
+            return;
+          }
+        } catch {
+          // AI init failed — fall through to sector-default result
+        }
+      }
+
+      set({ modelState: initialResult, isCalculating: false });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -255,7 +351,6 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     try {
       const { modelState } = get();
       if (!modelState) throw new Error('No model initialized');
-      // Use setTimeout to avoid blocking UI on heavy computation
       const scenarios = await new Promise<ScenarioSet[]>((resolve) => {
         setTimeout(() => resolve(generateScenarios(modelState)), 0);
       });
@@ -270,7 +365,6 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     try {
       const { modelState } = get();
       if (!modelState) throw new Error('No model initialized');
-      // Use setTimeout to avoid blocking UI on heavy computation
       const table = await new Promise<SensitivityTable>((resolve) => {
         setTimeout(() => resolve(generateSensitivityTable(modelState, tableId)), 0);
       });
