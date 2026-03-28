@@ -3,11 +3,6 @@
 import type {
   ModelState,
   AnnualProjectionYear,
-  DebtScheduleYear,
-  CreditMetricsYear,
-  SensitivityTable,
-  ScenarioSet,
-  ExitFlag,
 } from '../dealEngineTypes';
 
 let ExcelJS: typeof import('exceljs') | null = null;
@@ -63,7 +58,6 @@ const F_RED = { name: 'Calibri', size: 10, bold: true, color: { argb: RED_C } };
 const F_AMBER = { name: 'Calibri', size: 10, bold: true, color: { argb: AMBER_C } };
 const F_COVER_METRIC = { name: 'Calibri', size: 22, bold: true, color: { argb: NAVY } };
 const F_COVER_LABEL = { name: 'Calibri', size: 9, color: { argb: 'FF888888' } };
-const F_WHITE = { name: 'Calibri', size: 10, bold: true, color: { argb: WHITE } };
 const F_WHITE_LG = { name: 'Calibri', size: 12, bold: true, color: { argb: WHITE } };
 
 // Borders
@@ -73,12 +67,10 @@ const THICK_BOTTOM = { bottom: { style: 'thick' as const, color: { argb: NAVY } 
 
 // Number formats
 const FMT_CCY = '#,##0.0;(#,##0.0);"-"';
-const FMT_CCY_0 = '#,##0;(#,##0);"-"';
 const FMT_PCT = '0.0%;(0.0%);"-"';
 const FMT_MULT = '0.0"x"';
 const FMT_NUM = '#,##0.0;(#,##0.0);"-"';
 const FMT_INT = '#,##0';
-const FMT_BPS = '#,##0"bps"';
 
 function irrFont(irr: number | null) {
   if (irr == null) return F_BODY;
@@ -212,9 +204,9 @@ export async function buildExcel(state: ModelState): Promise<Blob> {
   buildAssumptionsSheet(wb, state, ccy);
   buildPLSheet(wb, state, ccy, hp, years);
   buildCashFlowDebtSheet(wb, state, ccy, hp, years, ds);
-  buildReturnsSheet(wb, state, ccy, hp, years);
+  buildReturnsSheet(wb, state, ccy);
   buildScenariosSheet(wb, state, ccy);
-  buildRiskSheet(wb, state, ccy, hp, years);
+  buildRiskSheet(wb, state, ccy, hp);
 
   const buffer = await wb.xlsx.writeBuffer();
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -452,7 +444,7 @@ function buildSourcesUsesSheet(wb: WB, state: ModelState, ccy: string) {
 
 // ── Sheet 3: Assumptions ────────────────────────────────────────────────
 
-function buildAssumptionsSheet(wb: WB, state: ModelState, ccy: string) {
+function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string) {
   const ws = wb.addWorksheet('Assumptions', { properties: { tabColor: { argb: '1a5276' } } });
   ws.getColumn(1).width = 32;
   ws.getColumn(2).width = 18;
@@ -711,7 +703,7 @@ function buildCashFlowDebtSheet(
 
 // ── Sheet 6: Returns ────────────────────────────────────────────────────
 
-function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, hp: number, years: AnnualProjectionYear[]) {
+function buildReturnsSheet(wb: WB, state: ModelState, ccy: string) {
   const ws = wb.addWorksheet('Returns', { properties: { tabColor: { argb: '7d3c98' } } });
   ws.getColumn(1).width = 32;
   ws.getColumn(2).width = 18;
@@ -983,7 +975,7 @@ function buildScenariosSheet(wb: WB, state: ModelState, ccy: string) {
 
 // ── Sheet 8: Risk Assessment ────────────────────────────────────────────
 
-function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number, years: AnnualProjectionYear[]) {
+function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
   const ws = wb.addWorksheet('Risk', { properties: { tabColor: { argb: 'c0392b' } } });
   ws.getColumn(1).width = 36;
   ws.getColumn(2).width = 14;
