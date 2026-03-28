@@ -17,7 +17,7 @@ from backend.ai.gateway import call_ai, detect_provider
 from backend.ai.intent import classify_intent
 from backend.engine.debt_schedule import build_debt_schedule
 from backend.engine.projections import build_projections, update_projections_with_debt
-from backend.engine.reality_check import run_reality_check
+from backend.engine.reality_check import compute_credit_analysis, run_reality_check
 from backend.engine.returns import calculate_returns, decompose_value_drivers
 from backend.engine.scenarios import generate_scenarios, generate_sensitivity_tables
 from backend.export.excel import build_excel
@@ -75,12 +75,17 @@ def _full_recalc(state: ModelState) -> ModelState:
     ret = calculate_returns(state, proj, ds)
     vd = decompose_value_drivers(state, proj, ds, ret)
     rc = run_reality_check(state, proj, ds, ret)
+    ca = compute_credit_analysis(state, proj, ds)
+
+    # Populate Sources & Uses (hard reconciliation)
+    state.compute_sources_and_uses()
 
     state.projections = proj
     state.debt_schedule = ds
     state.returns = ret
     state.value_drivers = vd
     state.exit_reality_check = rc
+    state.credit_analysis = ca
     state.last_modified = datetime.utcnow()
 
     # Update exit derived fields

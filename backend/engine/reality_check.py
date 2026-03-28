@@ -1,4 +1,4 @@
-"""Exit reality check — all 8 rules from Section 3.8."""
+"""Exit reality check (8 rules) and IC-grade credit analysis with stress tests."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ from typing import Optional
 from backend.models.debt import DebtSchedule
 from backend.models.outputs import (
     AnnualProjection,
+    CreditAnalysis,
+    CreditMetricsYear,
     ExitFlag,
     ExitRealityCheck,
+    RecoveryTranche,
     Returns,
 )
 from backend.models.state import ModelState
@@ -211,3 +214,157 @@ def _compute_implied_buyer_irr(
 
     buyer_cfs = [-buyer_equity] + [0.0] * (buyer_hold - 1) + [buyer_exit_equity]
     return _solve_irr(buyer_cfs)
+
+
+# ── Credit Analysis with Stress Tests & Recovery Waterfall ───────────────
+
+def compute_credit_analysis(
+    state: ModelState,
+    projections: AnnualProjection,
+    debt_schedule: DebtSchedule,
+) -> CreditAnalysis:
+    """IC-grade credit analysis: per-year metrics, stress EBITDA, and recovery waterfall.
+
+    Stress cases:
+      - Mild stress: EBITDA -20%, exit multiple 6x
+      - Severe stress: EBITDA -30%, exit multiple 6x
+
+    Recovery waterfall allocates stressed EV sequentially: Senior A → Senior B → Equity.
+    FCCR denominator includes principal (full debt service); DSCR denominator = interest only.
+    """
+    hp = state.exit.holding_period
+    initial_debt = state.entry.total_debt_raised
+
+    # ── Per-year credit metrics ──
+    metrics: list[CreditMetricsYear] = []
+    for yr_idx in range(hp):
+        yr = projections.years[yr_idx] if yr_idx < len(projections.years) else None
+        if yr is None:
+            break
+
+        ebitda_adj = yr.ebitda_adj
+        fcf_pre = yr.fcf_pre_debt
+        tot_cash_int = (
+            debt_schedule.total_cash_interest_by_year[yr_idx]
+            if yr_idx < len(debt_schedule.total_cash_interest_by_year)
+            else 0.0
+        )
+        tot_debt = (
+            debt_schedule.total_debt_by_year[yr_idx]
+            if yr_idx < len(debt_schedule.total_debt_by_year)
+            else 0.0
+        )
+
+        # Mandatory amortisation (scheduled repayments only, no sweep)
+        mandatory_amort = sum(
+            debt_schedule.tranche_schedules[t][yr_idx].scheduled_repayment
+            for t in range(len(debt_schedule.tranche_schedules))
+        ) if debt_schedule.tranche_schedules else 0.0
+
+        # FCCR = FCF pre-debt / full debt service (interest + scheduled principal)
+        full_debt_service = tot_cash_int + mandatory_amort
+        fccr = fcf_pre / full_debt_service if full_debt_service > 0 else 99.0
+
+        # Interest coverage = EBITDA / Interest
+        interest_coverage = ebitda_adj / tot_cash_int if tot_cash_int > 0 else 99.0
+
+        # DSCR = FCF / Interest only (principal excluded per IC standard)
+        dscr = fcf_pre / tot_cash_int if tot_cash_int > 0 else 99.0
+
+        leverage = tot_debt / ebitda_adj if ebitda_adj > 0 else 0.0
+
+        # Cumulative debt paydown since entry
+        cumulative_paydown = initial_debt - tot_debt
+        paydown_pct = cumulative_paydown / initial_debt if initial_debt > 0 else 0.0
+
+        metrics.append(CreditMetricsYear(
+            year=yr_idx + 1,
+            fccr=fccr,
+            interest_coverage=interest_coverage,
+            dscr=dscr,
+            leverage=leverage,
+            senior_leverage=leverage,
+            total_debt=tot_debt,
+            cumulative_debt_paydown=cumulative_paydown,
+            debt_paydown_pct=paydown_pct,
+        ))
+
+    # ── Stress tests ──
+    exit_yr = projections.years[-1] if projections.years else None
+    exit_ebitda = exit_yr.ebitda_adj if exit_yr else 0.0
+    exit_debt = (
+        debt_schedule.total_debt_by_year[-1]
+        if debt_schedule.total_debt_by_year
+        else 0.0
+    )
+
+    # Stress exit multiples per upgrademodel.md
+    stress_exit_multiple = 6.0
+    stress_cases = [
+        ("20% EBITDA Stress", exit_ebitda * 0.80),
+        ("30% EBITDA Stress", exit_ebitda * 0.70),
+    ]
+
+    # ── Recovery waterfall: tranche-by-tranche (senior → junior → equity) ──
+    recovery_waterfall: list[RecoveryTranche] = []
+
+    for stress_label, stress_ebitda in stress_cases:
+        stress_ev = stress_ebitda * stress_exit_multiple
+        remaining_ev = stress_ev
+
+        for t_idx, tranche in enumerate(state.debt_tranches):
+            # Exit balance for this tranche
+            tranche_balance = 0.0
+            if (
+                debt_schedule.tranche_schedules
+                and t_idx < len(debt_schedule.tranche_schedules)
+            ):
+                t_sched = debt_schedule.tranche_schedules[t_idx]
+                if t_sched:
+                    tranche_balance = t_sched[-1].ending_balance
+
+            if tranche_balance > 0:
+                recovery_abs = min(remaining_ev, tranche_balance)
+                recovery_pct = recovery_abs / tranche_balance if tranche_balance > 0 else 0.0
+                recovery_waterfall.append(RecoveryTranche(
+                    tranche=f"{tranche.name} ({stress_label})",
+                    recovery_pct=recovery_pct,
+                ))
+                remaining_ev = max(0.0, remaining_ev - recovery_abs)
+
+        # Equity residual
+        equity_check = state.entry.equity_check
+        equity_recovery_pct = min(1.0, remaining_ev / equity_check) if equity_check > 0 else 0.0
+        recovery_waterfall.append(RecoveryTranche(
+            tranche=f"Equity ({stress_label})",
+            recovery_pct=equity_recovery_pct,
+        ))
+
+    # ── Covenant headroom (3.5x leverage covenant as standard proxy) ──
+    covenant_leverage = 3.5
+    covenant_headroom: list[float] = []
+    for yr_idx in range(hp):
+        yr = projections.years[yr_idx] if yr_idx < len(projections.years) else None
+        if yr and yr_idx < len(debt_schedule.total_debt_by_year):
+            ebitda_required = debt_schedule.total_debt_by_year[yr_idx] / covenant_leverage
+            covenant_headroom.append(yr.ebitda_adj - ebitda_required)
+
+    ebitda_at_entry = state.revenue.base_revenue * state.margins.base_ebitda_margin
+    refinancing_risk = exit_debt > exit_ebitda * 4.5 if exit_ebitda > 0 else False
+    refinancing_detail = (
+        f"Exit leverage {exit_debt / exit_ebitda:.1f}x exceeds 4.5x refinancing threshold"
+        if refinancing_risk and exit_ebitda > 0
+        else ""
+    )
+
+    return CreditAnalysis(
+        metrics_by_year=metrics,
+        max_debt_capacity_at_4x=ebitda_at_entry * 4.0,
+        max_debt_capacity_at_5x=ebitda_at_entry * 5.0,
+        max_debt_capacity_at_6x=ebitda_at_entry * 6.0,
+        covenant_headroom_by_year=covenant_headroom,
+        refinancing_risk=refinancing_risk,
+        refinancing_risk_detail=refinancing_detail,
+        recovery_waterfall=recovery_waterfall,
+        credit_rating_estimate="",
+    )

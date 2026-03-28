@@ -78,10 +78,12 @@ def calculate_returns(
     """Calculate equity IRR, MOIC, gross/levered/unlevered IRR per Section 3.4."""
     hp = state.exit.holding_period
 
-    # Entry equity
+    # Entry equity = EV + all upfront fees (advisory % EV, txn costs, financing fees) - debt
+    entry_fee = state.fees.entry_fee_pct * state.entry.enterprise_value
     financing_fees = state.fees.financing_fee_pct * state.entry.total_debt_raised
     entry_equity = (
         state.entry.enterprise_value
+        + entry_fee
         + state.fees.transaction_costs
         + financing_fees
         - state.entry.total_debt_raised
@@ -123,6 +125,7 @@ def calculate_returns(
 
     # ── Levered pre-fee IRR (equity IRR before entry/exit fees and MIP) ──
     entry_equity_levered = state.entry.enterprise_value - state.entry.total_debt_raised
+
     exit_equity_levered = exit_ev - exit_net_debt  # no exit fee, no MIP
     levered_cfs = [-entry_equity_levered] + [0.0] * (hp - 1) + [exit_equity_levered]
     irr_levered = _solve_irr(levered_cfs) if entry_equity_levered > 0 else None
@@ -224,9 +227,10 @@ def decompose_value_drivers(
     # And: delta_rev + delta_margin + delta_multiple + delta_debt = (exit_ev - EV) + (debt - exit_net_debt)
     #     = (exit_ev - exit_net_debt) - (EV - debt)
     # Therefore: fees_drag = txn_costs + financing_fees + exit_fee + mip for exact reconciliation
+    entry_fee_abs = state.fees.entry_fee_pct * state.entry.enterprise_value
     financing_fees = state.fees.financing_fee_pct * state.entry.total_debt_raised
     exit_fee = state.fees.exit_fee_pct * exit_ev
-    fees_drag = state.fees.transaction_costs + financing_fees + exit_fee + returns.mip_payout
+    fees_drag = entry_fee_abs + state.fees.transaction_costs + financing_fees + exit_fee + returns.mip_payout
 
     total_gain = exit_equity - entry_equity
 
