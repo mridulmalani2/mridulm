@@ -4,7 +4,10 @@ import type { ModelState, SourcesAndUses } from '../dealEngineTypes';
 
 export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
   const ev = state.entry.enterprise_value;
-  const txnFees = state.fees.transaction_costs;
+  // Transaction fees: use explicit amount if set, otherwise derive from entry_fee_pct * EV
+  const txnFees = state.fees.transaction_costs > 0
+    ? state.fees.transaction_costs
+    : state.fees.entry_fee_pct * ev;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const cashToBs = 0; // no excess cash modeled currently
 
@@ -41,5 +44,8 @@ export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
     implied_leverage: state.revenue.base_revenue * state.margins.base_ebitda_margin > 0
       ? totalDebt / (state.revenue.base_revenue * state.margins.base_ebitda_margin)
       : 0,
+    // Audit check: Sources = Uses
+    sources_uses_balanced: Math.abs(totalSources - totalUses) < 0.01,
+    imbalance: totalSources - totalUses,
   };
 }

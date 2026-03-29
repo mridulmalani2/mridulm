@@ -12,6 +12,7 @@ import ExitRealityCheck from '../components/deal-engine/outputs/ExitRealityCheck
 import SourcesUsesTable from '../components/deal-engine/outputs/SourcesUsesTable';
 import CreditPanel from '../components/deal-engine/outputs/CreditPanel';
 import EBITDABridgeChart from '../components/deal-engine/outputs/EBITDABridgeChart';
+import FragilityPanel from '../components/deal-engine/outputs/FragilityPanel';
 import ChatPanel from '../components/deal-engine/chat/ChatPanel';
 import ApiKeyModal from '../components/deal-engine/ApiKeyModal';
 
@@ -362,7 +363,7 @@ const InitializeForm: React.FC = () => {
   );
 };
 
-type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'sensitivity' | 'scenarios' | 'reality';
+type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'fragility' | 'sensitivity' | 'scenarios' | 'reality';
 
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
@@ -395,6 +396,7 @@ const DealEngine: React.FC = () => {
     { id: 'su', label: 'S&U' },
     { id: 'debt', label: 'Debt' },
     { id: 'credit', label: 'Credit' },
+    { id: 'fragility', label: 'Fragility' },
     { id: 'sensitivity', label: 'Sensitivity' },
     { id: 'scenarios', label: 'Scenarios' },
     { id: 'reality', label: 'Reality Check' },
@@ -497,6 +499,7 @@ const DealEngine: React.FC = () => {
             {activeTab === 'su' && <SourcesUsesTable />}
             {activeTab === 'debt' && <DebtScheduleTable />}
             {activeTab === 'credit' && <CreditPanel />}
+            {activeTab === 'fragility' && <FragilityPanel />}
             {activeTab === 'sensitivity' && <SensitivityHeatmap />}
             {activeTab === 'scenarios' && <ScenarioPanel />}
             {activeTab === 'reality' && <ExitRealityCheck />}

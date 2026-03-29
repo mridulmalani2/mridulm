@@ -106,13 +106,24 @@ const SourcesUsesTable: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary bar */}
-      <div className="mt-3 flex gap-4">
+      {/* Summary bar + Audit check */}
+      <div className="mt-3 flex items-center gap-4">
         <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
           Debt: {pct(su.debt_pct_of_total)}
         </span>
         <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
           Equity: {pct(su.equity_pct_of_total)}
+        </span>
+        <span
+          className="text-[10px] font-semibold px-1.5 py-0.5 ml-auto"
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            color: su.sources_uses_balanced ? '#15803d' : '#b91c1c',
+            border: `1px solid ${su.sources_uses_balanced ? 'rgba(21,128,61,0.3)' : 'rgba(185,28,28,0.3)'}`,
+            background: su.sources_uses_balanced ? 'rgba(21,128,61,0.04)' : 'rgba(185,28,28,0.04)',
+          }}
+        >
+          {su.sources_uses_balanced ? 'S=U ✓' : `IMBALANCE: ${sym}${fmt(Math.abs(su.imbalance))}`}
         </span>
       </div>
     </div>

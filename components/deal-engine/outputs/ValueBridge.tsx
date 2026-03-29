@@ -67,6 +67,47 @@ const ValueBridge: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Operational vs Financial Engineering split */}
+      {vd.operational_pct > 0 && (
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)' }}>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(17,17,17,0.06)' }}>
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.min(vd.operational_pct, 100)}%`,
+                  background: vd.operational_pct >= 50 ? '#15803d' : '#b45309',
+                }}
+              />
+            </div>
+            <span className="text-[10px] font-semibold" style={{ color: '#111', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>
+              {vd.operational_pct.toFixed(0)}% Operational
+            </span>
+          </div>
+
+          {/* IC Insights */}
+          {vd.insights && vd.insights.length > 0 && (
+            <div className="space-y-1">
+              {vd.insights.map((insight, i) => (
+                <div
+                  key={i}
+                  className="text-[11px] px-2.5 py-1.5"
+                  style={{
+                    background: '#F9F9F7',
+                    border: '1px solid rgba(17,17,17,0.06)',
+                    fontFamily: 'Lora, serif',
+                    color: 'rgba(17,17,17,0.55)',
+                    lineHeight: '1.5',
+                  }}
+                >
+                  {insight}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
