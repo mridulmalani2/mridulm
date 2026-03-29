@@ -10,6 +10,7 @@ const CLASSIFICATION_COLORS: Record<string, string> = {
 
 const FragilityPanel: React.FC = () => {
   const frag = useDealEngineStore((s) => s.modelState?.fragility);
+  const apiKey = useDealEngineStore((s) => s.apiKey);
 
   if (!frag || frag.stress_results.length === 0) return null;
 
@@ -170,30 +171,34 @@ const FragilityPanel: React.FC = () => {
         </table>
       </div>
 
-      {/* Key sensitivity callouts */}
-      <div
-        className="text-[10px] font-medium tracking-wider uppercase mb-2"
-        style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
-      >
-        IC Insights
-      </div>
-      <div className="space-y-1.5">
-        {frag.insights.map((insight, i) => (
+      {/* Key sensitivity callouts — only shown when API key is set */}
+      {apiKey && frag.insights.length > 0 && (
+        <>
           <div
-            key={i}
-            className="text-xs px-3 py-2"
-            style={{
-              background: '#F9F9F7',
-              border: '1px solid rgba(17,17,17,0.08)',
-              fontFamily: 'Lora, serif',
-              color: 'rgba(17,17,17,0.6)',
-              lineHeight: '1.5',
-            }}
+            className="text-[10px] font-medium tracking-wider uppercase mb-2"
+            style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
           >
-            {insight}
+            IC Insights
           </div>
-        ))}
-      </div>
+          <div className="space-y-1.5">
+            {frag.insights.map((insight, i) => (
+              <div
+                key={i}
+                className="text-xs px-3 py-2"
+                style={{
+                  background: '#F9F9F7',
+                  border: '1px solid rgba(17,17,17,0.08)',
+                  fontFamily: 'Lora, serif',
+                  color: 'rgba(17,17,17,0.6)',
+                  lineHeight: '1.5',
+                }}
+              >
+                {insight}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -10,6 +10,7 @@ const VERDICT_COLORS: Record<string, string> = {
 
 const ExitRealityCheck: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
+  const apiKey = useDealEngineStore((s) => s.apiKey);
   if (!ms) return null;
 
   const rc = ms.exit_reality_check;
@@ -75,9 +76,11 @@ const ExitRealityCheck: React.FC = () => {
                   {flag.flag_type.replace(/_/g, ' ')}
                 </span>
               </div>
-              <p className="text-xs mb-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
-                {flag.description}
-              </p>
+              {apiKey && (
+                <p className="text-xs mb-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
+                  {flag.description}
+                </p>
+              )}
               <p className="text-[10px]" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
                 {flag.quantified_impact}
               </p>

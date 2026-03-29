@@ -4,6 +4,7 @@ import { useDealEngineStore } from '../../../store/dealEngine';
 
 const ValueBridge: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
+  const apiKey = useDealEngineStore((s) => s.apiKey);
   if (!ms) return null;
 
   const vd = ms.value_drivers;
@@ -86,8 +87,8 @@ const ValueBridge: React.FC = () => {
             </span>
           </div>
 
-          {/* IC Insights */}
-          {vd.insights && vd.insights.length > 0 && (
+          {/* IC Insights — only shown when API key is set */}
+          {apiKey && vd.insights && vd.insights.length > 0 && (
             <div className="space-y-1">
               {vd.insights.map((insight, i) => (
                 <div

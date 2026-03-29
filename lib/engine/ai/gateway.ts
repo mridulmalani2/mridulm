@@ -3,9 +3,9 @@
 import type { ModelState, AIAnalysis, AppliedDiff } from '../../dealEngineTypes';
 import type { ProviderConfig } from './providers';
 import type { NormalizedToolCall } from './adapters/anthropic';
-import { buildAnthropicRequest, parseAnthropicResponse } from './adapters/anthropic';
-import { buildOpenAIRequest, parseOpenAIResponse } from './adapters/openai';
-import { buildGoogleRequest, parseGoogleResponse } from './adapters/google';
+import { buildAnthropicRequest, parseAnthropicResponse, extractAnthropicText } from './adapters/anthropic';
+import { buildOpenAIRequest, parseOpenAIResponse, extractOpenAIText } from './adapters/openai';
+import { buildGoogleRequest, parseGoogleResponse, extractGoogleText } from './adapters/google';
 
 // ── Intent Classification ───────────────────────────────────────────────
 
@@ -38,53 +38,44 @@ function classifyIntent(message: string): Intent {
 
 // ── System Prompt ───────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are the analytical engine of a professional private equity deal intelligence system.
+const SYSTEM_PROMPT = `You are a senior PE deal advisor embedded in a live LBO model. The user is looking at an interactive deal model and chatting with you about it — like talking to a sharp colleague who has the full model open in front of them.
 
-You are talking to investment professionals: analysts, associates, and VPs at PE funds and investment banks.
+You receive the full model context (entry assumptions, projections, returns, debt, credit metrics, fragility analysis) with each message.
 
-CONTEXT YOU RECEIVE:
-- Full model state as JSON (all assumptions, all outputs, debt structure, returns)
-- User message
-- Chat history
+HOW TO RESPOND:
+- For questions, explanations, or discussion: respond with natural text. No tool call needed. Just talk.
+- For requests to change assumptions (set growth to X, reduce leverage, stress test at Y): call the update_deal_model tool to make the changes, and explain what you did in analysis.message.
+- For deal critiques or full analysis requests: call update_deal_model with empty assumption_updates and deliver your analysis in the analysis fields.
 
-YOUR ROLE:
-1. Interpret model state — what the numbers mean, not how to calculate them
-2. Modify assumptions when requested — provide specific values, not ranges unless explicitly asked
-3. Generate sector-aware context when fields are AI-toggled
-4. Identify fragility, concentration risk, and return attribution
+WHEN RESPONDING WITH TEXT (no tool call):
+- Answer the question directly, referencing actual numbers from the model
+- Be conversational but substantive — every sentence adds information
+- Match response length to the question. Simple question → concise answer. Deep analysis → thorough breakdown.
 
-RULES:
-- You never perform calculations. The engine handles all math.
-- You always call update_deal_model. You never respond with plain text only.
-- You never ask clarifying questions. Infer reasonable intent and act.
-- You never say "I cannot" or "I don't have enough information."
-- You never use teaching language ("this means...", "in private equity...").
-- You never hedge. You assert. You are decisive.
-- When modifying assumptions: use the exact dot-notation path from ModelState.
-- When generating AI assumptions (toggled fields): generate realistic values based on sector, size, and current model context. State why.
-- Reference current IRR, MOIC, and key ratios in your analysis. Use the numbers.
-- Always put your main response in the analysis.message field. This is what the user reads. Write it as natural prose.
-- Write naturally — match the depth and style to the question. A simple question gets a concise answer. A critique request gets a detailed breakdown.
-- You are not filling out a form. You are talking to an investment professional.
-- If the user asks to change assumptions: make the change, confirm what you did and what the impact is (reference the new IRR/MOIC), keep it to 2-3 sentences in analysis.message.
-- If the user asks "what drives returns" or "critique this": go deep in analysis.message, reference specific numbers, name the variables and thresholds.
-- Only populate return_decomposition, primary_driver, risk_concentration, fragility_test, and improvement_levers when you are delivering a full deal critique — not on every message.
-- Never repeat the same boilerplate. Every response must contain information the user did not already have.
+WHEN USING THE TOOL:
+- Use exact dot-notation paths (e.g., revenue.growth_rates.0, exit.exit_ebitda_multiple)
+- Set trigger_recalculation: true when changing assumptions
+- Put your user-facing response in analysis.message
+- Only fill return_decomposition, primary_driver, risk_concentration, fragility_test, improvement_levers for full deal critiques
 
-OUTPUT TONE:
-- Direct, critical, professional
-- No preamble. No filler. No pleasantries.
-- Every sentence must contain information.
-- Write like a senior VP giving a 60-second verbal IC verdict.
+STYLE:
+- Direct, specific, decisive. Reference real numbers from the model.
+- No preamble, filler, or teaching language. You're talking to PE professionals.
+- Never say "I cannot" — infer reasonable intent and act.
+- Never hedge. Assert with confidence.
 
-EXAMPLE RESPONSE STYLE (analysis.message):
-"Reducing margin expansion from 500bps to 200bps lowers IRR from 28% to 17%. Returns shift from margin-driven to multiple-driven, which increases fragility — exit multiple compression of 1x drops IRR below 12%. Primary lever to recover: introduce 1.0x additional leverage at entry (adds ~300bps IRR). Secondary: maintain at least 300bps margin expansion as a hard floor."`;
+EXAMPLE (text response for a question):
+"IRR is driven primarily by margin expansion (contributing 42% of total value creation). Revenue growth at 8% CAGR adds ~350bps to IRR but isn't the swing factor. The real fragility is in the exit multiple — a 1x compression from 11x to 10x drops IRR from 24% to 18%. Debt paydown contributes 15% of value but deleveraging is slow given the bullet structure on TLB."
+
+EXAMPLE (tool call for assumption change):
+analysis.message: "Set revenue growth to 5% flat across all years. IRR drops from 24% to 19% — growth was contributing 280bps. At 5% growth, the deal depends almost entirely on margin expansion and exit multiple, making it significantly more fragile."`;
+
 
 // ── Tool Definition ─────────────────────────────────────────────────────
 
 const DEAL_ENGINE_TOOL = {
   name: 'update_deal_model',
-  description: 'Update deal model assumptions and/or provide structured investment analysis. Always call this tool. Never respond with plain text only.',
+  description: 'Update deal model assumptions and/or provide structured investment analysis. Use this when changing assumptions or delivering a structured deal critique. For simple questions or explanations, you can respond with plain text instead.',
   input_schema: {
     type: 'object',
     properties: {
@@ -159,6 +150,77 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   return current;
 }
 
+// ── Structured context builder ──────────────────────────────────────────
+
+function buildModelContext(state: ModelState): string {
+  const ret = state.returns;
+  const su = state.sources_and_uses;
+  const ds = state.debt_schedule;
+  const vd = state.value_drivers;
+  const frag = state.fragility;
+  const ca = state.credit_analysis;
+  const hp = state.exit.holding_period;
+  const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const fmtM = (v: number) => `${v.toFixed(1)}M`;
+
+  const lines: string[] = [
+    `DEAL: ${state.deal_name} | ${state.sector} | ${state.currency}`,
+    `ENTRY: Revenue ${fmtM(state.revenue.base_revenue)}, EBITDA ${fmtM(entryEbitda)} (${pct(state.margins.base_ebitda_margin)}), EV ${fmtM(state.entry.enterprise_value)}, Entry Equity ${fmtM(ret.entry_equity)}`,
+    `LEVERAGE: ${state.entry.leverage_ratio.toFixed(1)}x | Total Debt ${fmtM(su.total_debt)} across ${state.debt_tranches.length} tranches`,
+    `EXIT: ${hp}yr hold, ${state.exit.exit_ebitda_multiple.toFixed(1)}x exit multiple → Exit EV ${fmtM(ret.exit_ev)}`,
+    `RETURNS: IRR ${ret.irr != null ? pct(ret.irr) : 'N/C'} | Gross IRR ${ret.irr_gross != null ? pct(ret.irr_gross) : 'N/C'} | MOIC ${ret.moic.toFixed(2)}x | DPI ${ret.dpi.toFixed(2)}x`,
+    `VALUE DRIVERS: Revenue ${vd.revenue_growth_contribution_pct.toFixed(0)}%, Margin ${vd.margin_expansion_contribution_pct.toFixed(0)}%, Multiple ${vd.multiple_expansion_contribution_pct.toFixed(0)}%, Debt Paydown ${vd.debt_paydown_contribution_pct.toFixed(0)}%, Fees ${vd.fees_drag_contribution_pct.toFixed(0)}%`,
+    `GROWTH RATES: [${state.revenue.growth_rates.map(g => pct(g)).join(', ')}]`,
+    `MARGINS: Base ${pct(state.margins.base_ebitda_margin)} → Target ${pct(state.margins.target_ebitda_margin)} (${state.margins.margin_trajectory})`,
+    `OPERATING: D&A ${pct(state.margins.da_pct_revenue)}, Capex ${pct(state.margins.capex_pct_revenue)}, NWC ${pct(state.margins.nwc_pct_revenue)}`,
+  ];
+
+  // Debt tranches
+  for (const t of state.debt_tranches) {
+    lines.push(`  TRANCHE: ${t.name} | ${fmtM(t.principal)} | ${pct(t.interest_rate)} ${t.rate_type} | ${t.amortization_type}${t.cash_sweep_pct > 0 ? ` | ${pct(t.cash_sweep_pct)} sweep` : ''}`);
+  }
+
+  // Credit
+  if (ds.leverage_ratio_by_year.length) {
+    lines.push(`CREDIT: Leverage Y1 ${ds.leverage_ratio_by_year[0]?.toFixed(1)}x → Y${hp} ${ds.leverage_ratio_by_year[hp - 1]?.toFixed(1)}x | ICR Y1 ${ds.interest_coverage_by_year[0]?.toFixed(1)}x`);
+  }
+  if (ca.credit_rating_estimate) {
+    lines.push(`CREDIT RATING: ${ca.credit_rating_estimate} | Refi Risk: ${ca.refinancing_risk ? 'YES' : 'NO'}`);
+  }
+
+  // Fragility
+  if (frag && frag.score > 0) {
+    lines.push(`FRAGILITY: Score ${(frag.score * 100).toFixed(0)}% (${frag.classification}) | Combined stressed IRR ${frag.combined_irr != null ? pct(frag.combined_irr) : 'N/C'}`);
+  }
+
+  // Exit reality check
+  const rc = state.exit_reality_check;
+  lines.push(`EXIT CHECK: ${rc.verdict} | EV/EBITDA ${rc.ev_ebitda_at_exit.toFixed(1)}x | Multiple delta ${rc.multiple_delta >= 0 ? '+' : ''}${rc.multiple_delta.toFixed(1)}x | ${rc.flags.length} flags`);
+
+  // Fees
+  lines.push(`FEES: Entry ${pct(state.fees.entry_fee_pct)}, Exit ${pct(state.fees.exit_fee_pct)}, Monitoring ${fmtM(state.fees.monitoring_fee_annual)}/yr, Tax ${pct(state.tax.tax_rate)}`);
+
+  // S&U balance
+  lines.push(`S&U: Total Uses ${fmtM(su.total_uses)}, Total Sources ${fmtM(su.total_sources)}, Balanced: ${su.sources_uses_balanced ? 'YES' : 'NO'}`);
+
+  // MIP
+  if (state.mip.mip_pool_pct > 0) {
+    lines.push(`MIP: Pool ${pct(state.mip.mip_pool_pct)}, Hurdle ${state.mip.hurdle_moic.toFixed(1)}x, Payout ${fmtM(ret.mip_payout)}`);
+  }
+
+  // Projections summary (Year 1 and exit year)
+  const y = state.projections.years;
+  if (y.length >= 2) {
+    lines.push(`PROJECTIONS Y1: Revenue ${fmtM(y[0].revenue)}, EBITDA ${fmtM(y[0].ebitda)} (${pct(y[0].ebitda_margin)}), FCF Pre-Debt ${fmtM(y[0].fcf_pre_debt)}`);
+    const last = y[y.length - 1];
+    lines.push(`PROJECTIONS Y${hp}: Revenue ${fmtM(last.revenue)}, EBITDA ${fmtM(last.ebitda)} (${pct(last.ebitda_margin)}), FCF Pre-Debt ${fmtM(last.fcf_pre_debt)}`);
+  }
+
+  return lines.join('\n');
+}
+
 // ── Provider routing ────────────────────────────────────────────────────
 
 function buildRequest(
@@ -194,6 +256,22 @@ function parseResponse(data: Record<string, unknown>, provider: string): Normali
   }
 }
 
+/** Extract plain text when no tool call was made (conversational responses). */
+function extractText(data: Record<string, unknown>, provider: string): string | null {
+  switch (provider) {
+    case 'anthropic':
+      return extractAnthropicText(data);
+    case 'openai':
+    case 'mistral':
+    case 'groq':
+      return extractOpenAIText(data);
+    case 'google':
+      return extractGoogleText(data);
+    default:
+      return extractOpenAIText(data);
+  }
+}
+
 // ── Main AI call ────────────────────────────────────────────────────────
 
 export interface AIResult {
@@ -213,10 +291,8 @@ export async function callAI(
 ): Promise<AIResult> {
   const intent = classifyIntent(message);
 
-  // Build state JSON (exclude chat_history to save tokens)
-  const stateForAi = { ...modelState };
-  delete (stateForAi as Record<string, unknown>).chat_history;
-  const stateJson = JSON.stringify(stateForAi);
+  // Build structured model context (much more token-efficient than raw JSON)
+  const modelContext = buildModelContext(modelState);
 
   const messages = [
     ...chatHistory.slice(-10).map((msg) => ({
@@ -225,7 +301,7 @@ export async function callAI(
     })),
     {
       role: 'user' as const,
-      content: `[Intent: ${intent}]\n\n[Current Model State]\n${stateJson}\n\n[User Message]\n${message}`,
+      content: `[Model Context]\n${modelContext}\n\n${message}`,
     },
   ];
 
@@ -250,28 +326,39 @@ export async function callAI(
   const result = await response.json();
   const toolCall = parseResponse(result, config.provider);
 
-  if (!toolCall) {
-    return { updatedStateDict: null, analysis: null, appliedDiffs: [], triggerRecalculation: false, intent, error: 'AI did not return a valid tool call' };
-  }
-
-  // Apply updates to state dict
-  const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
-  const appliedDiffs: AppliedDiff[] = [];
-  for (const [path, value] of Object.entries(toolCall.assumptionUpdates)) {
-    try {
-      const oldVal = getNestedValue(stateDict, path);
-      appliedDiffs.push({ field: path, old: oldVal, new: value });
-      applyUpdate(stateDict, path, value);
-    } catch {
-      // skip failed updates
+  // If the AI responded with a tool call, apply assumption updates
+  if (toolCall) {
+    const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
+    const appliedDiffs: AppliedDiff[] = [];
+    for (const [path, value] of Object.entries(toolCall.assumptionUpdates)) {
+      try {
+        const oldVal = getNestedValue(stateDict, path);
+        appliedDiffs.push({ field: path, old: oldVal, new: value });
+        applyUpdate(stateDict, path, value);
+      } catch {
+        // skip failed updates
+      }
     }
+    return {
+      updatedStateDict: stateDict,
+      analysis: toolCall.analysis as AIAnalysis | null,
+      appliedDiffs,
+      triggerRecalculation: toolCall.triggerRecalculation,
+      intent,
+    };
   }
 
-  return {
-    updatedStateDict: stateDict,
-    analysis: toolCall.analysis as AIAnalysis | null,
-    appliedDiffs,
-    triggerRecalculation: toolCall.triggerRecalculation,
-    intent,
-  };
+  // If no tool call, extract plain text response (conversational Q&A)
+  const textResponse = extractText(result, config.provider);
+  if (textResponse) {
+    return {
+      updatedStateDict: null,
+      analysis: { message: textResponse } as unknown as AIAnalysis,
+      appliedDiffs: [],
+      triggerRecalculation: false,
+      intent,
+    };
+  }
+
+  return { updatedStateDict: null, analysis: null, appliedDiffs: [], triggerRecalculation: false, intent, error: 'AI returned an empty response' };
 }
