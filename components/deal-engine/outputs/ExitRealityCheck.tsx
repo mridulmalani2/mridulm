@@ -44,11 +44,12 @@ const ExitRealityCheck: React.FC = () => {
         </div>
       )}
 
-      {rc.flags.length === 0 ? (
+      {apiKey && rc.flags.length === 0 && (
         <div className="text-xs" style={{ color: '#15803d', fontFamily: "'JetBrains Mono', monospace" }}>
           No flags triggered.
         </div>
-      ) : (
+      )}
+      {apiKey && rc.flags.length > 0 && (
         <div className="space-y-2">
           {rc.flags.map((flag, i) => (
             <div
@@ -76,16 +77,19 @@ const ExitRealityCheck: React.FC = () => {
                   {flag.flag_type.replace(/_/g, ' ')}
                 </span>
               </div>
-              {apiKey && (
-                <p className="text-xs mb-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
-                  {flag.description}
-                </p>
-              )}
+              <p className="text-xs mb-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
+                {flag.description}
+              </p>
               <p className="text-[10px]" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
                 {flag.quantified_impact}
               </p>
             </div>
           ))}
+        </div>
+      )}
+      {!apiKey && rc.flags.length > 0 && (
+        <div className="text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+          {rc.flags.filter(f => f.severity === 'critical').length} critical, {rc.flags.filter(f => f.severity === 'warning').length} warning flags — set API key for details
         </div>
       )}
     </div>
