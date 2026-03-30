@@ -483,6 +483,22 @@ export async function callAI(
 
   if (!response.ok) {
     const errorText = await response.text();
+
+    // On 400 schema validation errors (e.g. AI sent wrong type for a field),
+    // try to extract the AI's message from the malformed tool call in the error body
+    if (response.status === 400 && errorText.includes('tool call validation failed')) {
+      const msgMatch = errorText.match(/"message":\s*"([^"]+)"/);
+      if (msgMatch) {
+        return {
+          updatedStateDict: null,
+          analysis: { message: msgMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') } as unknown as AIAnalysis,
+          appliedDiffs: [],
+          triggerRecalculation: false,
+          intent,
+        };
+      }
+    }
+
     return { updatedStateDict: null, analysis: null, appliedDiffs: [], triggerRecalculation: false, intent, error: `API error ${response.status}: ${errorText}` };
   }
 

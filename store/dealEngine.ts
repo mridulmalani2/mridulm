@@ -226,19 +226,30 @@ Entry snapshot:
 - Entry Multiple: ${inputs.entry_multiple}x — Implied EV: ${evM}M ${inputs.currency}
 
 Using the company name and sector context, set realistic LBO assumptions. Update these paths:
-- revenue.growth_rates: 5-year array — tailor to this company type and sector growth profile
-- margins.target_ebitda_margin: realistic target after 5-year hold
+- revenue.growth_rates: 5-year array as DECIMALS (e.g. 0.08 = 8%, 0.12 = 12%). Typical PE range: 0.03–0.20. NEVER set values above 0.50.
+- margins.target_ebitda_margin: realistic target after 5-year hold, as DECIMAL (e.g. 0.30 = 30%)
 - margins.margin_trajectory: linear/front_loaded/back_loaded
-- margins.da_pct_revenue: sector-appropriate D&A as % of revenue
-- margins.capex_pct_revenue: maintenance capex as % of revenue
-- margins.nwc_pct_revenue: NWC as % of revenue
-- exit.exit_ebitda_multiple: realistic exit given entry, sector comps, 5-year hold
+- margins.da_pct_revenue: as DECIMAL (e.g. 0.05 = 5%)
+- margins.capex_pct_revenue: as DECIMAL (e.g. 0.04 = 4%)
+- margins.nwc_pct_revenue: as DECIMAL (e.g. 0.08 = 8%)
+- exit.exit_ebitda_multiple: realistic exit multiple given entry, sector comps, 5-year hold
 
 Be specific. Use the company name to infer business type and calibrate accordingly. Set trigger_recalculation to true.`;
 
           const result = await callAI(aiMessage, initialResult, [], config);
           if (!result.error && result.updatedStateDict && result.appliedDiffs.length > 0) {
-            const aiState = fullRecalc(result.updatedStateDict as unknown as ModelState);
+            // Clamp AI-set assumptions to sane PE bounds
+            const aiMs = result.updatedStateDict as unknown as ModelState;
+            aiMs.revenue.growth_rates = aiMs.revenue.growth_rates.map((g) =>
+              Math.max(-0.30, Math.min(0.50, g))
+            );
+            aiMs.margins.target_ebitda_margin = Math.max(0.05, Math.min(0.60, aiMs.margins.target_ebitda_margin));
+            aiMs.margins.da_pct_revenue = Math.max(0.005, Math.min(0.20, aiMs.margins.da_pct_revenue));
+            aiMs.margins.capex_pct_revenue = Math.max(0.005, Math.min(0.25, aiMs.margins.capex_pct_revenue));
+            aiMs.margins.nwc_pct_revenue = Math.max(-0.10, Math.min(0.30, aiMs.margins.nwc_pct_revenue));
+            aiMs.exit.exit_ebitda_multiple = Math.max(3, Math.min(30, aiMs.exit.exit_ebitda_multiple));
+
+            const aiState = fullRecalc(aiMs);
             set({ modelState: aiState, isCalculating: false });
             // Fire panel insights in background (non-blocking)
             get().refreshPanelInsights();
