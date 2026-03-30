@@ -15,8 +15,11 @@ export function deriveEntryFields(state: ModelState): void {
     state.entry.leverage_ratio = state.entry.total_debt_raised / ebitda;
   }
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
+  const txnCosts = state.fees.transaction_costs > 0
+    ? state.fees.transaction_costs
+    : state.fees.entry_fee_pct * state.entry.enterprise_value;
   state.entry.equity_check =
-    state.entry.enterprise_value + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + txnCosts + financingFees - state.entry.total_debt_raised;
 }
 
 function pad(lst: number[], defaultVal: number, length: number): number[] {
@@ -141,6 +144,7 @@ export function createDefaultModelState(): ModelState {
       equity_check: 0,
       total_debt_raised: 0,
       leverage_ratio: 4,
+      min_cash_balance: 0,
       currency: 'GBP',
     },
     debt_tranches: [],
@@ -212,6 +216,23 @@ export function createDefaultModelState(): ModelState {
       exit_equity: 0,
       total_equity_gain: 0,
       reconciliation_delta: 0,
+      ranked_drivers: [],
+      operational_pct: 0,
+      financial_engineering_pct: 0,
+      primary_driver: '',
+      insights: [],
+    },
+    fragility: {
+      base_irr: null,
+      base_moic: 0,
+      stress_results: [],
+      combined_irr: null,
+      combined_moic: 0,
+      irr_drop: 0,
+      score: 0,
+      classification: 'Robust',
+      dominant_stress_driver: '',
+      insights: [],
     },
     scenarios: [],
     sensitivity_tables: [],
@@ -241,6 +262,8 @@ export function createDefaultModelState(): ModelState {
       equity_pct_of_total: 0,
       debt_pct_of_total: 0,
       implied_leverage: 0,
+      sources_uses_balanced: true,
+      imbalance: 0,
     },
     credit_analysis: {
       metrics_by_year: [],

@@ -72,6 +72,26 @@ const FMT_MULT = '0.0"x"';
 const FMT_NUM = '#,##0.0;(#,##0.0);"-"';
 const FMT_INT = '#,##0';
 
+// ── Formula helpers ──────────────────────────────────────────────────────
+
+/** 1-based column number → Excel letter. 1→A, 2→B, 26→Z, 27→AA */
+function cl(n: number): string {
+  let s = '';
+  while (n > 0) { n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26); }
+  return s;
+}
+
+/** Cell reference string, e.g. cr(3,2) → "B3" */
+function cr(r: number, c: number): string { return `${cl(c)}${r}`; }
+
+/** Build a formula value object for ExcelJS */
+function fv(formula: string, result: number): { formula: string; result: number } {
+  return { formula, result };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CellVal = number | string | null | { formula: string; result: number };
+
 function irrFont(irr: number | null) {
   if (irr == null) return F_BODY;
   if (irr > 0.25) return F_GREEN;
@@ -126,9 +146,9 @@ function writeSectionHeader(ws: WS, row: number, title: string, maxCol: number):
 
 function writeDataRow(
   ws: WS, row: number, label: string,
-  values: (number | string | null)[],
+  values: CellVal[],
   fmt: string = FMT_CCY,
-  options: { alt?: boolean; bold?: boolean; topBorder?: boolean; font?: object } = {},
+  options: { alt?: boolean; bold?: boolean; topBorder?: boolean; font?: object; inputCols?: Set<number> } = {},
 ): number {
   const labelCell = ws.getCell(row, 1);
   labelCell.value = label;
@@ -138,8 +158,10 @@ function writeDataRow(
 
   for (let i = 0; i < values.length; i++) {
     const cell = ws.getCell(row, i + 2);
-    cell.value = values[i];
-    cell.font = options.font || (options.bold ? F_BODY_BOLD : F_BODY);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    cell.value = values[i] as any;
+    const isInput = options.inputCols?.has(i);
+    cell.font = isInput ? F_INPUT : (options.font || (options.bold ? F_BODY_BOLD : F_BODY));
     cell.numFmt = fmt;
     cell.alignment = { horizontal: 'right' };
     cell.border = options.topBorder
@@ -401,11 +423,12 @@ function buildSourcesUsesSheet(wb: WB, state: ModelState, ccy: string) {
   const total = su.total_uses || 1;
   const pctOf = (v: number) => v / total;
 
-  // Uses
+  // Uses — track rows for SUM formula
   let ur = row;
+  const usesStartRow = ur;
   const writeUse = (label: string, amt: number, alt: boolean) => {
     ws.getCell(ur, 1).value = label; ws.getCell(ur, 1).font = F_BODY; ws.getCell(ur, 1).border = THIN_BOTTOM;
-    ws.getCell(ur, 2).value = amt; ws.getCell(ur, 2).font = F_BODY; ws.getCell(ur, 2).numFmt = FMT_CCY; ws.getCell(ur, 2).border = THIN_BOTTOM;
+    ws.getCell(ur, 2).value = amt; ws.getCell(ur, 2).font = F_INPUT; ws.getCell(ur, 2).numFmt = FMT_CCY; ws.getCell(ur, 2).border = THIN_BOTTOM;
     ws.getCell(ur, 3).value = pctOf(amt); ws.getCell(ur, 3).font = F_BODY; ws.getCell(ur, 3).numFmt = FMT_PCT; ws.getCell(ur, 3).border = THIN_BOTTOM;
     if (alt) { for (let c = 1; c <= 3; c++) ws.getCell(ur, c).fill = LIGHT_FILL; }
     ur++;
@@ -414,19 +437,27 @@ function buildSourcesUsesSheet(wb: WB, state: ModelState, ccy: string) {
   writeUse('Transaction Fees', su.transaction_fees, true);
   writeUse('Financing Fees', su.financing_fees, false);
   if (su.cash_to_balance_sheet > 0) writeUse('Cash to Balance Sheet', su.cash_to_balance_sheet, true);
-  // Total uses
+  // Total uses = SUM formula
+  const usesEndRow = ur - 1;
   ws.getCell(ur, 1).value = 'Total Uses'; ws.getCell(ur, 1).font = F_BODY_BOLD;
-  ws.getCell(ur, 2).value = su.total_uses; ws.getCell(ur, 2).font = F_BODY_BOLD; ws.getCell(ur, 2).numFmt = FMT_CCY;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.getCell(ur, 2).value = { formula: `SUM(${cr(usesStartRow, 2)}:${cr(usesEndRow, 2)})`, result: su.total_uses } as any;
+  ws.getCell(ur, 2).font = F_BODY_BOLD; ws.getCell(ur, 2).numFmt = FMT_CCY;
   ws.getCell(ur, 3).value = 1; ws.getCell(ur, 3).font = F_BODY_BOLD; ws.getCell(ur, 3).numFmt = FMT_PCT;
   for (let c = 1; c <= 3; c++) ws.getCell(ur, c).border = { top: { style: 'medium' as const, color: { argb: NAVY } }, bottom: { style: 'double' as const, color: { argb: NAVY } } };
+  const totalUsesRow = ur;
   ur++;
 
-  // Sources
+  // Sources — track rows for SUM formula
   let sr = row;
+  const sourcesStartRow = sr;
   const writeSource = (label: string, amt: number, alt: boolean) => {
     ws.getCell(sr, 5).value = label; ws.getCell(sr, 5).font = F_BODY; ws.getCell(sr, 5).border = THIN_BOTTOM;
-    ws.getCell(sr, 6).value = amt; ws.getCell(sr, 6).font = F_BODY; ws.getCell(sr, 6).numFmt = FMT_CCY; ws.getCell(sr, 6).border = THIN_BOTTOM;
-    ws.getCell(sr, 7).value = pctOf(amt); ws.getCell(sr, 7).font = F_BODY; ws.getCell(sr, 7).numFmt = FMT_PCT; ws.getCell(sr, 7).border = THIN_BOTTOM;
+    ws.getCell(sr, 6).value = amt; ws.getCell(sr, 6).font = F_INPUT; ws.getCell(sr, 6).numFmt = FMT_CCY; ws.getCell(sr, 6).border = THIN_BOTTOM;
+    // % = amount / total uses (formula)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ws.getCell(sr, 7).value = { formula: `IF(${cr(totalUsesRow, 2)}=0,0,${cr(sr, 6)}/${cr(totalUsesRow, 2)})`, result: pctOf(amt) } as any;
+    ws.getCell(sr, 7).font = F_BODY; ws.getCell(sr, 7).numFmt = FMT_PCT; ws.getCell(sr, 7).border = THIN_BOTTOM;
     if (alt) { for (let c = 5; c <= 7; c++) ws.getCell(sr, c).fill = LIGHT_FILL; }
     sr++;
   };
@@ -437,10 +468,23 @@ function buildSourcesUsesSheet(wb: WB, state: ModelState, ccy: string) {
   }
   writeSource('Total Debt', su.total_debt, false);
   if (su.rollover_equity > 0) writeSource('Rollover Equity', su.rollover_equity, true);
-  writeSource('Sponsor Equity', su.sponsor_equity, su.rollover_equity > 0 ? false : true);
-  // Total sources
+  // Sponsor Equity = Total Uses - Total Debt - Rollover (formula)
+  ws.getCell(sr, 5).value = 'Sponsor Equity'; ws.getCell(sr, 5).font = F_BODY; ws.getCell(sr, 5).border = THIN_BOTTOM;
+  const debtRow = sr - (su.rollover_equity > 0 ? 2 : 1);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.getCell(sr, 6).value = { formula: `${cr(totalUsesRow, 2)}-${cr(debtRow, 6)}${su.rollover_equity > 0 ? `-${cr(sr - 1, 6)}` : ''}`, result: su.sponsor_equity } as any;
+  ws.getCell(sr, 6).font = F_INPUT; ws.getCell(sr, 6).numFmt = FMT_CCY; ws.getCell(sr, 6).border = THIN_BOTTOM;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.getCell(sr, 7).value = { formula: `IF(${cr(totalUsesRow, 2)}=0,0,${cr(sr, 6)}/${cr(totalUsesRow, 2)})`, result: pctOf(su.sponsor_equity) } as any;
+  ws.getCell(sr, 7).font = F_BODY; ws.getCell(sr, 7).numFmt = FMT_PCT; ws.getCell(sr, 7).border = THIN_BOTTOM;
+  if (su.rollover_equity > 0 ? false : true) { for (let c = 5; c <= 7; c++) ws.getCell(sr, c).fill = LIGHT_FILL; }
+  sr++;
+  // Total sources = SUM formula
+  const sourcesEndRow = sr - 1;
   ws.getCell(sr, 5).value = 'Total Sources'; ws.getCell(sr, 5).font = F_BODY_BOLD;
-  ws.getCell(sr, 6).value = su.total_sources; ws.getCell(sr, 6).font = F_BODY_BOLD; ws.getCell(sr, 6).numFmt = FMT_CCY;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.getCell(sr, 6).value = { formula: `SUM(${cr(sourcesStartRow, 6)}:${cr(sourcesEndRow, 6)})`, result: su.total_sources } as any;
+  ws.getCell(sr, 6).font = F_BODY_BOLD; ws.getCell(sr, 6).numFmt = FMT_CCY;
   ws.getCell(sr, 7).value = 1; ws.getCell(sr, 7).font = F_BODY_BOLD; ws.getCell(sr, 7).numFmt = FMT_PCT;
   for (let c = 5; c <= 7; c++) ws.getCell(sr, c).border = { top: { style: 'medium' as const, color: { argb: NAVY } }, bottom: { style: 'double' as const, color: { argb: NAVY } } };
   sr++;
@@ -570,7 +614,7 @@ function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string) {
   freezeAndPrint(ws, 2, 1, false);
 }
 
-// ── Sheet 4: P&L ────────────────────────────────────────────────────────
+// ── Sheet 4: P&L (Formula-linked) ───────────────────────────────────────
 
 function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years: AnnualProjectionYear[]) {
   const ws = wb.addWorksheet('P&L', { properties: { tabColor: { argb: '2e86c1' } } });
@@ -578,6 +622,8 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   for (let c = 2; c <= hp + 2; c++) ws.getColumn(c).width = 14;
 
   if (!years.length) { ws.getCell(1, 1).value = 'No projections calculated'; return; }
+
+  const inputCols = new Set(Array.from({ length: hp }, (_, i) => i + 1)); // year columns are inputs for growth/margin
 
   let row = 1;
   ws.mergeCells(row, 1, row, hp + 2);
@@ -596,36 +642,119 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   styleHeaderRow(ws, row, 1, hp + 2);
   row += 1;
 
-  const entryRev = state.revenue.base_revenue;
-  const entryEbitda = entryRev * state.margins.base_ebitda_margin;
+  // Track row positions for formula references
+  const R: Record<string, number> = {};
 
-  row = writeDataRow(ws, row, 'Revenue', [entryRev, ...years.map(y => y.revenue)], FMT_CCY, { bold: true });
-  row = writeDataRow(ws, row, 'Revenue Growth', ['--', ...years.map(y => y.revenue_growth)], FMT_PCT, { alt: true });
-  row++;
-  row = writeDataRow(ws, row, 'EBITDA', [entryEbitda, ...years.map(y => y.ebitda)], FMT_CCY, { bold: true });
-  row = writeDataRow(ws, row, 'EBITDA Margin', [state.margins.base_ebitda_margin, ...years.map(y => y.ebitda_margin)], FMT_PCT, { alt: true });
+  // --- Revenue: Entry is static input; Year N = Year N-1 * (1 + Growth N) ---
+  R.rev = row;
+  const revValues: CellVal[] = [state.revenue.base_revenue];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    const prevCol = col - 1;
+    revValues.push(fv(`${cr(R.rev, prevCol)}*(1+${cr(R.rev + 1, col)})`, years[i].revenue));
+  }
+  row = writeDataRow(ws, row, 'Revenue', revValues, FMT_CCY, { bold: true, inputCols: new Set([0]) });
+
+  // --- Revenue Growth: all inputs (blue font) ---
+  R.growth = row;
+  row = writeDataRow(ws, row, 'Revenue Growth', ['--', ...years.map(y => y.revenue_growth)], FMT_PCT, { alt: true, inputCols });
+  row++; // blank
+
+  // --- EBITDA = Revenue * EBITDA Margin ---
+  R.ebitda = row;
+  const ebitdaVals: CellVal[] = [fv(`${cr(R.rev, 2)}*${cr(row + 1, 2)}`, state.revenue.base_revenue * state.margins.base_ebitda_margin)];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    ebitdaVals.push(fv(`${cr(R.rev, col)}*${cr(row + 1, col)}`, years[i].ebitda));
+  }
+  row = writeDataRow(ws, row, 'EBITDA', ebitdaVals, FMT_CCY, { bold: true });
+
+  // --- EBITDA Margin: inputs ---
+  R.margin = row;
+  row = writeDataRow(ws, row, 'EBITDA Margin', [state.margins.base_ebitda_margin, ...years.map(y => y.ebitda_margin)], FMT_PCT, { alt: true, inputCols: new Set([0, ...Array.from(inputCols)]) });
+
+  // --- Monitoring Fee: static ---
+  R.monFee = row;
   row = writeDataRow(ws, row, 'Monitoring Fee Adj.', [0, ...Array(hp).fill(-state.fees.monitoring_fee_annual)], FMT_CCY);
-  row = writeDataRow(ws, row, 'EBITDA Adjusted', [entryEbitda, ...years.map(y => y.ebitda_adj)], FMT_CCY, { bold: true, alt: true });
-  row++;
+
+  // --- EBITDA Adjusted = EBITDA + Monitoring Fee ---
+  R.ebitdaAdj = row;
+  const ebitdaAdjVals: CellVal[] = [fv(`${cr(R.ebitda, 2)}+${cr(R.monFee, 2)}`, state.revenue.base_revenue * state.margins.base_ebitda_margin)];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    ebitdaAdjVals.push(fv(`${cr(R.ebitda, col)}+${cr(R.monFee, col)}`, years[i].ebitda_adj));
+  }
+  row = writeDataRow(ws, row, 'EBITDA Adjusted', ebitdaAdjVals, FMT_CCY, { bold: true, alt: true });
+  row++; // blank
+
+  // --- D&A: static (from engine calculation) ---
+  R.da = row;
   row = writeDataRow(ws, row, 'D&A', [null, ...years.map(y => -y.da)], FMT_CCY);
-  row = writeDataRow(ws, row, 'EBIT', [null, ...years.map(y => y.ebit)], FMT_CCY, { bold: true, alt: true });
+
+  // --- EBIT = EBITDA Adj + D&A (D&A is negative on sheet) ---
+  R.ebit = row;
+  const ebitVals: CellVal[] = [null];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    ebitVals.push(fv(`${cr(R.ebitdaAdj, col)}+${cr(R.da, col)}`, years[i].ebit));
+  }
+  row = writeDataRow(ws, row, 'EBIT', ebitVals, FMT_CCY, { bold: true, alt: true });
+
+  // --- Interest Expense: static (from debt schedule) ---
+  R.interest = row;
   row = writeDataRow(ws, row, 'Interest Expense', [null, ...years.map(y => -y.interest_expense)], FMT_CCY);
+
+  // --- Financing Fee Amort: static ---
+  R.finFee = row;
   row = writeDataRow(ws, row, 'Financing Fee Amort.', [null, ...years.map(y => -y.financing_fee_amort)], FMT_CCY, { alt: true });
-  row = writeDataRow(ws, row, 'EBT', [null, ...years.map(y => y.ebt)], FMT_CCY, { bold: true });
+
+  // --- EBT = EBIT + Interest + Fin Fee Amort (interest & fin fee are negative) ---
+  R.ebt = row;
+  const ebtVals: CellVal[] = [null];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    ebtVals.push(fv(`${cr(R.ebit, col)}+${cr(R.interest, col)}+${cr(R.finFee, col)}`, years[i].ebt));
+  }
+  row = writeDataRow(ws, row, 'EBT', ebtVals, FMT_CCY, { bold: true });
+
+  // --- Tax: static (complex NOL/min-tax logic) ---
+  R.tax = row;
   row = writeDataRow(ws, row, 'Tax', [null, ...years.map(y => -y.tax)], FMT_CCY, { alt: true });
+
   if (state.tax.nol_carryforward > 0) {
     row = writeDataRow(ws, row, '  NOL Utilised', [null, ...years.map(y => y.nol_used)], FMT_CCY);
   }
-  row = writeDataRow(ws, row, 'Net Income', [null, ...years.map(y => y.net_income)], FMT_CCY, { bold: true, topBorder: true });
-  row++;
-  // Margin analysis
-  row = writeDataRow(ws, row, 'Net Income Margin', [null, ...years.map(y => y.revenue > 0 ? y.net_income / y.revenue : 0)], FMT_PCT, { alt: true });
-  row = writeDataRow(ws, row, 'NOPAT', [null, ...years.map(y => y.nopat)], FMT_CCY);
+
+  // --- Net Income = EBT + Tax (tax is negative on sheet) ---
+  R.netIncome = row;
+  const niVals: CellVal[] = [null];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    niVals.push(fv(`${cr(R.ebt, col)}+${cr(R.tax, col)}`, years[i].net_income));
+  }
+  row = writeDataRow(ws, row, 'Net Income', niVals, FMT_CCY, { bold: true, topBorder: true });
+  row++; // blank
+
+  // --- Net Income Margin = Net Income / Revenue ---
+  const niMarginVals: CellVal[] = [null];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    niMarginVals.push(fv(`IF(${cr(R.rev, col)}=0,0,${cr(R.netIncome, col)}/${cr(R.rev, col)})`, years[i].revenue > 0 ? years[i].net_income / years[i].revenue : 0));
+  }
+  row = writeDataRow(ws, row, 'Net Income Margin', niMarginVals, FMT_PCT, { alt: true });
+
+  // --- NOPAT = EBIT * (1 - tax_rate) ---
+  const nopatVals: CellVal[] = [null];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    nopatVals.push(fv(`${cr(R.ebit, col)}*(1-${state.tax.tax_rate})`, years[i].nopat));
+  }
+  row = writeDataRow(ws, row, 'NOPAT', nopatVals, FMT_CCY);
 
   freezeAndPrint(ws, 3, 1);
 }
 
-// ── Sheet 5: Cash Flow & Debt ───────────────────────────────────────────
+// ── Sheet 5: Cash Flow & Debt (Formula-linked) ─────────────────────────
 
 function buildCashFlowDebtSheet(
   wb: WB, state: ModelState, ccy: string, hp: number,
@@ -651,25 +780,71 @@ function buildCashFlowDebtSheet(
   styleHeaderRow(ws, row, 1, hp + 1);
   row += 1;
 
+  // Track rows for formulas
+  const R: Record<string, number> = {};
+
   // FCF Build
   row = writeSectionHeader(ws, row, 'FREE CASH FLOW BUILD', hp + 1);
+
+  R.ebitdaAdj = row;
   row = writeDataRow(ws, row, 'EBITDA Adjusted', years.map(y => y.ebitda_adj), FMT_CCY, { bold: true });
+
+  R.tax = row;
   row = writeDataRow(ws, row, 'Tax Paid', years.map(y => -y.tax), FMT_CCY, { alt: true });
+
+  R.maintCapex = row;
   row = writeDataRow(ws, row, 'Maintenance Capex', years.map(y => -y.maintenance_capex), FMT_CCY);
+
+  R.growthCapex = row;
   row = writeDataRow(ws, row, 'Growth Capex', years.map(y => -y.growth_capex), FMT_CCY, { alt: true });
+
+  R.nwc = row;
   row = writeDataRow(ws, row, 'Change in NWC', years.map(y => -y.delta_nwc), FMT_CCY);
-  row = writeDataRow(ws, row, 'FCF Pre-Debt Service', years.map(y => y.fcf_pre_debt), FMT_CCY, { bold: true, topBorder: true, alt: true });
+
+  // --- FCF Pre-Debt = EBITDA Adj + Tax + Maint Capex + Growth Capex + NWC (all negative except EBITDA) ---
+  R.fcfPreDebt = row;
+  const fcfPreVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    fcfPreVals.push(fv(
+      `${cr(R.ebitdaAdj, col)}+${cr(R.tax, col)}+${cr(R.maintCapex, col)}+${cr(R.growthCapex, col)}+${cr(R.nwc, col)}`,
+      years[i].fcf_pre_debt,
+    ));
+  }
+  row = writeDataRow(ws, row, 'FCF Pre-Debt Service', fcfPreVals, FMT_CCY, { bold: true, topBorder: true, alt: true });
+
+  R.cashInt = row;
   row = writeDataRow(ws, row, 'Cash Interest', ds.total_cash_interest_by_year.map(v => -v), FMT_CCY);
+
+  R.debtRepay = row;
   row = writeDataRow(ws, row, 'Debt Repayment', ds.total_repayment_by_year.map(v => -v), FMT_CCY, { alt: true });
-  row = writeDataRow(ws, row, 'FCF to Equity', years.map(y => y.fcf_to_equity), FMT_CCY, { bold: true, topBorder: true });
+
+  // --- FCF to Equity = FCF Pre-Debt + Cash Interest + Debt Repayment (interest & repayment are negative) ---
+  R.fcfEquity = row;
+  const fcfEqVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    fcfEqVals.push(fv(
+      `${cr(R.fcfPreDebt, col)}+${cr(R.cashInt, col)}+${cr(R.debtRepay, col)}`,
+      years[i].fcf_to_equity,
+    ));
+  }
+  row = writeDataRow(ws, row, 'FCF to Equity', fcfEqVals, FMT_CCY, { bold: true, topBorder: true });
   row++;
 
-  // Cash conversion
-  row = writeDataRow(ws, row, 'Cash Conversion (FCF/EBITDA)', years.map(y => y.ebitda_adj > 0 ? y.fcf_pre_debt / y.ebitda_adj : 0), FMT_PCT, { alt: true });
+  // --- Cash Conversion = FCF Pre-Debt / EBITDA Adj ---
+  const ccVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    const result = years[i].ebitda_adj > 0 ? years[i].fcf_pre_debt / years[i].ebitda_adj : 0;
+    ccVals.push(fv(`IF(${cr(R.ebitdaAdj, col)}=0,0,${cr(R.fcfPreDebt, col)}/${cr(R.ebitdaAdj, col)})`, result));
+  }
+  row = writeDataRow(ws, row, 'Cash Conversion (FCF/EBITDA)', ccVals, FMT_PCT, { alt: true });
   row += 1;
 
-  // Debt schedule
+  // Debt schedule — tranche details use static values (complex per-tranche logic)
   row = writeSectionHeader(ws, row, 'DEBT SCHEDULE', hp + 1);
+  const trancheClosingRows: number[] = [];
   for (let tIdx = 0; tIdx < ds.tranche_schedules.length; tIdx++) {
     const trancheSched = ds.tranche_schedules[tIdx];
     if (!trancheSched.length) continue;
@@ -680,27 +855,73 @@ function buildCashFlowDebtSheet(
     for (let c = 2; c <= hp + 1; c++) ws.getCell(row, c).fill = MID_FILL;
     row++;
 
+    const openRow = row;
     row = writeDataRow(ws, row, '  Opening Balance', trancheSched.map(y => y.beginning_balance), FMT_CCY);
     row = writeDataRow(ws, row, '  Cash Interest', trancheSched.map(y => -y.cash_interest), FMT_CCY, { alt: true });
-    if (trancheSched.some(y => y.pik_accrual > 0)) {
+    const hasPik = trancheSched.some(y => y.pik_accrual > 0);
+    let pikRow = -1;
+    if (hasPik) {
+      pikRow = row;
       row = writeDataRow(ws, row, '  PIK Accrual', trancheSched.map(y => y.pik_accrual), FMT_CCY);
     }
+    const schedRepayRow = row;
     row = writeDataRow(ws, row, '  Scheduled Repayment', trancheSched.map(y => -y.scheduled_repayment), FMT_CCY, { alt: true });
-    if (trancheSched.some(y => y.sweep_repayment > 0)) {
+    const hasSweep = trancheSched.some(y => y.sweep_repayment > 0);
+    let sweepRow = -1;
+    if (hasSweep) {
+      sweepRow = row;
       row = writeDataRow(ws, row, '  Cash Sweep', trancheSched.map(y => -y.sweep_repayment), FMT_CCY);
     }
-    row = writeDataRow(ws, row, '  Closing Balance', trancheSched.map(y => y.ending_balance), FMT_CCY, { bold: true, topBorder: true, alt: true });
+
+    // --- Closing Balance = Opening + PIK + Scheduled Repayment + Sweep (repayments are negative) ---
+    const closingRow = row;
+    trancheClosingRows.push(closingRow);
+    const closingVals: CellVal[] = [];
+    for (let i = 0; i < hp; i++) {
+      const col = i + 2;
+      let formula = `${cr(openRow, col)}+${cr(schedRepayRow, col)}`;
+      if (hasPik) formula += `+${cr(pikRow, col)}`;
+      if (hasSweep) formula += `+${cr(sweepRow, col)}`;
+      closingVals.push(fv(formula, trancheSched[i].ending_balance));
+    }
+    row = writeDataRow(ws, row, '  Closing Balance', closingVals, FMT_CCY, { bold: true, topBorder: true, alt: true });
     row++;
   }
 
-  // Aggregate
-  row = writeDataRow(ws, row, 'Total Debt Outstanding', ds.total_debt_by_year, FMT_CCY, { bold: true });
+  // --- Total Debt = SUM of all tranche closing balances ---
+  R.totalDebt = row;
+  const totalDebtVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    if (trancheClosingRows.length > 0) {
+      const sumParts = trancheClosingRows.map(r => cr(r, col)).join('+');
+      totalDebtVals.push(fv(sumParts, ds.total_debt_by_year[i]));
+    } else {
+      totalDebtVals.push(ds.total_debt_by_year[i]);
+    }
+  }
+  row = writeDataRow(ws, row, 'Total Debt Outstanding', totalDebtVals, FMT_CCY, { bold: true });
   row++;
 
-  // Credit metrics
+  // --- Credit Metrics with formulas ---
   row = writeSectionHeader(ws, row, 'CREDIT METRICS', hp + 1);
-  row = writeDataRow(ws, row, 'Net Debt / EBITDA', ds.leverage_ratio_by_year, FMT_MULT, { bold: true });
-  row = writeDataRow(ws, row, 'Interest Coverage (EBITDA / Int)', ds.interest_coverage_by_year.map(v => Math.min(v, 99)), FMT_NUM, { alt: true });
+
+  // Leverage = Total Debt / EBITDA Adj
+  const levVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    levVals.push(fv(`IF(${cr(R.ebitdaAdj, col)}=0,0,${cr(R.totalDebt, col)}/${cr(R.ebitdaAdj, col)})`, ds.leverage_ratio_by_year[i]));
+  }
+  row = writeDataRow(ws, row, 'Net Debt / EBITDA', levVals, FMT_MULT, { bold: true });
+
+  // Interest Coverage = EBITDA Adj / -Cash Interest (cash interest row is negative)
+  const icVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    icVals.push(fv(`IF(${cr(R.cashInt, col)}=0,99,-${cr(R.ebitdaAdj, col)}/${cr(R.cashInt, col)})`, Math.min(ds.interest_coverage_by_year[i], 99)));
+  }
+  row = writeDataRow(ws, row, 'Interest Coverage (EBITDA / Int)', icVals, FMT_NUM, { alt: true });
+
   row = writeDataRow(ws, row, 'DSCR', ds.dscr_by_year.map(v => Math.min(v, 99)), FMT_NUM);
 
   // Extended credit metrics from credit_analysis
@@ -736,18 +957,22 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string) {
   ws.getCell(row, 1).border = THICK_BOTTOM;
   row += 2;
 
-  // Returns summary
+  // Returns summary — with key formulas for MOIC and Exit Equity
   row = writeSectionHeader(ws, row, 'RETURNS SUMMARY', 3);
-  const addRet = (label: string, value: number | null, fmt: string, alt = false) => {
+  const RR: Record<string, number> = {};
+  const addRet = (label: string, value: number | null | CellVal, fmt: string, alt = false, trackKey?: string) => {
+    if (trackKey) RR[trackKey] = row;
     ws.getCell(row, 1).value = label; ws.getCell(row, 1).font = F_BODY; ws.getCell(row, 1).border = THIN_BOTTOM;
     const vc = ws.getCell(row, 2);
-    vc.value = value;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vc.value = value as any;
     vc.numFmt = fmt;
     vc.border = THIN_BOTTOM;
     vc.alignment = { horizontal: 'right' };
-    if (label.includes('IRR') && typeof value === 'number') {
-      vc.font = irrFont(value);
-      const bg = irrBgFill(value);
+    const numVal = typeof value === 'number' ? value : (value && typeof value === 'object' && 'result' in value ? value.result : null);
+    if (label.includes('IRR') && typeof numVal === 'number') {
+      vc.font = irrFont(numVal);
+      const bg = irrBgFill(numVal);
       if (bg) vc.fill = bg;
     } else {
       vc.font = F_BODY;
@@ -761,16 +986,17 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string) {
   addRet('Levered IRR (Pre-Fees)', ret.irr_levered, FMT_PCT);
   addRet('Unlevered IRR', ret.irr_unlevered, FMT_PCT, true);
   row++;
-  addRet('MOIC', ret.moic, FMT_MULT);
+  addRet('Entry Equity', ret.entry_equity, FMT_CCY, false, 'entryEq');
+  addRet('Exit Equity', ret.exit_equity, FMT_CCY, true, 'exitEq');
+  // MOIC = Exit Equity / Entry Equity (formula)
+  addRet('MOIC', fv(`IF(${cr(RR.entryEq, 2)}=0,0,${cr(RR.exitEq, 2)}/${cr(RR.entryEq, 2)})`, ret.moic), FMT_MULT);
   addRet('DPI', ret.dpi, FMT_MULT, true);
   addRet('Payback Period (years)', ret.payback_years, '0.0');
   addRet('Average Cash Yield', ret.cash_yield_avg, FMT_PCT, true);
   row++;
-  addRet('Entry Equity', ret.entry_equity, FMT_CCY);
-  addRet('Exit Equity', ret.exit_equity, FMT_CCY, true);
-  addRet('Exit Enterprise Value', ret.exit_ev, FMT_CCY);
-  addRet('Exit Net Debt', ret.exit_net_debt, FMT_CCY, true);
-  addRet('MIP Payout', ret.mip_payout, FMT_CCY);
+  addRet('Exit Enterprise Value', ret.exit_ev, FMT_CCY, false, 'exitEv');
+  addRet('Exit Net Debt', ret.exit_net_debt, FMT_CCY, true, 'exitDebt');
+  addRet('MIP Payout', ret.mip_payout, FMT_CCY, false, 'mip');
   row += 2;
 
   // Value Driver Bridge
@@ -780,7 +1006,8 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string) {
   styleHeaderRow(ws, row, 1, 3);
   row++;
 
-  const bridges: [string, number, number | null, boolean][] = [
+  // Write bridge rows and track positions for exit equity formula
+  const bridgeData: [string, number, number | null, boolean][] = [
     ['Entry Equity', vd.entry_equity, null, false],
     ['(+) Revenue Growth', vd.revenue_growth_contribution_abs, vd.revenue_growth_contribution_pct, true],
     ['(+) Margin Expansion', vd.margin_expansion_contribution_abs, vd.margin_expansion_contribution_pct, false],
@@ -790,16 +1017,27 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string) {
     ['Exit Equity', vd.exit_equity, null, false],
   ];
 
-  for (const [label, absVal, pctVal, alt] of bridges) {
+  const bridgeStartRow = row;
+  for (let bIdx = 0; bIdx < bridgeData.length; bIdx++) {
+    const [label, absVal, pctVal, alt] = bridgeData[bIdx];
     const isTotal = label === 'Entry Equity' || label === 'Exit Equity';
     ws.getCell(row, 1).value = label;
     ws.getCell(row, 1).font = isTotal ? F_BODY_BOLD : F_BODY;
     ws.getCell(row, 1).border = isTotal ? MED_BOTTOM : THIN_BOTTOM;
-    ws.getCell(row, 2).value = absVal;
+
+    // Exit Equity = SUM of all bridge components (Entry + contributions)
+    if (label === 'Exit Equity') {
+      const sumRange = `${cr(bridgeStartRow, 2)}:${cr(row - 1, 2)}`;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ws.getCell(row, 2).value = { formula: `SUM(${sumRange})`, result: absVal } as any;
+    } else {
+      ws.getCell(row, 2).value = absVal;
+    }
     ws.getCell(row, 2).numFmt = FMT_CCY;
     ws.getCell(row, 2).font = isTotal ? F_BODY_BOLD : F_BODY;
     ws.getCell(row, 2).border = isTotal ? MED_BOTTOM : THIN_BOTTOM;
     ws.getCell(row, 2).alignment = { horizontal: 'right' };
+
     if (pctVal != null) {
       ws.getCell(row, 3).value = pctVal / 100;
       ws.getCell(row, 3).numFmt = FMT_PCT;

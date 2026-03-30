@@ -71,7 +71,7 @@ const Header: React.FC = () => {
 
   return (
     <div
-      className="relative z-10 flex items-center justify-between px-3 lg:px-5 h-11 flex-shrink-0"
+      className="relative z-50 flex items-center justify-between px-3 lg:px-5 h-11 flex-shrink-0"
       style={{ background: '#F9F9F7', borderBottom: '1px solid rgba(17,17,17,0.1)' }}
     >
       {/* Left: back + deal name */}

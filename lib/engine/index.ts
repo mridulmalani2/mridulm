@@ -9,6 +9,7 @@ import { runRealityCheck } from './realityCheck';
 import { computeSourcesAndUses } from './sourcesUses';
 import { computeCreditAnalysis } from './creditAnalysis';
 import { computeEBITDABridge } from './ebitdaBridge';
+import { computeFragility } from './fragility';
 
 export function fullRecalc(state: ModelState): ModelState {
   // Ensure new fields exist (backwards compatibility for older saved models)
@@ -50,6 +51,9 @@ export function fullRecalc(state: ModelState): ModelState {
 
   // EBITDA bridge
   state.ebitda_bridge = computeEBITDABridge(state, updatedProj);
+
+  // Fragility analysis (stress testing)
+  state.fragility = computeFragility(state);
 
   state.projections = { years: updatedProj };
   state.debt_schedule = ds;

@@ -38,8 +38,9 @@ export function computeCreditAnalysis(
     // Interest coverage: EBITDA / Cash Interest
     const icr = cashInterest > 0 ? yr.ebitda_adj / cashInterest : 99;
 
-    // DSCR: FCF pre-debt / Debt Service
-    const dscr = debtService > 0 ? yr.fcf_pre_debt / debtService : 99;
+    // DSCR: (EBITDA - Capex - ΔNWC - Taxes) / Interest (per IC blueprint)
+    const dscrNumerator = yr.ebitda_adj - yr.total_capex - yr.delta_nwc - yr.tax;
+    const dscr = cashInterest > 0 ? dscrNumerator / cashInterest : 99;
 
     // Leverage: Net Debt / EBITDA
     const leverage = yr.ebitda_adj > 0 ? totalDebt / yr.ebitda_adj : 0;

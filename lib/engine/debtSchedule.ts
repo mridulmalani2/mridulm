@@ -90,8 +90,9 @@ export function buildDebtSchedule(
       });
     }
 
-    // Second pass: cash sweep
-    let availableForSweep = fcfPreDebt - totalMandatoryAmort - totalCashInterest;
+    // Second pass: cash sweep (respect minimum cash balance)
+    const minCash = state.entry.min_cash_balance || 0;
+    let availableForSweep = Math.max(0, fcfPreDebt - totalMandatoryAmort - totalCashInterest - minCash);
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       const tranche = tranches[tIdx];
       const entry = yearEntries[tIdx];

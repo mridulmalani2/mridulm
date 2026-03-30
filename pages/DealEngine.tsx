@@ -12,6 +12,7 @@ import ExitRealityCheck from '../components/deal-engine/outputs/ExitRealityCheck
 import SourcesUsesTable from '../components/deal-engine/outputs/SourcesUsesTable';
 import CreditPanel from '../components/deal-engine/outputs/CreditPanel';
 import EBITDABridgeChart from '../components/deal-engine/outputs/EBITDABridgeChart';
+import FragilityPanel from '../components/deal-engine/outputs/FragilityPanel';
 import ChatPanel from '../components/deal-engine/chat/ChatPanel';
 import ApiKeyModal from '../components/deal-engine/ApiKeyModal';
 
@@ -362,7 +363,7 @@ const InitializeForm: React.FC = () => {
   );
 };
 
-type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'sensitivity' | 'scenarios' | 'reality';
+type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'fragility' | 'sensitivity' | 'scenarios' | 'reality';
 
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
@@ -395,6 +396,7 @@ const DealEngine: React.FC = () => {
     { id: 'su', label: 'S&U' },
     { id: 'debt', label: 'Debt' },
     { id: 'credit', label: 'Credit' },
+    { id: 'fragility', label: 'Fragility' },
     { id: 'sensitivity', label: 'Sensitivity' },
     { id: 'scenarios', label: 'Scenarios' },
     { id: 'reality', label: 'Reality Check' },
@@ -427,7 +429,7 @@ const DealEngine: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Tab bar */}
           <div
-            className="flex items-center flex-shrink-0 overflow-x-auto"
+            className="flex items-center flex-shrink-0"
             style={{ borderBottom: '1px solid rgba(17,17,17,0.1)', background: '#F9F9F7' }}
           >
             {/* Mobile: inputs toggle */}
@@ -444,45 +446,50 @@ const DealEngine: React.FC = () => {
                 ☰
               </button>
             )}
-            {tabs.map((tab) => (
+            {/* Scrollable tabs */}
+            <div className="flex-1 flex items-center overflow-x-auto min-w-0">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="px-3 lg:px-4 py-2.5 text-[11px] transition-colors relative flex-shrink-0"
+                  style={{
+                    color: activeTab === tab.id ? '#CC0000' : 'rgba(17,17,17,0.4)',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {tab.label}
+                  {activeTab === tab.id && (
+                    <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: '#CC0000' }} />
+                  )}
+                </button>
+              ))}
+            </div>
+            {/* Fixed action buttons */}
+            <div className="flex items-center flex-shrink-0" style={{ borderLeft: '1px solid rgba(17,17,17,0.08)' }}>
+              {!apiKey && (
+                <button
+                  onClick={() => setShowApiKeyModal(true)}
+                  className="px-3 py-1.5 mx-1 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
+                  style={{ color: '#b45309', border: '1px solid rgba(180,83,9,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  Set API Key
+                </button>
+              )}
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="px-3 lg:px-4 py-2.5 text-[11px] transition-colors relative flex-shrink-0"
+                onClick={() => setChatOpen(!chatOpen)}
+                className="px-3 py-1.5 mx-1 mr-2 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
                 style={{
-                  color: activeTab === tab.id ? '#CC0000' : 'rgba(17,17,17,0.4)',
+                  color: chatOpen ? '#CC0000' : 'rgba(17,17,17,0.4)',
+                  border: `1px solid ${chatOpen ? 'rgba(204,0,0,0.3)' : 'rgba(17,17,17,0.15)'}`,
                   fontFamily: "'JetBrains Mono', monospace",
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
                 }}
               >
-                {tab.label}
-                {activeTab === tab.id && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: '#CC0000' }} />
-                )}
+                {chatOpen ? 'Hide Chat' : 'AI Chat'}
               </button>
-            ))}
-            <div className="flex-1" />
-            {!apiKey && (
-              <button
-                onClick={() => setShowApiKeyModal(true)}
-                className="px-3 py-1.5 mr-2 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
-                style={{ color: '#b45309', border: '1px solid rgba(180,83,9,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
-              >
-                Set API Key
-              </button>
-            )}
-            <button
-              onClick={() => setChatOpen(!chatOpen)}
-              className="px-3 py-1.5 mr-2 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
-              style={{
-                color: chatOpen ? '#CC0000' : 'rgba(17,17,17,0.4)',
-                border: `1px solid ${chatOpen ? 'rgba(204,0,0,0.3)' : 'rgba(17,17,17,0.15)'}`,
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >
-              {chatOpen ? 'Hide Chat' : 'AI Chat'}
-            </button>
+            </div>
           </div>
 
           {/* Output content */}
@@ -497,6 +504,7 @@ const DealEngine: React.FC = () => {
             {activeTab === 'su' && <SourcesUsesTable />}
             {activeTab === 'debt' && <DebtScheduleTable />}
             {activeTab === 'credit' && <CreditPanel />}
+            {activeTab === 'fragility' && <FragilityPanel />}
             {activeTab === 'sensitivity' && <SensitivityHeatmap />}
             {activeTab === 'scenarios' && <ScenarioPanel />}
             {activeTab === 'reality' && <ExitRealityCheck />}

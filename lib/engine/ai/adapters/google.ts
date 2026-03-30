@@ -35,7 +35,7 @@ export function buildGoogleRequest(
       tools: [{ functionDeclarations: [toGeminiFunctionDeclaration(toolDef)] }],
       tool_config: {
         function_calling_config: {
-          mode: 'ANY',
+          mode: 'AUTO',
           allowed_function_names: ['update_deal_model'],
         },
       },
@@ -64,4 +64,17 @@ export function parseGoogleResponse(data: Record<string, unknown>): NormalizedTo
     }
   }
   return null;
+}
+
+/** Extract plain text from Gemini response when no tool call was made. */
+export function extractGoogleText(data: Record<string, unknown>): string | null {
+  const candidates = (data.candidates || []) as Array<Record<string, unknown>>;
+  if (!candidates.length) return null;
+  const content = candidates[0].content as Record<string, unknown>;
+  const parts = (content?.parts || []) as Array<Record<string, unknown>>;
+  const texts: string[] = [];
+  for (const part of parts) {
+    if (typeof part.text === 'string') texts.push(part.text);
+  }
+  return texts.length > 0 ? texts.join('\n') : null;
 }

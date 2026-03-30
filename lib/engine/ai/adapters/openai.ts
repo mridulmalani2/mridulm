@@ -37,7 +37,7 @@ export function buildOpenAIRequest(
       max_tokens: 4096,
       messages: openAIMessages,
       tools: [toOpenAITool(toolDef)],
-      tool_choice: { type: 'function', function: { name: 'update_deal_model' } },
+      tool_choice: 'auto',
     },
   };
 }
@@ -67,4 +67,12 @@ export function parseOpenAIResponse(data: Record<string, unknown>): NormalizedTo
     }
   }
   return null;
+}
+
+/** Extract plain text from OpenAI response when no tool call was made. */
+export function extractOpenAIText(data: Record<string, unknown>): string | null {
+  const choices = (data.choices || []) as Array<Record<string, unknown>>;
+  if (!choices.length) return null;
+  const message = choices[0].message as Record<string, unknown>;
+  return (message?.content as string) || null;
 }

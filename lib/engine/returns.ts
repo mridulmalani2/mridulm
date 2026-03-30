@@ -6,6 +6,7 @@ import type {
   DebtScheduleResult,
   Returns,
   ValueDriverDecomposition,
+  ValueDriverRanking,
 } from '../dealEngineTypes';
 
 // ── IRR Solver ──────────────────────────────────────────────────────────
@@ -80,8 +81,12 @@ export function calculateReturns(
   const hp = state.exit.holding_period;
 
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
+  // Transaction costs: use explicit amount if set, otherwise derive from entry_fee_pct * EV
+  const txnCosts = state.fees.transaction_costs > 0
+    ? state.fees.transaction_costs
+    : state.fees.entry_fee_pct * state.entry.enterprise_value;
   const entryEquity =
-    state.entry.enterprise_value + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + txnCosts + financingFees - state.entry.total_debt_raised;
 
   if (entryEquity <= 0) {
     return {
@@ -209,15 +214,61 @@ export function decomposeValueDrivers(
   const deltaDebt = entryNetDebt - exitNetDebt;
 
   // Fees drag
-  const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
+  const vdFinancingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
+  const vdTxnCosts = state.fees.transaction_costs > 0
+    ? state.fees.transaction_costs
+    : state.fees.entry_fee_pct * state.entry.enterprise_value;
   const exitFee = state.fees.exit_fee_pct * exitEv;
-  const feesDrag = state.fees.transaction_costs + financingFees + exitFee + returns.mip_payout;
+  const feesDrag = vdTxnCosts + vdFinancingFees + exitFee + returns.mip_payout;
 
   const totalGain = exitEquity - entryEquity;
   const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag;
   const reconDelta = Math.abs(computedGain - totalGain);
 
   const pct = (x: number) => (totalGain !== 0 ? (x / totalGain) * 100 : 0);
+
+  // Build ranked drivers (sorted by absolute contribution, fees always last)
+  const driverEntries: { driver: string; contribution_pct: number; contribution_abs: number }[] = [
+    { driver: 'Revenue Growth', contribution_pct: pct(deltaRev), contribution_abs: deltaRev },
+    { driver: 'Margin Expansion', contribution_pct: pct(deltaMargin), contribution_abs: deltaMargin },
+    { driver: 'Multiple Expansion', contribution_pct: pct(deltaMultiple), contribution_abs: deltaMultiple },
+    { driver: 'Deleveraging', contribution_pct: pct(deltaDebt), contribution_abs: deltaDebt },
+  ];
+  driverEntries.sort((a, b) => Math.abs(b.contribution_abs) - Math.abs(a.contribution_abs));
+
+  const rankedDrivers: ValueDriverRanking[] = driverEntries.map((d, i) => ({
+    ...d, rank: i + 1,
+  }));
+  // Fees always last
+  rankedDrivers.push({
+    driver: 'Fees / Leakage',
+    contribution_pct: pct(-feesDrag),
+    contribution_abs: -feesDrag,
+    rank: rankedDrivers.length + 1,
+  });
+
+  // Operational vs financial engineering split
+  const operationalAbs = Math.abs(deltaRev) + Math.abs(deltaMargin);
+  const totalAbsDrivers = Math.abs(deltaRev) + Math.abs(deltaMargin) + Math.abs(deltaMultiple) + Math.abs(deltaDebt);
+  const operationalPct = totalAbsDrivers > 0 ? (operationalAbs / totalAbsDrivers) * 100 : 0;
+  const financialPct = 100 - operationalPct;
+
+  const primaryDriver = rankedDrivers[0]?.driver || 'N/A';
+
+  // IC-level insights
+  const insights: string[] = [];
+  insights.push(
+    `Returns primarily driven by ${primaryDriver.toLowerCase()} (${Math.abs(rankedDrivers[0]?.contribution_pct ?? 0).toFixed(0)}%)`,
+  );
+
+  if (operationalPct < 20) {
+    insights.push('Less than 20% of value from operations — financial engineering heavy');
+  }
+
+  const multPct = Math.abs(pct(deltaMultiple));
+  if (multPct > 40) {
+    insights.push(`${multPct.toFixed(0)}% from multiple expansion — exit risk elevated`);
+  }
 
   return {
     revenue_growth_contribution_pct: pct(deltaRev),
@@ -234,5 +285,10 @@ export function decomposeValueDrivers(
     exit_equity: exitEquity,
     total_equity_gain: totalGain,
     reconciliation_delta: reconDelta,
+    ranked_drivers: rankedDrivers,
+    operational_pct: operationalPct,
+    financial_engineering_pct: financialPct,
+    primary_driver: primaryDriver,
+    insights,
   };
 }

@@ -67,6 +67,7 @@ export interface EntryAssumptions {
   equity_check: number;
   total_debt_raised: number;
   leverage_ratio: number;
+  min_cash_balance: number;
   currency: 'INR' | 'EUR' | 'USD' | 'GBP' | 'JPY';
 }
 
@@ -153,6 +154,13 @@ export interface Returns {
   mip_payout: number;
 }
 
+export interface ValueDriverRanking {
+  driver: string;
+  contribution_pct: number;
+  contribution_abs: number;
+  rank: number;
+}
+
 export interface ValueDriverDecomposition {
   revenue_growth_contribution_pct: number;
   margin_expansion_contribution_pct: number;
@@ -168,6 +176,35 @@ export interface ValueDriverDecomposition {
   exit_equity: number;
   total_equity_gain: number;
   reconciliation_delta: number;
+  // IC-grade additions
+  ranked_drivers: ValueDriverRanking[];
+  operational_pct: number;       // revenue + margin as % of total
+  financial_engineering_pct: number; // multiple + debt + fees as % of total
+  primary_driver: string;
+  insights: string[];
+}
+
+// ── Fragility Analysis ──────────────────────────────────────────────────
+
+export interface FragilityStressResult {
+  scenario: string;
+  irr: number | null;
+  moic: number;
+  delta_irr: number;   // vs base
+  delta_moic: number;  // vs base
+}
+
+export interface FragilityAnalysis {
+  base_irr: number | null;
+  base_moic: number;
+  stress_results: FragilityStressResult[];
+  combined_irr: number | null;
+  combined_moic: number;
+  irr_drop: number;
+  score: number;              // IRR_drop_combined / Base_IRR
+  classification: 'Robust' | 'Moderate Risk' | 'Fragile';
+  dominant_stress_driver: string;
+  insights: string[];
 }
 
 export interface ScenarioSet {
@@ -252,6 +289,7 @@ export interface ModelState {
   sources_and_uses: SourcesAndUses;
   credit_analysis: CreditAnalysis;
   ebitda_bridge: EBITDABridge;
+  fragility: FragilityAnalysis;
   scenarios: ScenarioSet[];
   sensitivity_tables: SensitivityTable[];
   exit_reality_check: ExitRealityCheck;
@@ -285,6 +323,9 @@ export interface SourcesAndUses {
   equity_pct_of_total: number;
   debt_pct_of_total: number;
   implied_leverage: number;
+  // Audit check
+  sources_uses_balanced: boolean;
+  imbalance: number;
 }
 
 // ── Credit Analysis ──────────────────────────────────────────────────────

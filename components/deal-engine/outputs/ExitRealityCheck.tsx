@@ -10,6 +10,9 @@ const VERDICT_COLORS: Record<string, string> = {
 
 const ExitRealityCheck: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
+  const apiKey = useDealEngineStore((s) => s.apiKey);
+  const aiInsights = useDealEngineStore((s) => s.aiPanelInsights);
+  const aiInsightsLoading = useDealEngineStore((s) => s.aiPanelInsightsLoading);
   if (!ms) return null;
 
   const rc = ms.exit_reality_check;
@@ -43,46 +46,65 @@ const ExitRealityCheck: React.FC = () => {
         </div>
       )}
 
-      {rc.flags.length === 0 ? (
+      {rc.flags.length === 0 && (
         <div className="text-xs" style={{ color: '#15803d', fontFamily: "'JetBrains Mono', monospace" }}>
           No flags triggered.
         </div>
-      ) : (
+      )}
+      {rc.flags.length > 0 && aiInsightsLoading && (
+        <div className="text-[10px] py-2" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+          {rc.flags.filter(f => f.severity === 'critical').length} critical, {rc.flags.filter(f => f.severity === 'warning').length} warning flags — generating analysis…
+        </div>
+      )}
+      {rc.flags.length > 0 && !aiInsightsLoading && aiInsights && aiInsights.exitFlags.length > 0 && (
         <div className="space-y-2">
-          {rc.flags.map((flag, i) => (
-            <div
-              key={i}
-              className="p-3"
-              style={{
-                borderLeft: `3px solid ${flag.severity === 'critical' ? '#b91c1c' : '#b45309'}`,
-                background: '#F9F9F7',
-                border: '1px solid rgba(17,17,17,0.08)',
-                borderLeftColor: flag.severity === 'critical' ? '#b91c1c' : '#b45309',
-                borderLeftWidth: 3,
-              }}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="text-[10px] font-medium uppercase tracking-widest"
-                  style={{
-                    color: flag.severity === 'critical' ? '#b91c1c' : '#b45309',
-                    fontFamily: "'JetBrains Mono', monospace",
-                  }}
-                >
-                  {flag.severity}
-                </span>
-                <span className="text-xs" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
-                  {flag.flag_type.replace(/_/g, ' ')}
-                </span>
+          {rc.flags.map((flag, i) => {
+            const aiFlag = aiInsights.exitFlags.find((af) => af.flag_type === flag.flag_type);
+            return (
+              <div
+                key={i}
+                className="p-3"
+                style={{
+                  background: '#F9F9F7',
+                  border: '1px solid rgba(17,17,17,0.08)',
+                  borderLeftColor: flag.severity === 'critical' ? '#b91c1c' : '#b45309',
+                  borderLeftWidth: 3,
+                  borderLeftStyle: 'solid',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className="text-[10px] font-medium uppercase tracking-widest"
+                    style={{
+                      color: flag.severity === 'critical' ? '#b91c1c' : '#b45309',
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}
+                  >
+                    {flag.severity}
+                  </span>
+                  <span className="text-xs" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {flag.flag_type.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <p className="text-xs mb-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
+                  {aiFlag?.description || ''}
+                </p>
+                <p className="text-[10px]" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+                  {aiFlag?.quantified_impact || ''}
+                </p>
               </div>
-              <p className="text-xs mb-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
-                {flag.description}
-              </p>
-              <p className="text-[10px]" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
-                {flag.quantified_impact}
-              </p>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+      {rc.flags.length > 0 && !aiInsightsLoading && !apiKey && (
+        <div className="text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+          {rc.flags.filter(f => f.severity === 'critical').length} critical, {rc.flags.filter(f => f.severity === 'warning').length} warning flags — set API key for details
+        </div>
+      )}
+      {rc.flags.length > 0 && !aiInsightsLoading && apiKey && (!aiInsights || aiInsights.exitFlags.length === 0) && (
+        <div className="text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+          {rc.flags.filter(f => f.severity === 'critical').length} critical, {rc.flags.filter(f => f.severity === 'warning').length} warning flags
         </div>
       )}
     </div>

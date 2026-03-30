@@ -9,6 +9,11 @@ export interface NormalizedToolCall {
   scenarioRequest: Record<string, unknown> | null;
 }
 
+/** Extracted plain-text response when no tool call is made. */
+export interface NormalizedTextResponse {
+  text: string;
+}
+
 export function buildAnthropicRequest(
   messages: { role: string; content: string }[],
   systemPrompt: string,
@@ -28,7 +33,7 @@ export function buildAnthropicRequest(
       max_tokens: 4096,
       system: systemPrompt,
       tools: [toolDef],
-      tool_choice: { type: 'tool', name: 'update_deal_model' },
+      tool_choice: { type: 'auto' },
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     },
   };
@@ -48,4 +53,16 @@ export function parseAnthropicResponse(data: Record<string, unknown>): Normalize
     }
   }
   return null;
+}
+
+/** Extract plain text from Anthropic response when no tool call was made. */
+export function extractAnthropicText(data: Record<string, unknown>): string | null {
+  const content = (data.content || []) as Array<Record<string, unknown>>;
+  const texts: string[] = [];
+  for (const block of content) {
+    if (block.type === 'text' && typeof block.text === 'string') {
+      texts.push(block.text);
+    }
+  }
+  return texts.length > 0 ? texts.join('\n') : null;
 }
