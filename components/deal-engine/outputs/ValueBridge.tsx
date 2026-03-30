@@ -4,7 +4,8 @@ import { useDealEngineStore } from '../../../store/dealEngine';
 
 const ValueBridge: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
-  const apiKey = useDealEngineStore((s) => s.apiKey);
+  const aiInsights = useDealEngineStore((s) => s.aiPanelInsights);
+  const aiInsightsLoading = useDealEngineStore((s) => s.aiPanelInsightsLoading);
   if (!ms) return null;
 
   const vd = ms.value_drivers;
@@ -87,10 +88,15 @@ const ValueBridge: React.FC = () => {
             </span>
           </div>
 
-          {/* IC Insights — only shown when API key is set */}
-          {apiKey && vd.insights && vd.insights.length > 0 && (
+          {/* IC Insights — AI-generated */}
+          {aiInsightsLoading && (
+            <div className="text-[10px] py-2" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Generating insights…
+            </div>
+          )}
+          {!aiInsightsLoading && aiInsights && aiInsights.valueBridge.length > 0 && (
             <div className="space-y-1">
-              {vd.insights.map((insight, i) => (
+              {aiInsights.valueBridge.map((insight, i) => (
                 <div
                   key={i}
                   className="text-[11px] px-2.5 py-1.5"

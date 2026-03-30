@@ -272,6 +272,169 @@ function extractText(data: Record<string, unknown>, provider: string): string | 
   }
 }
 
+// ── Panel Insights Generation ──────────────────────────────────────────
+
+export interface PanelInsights {
+  valueBridge: string[];
+  fragility: string[];
+  exitFlags: { flag_type: string; severity: string; description: string; quantified_impact: string }[];
+}
+
+const PANEL_INSIGHTS_TOOL = {
+  name: 'generate_panel_insights',
+  description: 'Generate IC-grade analytical insights for deal model output panels.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      value_bridge_insights: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '2-3 sharp, specific insights about value creation drivers. Reference actual numbers. No generic observations.',
+      },
+      fragility_insights: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '2-3 insights about model fragility, stress test results, and where the deal breaks. Quantify thresholds.',
+      },
+      exit_flag_details: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            flag_type: { type: 'string', description: 'The flag identifier (must match the engine flag_type)' },
+            description: { type: 'string', description: 'IC-grade explanation of why this flag matters. Be specific, reference the actual deal numbers.' },
+            quantified_impact: { type: 'string', description: 'Quantified statement of the impact — reference actual IRR, multiples, or dollar amounts from the model.' },
+          },
+          required: ['flag_type', 'description', 'quantified_impact'],
+        },
+        description: 'One entry per exit reality check flag. Generate proper descriptions and quantified impacts for each.',
+      },
+    },
+    required: ['value_bridge_insights', 'fragility_insights', 'exit_flag_details'],
+  },
+};
+
+const INSIGHTS_SYSTEM_PROMPT = `You are a senior PE deal advisor generating IC-grade analytical insights for an LBO model's output panels. You receive full model context.
+
+Write like a senior analyst preparing IC materials — direct, specific, quantified. Every sentence must reference actual numbers from the model. No generic observations, no templates, no filler.
+
+For VALUE BRIDGE insights: Explain what's actually driving returns and why. Reference the contribution split, identify if the deal is operationally or financially engineered, flag any concerning patterns.
+
+For FRAGILITY insights: Identify where the model breaks, quantify the break points, and assess whether the stress scenarios are realistic for this sector.
+
+For EXIT FLAG details: For each flag the engine has identified, write a proper IC-grade description explaining why it matters for THIS specific deal, and quantify the actual impact using the model's numbers. Do not use generic language — every description should be unique to this deal's specifics.`;
+
+function buildInsightsRequest(
+  messages: { role: string; content: string }[],
+  config: ProviderConfig,
+): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
+  let req: { url: string; headers: Record<string, string>; body: Record<string, unknown> };
+  switch (config.provider) {
+    case 'anthropic':
+      req = buildAnthropicRequest(messages, INSIGHTS_SYSTEM_PROMPT, PANEL_INSIGHTS_TOOL, config);
+      req.body.tool_choice = { type: 'tool', name: 'generate_panel_insights' };
+      break;
+    case 'google':
+      req = buildGoogleRequest(messages, INSIGHTS_SYSTEM_PROMPT, PANEL_INSIGHTS_TOOL, config);
+      ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).mode = 'ANY';
+      ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).allowed_function_names = ['generate_panel_insights'];
+      break;
+    default:
+      req = buildOpenAIRequest(messages, INSIGHTS_SYSTEM_PROMPT, PANEL_INSIGHTS_TOOL, config);
+      req.body.tool_choice = { type: 'function', function: { name: 'generate_panel_insights' } };
+      break;
+  }
+  return req;
+}
+
+function parseInsightsResponse(data: Record<string, unknown>, provider: string): PanelInsights | null {
+  let args: Record<string, unknown> | null = null;
+
+  switch (provider) {
+    case 'anthropic': {
+      const content = (data.content || []) as Array<Record<string, unknown>>;
+      for (const block of content) {
+        if (block.type === 'tool_use') {
+          args = block.input as Record<string, unknown>;
+          break;
+        }
+      }
+      break;
+    }
+    case 'openai':
+    case 'mistral':
+    case 'groq': {
+      const choices = (data.choices || []) as Array<Record<string, unknown>>;
+      if (choices.length) {
+        const message = choices[0].message as Record<string, unknown>;
+        const toolCalls = (message?.tool_calls || []) as Array<Record<string, unknown>>;
+        if (toolCalls.length) {
+          const fn = toolCalls[0].function as Record<string, unknown>;
+          try {
+            args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments as string) : fn.arguments as Record<string, unknown>;
+          } catch { /* skip */ }
+        }
+      }
+      break;
+    }
+    case 'google': {
+      const candidates = (data.candidates || []) as Array<Record<string, unknown>>;
+      if (candidates.length) {
+        const content = candidates[0].content as Record<string, unknown>;
+        const parts = (content?.parts || []) as Array<Record<string, unknown>>;
+        for (const part of parts) {
+          const fc = part.functionCall as Record<string, unknown> | undefined;
+          if (fc) { args = (fc.args || {}) as Record<string, unknown>; break; }
+        }
+      }
+      break;
+    }
+  }
+
+  if (!args) return null;
+
+  const flagDetails = (args.exit_flag_details || []) as Array<Record<string, string>>;
+  return {
+    valueBridge: (args.value_bridge_insights || []) as string[],
+    fragility: (args.fragility_insights || []) as string[],
+    exitFlags: flagDetails.map((f) => ({
+      flag_type: f.flag_type || '',
+      severity: f.severity || 'warning',
+      description: f.description || '',
+      quantified_impact: f.quantified_impact || '',
+    })),
+  };
+}
+
+export async function generatePanelInsights(
+  modelState: ModelState,
+  config: ProviderConfig,
+): Promise<PanelInsights> {
+  const modelContext = buildModelContext(modelState);
+
+  // Include engine flag types so AI knows what to write about
+  const rc = modelState.exit_reality_check;
+  const flagContext = rc.flags.length > 0
+    ? `\n\nEXIT FLAGS TO DESCRIBE (generate description + quantified_impact for each):\n${rc.flags.map((f) => `- ${f.flag_type} [${f.severity}]`).join('\n')}`
+    : '\n\nNo exit flags triggered.';
+
+  const messages = [{
+    role: 'user' as const,
+    content: `[Model Context]\n${modelContext}${flagContext}\n\nGenerate IC-grade panel insights for this deal model.`,
+  }];
+
+  const { url, headers, body } = buildInsightsRequest(messages, config);
+
+  try {
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!response.ok) return { valueBridge: [], fragility: [], exitFlags: [] };
+    const result = await response.json();
+    return parseInsightsResponse(result, config.provider) || { valueBridge: [], fragility: [], exitFlags: [] };
+  } catch {
+    return { valueBridge: [], fragility: [], exitFlags: [] };
+  }
+}
+
 // ── Main AI call ────────────────────────────────────────────────────────
 
 export interface AIResult {

@@ -11,7 +11,8 @@ import type {
 } from '../lib/dealEngineTypes';
 import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
 import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
-import { callAI } from '../lib/engine/ai/gateway';
+import { callAI, generatePanelInsights } from '../lib/engine/ai/gateway';
+import type { PanelInsights } from '../lib/engine/ai/gateway';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
 import type { AIProvider } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
@@ -69,6 +70,8 @@ interface DealEngineStore {
   sensitivityTables: SensitivityTable[];
   lastDiffs: AppliedDiff[];
   lastAnalysis: AIAnalysis | null;
+  aiPanelInsights: PanelInsights | null;
+  aiPanelInsightsLoading: boolean;
   error: string | null;
 
   setApiKey: (key: string) => void;
@@ -92,6 +95,7 @@ interface DealEngineStore {
   exportExcel: () => Promise<void>;
   saveModel: () => void;
   loadModel: (file: File) => Promise<void>;
+  refreshPanelInsights: () => Promise<void>;
   setActiveScenario: (s: string) => void;
   setActiveSensitivityTable: (t: number) => void;
 }
@@ -108,6 +112,8 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   sensitivityTables: [],
   lastDiffs: [],
   lastAnalysis: null,
+  aiPanelInsights: null,
+  aiPanelInsightsLoading: false,
   error: null,
 
   setApiKey: (key) => {
@@ -128,7 +134,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     set({ apiKey: key, aiProvider: provider });
   },
 
-  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, error: null }),
+  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, error: null }),
 
   initializeModel: async (inputs) => {
     set({ isCalculating: true, error: null });
@@ -234,6 +240,8 @@ Be specific. Use the company name to infer business type and calibrate according
           if (!result.error && result.updatedStateDict && result.appliedDiffs.length > 0) {
             const aiState = fullRecalc(result.updatedStateDict as unknown as ModelState);
             set({ modelState: aiState, isCalculating: false });
+            // Fire panel insights in background (non-blocking)
+            get().refreshPanelInsights();
             return;
           }
         } catch {
@@ -242,6 +250,8 @@ Be specific. Use the company name to infer business type and calibrate according
       }
 
       set({ modelState: initialResult, isCalculating: false });
+      // Fire panel insights if API key available (non-blocking)
+      if (get().apiKey) get().refreshPanelInsights();
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -295,7 +305,7 @@ Be specific. Use the company name to infer business type and calibrate according
       if (result.updatedStateDict) {
         updatedState = result.updatedStateDict as unknown as ModelState;
       }
-      if (result.triggerRecalculation) {
+      if (result.triggerRecalculation || result.appliedDiffs.length > 0) {
         updatedState = fullRecalc(updatedState);
       }
 
@@ -316,6 +326,11 @@ Be specific. Use the company name to infer business type and calibrate according
         lastAnalysis: result.analysis,
         isCalculating: false,
       });
+
+      // Refresh panel insights in background after model changes
+      if (result.appliedDiffs.length > 0) {
+        get().refreshPanelInsights();
+      }
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -414,6 +429,19 @@ Be specific. Use the company name to infer business type and calibrate according
       set({ modelState: result, isCalculating: false });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
+    }
+  },
+
+  refreshPanelInsights: async () => {
+    const { modelState, apiKey, aiProvider } = get();
+    if (!modelState || !apiKey) return;
+    set({ aiPanelInsightsLoading: true });
+    try {
+      const config = buildProviderConfig(aiProvider, apiKey);
+      const insights = await generatePanelInsights(modelState, config);
+      set({ aiPanelInsights: insights, aiPanelInsightsLoading: false });
+    } catch {
+      set({ aiPanelInsightsLoading: false });
     }
   },
 

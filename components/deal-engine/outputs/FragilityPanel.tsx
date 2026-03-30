@@ -10,7 +10,8 @@ const CLASSIFICATION_COLORS: Record<string, string> = {
 
 const FragilityPanel: React.FC = () => {
   const frag = useDealEngineStore((s) => s.modelState?.fragility);
-  const apiKey = useDealEngineStore((s) => s.apiKey);
+  const aiInsights = useDealEngineStore((s) => s.aiPanelInsights);
+  const aiInsightsLoading = useDealEngineStore((s) => s.aiPanelInsightsLoading);
 
   if (!frag || frag.stress_results.length === 0) return null;
 
@@ -171,8 +172,13 @@ const FragilityPanel: React.FC = () => {
         </table>
       </div>
 
-      {/* Key sensitivity callouts — only shown when API key is set */}
-      {apiKey && frag.insights.length > 0 && (
+      {/* Key sensitivity callouts — AI-generated */}
+      {aiInsightsLoading && (
+        <div className="text-[10px] py-2" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+          Generating insights…
+        </div>
+      )}
+      {!aiInsightsLoading && aiInsights && aiInsights.fragility.length > 0 && (
         <>
           <div
             className="text-[10px] font-medium tracking-wider uppercase mb-2"
@@ -181,7 +187,7 @@ const FragilityPanel: React.FC = () => {
             IC Insights
           </div>
           <div className="space-y-1.5">
-            {frag.insights.map((insight, i) => (
+            {aiInsights.fragility.map((insight, i) => (
               <div
                 key={i}
                 className="text-xs px-3 py-2"
