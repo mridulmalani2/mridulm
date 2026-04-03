@@ -152,7 +152,7 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 
 // ── Structured context builder ──────────────────────────────────────────
 
-function buildModelContext(state: ModelState): string {
+export function buildModelContext(state: ModelState): string {
   const ret = state.returns;
   const su = state.sources_and_uses;
   const ds = state.debt_schedule;
