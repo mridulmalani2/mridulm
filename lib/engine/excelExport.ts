@@ -222,6 +222,45 @@ function freezeAndPrint(ws: WS, freezeRow: number, freezeCol: number, landscape 
   };
 }
 
+// ── Cross-sheet reference types ─────────────────────────────────────────
+
+/** Cell references from the Assumptions sheet, used by P&L and Cash Flow. */
+interface AssumptionCells {
+  baseRevenue: string;
+  baseMargin: string;
+  ltmEbitda: string;
+  entryMultiple: string;
+  ev: string;
+  holdingPeriod: string;
+  exitMultiple: string;
+  targetMargin: string;
+  daPct: string;
+  capexPct: string;
+  nwcPct: string;
+  taxRate: string;
+  entryFeePct: string;
+  exitFeePct: string;
+  monitoringFee: string;
+  financingFeePct: string;
+  /** Cross-sheet ref for growth rate in year i (0-based). */
+  growthRate: (i: number) => string;
+  /** Cross-sheet ref for EBITDA margin in year i (0-based). */
+  margin: (i: number) => string;
+  /** Cross-sheet ref for entry margin (col B in schedule row). */
+  entryMargin: string;
+}
+
+/** Row positions from the P&L sheet, used by Cash Flow. */
+interface PLRefs {
+  revenueRow: number;
+  ebitdaAdjRow: number;
+  taxRow: number;
+  entryCol: number;
+}
+
+const ASHEET = "'Assumptions'";
+const PLSHEET = "'P&L'";
+
 // ── Main Export ──────────────────────────────────────────────────────────
 
 export async function buildExcel(state: ModelState): Promise<Blob> {
@@ -237,10 +276,10 @@ export async function buildExcel(state: ModelState): Promise<Blob> {
 
   buildCoverSheet(wb, state, ccy);
   buildSourcesUsesSheet(wb, state, ccy);
-  buildAssumptionsSheet(wb, state, ccy);
-  buildPLSheet(wb, state, ccy, hp, years);
-  buildCashFlowDebtSheet(wb, state, ccy, hp, years, ds);
-  buildReturnsSheet(wb, state, ccy);
+  const aRefs = buildAssumptionsSheet(wb, state, ccy);
+  const plRefs = buildPLSheet(wb, state, ccy, hp, years, aRefs);
+  buildCashFlowDebtSheet(wb, state, ccy, hp, years, ds, aRefs, plRefs);
+  buildReturnsSheet(wb, state, ccy, aRefs);
   buildScenariosSheet(wb, state, ccy);
   buildRiskSheet(wb, state, ccy, hp);
 
@@ -500,101 +539,139 @@ function buildSourcesUsesSheet(wb: WB, state: ModelState, ccy: string) {
   freezeAndPrint(ws, 3, 1);
 }
 
-// ── Sheet 3: Assumptions ────────────────────────────────────────────────
+// ── Sheet 3: Assumptions (structured, formula-linked) ──────────────────
+//
+// Layout uses FIXED row positions for all scalar and time-series assumptions
+// so that P&L, Cash Flow, and Returns sheets can reference them reliably.
+// Variable-length sections (debt tranches, add-ons) come at the end.
 
-function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string) {
+function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string): AssumptionCells {
   const ws = wb.addWorksheet('Assumptions', { properties: { tabColor: { argb: '1a5276' } } });
+  const hp = state.exit.holding_period;
+  const maxCol = hp + 2; // col 1 = label, col 2 = Entry, cols 3..hp+2 = years
   ws.getColumn(1).width = 32;
   ws.getColumn(2).width = 18;
-  ws.getColumn(3).width = 6;
-  ws.getColumn(4).width = 32;
-  ws.getColumn(5).width = 18;
+  for (let c = 3; c <= maxCol; c++) ws.getColumn(c).width = 14;
 
   const ai = new Set(state.ai_toggle_fields);
+  const isAi = (p: string) => ai.has(p);
+
+  // ── Section 1: Entry Assumptions (rows 1-10) ──────────────────────────
+
   let row = 1;
+  ws.mergeCells(row, 1, row, 2);
+  ws.getCell(row, 1).value = `${state.deal_name} — Model Assumptions`;
+  ws.getCell(row, 1).font = F_SECTION;
+  ws.getCell(row, 1).border = THICK_BOTTOM;
+  row = 3; // row 2 blank
 
-  const add = (label: string, value: string | number | null, fieldPath = '', fmt?: string, alt = false) => {
-    const isAi = ai.has(fieldPath);
-    const prefix = isAi ? '[AI] ' : '';
-    row = writeKvRow(ws, row, `${prefix}${label}`, value, { fmt, input: isAi, alt });
-  };
+  row = writeSectionHeader(ws, row, 'ENTRY ASSUMPTIONS', 2); // row 3 header → row becomes 4
+  // Row 4: LTM Revenue
+  writeKvRow(ws, 4, 'LTM Revenue', state.revenue.base_revenue, { fmt: FMT_CCY, input: true });
+  // Row 5: Base EBITDA Margin
+  writeKvRow(ws, 5, 'Base EBITDA Margin', state.margins.base_ebitda_margin, { fmt: FMT_PCT, input: isAi('margins.base_ebitda_margin') });
+  // Row 6: LTM EBITDA (formula = B4 * B5)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.getCell(6, 1).value = 'LTM EBITDA'; ws.getCell(6, 1).font = F_BODY; ws.getCell(6, 1).border = THIN_BOTTOM;
+  ws.getCell(6, 2).value = { formula: 'B4*B5', result: state.revenue.base_revenue * state.margins.base_ebitda_margin } as any;
+  ws.getCell(6, 2).font = F_BODY; ws.getCell(6, 2).numFmt = FMT_CCY; ws.getCell(6, 2).border = THIN_BOTTOM; ws.getCell(6, 2).alignment = { horizontal: 'right' };
+  // Row 7: Entry EBITDA Multiple
+  writeKvRow(ws, 7, 'Entry EBITDA Multiple', state.entry.entry_ebitda_multiple, { fmt: FMT_MULT, input: true });
+  // Row 8: Enterprise Value (formula = B6 * B7)
+  ws.getCell(8, 1).value = 'Enterprise Value'; ws.getCell(8, 1).font = F_BODY_BOLD; ws.getCell(8, 1).border = THIN_BOTTOM;
+  ws.getCell(8, 2).value = { formula: 'B6*B7', result: state.entry.enterprise_value } as any;
+  ws.getCell(8, 2).font = F_BODY_BOLD; ws.getCell(8, 2).numFmt = FMT_CCY; ws.getCell(8, 2).border = THIN_BOTTOM; ws.getCell(8, 2).alignment = { horizontal: 'right' };
+  // Row 9: Leverage Ratio
+  writeKvRow(ws, 9, 'Leverage Ratio', state.entry.leverage_ratio, { fmt: FMT_MULT });
+  // Row 10: Equity Check
+  writeKvRow(ws, 10, 'Equity Check', state.entry.equity_check, { fmt: FMT_CCY, alt: true });
 
-  // Entry
-  row = writeSectionHeader(ws, row, 'ENTRY ASSUMPTIONS', 2);
-  add('Deal Name', state.deal_name, '', undefined);
-  add('Sector', state.sector, '', undefined, true);
-  add('Currency', state.currency);
-  add('LTM Revenue', state.revenue.base_revenue, '', FMT_CCY, true);
-  add('LTM EBITDA', state.revenue.base_revenue * state.margins.base_ebitda_margin, '', FMT_CCY);
-  add('LTM EBITDA Margin', state.margins.base_ebitda_margin, 'margins.base_ebitda_margin', FMT_PCT, true);
-  add('Entry EBITDA Multiple', state.entry.entry_ebitda_multiple, '', FMT_MULT);
-  add('Entry Revenue Multiple', state.entry.entry_revenue_multiple, '', FMT_MULT, true);
-  add('Enterprise Value', state.entry.enterprise_value, '', FMT_CCY);
-  add('Total Debt Raised', state.entry.total_debt_raised, '', FMT_CCY, true);
-  add('Leverage Ratio', state.entry.leverage_ratio, 'entry.leverage_ratio', FMT_MULT);
-  add('Equity Check', state.entry.equity_check, '', FMT_CCY, true);
-  row++;
+  // ── Section 2: Exit Assumptions (rows 12-15) ──────────────────────────
 
-  // Debt structure
+  writeSectionHeader(ws, 12, 'EXIT ASSUMPTIONS', 2); // row 12 header
+  // Row 13: Holding Period
+  writeKvRow(ws, 13, 'Holding Period (years)', state.exit.holding_period, { fmt: FMT_INT, input: true });
+  // Row 14: Exit EBITDA Multiple
+  writeKvRow(ws, 14, 'Exit EBITDA Multiple', state.exit.exit_ebitda_multiple, { fmt: FMT_MULT, input: isAi('exit.exit_ebitda_multiple') });
+  // Row 15: Exit Method
+  writeKvRow(ws, 15, 'Exit Method', state.exit.exit_method);
+
+  // ── Section 3: Operating Assumptions (rows 17-22) ─────────────────────
+
+  writeSectionHeader(ws, 17, 'OPERATING ASSUMPTIONS', 2); // row 17 header
+  // Row 18: Target EBITDA Margin
+  writeKvRow(ws, 18, 'Target EBITDA Margin', state.margins.target_ebitda_margin, { fmt: FMT_PCT, input: isAi('margins.target_ebitda_margin') });
+  // Row 19: Margin Trajectory
+  writeKvRow(ws, 19, 'Margin Trajectory', state.margins.margin_trajectory, { input: isAi('margins.margin_trajectory') });
+  // Row 20: D&A % Revenue
+  writeKvRow(ws, 20, 'D&A (% Revenue)', state.margins.da_pct_revenue, { fmt: FMT_PCT, input: true });
+  // Row 21: Capex % Revenue
+  writeKvRow(ws, 21, 'Maintenance Capex (% Revenue)', state.margins.capex_pct_revenue, { fmt: FMT_PCT, input: true });
+  // Row 22: NWC % Revenue
+  writeKvRow(ws, 22, 'NWC (% Revenue)', state.margins.nwc_pct_revenue, { fmt: FMT_PCT, input: true });
+
+  // ── Section 4: Fees & Tax (rows 24-30) ────────────────────────────────
+
+  writeSectionHeader(ws, 24, 'FEES & TAX', 2); // row 24 header
+  // Row 25: Tax Rate
+  writeKvRow(ws, 25, 'Tax Rate', state.tax.tax_rate, { fmt: FMT_PCT, input: true });
+  // Row 26: Entry Fee %
+  writeKvRow(ws, 26, 'Entry Fee %', state.fees.entry_fee_pct, { fmt: FMT_PCT, alt: true });
+  // Row 27: Exit Fee %
+  writeKvRow(ws, 27, 'Exit Fee %', state.fees.exit_fee_pct, { fmt: FMT_PCT });
+  // Row 28: Monitoring Fee
+  writeKvRow(ws, 28, 'Monitoring Fee (p.a.)', state.fees.monitoring_fee_annual, { fmt: FMT_CCY, input: true, alt: true });
+  // Row 29: Financing Fee %
+  writeKvRow(ws, 29, 'Financing Fee %', state.fees.financing_fee_pct, { fmt: FMT_PCT });
+  // Row 30: Transaction Costs
+  writeKvRow(ws, 30, 'Transaction Costs', state.fees.transaction_costs, { fmt: FMT_CCY, alt: true });
+
+  // ── Section 5: Year-by-Year Schedule (rows 32-35) ─────────────────────
+
+  writeSectionHeader(ws, 32, 'YEAR-BY-YEAR ASSUMPTIONS', maxCol); // row 32 header
+
+  // Row 33: column headers (Entry, Y1, Y2, ...)
+  ws.getCell(33, 1).value = ''; ws.getCell(33, 1).font = F_HEADER;
+  ws.getCell(33, 2).value = 'Entry (LTM)'; ws.getCell(33, 2).font = F_HEADER;
+  for (let i = 0; i < hp; i++) { ws.getCell(33, i + 3).value = `Year ${i + 1}`; ws.getCell(33, i + 3).font = F_HEADER; }
+  styleHeaderRow(ws, 33, 1, maxCol);
+
+  // Row 34: Revenue Growth Rates
+  const growthVals: CellVal[] = ['--', ...state.revenue.growth_rates.slice(0, hp)];
+  writeDataRow(ws, 34, 'Revenue Growth %', growthVals, FMT_PCT, { inputCols: new Set(Array.from({ length: hp }, (_, i) => i + 1)) });
+
+  // Row 35: EBITDA Margin Schedule
+  const years = state.projections.years;
+  const marginVals: CellVal[] = [state.margins.base_ebitda_margin, ...years.slice(0, hp).map(y => y.ebitda_margin)];
+  writeDataRow(ws, 35, 'EBITDA Margin %', marginVals, FMT_PCT, { alt: true, inputCols: new Set([0, ...Array.from({ length: hp }, (_, i) => i + 1)]) });
+
+  // ── Section 6: Debt Structure (variable-length, starts at row 37) ─────
+
+  row = 37;
   row = writeSectionHeader(ws, row, 'DEBT STRUCTURE', 2);
   for (const t of state.debt_tranches) {
     ws.getCell(row, 1).value = t.name; ws.getCell(row, 1).font = F_BODY_BOLD; ws.getCell(row, 1).fill = MID_FILL;
     ws.getCell(row, 2).fill = MID_FILL;
     row++;
-    add('  Principal', t.principal, '', FMT_CCY);
-    add('  Rate Type', t.rate_type, '', undefined, true);
-    add('  Interest Rate', t.interest_rate, '', FMT_PCT);
-    add('  Amortization', t.amortization_type, '', undefined, true);
-    if (t.pik_rate > 0) add('  PIK Rate', t.pik_rate, '', FMT_PCT);
+    row = writeKvRow(ws, row, '  Principal', t.principal, { fmt: FMT_CCY, input: true });
+    row = writeKvRow(ws, row, '  Rate Type', t.rate_type, { alt: true });
+    row = writeKvRow(ws, row, '  Interest Rate', t.interest_rate, { fmt: FMT_PCT, input: true });
+    row = writeKvRow(ws, row, '  Amortization', t.amortization_type, { alt: true });
+    if (t.pik_rate > 0) row = writeKvRow(ws, row, '  PIK Rate', t.pik_rate, { fmt: FMT_PCT });
     if (t.rate_type === 'floating') {
-      add('  Base Rate', t.base_rate, '', FMT_PCT);
-      add('  Spread', t.spread, '', FMT_PCT, true);
-      add('  Floor', t.floor, '', FMT_PCT);
+      row = writeKvRow(ws, row, '  Base Rate', t.base_rate, { fmt: FMT_PCT });
+      row = writeKvRow(ws, row, '  Spread', t.spread, { fmt: FMT_PCT, alt: true });
+      row = writeKvRow(ws, row, '  Floor', t.floor, { fmt: FMT_PCT });
     }
   }
   row++;
 
-  // Revenue
-  row = writeSectionHeader(ws, row, 'REVENUE ASSUMPTIONS', 2);
-  state.revenue.growth_rates.forEach((g, i) => add(`Year ${i + 1} Revenue Growth`, g, 'revenue.growth_rates', FMT_PCT, i % 2 === 1));
-  if (state.revenue.churn_rate > 0) add('Churn Rate', state.revenue.churn_rate, '', FMT_PCT);
-  row++;
-
-  // Margins
-  row = writeSectionHeader(ws, row, 'MARGIN & OPERATING ASSUMPTIONS', 2);
-  add('Base EBITDA Margin', state.margins.base_ebitda_margin, 'margins.base_ebitda_margin', FMT_PCT);
-  add('Target EBITDA Margin', state.margins.target_ebitda_margin, 'margins.target_ebitda_margin', FMT_PCT, true);
-  add('Margin Trajectory', state.margins.margin_trajectory, 'margins.margin_trajectory');
-  add('D&A (% Revenue)', state.margins.da_pct_revenue, '', FMT_PCT, true);
-  add('Maintenance Capex (% Revenue)', state.margins.capex_pct_revenue, '', FMT_PCT);
-  add('NWC (% Revenue)', state.margins.nwc_pct_revenue, '', FMT_PCT, true);
-  row++;
-
-  // Fees & Tax
-  row = writeSectionHeader(ws, row, 'FEES & TAX', 2);
-  add('Entry Fee %', state.fees.entry_fee_pct, '', FMT_PCT);
-  add('Exit Fee %', state.fees.exit_fee_pct, '', FMT_PCT, true);
-  add('Monitoring Fee (p.a.)', state.fees.monitoring_fee_annual, 'fees.monitoring_fee_annual', FMT_CCY);
-  add('Financing Fee %', state.fees.financing_fee_pct, '', FMT_PCT, true);
-  add('Transaction Costs', state.fees.transaction_costs, '', FMT_CCY);
-  add('Tax Rate', state.tax.tax_rate, '', FMT_PCT, true);
-  if (state.tax.nol_carryforward > 0) add('NOL Carryforward', state.tax.nol_carryforward, '', FMT_CCY);
-  if (state.tax.minimum_tax_rate > 0) add('Minimum Tax Rate', state.tax.minimum_tax_rate, '', FMT_PCT);
-  row++;
-
-  // Exit
-  row = writeSectionHeader(ws, row, 'EXIT ASSUMPTIONS', 2);
-  add('Holding Period (years)', state.exit.holding_period, 'exit.holding_period', FMT_INT);
-  add('Exit EBITDA Multiple', state.exit.exit_ebitda_multiple, 'exit.exit_ebitda_multiple', FMT_MULT, true);
-  add('Exit Method', state.exit.exit_method);
-  row++;
-
   // MIP
   row = writeSectionHeader(ws, row, 'MANAGEMENT INCENTIVE PLAN', 2);
-  add('MIP Pool %', state.mip.mip_pool_pct, '', FMT_PCT);
-  add('Hurdle MOIC', state.mip.hurdle_moic, '', FMT_MULT, true);
-  add('Vesting Years', state.mip.vesting_years, '', FMT_INT);
-  add('Sweet Equity %', state.mip.sweet_equity_pct, '', FMT_PCT, true);
+  row = writeKvRow(ws, row, 'MIP Pool %', state.mip.mip_pool_pct, { fmt: FMT_PCT, input: true });
+  row = writeKvRow(ws, row, 'Hurdle MOIC', state.mip.hurdle_moic, { fmt: FMT_MULT, alt: true });
+  row = writeKvRow(ws, row, 'Vesting Years', state.mip.vesting_years, { fmt: FMT_INT });
+  row = writeKvRow(ws, row, 'Sweet Equity %', state.mip.sweet_equity_pct, { fmt: FMT_PCT, alt: true });
 
   // Add-ons
   if (state.add_on_acquisitions && state.add_on_acquisitions.length > 0) {
@@ -603,27 +680,60 @@ function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string) {
     for (const a of state.add_on_acquisitions) {
       ws.getCell(row, 1).value = a.name; ws.getCell(row, 1).font = F_BODY_BOLD; ws.getCell(row, 1).fill = MID_FILL;
       ws.getCell(row, 2).fill = MID_FILL; row++;
-      add('  Year', a.year, '', FMT_INT);
-      add('  Revenue', a.revenue, '', FMT_CCY, true);
-      add('  EBITDA Margin', a.ebitda_margin, '', FMT_PCT);
-      add('  Purchase Multiple', a.purchase_multiple, '', FMT_MULT, true);
-      add('  Funding', a.funding);
+      row = writeKvRow(ws, row, '  Year', a.year, { fmt: FMT_INT });
+      row = writeKvRow(ws, row, '  Revenue', a.revenue, { fmt: FMT_CCY, alt: true });
+      row = writeKvRow(ws, row, '  EBITDA Margin', a.ebitda_margin, { fmt: FMT_PCT });
+      row = writeKvRow(ws, row, '  Purchase Multiple', a.purchase_multiple, { fmt: FMT_MULT, alt: true });
+      row = writeKvRow(ws, row, '  Funding', a.funding);
     }
   }
 
-  freezeAndPrint(ws, 2, 1, false);
+  // NOL / Min Tax (informational, at end)
+  if (state.tax.nol_carryforward > 0 || state.tax.minimum_tax_rate > 0) {
+    row++;
+    row = writeSectionHeader(ws, row, 'TAX ADJUSTMENTS', 2);
+    if (state.tax.nol_carryforward > 0) row = writeKvRow(ws, row, 'NOL Carryforward', state.tax.nol_carryforward, { fmt: FMT_CCY });
+    if (state.tax.minimum_tax_rate > 0) row = writeKvRow(ws, row, 'Minimum Tax Rate', state.tax.minimum_tax_rate, { fmt: FMT_PCT, alt: true });
+  }
+
+  freezeAndPrint(ws, 34, 1, false);
+
+  // ── Build cross-sheet reference map ───────────────────────────────────
+
+  return {
+    baseRevenue: `${ASHEET}!B4`,
+    baseMargin: `${ASHEET}!B5`,
+    ltmEbitda: `${ASHEET}!B6`,
+    entryMultiple: `${ASHEET}!B7`,
+    ev: `${ASHEET}!B8`,
+    holdingPeriod: `${ASHEET}!B13`,
+    exitMultiple: `${ASHEET}!B14`,
+    targetMargin: `${ASHEET}!B18`,
+    daPct: `${ASHEET}!B20`,
+    capexPct: `${ASHEET}!B21`,
+    nwcPct: `${ASHEET}!B22`,
+    taxRate: `${ASHEET}!B25`,
+    entryFeePct: `${ASHEET}!B26`,
+    exitFeePct: `${ASHEET}!B27`,
+    monitoringFee: `${ASHEET}!B28`,
+    financingFeePct: `${ASHEET}!B29`,
+    growthRate: (i: number) => `${ASHEET}!${cl(i + 3)}34`,
+    margin: (i: number) => `${ASHEET}!${cl(i + 3)}35`,
+    entryMargin: `${ASHEET}!B35`,
+  };
 }
 
-// ── Sheet 4: P&L (Formula-linked) ───────────────────────────────────────
+// ── Sheet 4: P&L (Formula-linked to Assumptions) ──────────────────────
 
-function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years: AnnualProjectionYear[]) {
+function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years: AnnualProjectionYear[], aRefs: AssumptionCells): PLRefs {
   const ws = wb.addWorksheet('P&L', { properties: { tabColor: { argb: '2e86c1' } } });
   ws.getColumn(1).width = 30;
   for (let c = 2; c <= hp + 2; c++) ws.getColumn(c).width = 14;
 
-  if (!years.length) { ws.getCell(1, 1).value = 'No projections calculated'; return; }
-
-  const inputCols = new Set(Array.from({ length: hp }, (_, i) => i + 1)); // year columns are inputs for growth/margin
+  if (!years.length) {
+    ws.getCell(1, 1).value = 'No projections calculated';
+    return { revenueRow: 0, ebitdaAdjRow: 0, taxRow: 0, entryCol: 2 };
+  }
 
   let row = 1;
   ws.mergeCells(row, 1, row, hp + 2);
@@ -645,19 +755,23 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   // Track row positions for formula references
   const R: Record<string, number> = {};
 
-  // --- Revenue: Entry is static input; Year N = Year N-1 * (1 + Growth N) ---
+  // --- Revenue: Entry = Assumptions!BaseRevenue; Year N = Year N-1 * (1 + Growth N) ---
   R.rev = row;
-  const revValues: CellVal[] = [state.revenue.base_revenue];
+  const revValues: CellVal[] = [fv(aRefs.baseRevenue, state.revenue.base_revenue)];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
     const prevCol = col - 1;
     revValues.push(fv(`${cr(R.rev, prevCol)}*(1+${cr(R.rev + 1, col)})`, years[i].revenue));
   }
-  row = writeDataRow(ws, row, 'Revenue', revValues, FMT_CCY, { bold: true, inputCols: new Set([0]) });
+  row = writeDataRow(ws, row, 'Revenue', revValues, FMT_CCY, { bold: true });
 
-  // --- Revenue Growth: all inputs (blue font) ---
+  // --- Revenue Growth: linked to Assumptions year-by-year schedule ---
   R.growth = row;
-  row = writeDataRow(ws, row, 'Revenue Growth', ['--', ...years.map(y => y.revenue_growth)], FMT_PCT, { alt: true, inputCols });
+  const growthVals: CellVal[] = ['--' as CellVal];
+  for (let i = 0; i < hp; i++) {
+    growthVals.push(fv(aRefs.growthRate(i), years[i].revenue_growth));
+  }
+  row = writeDataRow(ws, row, 'Revenue Growth', growthVals, FMT_PCT, { alt: true });
   row++; // blank
 
   // --- EBITDA = Revenue * EBITDA Margin ---
@@ -669,13 +783,21 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   }
   row = writeDataRow(ws, row, 'EBITDA', ebitdaVals, FMT_CCY, { bold: true });
 
-  // --- EBITDA Margin: inputs ---
+  // --- EBITDA Margin: linked to Assumptions year-by-year schedule ---
   R.margin = row;
-  row = writeDataRow(ws, row, 'EBITDA Margin', [state.margins.base_ebitda_margin, ...years.map(y => y.ebitda_margin)], FMT_PCT, { alt: true, inputCols: new Set([0, ...Array.from(inputCols)]) });
+  const marginVals: CellVal[] = [fv(aRefs.entryMargin, state.margins.base_ebitda_margin)];
+  for (let i = 0; i < hp; i++) {
+    marginVals.push(fv(aRefs.margin(i), years[i].ebitda_margin));
+  }
+  row = writeDataRow(ws, row, 'EBITDA Margin', marginVals, FMT_PCT, { alt: true });
 
-  // --- Monitoring Fee: static ---
+  // --- Monitoring Fee: linked to Assumptions ---
   R.monFee = row;
-  row = writeDataRow(ws, row, 'Monitoring Fee Adj.', [0, ...Array(hp).fill(-state.fees.monitoring_fee_annual)], FMT_CCY);
+  const monFeeVals: CellVal[] = [0 as CellVal];
+  for (let i = 0; i < hp; i++) {
+    monFeeVals.push(fv(`-${aRefs.monitoringFee}`, -state.fees.monitoring_fee_annual));
+  }
+  row = writeDataRow(ws, row, 'Monitoring Fee Adj.', monFeeVals, FMT_CCY);
 
   // --- EBITDA Adjusted = EBITDA + Monitoring Fee ---
   R.ebitdaAdj = row;
@@ -687,47 +809,65 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   row = writeDataRow(ws, row, 'EBITDA Adjusted', ebitdaAdjVals, FMT_CCY, { bold: true, alt: true });
   row++; // blank
 
-  // --- D&A: static (from engine calculation) ---
+  // --- D&A = -Revenue * D&A% (linked to Assumptions) ---
   R.da = row;
-  row = writeDataRow(ws, row, 'D&A', [null, ...years.map(y => -y.da)], FMT_CCY);
+  const daVals: CellVal[] = [null as CellVal];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 3;
+    daVals.push(fv(`-${cr(R.rev, col)}*${aRefs.daPct}`, -years[i].da));
+  }
+  row = writeDataRow(ws, row, 'D&A', daVals, FMT_CCY);
 
   // --- EBIT = EBITDA Adj + D&A (D&A is negative on sheet) ---
   R.ebit = row;
-  const ebitVals: CellVal[] = [null];
+  const ebitVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
     ebitVals.push(fv(`${cr(R.ebitdaAdj, col)}+${cr(R.da, col)}`, years[i].ebit));
   }
   row = writeDataRow(ws, row, 'EBIT', ebitVals, FMT_CCY, { bold: true, alt: true });
 
-  // --- Interest Expense: static (from debt schedule) ---
+  // --- Interest Expense: static (from debt schedule — complex tranche-level logic) ---
   R.interest = row;
   row = writeDataRow(ws, row, 'Interest Expense', [null, ...years.map(y => -y.interest_expense)], FMT_CCY);
 
-  // --- Financing Fee Amort: static ---
+  // --- Financing Fee Amort = -(EV * Financing Fee %) / Holding Period (linked to Assumptions) ---
   R.finFee = row;
-  row = writeDataRow(ws, row, 'Financing Fee Amort.', [null, ...years.map(y => -y.financing_fee_amort)], FMT_CCY, { alt: true });
+  const finFeeVals: CellVal[] = [null as CellVal];
+  const totalFinFee = state.entry.enterprise_value * state.fees.financing_fee_pct;
+  for (let i = 0; i < hp; i++) {
+    finFeeVals.push(fv(`-(${aRefs.ev}*${aRefs.financingFeePct})/${aRefs.holdingPeriod}`, -(totalFinFee / hp)));
+  }
+  row = writeDataRow(ws, row, 'Financing Fee Amort.', finFeeVals, FMT_CCY, { alt: true });
 
   // --- EBT = EBIT + Interest + Fin Fee Amort (interest & fin fee are negative) ---
   R.ebt = row;
-  const ebtVals: CellVal[] = [null];
+  const ebtVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
     ebtVals.push(fv(`${cr(R.ebit, col)}+${cr(R.interest, col)}+${cr(R.finFee, col)}`, years[i].ebt));
   }
   row = writeDataRow(ws, row, 'EBT', ebtVals, FMT_CCY, { bold: true });
 
-  // --- Tax: static (complex NOL/min-tax logic) ---
+  // --- Tax = -MAX(EBT * Tax Rate, 0) linked to Assumptions ---
+  // Note: if NOL carryforward exists, engine uses complex logic — use hardcoded values
   R.tax = row;
-  row = writeDataRow(ws, row, 'Tax', [null, ...years.map(y => -y.tax)], FMT_CCY, { alt: true });
-
-  if (state.tax.nol_carryforward > 0) {
+  const hasNol = state.tax.nol_carryforward > 0;
+  if (hasNol) {
+    row = writeDataRow(ws, row, 'Tax', [null, ...years.map(y => -y.tax)], FMT_CCY, { alt: true });
     row = writeDataRow(ws, row, '  NOL Utilised', [null, ...years.map(y => y.nol_used)], FMT_CCY);
+  } else {
+    const taxVals: CellVal[] = [null as CellVal];
+    for (let i = 0; i < hp; i++) {
+      const col = i + 3;
+      taxVals.push(fv(`-MAX(${cr(R.ebt, col)}*${aRefs.taxRate},0)`, -years[i].tax));
+    }
+    row = writeDataRow(ws, row, 'Tax', taxVals, FMT_CCY, { alt: true });
   }
 
   // --- Net Income = EBT + Tax (tax is negative on sheet) ---
   R.netIncome = row;
-  const niVals: CellVal[] = [null];
+  const niVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
     niVals.push(fv(`${cr(R.ebt, col)}+${cr(R.tax, col)}`, years[i].net_income));
@@ -736,36 +876,43 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   row++; // blank
 
   // --- Net Income Margin = Net Income / Revenue ---
-  const niMarginVals: CellVal[] = [null];
+  const niMarginVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
     niMarginVals.push(fv(`IF(${cr(R.rev, col)}=0,0,${cr(R.netIncome, col)}/${cr(R.rev, col)})`, years[i].revenue > 0 ? years[i].net_income / years[i].revenue : 0));
   }
   row = writeDataRow(ws, row, 'Net Income Margin', niMarginVals, FMT_PCT, { alt: true });
 
-  // --- NOPAT = EBIT * (1 - tax_rate) ---
-  const nopatVals: CellVal[] = [null];
+  // --- NOPAT = EBIT * (1 - Tax Rate) linked to Assumptions ---
+  const nopatVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
-    nopatVals.push(fv(`${cr(R.ebit, col)}*(1-${state.tax.tax_rate})`, years[i].nopat));
+    nopatVals.push(fv(`${cr(R.ebit, col)}*(1-${aRefs.taxRate})`, years[i].nopat));
   }
   row = writeDataRow(ws, row, 'NOPAT', nopatVals, FMT_CCY);
 
   freezeAndPrint(ws, 3, 1);
+
+  return { revenueRow: R.rev, ebitdaAdjRow: R.ebitdaAdj, taxRow: R.tax, entryCol: 2 };
 }
 
-// ── Sheet 5: Cash Flow & Debt (Formula-linked) ─────────────────────────
+// ── Sheet 5: Cash Flow & Debt (Formula-linked to P&L and Assumptions) ──
 
 function buildCashFlowDebtSheet(
   wb: WB, state: ModelState, ccy: string, hp: number,
   years: AnnualProjectionYear[],
   ds: ModelState['debt_schedule'],
+  aRefs: AssumptionCells,
+  plRefs: PLRefs,
 ) {
   const ws = wb.addWorksheet('Cash Flow & Debt', { properties: { tabColor: { argb: '1e8449' } } });
   ws.getColumn(1).width = 30;
   for (let c = 2; c <= hp + 1; c++) ws.getColumn(c).width = 14;
 
   if (!years.length) { ws.getCell(1, 1).value = 'No projections calculated'; return; }
+
+  // Helper: P&L cross-sheet cell reference. CF Year 1 is col 2, but P&L Year 1 is col 3.
+  const plRef = (plRow: number, cfCol: number) => `${PLSHEET}!${cr(plRow, cfCol + 1)}`;
 
   let row = 1;
   ws.mergeCells(row, 1, row, hp + 1);
@@ -786,22 +933,49 @@ function buildCashFlowDebtSheet(
   // FCF Build
   row = writeSectionHeader(ws, row, 'FREE CASH FLOW BUILD', hp + 1);
 
+  // --- EBITDA Adjusted: linked to P&L ---
   R.ebitdaAdj = row;
-  row = writeDataRow(ws, row, 'EBITDA Adjusted', years.map(y => y.ebitda_adj), FMT_CCY, { bold: true });
+  const ebitdaAdjVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    ebitdaAdjVals.push(fv(plRef(plRefs.ebitdaAdjRow, col), years[i].ebitda_adj));
+  }
+  row = writeDataRow(ws, row, 'EBITDA Adjusted', ebitdaAdjVals, FMT_CCY, { bold: true });
 
+  // --- Tax Paid: linked to P&L (sign already negative in P&L Tax row) ---
   R.tax = row;
-  row = writeDataRow(ws, row, 'Tax Paid', years.map(y => -y.tax), FMT_CCY, { alt: true });
+  const taxVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    taxVals.push(fv(plRef(plRefs.taxRow, col), -years[i].tax));
+  }
+  row = writeDataRow(ws, row, 'Tax Paid', taxVals, FMT_CCY, { alt: true });
 
+  // --- Maintenance Capex = -Revenue * Capex% (linked to P&L Revenue and Assumptions) ---
   R.maintCapex = row;
-  row = writeDataRow(ws, row, 'Maintenance Capex', years.map(y => -y.maintenance_capex), FMT_CCY);
+  const capexVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const col = i + 2;
+    capexVals.push(fv(`-${plRef(plRefs.revenueRow, col)}*${aRefs.capexPct}`, -years[i].maintenance_capex));
+  }
+  row = writeDataRow(ws, row, 'Maintenance Capex', capexVals, FMT_CCY);
 
+  // --- Growth Capex: static (complex add-on acquisition logic) ---
   R.growthCapex = row;
   row = writeDataRow(ws, row, 'Growth Capex', years.map(y => -y.growth_capex), FMT_CCY, { alt: true });
 
+  // --- Change in NWC = -NWC% * (Revenue_Y(i) - Revenue_Y(i-1)), linked to Assumptions & P&L ---
   R.nwc = row;
-  row = writeDataRow(ws, row, 'Change in NWC', years.map(y => -y.delta_nwc), FMT_CCY);
+  const nwcVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    // P&L revenue: entry is col 2 (plRefs.entryCol), Y1 is col 3, so Y(i) is col i+3
+    const plRevCurr = `${PLSHEET}!${cr(plRefs.revenueRow, i + 3)}`;
+    const plRevPrev = `${PLSHEET}!${cr(plRefs.revenueRow, i + 2)}`;
+    nwcVals.push(fv(`-${aRefs.nwcPct}*(${plRevCurr}-${plRevPrev})`, -years[i].delta_nwc));
+  }
+  row = writeDataRow(ws, row, 'Change in NWC', nwcVals, FMT_CCY);
 
-  // --- FCF Pre-Debt = EBITDA Adj + Tax + Maint Capex + Growth Capex + NWC (all negative except EBITDA) ---
+  // --- FCF Pre-Debt = EBITDA Adj + Tax + Maint Capex + Growth Capex + NWC ---
   R.fcfPreDebt = row;
   const fcfPreVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
@@ -819,7 +993,7 @@ function buildCashFlowDebtSheet(
   R.debtRepay = row;
   row = writeDataRow(ws, row, 'Debt Repayment', ds.total_repayment_by_year.map(v => -v), FMT_CCY, { alt: true });
 
-  // --- FCF to Equity = FCF Pre-Debt + Cash Interest + Debt Repayment (interest & repayment are negative) ---
+  // --- FCF to Equity = FCF Pre-Debt + Cash Interest + Debt Repayment ---
   R.fcfEquity = row;
   const fcfEqVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
@@ -938,7 +1112,7 @@ function buildCashFlowDebtSheet(
 
 // ── Sheet 6: Returns ────────────────────────────────────────────────────
 
-function buildReturnsSheet(wb: WB, state: ModelState, ccy: string) {
+function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: AssumptionCells) {
   const ws = wb.addWorksheet('Returns', { properties: { tabColor: { argb: '7d3c98' } } });
   ws.getColumn(1).width = 32;
   ws.getColumn(2).width = 18;
