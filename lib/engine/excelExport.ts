@@ -968,7 +968,6 @@ function buildCashFlowDebtSheet(
   R.nwc = row;
   const nwcVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
-    const col = i + 2;
     // P&L revenue: entry is col 2 (plRefs.entryCol), Y1 is col 3, so Y(i) is col i+3
     const plRevCurr = `${PLSHEET}!${cr(plRefs.revenueRow, i + 3)}`;
     const plRevPrev = `${PLSHEET}!${cr(plRefs.revenueRow, i + 2)}`;
