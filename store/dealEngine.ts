@@ -297,7 +297,7 @@ Be specific. Use the company name to infer business type and calibrate according
       }
 
       const result = fullRecalc(state);
-      set({ modelState: result, isCalculating: false });
+      set({ modelState: result, isCalculating: false, memoContent: null });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -349,6 +349,7 @@ Be specific. Use the company name to infer business type and calibrate according
         lastDiffs: result.appliedDiffs,
         lastAnalysis: result.analysis,
         isCalculating: false,
+        ...(result.appliedDiffs.length > 0 ? { memoContent: null } : {}),
       });
 
       // Refresh panel insights in background after model changes
@@ -379,7 +380,7 @@ Be specific. Use the company name to infer business type and calibrate according
         updatedState = result.updatedStateDict as unknown as ModelState;
       }
       updatedState = fullRecalc(updatedState);
-      set({ modelState: updatedState, isCalculating: false });
+      set({ modelState: updatedState, isCalculating: false, memoContent: null });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -450,7 +451,20 @@ Be specific. Use the company name to infer business type and calibrate according
     set({ isCalculating: true });
     try {
       const result = fullRecalc(data);
-      set({ modelState: result, isCalculating: false });
+      set({
+        modelState: result,
+        isCalculating: false,
+        chatHistory: [],
+        scenarios: [],
+        sensitivityTables: [],
+        lastDiffs: [],
+        lastAnalysis: null,
+        aiPanelInsights: null,
+        memoContent: null,
+        error: null,
+      });
+      // Refresh panel insights for newly loaded model
+      if (get().apiKey) get().refreshPanelInsights();
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
