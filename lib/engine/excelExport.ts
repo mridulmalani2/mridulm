@@ -280,7 +280,9 @@ export async function buildExcel(state: ModelState): Promise<Blob> {
   const plRefs = buildPLSheet(wb, state, ccy, hp, years, aRefs);
   buildCashFlowDebtSheet(wb, state, ccy, hp, years, ds, aRefs, plRefs);
   buildReturnsSheet(wb, state, ccy, aRefs);
-  buildScenariosSheet(wb, state, ccy);
+  if (state.scenarios.length || state.sensitivity_tables.length) {
+    buildScenariosSheet(wb, state, ccy);
+  }
   buildRiskSheet(wb, state, ccy, hp);
 
   const buffer = await wb.xlsx.writeBuffer();
@@ -415,10 +417,6 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
   ws.getCell(row, 4).alignment = { horizontal: 'center' };
   row += 1;
 
-  if (rc.flags.length) {
-    ws.getCell(row, 2).value = `${rc.flags.filter(f => f.severity === 'critical').length} critical, ${rc.flags.filter(f => f.severity === 'warning').length} warning flags`;
-    ws.getCell(row, 2).font = F_SUBTITLE;
-  }
   row += 3;
 
   // Footer
