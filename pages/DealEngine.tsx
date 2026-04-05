@@ -111,6 +111,7 @@ const InitializeForm: React.FC = () => {
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
   const storedApiKey = useDealEngineStore((s) => s.apiKey);
+  const clearApiKey = useDealEngineStore((s) => s.clearApiKey);
   const [form, setForm] = useState(INIT_DEFAULTS);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiInfo, setShowApiInfo] = useState(false);
@@ -303,7 +304,16 @@ const InitializeForm: React.FC = () => {
                 </p>
               )}
 
-              {!storedApiKey && (
+              {storedApiKey ? (
+                <button
+                  type="button"
+                  onClick={() => { clearApiKey(); setApiKeyInput(''); }}
+                  className="text-[10px] tracking-widest uppercase transition-colors"
+                  style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  Change Key
+                </button>
+              ) : (
                 <input
                   type="password"
                   value={apiKeyInput}
