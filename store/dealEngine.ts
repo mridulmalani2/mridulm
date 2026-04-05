@@ -13,6 +13,7 @@ import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
 import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
 import { callAI, generatePanelInsights } from '../lib/engine/ai/gateway';
 import type { PanelInsights } from '../lib/engine/ai/gateway';
+import { generateInvestmentMemo } from '../lib/engine/ai/memoGenerator';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
 import type { AIProvider } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
@@ -72,6 +73,8 @@ interface DealEngineStore {
   lastAnalysis: AIAnalysis | null;
   aiPanelInsights: PanelInsights | null;
   aiPanelInsightsLoading: boolean;
+  memoContent: string | null;
+  isMemoGenerating: boolean;
   error: string | null;
 
   setApiKey: (key: string) => void;
@@ -96,6 +99,7 @@ interface DealEngineStore {
   saveModel: () => void;
   loadModel: (file: File) => Promise<void>;
   refreshPanelInsights: () => Promise<void>;
+  generateMemo: () => Promise<void>;
   setActiveScenario: (s: string) => void;
   setActiveSensitivityTable: (t: number) => void;
 }
@@ -114,6 +118,8 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   lastAnalysis: null,
   aiPanelInsights: null,
   aiPanelInsightsLoading: false,
+  memoContent: null,
+  isMemoGenerating: false,
   error: null,
 
   setApiKey: (key) => {
@@ -134,7 +140,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     set({ apiKey: key, aiProvider: provider });
   },
 
-  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, error: null }),
+  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null }),
 
   initializeModel: async (inputs) => {
     set({ isCalculating: true, error: null });
@@ -453,6 +459,19 @@ Be specific. Use the company name to infer business type and calibrate according
       set({ aiPanelInsights: insights, aiPanelInsightsLoading: false });
     } catch {
       set({ aiPanelInsightsLoading: false });
+    }
+  },
+
+  generateMemo: async () => {
+    const { modelState, apiKey, aiProvider } = get();
+    if (!modelState || !apiKey) return;
+    set({ isMemoGenerating: true, memoContent: null, error: null });
+    try {
+      const config = buildProviderConfig(aiProvider, apiKey);
+      const memo = await generateInvestmentMemo(modelState, config);
+      set({ memoContent: memo, isMemoGenerating: false });
+    } catch (e: unknown) {
+      set({ isMemoGenerating: false, error: (e as Error).message });
     }
   },
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import MemoModal from '../MemoModal';
 
 interface HeaderButtonProps {
   onClick: () => void;
@@ -57,6 +58,17 @@ const Header: React.FC = () => {
   const loadModel = useDealEngineStore((s) => s.loadModel);
   const resetModel = useDealEngineStore((s) => s.resetModel);
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
+  const generateMemo = useDealEngineStore((s) => s.generateMemo);
+  const isMemoGenerating = useDealEngineStore((s) => s.isMemoGenerating);
+  const memoContent = useDealEngineStore((s) => s.memoContent);
+  const apiKey = useDealEngineStore((s) => s.apiKey);
+
+  const [showMemo, setShowMemo] = useState(false);
+
+  // Auto-open memo modal when generation completes
+  useEffect(() => {
+    if (memoContent) setShowMemo(true);
+  }, [memoContent]);
 
   const handleLoadFile = () => {
     const input = document.createElement('input');
@@ -102,9 +114,37 @@ const Header: React.FC = () => {
         )}
       </div>
 
+      {/* Memo modal */}
+      {(showMemo && memoContent) && (
+        <MemoModal
+          content={memoContent}
+          isLoading={false}
+          dealName={modelState?.deal_name || 'deal'}
+          onClose={() => setShowMemo(false)}
+        />
+      )}
+      {isMemoGenerating && (
+        <MemoModal
+          content=""
+          isLoading={true}
+          dealName={modelState?.deal_name || 'deal'}
+          onClose={() => setShowMemo(false)}
+        />
+      )}
+
       {/* Right: action buttons */}
       {modelState && (
         <div className="flex items-center gap-1">
+          <HeaderButton
+            onClick={() => {
+              if (isMemoGenerating) return;
+              if (memoContent && !isMemoGenerating) { setShowMemo(true); return; }
+              if (!apiKey) return;
+              generateMemo();
+            }}
+            label={isMemoGenerating ? 'Drafting…' : 'Memo'}
+            tooltip="Generate a professional 1-page investment committee memo from your current deal model. Requires an API key."
+          />
           <HeaderButton
             onClick={exportExcel}
             label="Export .xlsx"
