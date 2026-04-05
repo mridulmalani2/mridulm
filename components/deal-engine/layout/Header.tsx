@@ -65,9 +65,13 @@ const Header: React.FC = () => {
 
   const [showMemo, setShowMemo] = useState(false);
 
-  // Auto-open memo modal when generation completes
+  // Auto-open memo modal when generation completes; close when invalidated
   useEffect(() => {
-    if (memoContent) setShowMemo(true);
+    if (memoContent) {
+      setShowMemo(true);
+    } else {
+      setShowMemo(false);
+    }
   }, [memoContent]);
 
   const handleLoadFile = () => {
@@ -138,7 +142,7 @@ const Header: React.FC = () => {
           <HeaderButton
             onClick={() => {
               if (isMemoGenerating) return;
-              if (memoContent && !isMemoGenerating) { setShowMemo(true); return; }
+              if (memoContent) { setShowMemo(true); return; }
               if (!apiKey) return;
               generateMemo();
             }}
