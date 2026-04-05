@@ -80,6 +80,7 @@ interface DealEngineStore {
   setApiKey: (key: string) => void;
   setAiProvider: (provider: AIProvider) => void;
   setProviderAndKey: (provider: AIProvider, key: string) => void;
+  clearApiKey: () => void;
   initializeModel: (inputs: {
     deal_name: string;
     revenue: number;
@@ -138,6 +139,12 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     localStorage.setItem('deal-engine-api-key', key);
     localStorage.setItem('deal-engine-ai-provider', provider);
     set({ apiKey: key, aiProvider: provider });
+  },
+
+  clearApiKey: () => {
+    localStorage.removeItem('deal-engine-api-key');
+    localStorage.removeItem('deal-engine-ai-provider');
+    set({ apiKey: null, aiProvider: 'anthropic' });
   },
 
   resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null }),
@@ -290,7 +297,7 @@ Be specific. Use the company name to infer business type and calibrate according
       }
 
       const result = fullRecalc(state);
-      set({ modelState: result, isCalculating: false });
+      set({ modelState: result, isCalculating: false, memoContent: null });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -342,6 +349,7 @@ Be specific. Use the company name to infer business type and calibrate according
         lastDiffs: result.appliedDiffs,
         lastAnalysis: result.analysis,
         isCalculating: false,
+        ...(result.appliedDiffs.length > 0 ? { memoContent: null } : {}),
       });
 
       // Refresh panel insights in background after model changes
@@ -372,7 +380,7 @@ Be specific. Use the company name to infer business type and calibrate according
         updatedState = result.updatedStateDict as unknown as ModelState;
       }
       updatedState = fullRecalc(updatedState);
-      set({ modelState: updatedState, isCalculating: false });
+      set({ modelState: updatedState, isCalculating: false, memoContent: null });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -443,7 +451,20 @@ Be specific. Use the company name to infer business type and calibrate according
     set({ isCalculating: true });
     try {
       const result = fullRecalc(data);
-      set({ modelState: result, isCalculating: false });
+      set({
+        modelState: result,
+        isCalculating: false,
+        chatHistory: [],
+        scenarios: [],
+        sensitivityTables: [],
+        lastDiffs: [],
+        lastAnalysis: null,
+        aiPanelInsights: null,
+        memoContent: null,
+        error: null,
+      });
+      // Refresh panel insights for newly loaded model
+      if (get().apiKey) get().refreshPanelInsights();
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }

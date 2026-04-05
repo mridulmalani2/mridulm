@@ -111,6 +111,7 @@ const InitializeForm: React.FC = () => {
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
   const storedApiKey = useDealEngineStore((s) => s.apiKey);
+  const clearApiKey = useDealEngineStore((s) => s.clearApiKey);
   const [form, setForm] = useState(INIT_DEFAULTS);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiInfo, setShowApiInfo] = useState(false);
@@ -303,7 +304,16 @@ const InitializeForm: React.FC = () => {
                 </p>
               )}
 
-              {!storedApiKey && (
+              {storedApiKey ? (
+                <button
+                  type="button"
+                  onClick={() => { clearApiKey(); setApiKeyInput(''); }}
+                  className="text-[10px] tracking-widest uppercase transition-colors"
+                  style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  Change Key
+                </button>
+              ) : (
                 <input
                   type="password"
                   value={apiKeyInput}
@@ -368,6 +378,7 @@ type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'fragility' | 'sensitivi
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
   const apiKey = useDealEngineStore((s) => s.apiKey);
+  const clearApiKey = useDealEngineStore((s) => s.clearApiKey);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [activeTab, setActiveTab] = useState<OutputTab>('returns');
   const [chatOpen, setChatOpen] = useState(true);
@@ -414,7 +425,7 @@ const DealEngine: React.FC = () => {
       />
 
       {/* API Key Modal */}
-      {showApiKeyModal && !apiKey && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
+      {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
 
       {/* Header */}
       <Header />
@@ -469,13 +480,21 @@ const DealEngine: React.FC = () => {
             </div>
             {/* Fixed action buttons */}
             <div className="flex items-center flex-shrink-0" style={{ borderLeft: '1px solid rgba(17,17,17,0.08)' }}>
-              {!apiKey && (
+              {!apiKey ? (
                 <button
                   onClick={() => setShowApiKeyModal(true)}
                   className="px-3 py-1.5 mx-1 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
                   style={{ color: '#b45309', border: '1px solid rgba(180,83,9,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
                 >
                   Set API Key
+                </button>
+              ) : (
+                <button
+                  onClick={() => { clearApiKey(); setShowApiKeyModal(true); }}
+                  className="px-3 py-1.5 mx-1 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
+                  style={{ color: 'rgba(17,17,17,0.4)', border: '1px solid rgba(17,17,17,0.12)', fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  Change Key
                 </button>
               )}
               <button
