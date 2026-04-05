@@ -80,6 +80,7 @@ interface DealEngineStore {
   setApiKey: (key: string) => void;
   setAiProvider: (provider: AIProvider) => void;
   setProviderAndKey: (provider: AIProvider, key: string) => void;
+  clearApiKey: () => void;
   initializeModel: (inputs: {
     deal_name: string;
     revenue: number;
@@ -138,6 +139,12 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     localStorage.setItem('deal-engine-api-key', key);
     localStorage.setItem('deal-engine-ai-provider', provider);
     set({ apiKey: key, aiProvider: provider });
+  },
+
+  clearApiKey: () => {
+    localStorage.removeItem('deal-engine-api-key');
+    localStorage.removeItem('deal-engine-ai-provider');
+    set({ apiKey: null, aiProvider: 'anthropic' });
   },
 
   resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null }),

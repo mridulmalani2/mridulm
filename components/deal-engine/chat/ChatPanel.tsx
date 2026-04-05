@@ -338,6 +338,11 @@ const ChatPanel: React.FC = () => {
       {error && (
         <div className="px-3 py-1.5 flex-shrink-0" style={{ background: '#fff5f5', borderTop: '1px solid rgba(185,28,28,0.2)' }}>
           <p className="text-[10px]" style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>{error}</p>
+          {/429|rate.limit|too.many.requests/i.test(error) && (
+            <p className="text-[10px] mt-1" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>
+              If you&apos;re using a free-tier API key, some features may hit rate limits. Please wait a moment and try again.
+            </p>
+          )}
         </div>
       )}
 

@@ -19,6 +19,7 @@ const ApiKeyModal: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const handleConnect = () => {
     if (key.trim()) {
       setProviderAndKey(selectedProvider, key.trim());
+      onClose?.();
     }
   };
 
