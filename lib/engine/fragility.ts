@@ -17,24 +17,41 @@ function deepClone(state: ModelState): ModelState {
 function quickCalc(state: ModelState): { irr: number | null; moic: number } {
   deriveEntryFields(state);
   ensureListLengths(state);
-  const proj = buildProjections(state);
-  const ds = buildDebtSchedule(state, proj);
 
+  const MAX_ITER = 5;
+  const TOLERANCE = 0.01;
   const hp = state.exit.holding_period;
-  const pikByYear: number[] = [];
-  for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
-    let pik = 0;
-    if (ds.tranche_schedules.length) {
-      for (let t = 0; t < ds.tranche_schedules.length; t++) {
-        pik += ds.tranche_schedules[t][yrIdx].pik_accrual;
+
+  let proj = buildProjections(state);
+  let updatedProj = proj;
+  let ds = buildDebtSchedule(state, proj);
+  let prevTotalInterest = 0;
+
+  for (let iter = 0; iter < MAX_ITER; iter++) {
+    ds = buildDebtSchedule(state, updatedProj);
+
+    const pikByYear: number[] = [];
+    for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
+      let pik = 0;
+      if (ds.tranche_schedules.length) {
+        for (let t = 0; t < ds.tranche_schedules.length; t++) {
+          pik += ds.tranche_schedules[t][yrIdx].pik_accrual;
+        }
       }
+      pikByYear.push(pik);
     }
-    pikByYear.push(pik);
+
+    updatedProj = updateProjectionsWithDebt(
+      proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
+    );
+
+    const currentTotalInterest = ds.total_cash_interest_by_year.reduce((a, b) => a + b, 0);
+    const delta = Math.abs(currentTotalInterest - prevTotalInterest);
+    if (delta < TOLERANCE && iter > 0) break;
+    prevTotalInterest = currentTotalInterest;
+    proj = updatedProj;
   }
 
-  const updatedProj = updateProjectionsWithDebt(
-    proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
-  );
   const ret = calculateReturns(state, updatedProj, ds);
   return { irr: ret.irr, moic: ret.moic };
 }

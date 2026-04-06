@@ -67,6 +67,11 @@ class Returns(BaseModel):
     exit_ev: float = Field(default=0.0)
     exit_net_debt: float = Field(default=0.0)
     mip_payout: float = Field(default=0.0)
+    total_distributions: float = Field(default=0.0, description="Sum of interim distributions")
+    dpi_by_year: list[float] = Field(default_factory=list, description="Cumulative DPI per year")
+    rvpi_by_year: list[float] = Field(default_factory=list, description="Residual value to paid-in per year")
+    convergence_iterations: int = Field(default=1, description="Debt/interest convergence iterations used")
+    convergence_delta: float = Field(default=0.0, description="Final interest delta (£m) at convergence")
 
 
 # ── Value Driver Decomposition ────────────────────────────────────────────
@@ -190,6 +195,7 @@ class ExitFlag(BaseModel):
         "leverage_at_exit_above_threshold",
         "nwc_deterioration",
         "capex_intensity_change",
+        "post_recap_leverage_excessive",
     ]
     severity: Literal["warning", "critical"]
     description: str = ""

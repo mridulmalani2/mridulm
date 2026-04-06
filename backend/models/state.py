@@ -120,6 +120,11 @@ class ExitAssumptions(BaseModel):
     exit_method: Literal[
         "strategic", "secondary_buyout", "ipo", "recapitalization"
     ] = "secondary_buyout"
+    mid_year_convention: bool = Field(default=False, description="Discount CFs at t+0.5 (PE standard)")
+    interim_distributions: list[float] = Field(
+        default_factory=list,
+        description="Per-year cash distributions to equity (£m). Dividend recaps, special dividends.",
+    )
     exit_ebitda: float = Field(default=0.0, description="Derived from projection")
     exit_ev: float = Field(default=0.0, description="exit_ebitda x exit_multiple")
     exit_net_debt: float = Field(default=0.0)
@@ -266,6 +271,9 @@ class ModelState(BaseModel):
             self.revenue.acquisition_revenue, 0.0, hp
         )
         self.margins.growth_capex = _pad(self.margins.growth_capex, 0.0, hp)
+        self.exit.interim_distributions = _pad(
+            self.exit.interim_distributions, 0.0, hp
+        )
 
         # margin_by_year overrides trajectory if already populated with correct length
         if self.margins.margin_by_year and len(self.margins.margin_by_year) == hp:

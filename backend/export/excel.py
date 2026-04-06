@@ -262,7 +262,7 @@ def _build_cover_sheet(wb: Workbook, state: ModelState, ccy: str):
 
     ret = state.returns
     metrics = [
-        ("EQUITY IRR", ret.irr, FMT_PCT),
+        (f"EQUITY IRR{' (MID-YR)' if state.exit.mid_year_convention else ''}", ret.irr, FMT_PCT),
         ("MOIC", ret.moic, FMT_MULT),
         ("ENTRY EV", state.entry.enterprise_value, f'{ccy}#,##0.0"m"'),
         ("ENTRY EQUITY", ret.entry_equity, f'{ccy}#,##0.0"m"'),
@@ -525,6 +525,13 @@ def _build_assumptions_sheet(wb: Workbook, state: ModelState, ccy: str):
     add("Holding Period", state.exit.holding_period, "exit.holding_period", FMT_INT)
     add("Exit EBITDA Multiple", state.exit.exit_ebitda_multiple, "exit.exit_ebitda_multiple", FMT_MULT, True)
     add("Exit Method", state.exit.exit_method)
+    add("Mid-Year Convention", "Yes" if state.exit.mid_year_convention else "No")
+    # Show interim distributions if any are non-zero
+    distributions = state.exit.interim_distributions or []
+    if any(d > 0 for d in distributions):
+        for i, d in enumerate(distributions):
+            if d > 0:
+                add(f"Distribution Year {i + 1}", d, fmt=FMT_CCY, alt=True)
     row += 1
 
     row = _write_section_header(ws, row, "MANAGEMENT INCENTIVE", 2)
@@ -695,20 +702,31 @@ def _build_returns_sheet(wb: Workbook, state: ModelState, ccy: str, hp: int):
             vc.fill = LIGHT_FILL
         row += 1
 
-    add_ret("Equity IRR (Post-Fees, Post-MIP)", ret.irr, FMT_PCT)
-    add_ret("Gross IRR (Pre-MIP)", ret.irr_gross, FMT_PCT, True)
-    add_ret("Levered IRR (Pre-Fees)", ret.irr_levered, FMT_PCT)
-    add_ret("Unlevered IRR", ret.irr_unlevered, FMT_PCT, True)
+    irr_suffix = " (mid-year)" if state.exit.mid_year_convention else ""
+    add_ret(f"Equity IRR (Post-Fees, Post-MIP){irr_suffix}", ret.irr, FMT_PCT)
+    add_ret(f"Gross IRR (Pre-MIP){irr_suffix}", ret.irr_gross, FMT_PCT, True)
+    add_ret(f"Levered IRR (Pre-Fees){irr_suffix}", ret.irr_levered, FMT_PCT)
+    add_ret(f"Unlevered IRR{irr_suffix}", ret.irr_unlevered, FMT_PCT, True)
     row += 1
     add_ret("MOIC", ret.moic, FMT_MULT)
     add_ret("Payback (years)", ret.payback_years, "0.0", True)
     add_ret("Cash Yield (avg)", ret.cash_yield_avg, FMT_PCT)
+    # Distribution metrics (shown when distributions exist)
+    if ret.total_distributions > 0:
+        row += 1
+        add_ret("Total Distributions", ret.total_distributions, FMT_CCY)
+        if ret.dpi_by_year:
+            add_ret("DPI (Final)", ret.dpi_by_year[-1], FMT_MULT, True)
     row += 1
     add_ret("Entry Equity", ret.entry_equity, FMT_CCY)
     add_ret("Exit Equity", ret.exit_equity, FMT_CCY, True)
     add_ret("Exit EV", ret.exit_ev, FMT_CCY)
     add_ret("Exit Net Debt", ret.exit_net_debt, FMT_CCY, True)
     add_ret("MIP Payout", ret.mip_payout, FMT_CCY)
+    # Convergence metadata (audit transparency)
+    if ret.convergence_iterations > 1:
+        add_ret("Convergence Iterations", ret.convergence_iterations, FMT_INT, True)
+        add_ret("Convergence Delta (£m)", ret.convergence_delta, "0.0000")
     row += 2
 
     # Value bridge

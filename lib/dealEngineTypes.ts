@@ -76,6 +76,8 @@ export interface ExitAssumptions {
   exit_ebitda_multiple: number;
   exit_revenue_multiple: number;
   exit_method: 'strategic' | 'secondary_buyout' | 'ipo' | 'recapitalization';
+  mid_year_convention: boolean;
+  interim_distributions: number[];
   exit_ebitda: number;
   exit_ev: number;
   exit_net_debt: number;
@@ -152,6 +154,11 @@ export interface Returns {
   exit_ev: number;
   exit_net_debt: number;
   mip_payout: number;
+  total_distributions: number;
+  dpi_by_year: number[];
+  rvpi_by_year: number[];
+  convergence_iterations: number;
+  convergence_delta: number;
 }
 
 export interface ValueDriverRanking {

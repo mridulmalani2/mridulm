@@ -48,31 +48,48 @@ def _get_or_create_session(session_id: Optional[str]) -> tuple[str, ModelState]:
 
 
 def _full_recalc(state: ModelState) -> ModelState:
-    """Run the full model pipeline: projections → debt → returns → bridge → reality check."""
+    """Run the full model pipeline with iterative convergence: projections → debt → returns → bridge → reality check."""
     state.derive_entry_fields()
     state.ensure_list_lengths()
 
-    proj = build_projections(state)
-    ds = build_debt_schedule(state, proj)
+    MAX_ITER = 5
+    TOLERANCE = 0.01  # £m
 
-    # Second pass with actual debt data
     hp = state.exit.holding_period
-    pik_by_year = []
-    for yr_idx in range(hp):
-        pik = sum(
-            ds.tranche_schedules[t][yr_idx].pik_accrual
-            for t in range(len(ds.tranche_schedules))
-        ) if ds.tranche_schedules else 0.0
-        pik_by_year.append(pik)
+    proj = build_projections(state)
+    prev_total_interest = 0.0
+    iterations = 0
+    convergence_delta = 0.0
 
-    proj = update_projections_with_debt(
-        proj, state,
-        ds.total_cash_interest_by_year,
-        pik_by_year,
-        ds.total_repayment_by_year,
-    )
+    for iteration in range(MAX_ITER):
+        iterations = iteration + 1
+        ds = build_debt_schedule(state, proj)
+
+        pik_by_year = []
+        for yr_idx in range(hp):
+            pik = sum(
+                ds.tranche_schedules[t][yr_idx].pik_accrual
+                for t in range(len(ds.tranche_schedules))
+            ) if ds.tranche_schedules else 0.0
+            pik_by_year.append(pik)
+
+        proj = update_projections_with_debt(
+            proj, state,
+            ds.total_cash_interest_by_year,
+            pik_by_year,
+            ds.total_repayment_by_year,
+        )
+
+        # Check convergence
+        current_total_interest = sum(ds.total_cash_interest_by_year) if ds.total_cash_interest_by_year else 0.0
+        convergence_delta = abs(current_total_interest - prev_total_interest)
+        if convergence_delta < TOLERANCE and iteration > 0:
+            break
+        prev_total_interest = current_total_interest
 
     ret = calculate_returns(state, proj, ds)
+    ret.convergence_iterations = iterations
+    ret.convergence_delta = convergence_delta
     vd = decompose_value_drivers(state, proj, ds, ret)
     rc = run_reality_check(state, proj, ds, ret)
     ca = compute_credit_analysis(state, proj, ds)
