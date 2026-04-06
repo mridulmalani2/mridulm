@@ -69,6 +69,71 @@ def _solve_irr(cashflows: list[float]) -> Optional[float]:
     return None
 
 
+def _solve_irr_timed(cashflows: list[float], times: list[float]) -> Optional[float]:
+    """Solve IRR with arbitrary time vectors: sum(cf_i / (1+r)^t_i) = 0.
+
+    Supports mid-year convention where cash flows occur at fractional periods.
+    Falls back from Newton-Raphson to brentq.
+    """
+    if not cashflows or all(cf >= 0 for cf in cashflows) or all(cf <= 0 for cf in cashflows):
+        return None
+    if len(cashflows) != len(times):
+        return None
+
+    # Newton-Raphson with analytical derivative
+    try:
+        r = 0.1
+        for _ in range(200):
+            npv = sum(cf / (1 + r) ** t for cf, t in zip(cashflows, times))
+            dnpv = sum(-t * cf / (1 + r) ** (t + 1) for cf, t in zip(cashflows, times))
+            if abs(dnpv) < 1e-15:
+                break
+            step = npv / dnpv
+            r -= step
+            if abs(step) < 1e-10 and -0.999 <= r <= 100.0:
+                return float(r)
+        if -0.999 <= r <= 100.0:
+            npv = sum(cf / (1 + r) ** t for cf, t in zip(cashflows, times))
+            if abs(npv) < 0.01:
+                return float(r)
+    except Exception:
+        pass
+
+    # Fallback: brentq
+    try:
+        from scipy.optimize import brentq
+
+        def npv_func(r):
+            return sum(cf / (1 + r) ** t for cf, t in zip(cashflows, times))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = brentq(npv_func, -0.999, 100.0, maxiter=500)
+            return float(result)
+    except Exception:
+        pass
+
+    return None
+
+
+def _build_time_vector(hp: int, mid_year: bool) -> list[float]:
+    """Build time vector for IRR cash flows.
+
+    Standard:  [0, 1, 2, ..., hp]
+    Mid-year:  [0, 0.5, 1.5, ..., hp-0.5]  (entry at t=0, annual CFs at mid-year)
+    """
+    if mid_year:
+        return [0.0] + [t + 0.5 for t in range(hp)]
+    return [float(t) for t in range(hp + 1)]
+
+
+def _solve_irr_auto(cashflows: list[float], times: list[float] | None) -> Optional[float]:
+    """Use timed solver if times provided, else standard solver."""
+    if times is not None:
+        return _solve_irr_timed(cashflows, times)
+    return _solve_irr(cashflows)
+
+
 # ── Returns Calculation ───────────────────────────────────────────────────
 
 def calculate_returns(
@@ -78,6 +143,8 @@ def calculate_returns(
 ) -> Returns:
     """Calculate equity IRR, MOIC, gross/levered/unlevered IRR per Section 3.4."""
     hp = state.exit.holding_period
+    mid_year = state.exit.mid_year_convention
+    times = _build_time_vector(hp, mid_year) if mid_year else None
 
     # Entry equity = EV + all upfront fees (advisory % EV, txn costs, financing fees) - debt
     entry_fee = state.fees.entry_fee_pct * state.entry.enterprise_value
@@ -114,40 +181,82 @@ def calculate_returns(
 
     exit_equity = exit_equity_pre_mip - mip_payout
 
-    # MOIC
-    moic = exit_equity / entry_equity if entry_equity > 0 else 0.0
+    # ── Interim distributions (dividend recaps) ──
+    distributions = state.exit.interim_distributions[:hp] if state.exit.interim_distributions else [0.0] * hp
+    while len(distributions) < hp:
+        distributions.append(0.0)
+    total_distributions = sum(distributions)
 
-    # ── Equity IRR (post-fees, post-MIP) ──
+    # MOIC includes all distributions
+    moic = (exit_equity + total_distributions) / entry_equity if entry_equity > 0 else 0.0
+
+    # DPI by year (cumulative distributions / entry equity)
+    dpi_by_year: list[float] = []
+    cumul_dist = 0.0
+    for d in distributions:
+        cumul_dist += d
+        dpi_by_year.append(cumul_dist / entry_equity if entry_equity > 0 else 0.0)
+
+    # RVPI by year (residual value / entry equity — estimated from projected exit)
+    rvpi_by_year: list[float] = []
+    for yr_idx in range(hp):
+        if yr_idx == hp - 1:
+            rvpi_by_year.append(0.0)  # at exit, RVPI = 0
+        else:
+            # Estimate residual from projected EBITDA at that year
+            proj_yr = projections.years[yr_idx] if yr_idx < len(projections.years) else None
+            if proj_yr:
+                est_ev = proj_yr.ebitda_adj * state.exit.exit_ebitda_multiple
+                est_debt = debt_schedule.total_debt_by_year[yr_idx] if yr_idx < len(debt_schedule.total_debt_by_year) else 0.0
+                est_equity = max(0.0, est_ev - est_debt)
+                rvpi_by_year.append(est_equity / entry_equity if entry_equity > 0 else 0.0)
+            else:
+                rvpi_by_year.append(0.0)
+
+    # ── Equity IRR (post-fees, post-MIP, with distributions) ──
     equity_cfs: list[float] = [-entry_equity]
-    for _ in range(hp - 1):
-        equity_cfs.append(0.0)  # no interim dividends
-    equity_cfs.append(exit_equity)
-    irr = _solve_irr(equity_cfs)
+    for yr_idx in range(hp):
+        dist = distributions[yr_idx]
+        if yr_idx == hp - 1:
+            equity_cfs.append(exit_equity + dist)
+        else:
+            equity_cfs.append(dist)
+    irr = _solve_irr_auto(equity_cfs, times)
 
     # ── Levered pre-fee IRR (equity IRR before entry/exit fees and MIP) ──
     entry_equity_levered = state.entry.enterprise_value - state.entry.total_debt_raised
 
     exit_equity_levered = exit_ev - exit_net_debt  # no exit fee, no MIP
-    levered_cfs = [-entry_equity_levered] + [0.0] * (hp - 1) + [exit_equity_levered]
-    irr_levered = _solve_irr(levered_cfs) if entry_equity_levered > 0 else None
+    levered_cfs = [-entry_equity_levered]
+    for yr_idx in range(hp):
+        dist = distributions[yr_idx]
+        if yr_idx == hp - 1:
+            levered_cfs.append(exit_equity_levered + dist)
+        else:
+            levered_cfs.append(dist)
+    irr_levered = _solve_irr_auto(levered_cfs, times) if entry_equity_levered > 0 else None
 
     # ── Gross IRR (before carry/MIP but after deal-level fees) ──
     exit_equity_gross = exit_ev - exit_net_debt - exit_fee  # after exit fee, before MIP
-    gross_cfs = [-entry_equity] + [0.0] * (hp - 1) + [exit_equity_gross]
-    irr_gross = _solve_irr(gross_cfs) if entry_equity > 0 else None
+    gross_cfs = [-entry_equity]
+    for yr_idx in range(hp):
+        dist = distributions[yr_idx]
+        if yr_idx == hp - 1:
+            gross_cfs.append(exit_equity_gross + dist)
+        else:
+            gross_cfs.append(dist)
+    irr_gross = _solve_irr_auto(gross_cfs, times) if entry_equity > 0 else None
 
     # ── Unlevered IRR ──
     entry_cost_unlev = state.entry.enterprise_value + state.fees.transaction_costs
     unlev_cfs: list[float] = [-entry_cost_unlev]
     for yr in projections.years[:-1]:
-        unlev_tax = yr.ebit * state.tax.tax_rate if yr.ebit > 0 else 0.0
         unlev_cfs.append(yr.fcf_pre_debt)
     # Final year includes exit
     if projections.years:
         last_yr = projections.years[-1]
-        unlev_tax = last_yr.ebit * state.tax.tax_rate if last_yr.ebit > 0 else 0.0
         unlev_cfs.append(last_yr.fcf_pre_debt + exit_ev - exit_fee)
-    irr_unlevered = _solve_irr(unlev_cfs)
+    irr_unlevered = _solve_irr_auto(unlev_cfs, times)
 
     # Payback years
     cumulative = 0.0
@@ -165,7 +274,7 @@ def calculate_returns(
     return Returns(
         irr=irr,
         moic=moic,
-        dpi=moic,  # At exit, DPI = MOIC
+        dpi=dpi_by_year[-1] if dpi_by_year else moic,
         rvpi=0.0,
         cash_yield_avg=cash_yield_avg,
         payback_years=payback,
@@ -178,6 +287,9 @@ def calculate_returns(
         exit_ev=exit_ev,
         exit_net_debt=exit_net_debt,
         mip_payout=mip_payout,
+        total_distributions=total_distributions,
+        dpi_by_year=dpi_by_year,
+        rvpi_by_year=rvpi_by_year,
     )
 
 
@@ -222,21 +334,15 @@ def decompose_value_drivers(
     delta_debt = entry_net_debt - exit_net_debt
 
     # Step 5 — Fees drag
-    # entry_equity = EV + txn_costs + financing_fees - debt
-    # exit_equity = exit_ev - exit_net_debt - exit_fee - mip
-    # So: total_gain = (exit_ev - exit_net_debt) - (EV - debt) - exit_fee - mip - txn_costs - financing_fees
-    # And: delta_rev + delta_margin + delta_multiple + delta_debt = (exit_ev - EV) + (debt - exit_net_debt)
-    #     = (exit_ev - exit_net_debt) - (EV - debt)
-    # Therefore: fees_drag = txn_costs + financing_fees + exit_fee + mip for exact reconciliation
     entry_fee_abs = state.fees.entry_fee_pct * state.entry.enterprise_value
     financing_fees = state.fees.financing_fee_pct * state.entry.total_debt_raised
     exit_fee = state.fees.exit_fee_pct * exit_ev
     fees_drag = entry_fee_abs + state.fees.transaction_costs + financing_fees + exit_fee + returns.mip_payout
 
-    total_gain = exit_equity - entry_equity
+    total_gain = exit_equity + returns.total_distributions - entry_equity
 
     # Reconciliation
-    computed_gain = delta_rev + delta_margin + delta_multiple + delta_debt - fees_drag
+    computed_gain = delta_rev + delta_margin + delta_multiple + delta_debt - fees_drag + returns.total_distributions
     recon_delta = abs(computed_gain - total_gain)
     if recon_delta > 0.01:
         logger.warning(
@@ -250,7 +356,6 @@ def decompose_value_drivers(
         return (x / total_gain * 100.0) if total_gain != 0 else 0.0
 
     # ── Ranked driver bridge ──────────────────────────────────────────────
-    # Positive contributors only get a rank; fees is always last (it's drag)
     raw_drivers = [
         ("Revenue Growth",      delta_rev),
         ("Margin Expansion",    delta_margin),

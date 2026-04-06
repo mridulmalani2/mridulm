@@ -77,6 +77,30 @@ const ReturnsSummary: React.FC = () => {
           <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Cash Yield</div>
         </div>
       </div>
+
+      {/* DPI / Distributions row (shown only when distributions exist) */}
+      {(ret.total_distributions ?? 0) > 0 && (
+        <div className="grid grid-cols-3 gap-4 mt-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 12 }}>
+          <div>
+            <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+              {ret.total_distributions.toFixed(1)}
+            </div>
+            <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Dist. (£m)</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+              {ret.dpi_by_year && ret.dpi_by_year.length ? fmtPct(ret.dpi_by_year[ret.dpi_by_year.length - 1]) : '0%'}
+            </div>
+            <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>DPI</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+              {ret.rvpi_by_year && ret.rvpi_by_year.length > 0 ? ret.rvpi_by_year[0].toFixed(2) + 'x' : '—'}
+            </div>
+            <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>RVPI (Yr 1)</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

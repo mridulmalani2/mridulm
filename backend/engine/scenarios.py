@@ -13,29 +13,48 @@ from backend.engine.returns import calculate_returns
 
 
 def _run_full_model(state: ModelState) -> tuple:
-    """Run full model pipeline and return (returns, projections, debt_schedule)."""
+    """Run full model pipeline with iterative convergence and return (returns, projections, debt_schedule)."""
     state.derive_entry_fields()
     state.ensure_list_lengths()
+
+    MAX_ITER = 5
+    TOLERANCE = 0.01  # £m
+
     proj = build_projections(state)
-    ds = build_debt_schedule(state, proj)
+    prev_total_interest = 0.0
+    iterations = 0
+    convergence_delta = 0.0
 
-    # Second pass: update projections with actual debt data
-    pik_by_year = []
-    for yr_idx in range(state.exit.holding_period):
-        pik = sum(
-            ds.tranche_schedules[t][yr_idx].pik_accrual
-            for t in range(len(ds.tranche_schedules))
-        ) if ds.tranche_schedules else 0.0
-        pik_by_year.append(pik)
+    for iteration in range(MAX_ITER):
+        iterations = iteration + 1
+        ds = build_debt_schedule(state, proj)
 
-    proj = update_projections_with_debt(
-        proj, state,
-        ds.total_cash_interest_by_year,
-        pik_by_year,
-        ds.total_repayment_by_year,
-    )
+        # Build PIK array
+        pik_by_year = []
+        for yr_idx in range(state.exit.holding_period):
+            pik = sum(
+                ds.tranche_schedules[t][yr_idx].pik_accrual
+                for t in range(len(ds.tranche_schedules))
+            ) if ds.tranche_schedules else 0.0
+            pik_by_year.append(pik)
+
+        proj = update_projections_with_debt(
+            proj, state,
+            ds.total_cash_interest_by_year,
+            pik_by_year,
+            ds.total_repayment_by_year,
+        )
+
+        # Check convergence
+        current_total_interest = sum(ds.total_cash_interest_by_year) if ds.total_cash_interest_by_year else 0.0
+        convergence_delta = abs(current_total_interest - prev_total_interest)
+        if convergence_delta < TOLERANCE and iteration > 0:
+            break
+        prev_total_interest = current_total_interest
 
     ret = calculate_returns(state, proj, ds)
+    ret.convergence_iterations = iterations
+    ret.convergence_delta = convergence_delta
     return ret, proj, ds
 
 

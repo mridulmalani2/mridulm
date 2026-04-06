@@ -159,6 +159,25 @@ export function runRealityCheck(
     });
   }
 
+  // RULE 9 — Post-Recap Leverage Check (dividend recapitalization)
+  const distributions = state.exit.interim_distributions || [];
+  if (distributions.some((d) => d > 0)) {
+    const leverageThreshold = ['Technology', 'Healthcare'].includes(state.sector) ? 5.0 : 4.0;
+    for (let tIdx = 0; tIdx < distributions.length; tIdx++) {
+      if (distributions[tIdx] > 0 && tIdx < _debtSchedule.leverage_ratio_by_year.length) {
+        const leverageAtT = _debtSchedule.leverage_ratio_by_year[tIdx];
+        if (leverageAtT > leverageThreshold) {
+          flags.push({
+            flag_type: 'post_recap_leverage_excessive',
+            severity: 'warning',
+            description: `Year ${tIdx + 1} distribution of ${distributions[tIdx].toFixed(0)}m occurs at ${leverageAtT.toFixed(1)}x leverage — above ${leverageThreshold.toFixed(0)}x sector threshold.`,
+            quantified_impact: `Post-distribution leverage: ${leverageAtT.toFixed(1)}x`,
+          });
+        }
+      }
+    }
+  }
+
   // Verdict
   const criticalCount = flags.filter((f) => f.severity === 'critical').length;
   let verdict: 'aggressive' | 'realistic' | 'conservative';

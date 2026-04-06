@@ -38,6 +38,8 @@ const Section: React.FC<SectionProps> = ({ title, children, defaultOpen = true }
 
 const InputPanel: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
+  const updateField = useDealEngineStore((s) => s.updateField);
+  const [showDistributions, setShowDistributions] = useState(false);
 
   if (!ms) return null;
 
@@ -110,6 +112,56 @@ const InputPanel: React.FC = () => {
         <InputField label="Holding Period" path="exit.holding_period" value={ms.exit.holding_period} suffix="yrs" min={1} max={10} />
         <InputField label="Exit EBITDA Multiple" path="exit.exit_ebitda_multiple" value={ms.exit.exit_ebitda_multiple} suffix="x" aiToggleable />
         <InputField label="Exit Method" path="exit.exit_method" value={ms.exit.exit_method} type="select" options={EXIT_METHODS} />
+        {/* Mid-Year Convention Toggle */}
+        <div className="mb-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Mid-Year Convention
+            </label>
+            <button
+              onClick={() => updateField('exit.mid_year_convention', !ms.exit.mid_year_convention)}
+              className="relative w-8 h-4 rounded-full transition-colors"
+              style={{ background: ms.exit.mid_year_convention ? '#111111' : 'rgba(17,17,17,0.15)' }}
+            >
+              <span
+                className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform"
+                style={{ left: ms.exit.mid_year_convention ? 16 : 2 }}
+              />
+            </button>
+          </div>
+        </div>
+        {/* Interim Distributions (Dividend Recaps) */}
+        {(ms.exit.interim_distributions || []).some((d: number) => d > 0) || showDistributions ? (
+          <div className="mb-2.5">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+                Distributions
+              </label>
+              <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
+                £m/yr
+              </span>
+            </div>
+            {Array.from({ length: ms.exit.holding_period }, (_, i) => (
+              <InputField
+                key={`dist-${i}`}
+                label={`Year ${i + 1}`}
+                path={`exit.interim_distributions.${i}`}
+                value={(ms.exit.interim_distributions || [])[i] || 0}
+                suffix="£m"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="mb-2.5">
+            <button
+              onClick={() => setShowDistributions(true)}
+              className="text-[10px] tracking-wider px-2 py-1 transition-colors hover:bg-[rgba(17,17,17,0.04)]"
+              style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", border: '1px dashed rgba(17,17,17,0.15)' }}
+            >
+              + Add Dividend Recap / Distribution
+            </button>
+          </div>
+        )}
         <InputField label="Exit EV" path="exit.exit_ev" value={ms.exit.exit_ev} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
         <InputField label="Exit Net Debt" path="exit.exit_net_debt" value={ms.exit.exit_net_debt} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
         <InputField label="Exit Equity" path="exit.exit_equity" value={ms.exit.exit_equity} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />

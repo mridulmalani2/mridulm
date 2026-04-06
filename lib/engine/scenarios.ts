@@ -9,24 +9,47 @@ import { calculateReturns } from './returns';
 function runFullModel(state: ModelState) {
   deriveEntryFields(state);
   ensureListLengths(state);
-  const proj = buildProjections(state);
-  const ds = buildDebtSchedule(state, proj);
 
-  const pikByYear: number[] = [];
-  for (let yrIdx = 0; yrIdx < state.exit.holding_period; yrIdx++) {
-    let pik = 0;
-    if (ds.tranche_schedules.length) {
-      for (let t = 0; t < ds.tranche_schedules.length; t++) {
-        pik += ds.tranche_schedules[t][yrIdx].pik_accrual;
+  const MAX_ITER = 5;
+  const TOLERANCE = 0.01;
+  const hp = state.exit.holding_period;
+
+  let proj = buildProjections(state);
+  let ds = buildDebtSchedule(state, proj);
+  let updatedProj = proj;
+  let prevTotalInterest = 0;
+  let iterations = 0;
+  let convergenceDelta = 0;
+
+  for (let iter = 0; iter < MAX_ITER; iter++) {
+    iterations = iter + 1;
+    ds = buildDebtSchedule(state, updatedProj);
+
+    const pikByYear: number[] = [];
+    for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
+      let pik = 0;
+      if (ds.tranche_schedules.length) {
+        for (let t = 0; t < ds.tranche_schedules.length; t++) {
+          pik += ds.tranche_schedules[t][yrIdx].pik_accrual;
+        }
       }
+      pikByYear.push(pik);
     }
-    pikByYear.push(pik);
+
+    updatedProj = updateProjectionsWithDebt(
+      proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
+    );
+
+    const currentTotalInterest = ds.total_cash_interest_by_year.reduce((a, b) => a + b, 0);
+    convergenceDelta = Math.abs(currentTotalInterest - prevTotalInterest);
+    if (convergenceDelta < TOLERANCE && iter > 0) break;
+    prevTotalInterest = currentTotalInterest;
+    proj = updatedProj;
   }
 
-  const updatedProj = updateProjectionsWithDebt(
-    proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
-  );
   const ret = calculateReturns(state, updatedProj, ds);
+  ret.convergence_iterations = iterations;
+  ret.convergence_delta = convergenceDelta;
   return { returns: ret, projections: updatedProj, debtSchedule: ds };
 }
 

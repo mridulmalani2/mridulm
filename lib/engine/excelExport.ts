@@ -333,7 +333,7 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
   // Key metrics in a 2x3 grid
   const ret = state.returns;
   const metrics: [string, string | number, string][] = [
-    ['EQUITY IRR', ret.irr != null ? ret.irr : 'N/A', FMT_PCT],
+    [`EQUITY IRR${state.exit.mid_year_convention ? ' (MID-YR)' : ''}`, ret.irr != null ? ret.irr : 'N/A', FMT_PCT],
     ['MOIC', ret.moic, FMT_MULT],
     ['ENTRY EV', state.entry.enterprise_value, `${ccy}#,##0.0"m"`],
     ['ENTRY EQUITY', ret.entry_equity, `${ccy}#,##0.0"m"`],
@@ -593,6 +593,8 @@ function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string): Assumpt
   writeKvRow(ws, 14, 'Exit EBITDA Multiple', state.exit.exit_ebitda_multiple, { fmt: FMT_MULT, input: isAi('exit.exit_ebitda_multiple') });
   // Row 15: Exit Method
   writeKvRow(ws, 15, 'Exit Method', state.exit.exit_method);
+  // Row 16: Mid-Year Convention
+  writeKvRow(ws, 16, 'Mid-Year Convention', state.exit.mid_year_convention ? 'Yes' : 'No');
 
   // ── Section 3: Operating Assumptions (rows 17-22) ─────────────────────
 
@@ -1153,22 +1155,40 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
     row++;
   };
 
-  addRet('Equity IRR (Post-Fees, Post-MIP)', ret.irr, FMT_PCT);
-  addRet('Gross IRR (Pre-MIP)', ret.irr_gross, FMT_PCT, true);
-  addRet('Levered IRR (Pre-Fees)', ret.irr_levered, FMT_PCT);
-  addRet('Unlevered IRR', ret.irr_unlevered, FMT_PCT, true);
+  const irrSuffix = state.exit.mid_year_convention ? ' (mid-year)' : '';
+  addRet(`Equity IRR (Post-Fees, Post-MIP)${irrSuffix}`, ret.irr, FMT_PCT);
+  addRet(`Gross IRR (Pre-MIP)${irrSuffix}`, ret.irr_gross, FMT_PCT, true);
+  addRet(`Levered IRR (Pre-Fees)${irrSuffix}`, ret.irr_levered, FMT_PCT);
+  addRet(`Unlevered IRR${irrSuffix}`, ret.irr_unlevered, FMT_PCT, true);
   row++;
   addRet('Entry Equity', ret.entry_equity, FMT_CCY, false, 'entryEq');
   addRet('Exit Equity', ret.exit_equity, FMT_CCY, true, 'exitEq');
-  // MOIC = Exit Equity / Entry Equity (formula)
-  addRet('MOIC', fv(`IF(${cr(RR.entryEq, 2)}=0,0,${cr(RR.exitEq, 2)}/${cr(RR.entryEq, 2)})`, ret.moic), FMT_MULT);
+  // MOIC = (Exit Equity + Total Distributions) / Entry Equity
+  const totalDist = ret.total_distributions ?? 0;
+  if (totalDist > 0) {
+    addRet('MOIC (incl. distributions)', fv(`IF(${cr(RR.entryEq, 2)}=0,0,(${cr(RR.exitEq, 2)}+${totalDist.toFixed(2)})/${cr(RR.entryEq, 2)})`, ret.moic), FMT_MULT);
+  } else {
+    addRet('MOIC', fv(`IF(${cr(RR.entryEq, 2)}=0,0,${cr(RR.exitEq, 2)}/${cr(RR.entryEq, 2)})`, ret.moic), FMT_MULT);
+  }
   addRet('DPI', ret.dpi, FMT_MULT, true);
   addRet('Payback Period (years)', ret.payback_years, '0.0');
   addRet('Average Cash Yield', ret.cash_yield_avg, FMT_PCT, true);
+  // Distribution metrics (shown when distributions exist)
+  if (totalDist > 0) {
+    addRet('Total Distributions', totalDist, FMT_CCY);
+    if (ret.dpi_by_year && ret.dpi_by_year.length) {
+      addRet('DPI (Final)', ret.dpi_by_year[ret.dpi_by_year.length - 1], FMT_MULT, true);
+    }
+  }
   row++;
   addRet('Exit Enterprise Value', ret.exit_ev, FMT_CCY, false, 'exitEv');
   addRet('Exit Net Debt', ret.exit_net_debt, FMT_CCY, true, 'exitDebt');
   addRet('MIP Payout', ret.mip_payout, FMT_CCY, false, 'mip');
+  // Convergence metadata (audit transparency)
+  if ((ret.convergence_iterations ?? 1) > 1) {
+    addRet('Convergence Iterations', ret.convergence_iterations, '0');
+    addRet('Convergence Delta (£m)', ret.convergence_delta, '0.0000', true);
+  }
   row += 2;
 
   // Value Driver Bridge

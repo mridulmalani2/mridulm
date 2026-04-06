@@ -71,6 +71,79 @@ export function solveIrr(cashflows: number[]): number | null {
   return null;
 }
 
+
+/**
+ * Solve IRR with arbitrary time vectors: sum(cf_i / (1+r)^t_i) = 0.
+ * Supports mid-year convention where cash flows occur at fractional periods.
+ */
+export function solveIrrTimed(cashflows: number[], times: number[]): number | null {
+  if (!cashflows.length || cashflows.length !== times.length) return null;
+  if (cashflows.every((cf) => cf >= 0) || cashflows.every((cf) => cf <= 0)) return null;
+
+  // Newton-Raphson
+  let r = 0.1;
+  for (let iter = 0; iter < 200; iter++) {
+    let npv = 0;
+    let dnpv = 0;
+    for (let i = 0; i < cashflows.length; i++) {
+      npv += cashflows[i] / Math.pow(1 + r, times[i]);
+      dnpv += -times[i] * cashflows[i] / Math.pow(1 + r, times[i] + 1);
+    }
+    if (Math.abs(dnpv) < 1e-15) break;
+    const step = npv / dnpv;
+    r -= step;
+    if (Math.abs(step) < 1e-10 && r >= -0.999 && r <= 100) return r;
+  }
+
+  if (r >= -0.999 && r <= 100) {
+    let npv = 0;
+    for (let i = 0; i < cashflows.length; i++) {
+      npv += cashflows[i] / Math.pow(1 + r, times[i]);
+    }
+    if (Math.abs(npv) < 0.01) return r;
+  }
+
+  // Fallback: bisection
+  let lo = -0.999;
+  let hi = 100.0;
+  const npvAt = (rate: number) => {
+    let s = 0;
+    for (let i = 0; i < cashflows.length; i++) {
+      s += cashflows[i] / Math.pow(1 + rate, times[i]);
+    }
+    return s;
+  };
+
+  let fLo = npvAt(lo);
+  if (fLo * npvAt(hi) > 0) return null;
+
+  for (let iter = 0; iter < 500; iter++) {
+    const mid = (lo + hi) / 2;
+    const fMid = npvAt(mid);
+    if (Math.abs(fMid) < 1e-10 || (hi - lo) < 1e-12) return mid;
+    if (fLo * fMid < 0) {
+      hi = mid;
+    } else {
+      lo = mid;
+      fLo = fMid;
+    }
+  }
+  return null;
+}
+
+
+function buildTimeVector(hp: number, midYear: boolean): number[] | null {
+  if (!midYear) return null;
+  return [0, ...Array.from({ length: hp }, (_, t) => t + 0.5)];
+}
+
+
+function solveIrrAuto(cashflows: number[], times: number[] | null): number | null {
+  if (times) return solveIrrTimed(cashflows, times);
+  return solveIrr(cashflows);
+}
+
+
 // ── Returns Calculation ─────────────────────────────────────────────────
 
 export function calculateReturns(
@@ -79,6 +152,8 @@ export function calculateReturns(
   debtSchedule: DebtScheduleResult,
 ): Returns {
   const hp = state.exit.holding_period;
+  const midYear = state.exit.mid_year_convention ?? false;
+  const times = buildTimeVector(hp, midYear);
 
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   // Transaction costs: use explicit amount if set, otherwise derive from entry_fee_pct * EV
@@ -94,6 +169,8 @@ export function calculateReturns(
       irr_gross: null, irr_levered: null, irr_unlevered: null,
       irr_convergence_failed: true, entry_equity: entryEquity,
       exit_equity: 0, exit_ev: 0, exit_net_debt: 0, mip_payout: 0,
+      total_distributions: 0, dpi_by_year: [], rvpi_by_year: [],
+      convergence_iterations: 1, convergence_delta: 0,
     };
   }
 
@@ -113,22 +190,76 @@ export function calculateReturns(
     : 0;
 
   const exitEquity = exitEquityPreMip - mipPayout;
-  const moic = entryEquity > 0 ? exitEquity / entryEquity : 0;
 
-  // Equity IRR
-  const equityCfs = [-entryEquity, ...Array(hp - 1).fill(0), exitEquity];
-  const irr = solveIrr(equityCfs);
+  // ── Interim distributions (dividend recaps) ──
+  const rawDist = state.exit.interim_distributions || [];
+  const distributions: number[] = [];
+  for (let i = 0; i < hp; i++) {
+    distributions.push(i < rawDist.length ? rawDist[i] : 0);
+  }
+  const totalDistributions = distributions.reduce((s, d) => s + d, 0);
+
+  // MOIC includes all distributions
+  const moic = entryEquity > 0 ? (exitEquity + totalDistributions) / entryEquity : 0;
+
+  // DPI by year (cumulative distributions / entry equity)
+  const dpiByYear: number[] = [];
+  let cumulDist = 0;
+  for (const d of distributions) {
+    cumulDist += d;
+    dpiByYear.push(entryEquity > 0 ? cumulDist / entryEquity : 0);
+  }
+
+  // RVPI by year
+  const rvpiByYear: number[] = [];
+  for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
+    if (yrIdx === hp - 1) {
+      rvpiByYear.push(0);
+    } else if (yrIdx < projections.length) {
+      const yr = projections[yrIdx];
+      const estEv = yr.ebitda_adj * state.exit.exit_ebitda_multiple;
+      const estDebt = yrIdx < debtSchedule.total_debt_by_year.length ? debtSchedule.total_debt_by_year[yrIdx] : 0;
+      rvpiByYear.push(entryEquity > 0 ? Math.max(0, estEv - estDebt) / entryEquity : 0);
+    } else {
+      rvpiByYear.push(0);
+    }
+  }
+
+  // ── Equity IRR (with distributions) ──
+  const equityCfs: number[] = [-entryEquity];
+  for (let i = 0; i < hp; i++) {
+    if (i === hp - 1) {
+      equityCfs.push(exitEquity + distributions[i]);
+    } else {
+      equityCfs.push(distributions[i]);
+    }
+  }
+  const irr = solveIrrAuto(equityCfs, times);
 
   // Levered pre-fee IRR
   const entryEquityLevered = state.entry.enterprise_value - state.entry.total_debt_raised;
   const exitEquityLevered = exitEv - exitNetDebt;
-  const leveredCfs = [-entryEquityLevered, ...Array(hp - 1).fill(0), exitEquityLevered];
-  const irrLevered = entryEquityLevered > 0 ? solveIrr(leveredCfs) : null;
+  const leveredCfs: number[] = [-entryEquityLevered];
+  for (let i = 0; i < hp; i++) {
+    if (i === hp - 1) {
+      leveredCfs.push(exitEquityLevered + distributions[i]);
+    } else {
+      leveredCfs.push(distributions[i]);
+    }
+  }
+  const irrLevered = entryEquityLevered > 0 ? solveIrrAuto(leveredCfs, times) : null;
 
   // Gross IRR
   const exitEquityGross = exitEv - exitNetDebt - exitFee;
-  const grossCfs = [-entryEquity, ...Array(hp - 1).fill(0), exitEquityGross];
-  const irrGross = entryEquity > 0 ? solveIrr(grossCfs) : null;
+  const grossCfs: number[] = [-entryEquity];
+  for (let i = 0; i < hp; i++) {
+    if (i === hp - 1) {
+      grossCfs.push(exitEquityGross + distributions[i]);
+    } else {
+      grossCfs.push(distributions[i]);
+    }
+  }
+  const irrGross = entryEquity > 0 ? solveIrrAuto(grossCfs, times) : null;
 
   // Unlevered IRR
   const entryCostUnlev = state.entry.enterprise_value + state.fees.transaction_costs;
@@ -140,7 +271,7 @@ export function calculateReturns(
     const lastYr = projections[projections.length - 1];
     unlevCfs.push(lastYr.fcf_pre_debt + exitEv - exitFee);
   }
-  const irrUnlevered = solveIrr(unlevCfs);
+  const irrUnlevered = solveIrrAuto(unlevCfs, times);
 
   // Payback
   let cumulative = 0;
@@ -160,7 +291,7 @@ export function calculateReturns(
   return {
     irr,
     moic,
-    dpi: moic,
+    dpi: dpiByYear.length ? dpiByYear[dpiByYear.length - 1] : moic,
     rvpi: 0,
     cash_yield_avg: cashYieldAvg,
     payback_years: payback,
@@ -173,6 +304,11 @@ export function calculateReturns(
     exit_ev: exitEv,
     exit_net_debt: exitNetDebt,
     mip_payout: mipPayout,
+    total_distributions: totalDistributions,
+    dpi_by_year: dpiByYear,
+    rvpi_by_year: rvpiByYear,
+    convergence_iterations: 1,
+    convergence_delta: 0,
   };
 }
 
@@ -221,8 +357,9 @@ export function decomposeValueDrivers(
   const exitFee = state.fees.exit_fee_pct * exitEv;
   const feesDrag = vdTxnCosts + vdFinancingFees + exitFee + returns.mip_payout;
 
-  const totalGain = exitEquity - entryEquity;
-  const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag;
+  const totalDistributions = returns.total_distributions ?? 0;
+  const totalGain = exitEquity + totalDistributions - entryEquity;
+  const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag + totalDistributions;
   const reconDelta = Math.abs(computedGain - totalGain);
 
   const pct = (x: number) => (totalGain !== 0 ? (x / totalGain) * 100 : 0);

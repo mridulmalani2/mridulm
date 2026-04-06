@@ -74,6 +74,7 @@ export function ensureListLengths(state: ModelState): void {
   state.revenue.organic_growth = pad(state.revenue.organic_growth, 0.0, hp);
   state.revenue.acquisition_revenue = pad(state.revenue.acquisition_revenue, 0.0, hp);
   state.margins.growth_capex = pad(state.margins.growth_capex, 0.0, hp);
+  state.exit.interim_distributions = pad(state.exit.interim_distributions || [], 0.0, hp);
 
   if (!(state.margins.margin_by_year && state.margins.margin_by_year.length === hp)) {
     state.margins.margin_by_year = buildMarginTrajectory(
@@ -166,6 +167,8 @@ export function createDefaultModelState(): ModelState {
       exit_ebitda_multiple: 10,
       exit_revenue_multiple: 0,
       exit_method: 'secondary_buyout',
+      mid_year_convention: false,
+      interim_distributions: [],
       exit_ebitda: 0,
       exit_ev: 0,
       exit_net_debt: 0,
@@ -200,6 +203,11 @@ export function createDefaultModelState(): ModelState {
       exit_ev: 0,
       exit_net_debt: 0,
       mip_payout: 0,
+      total_distributions: 0,
+      dpi_by_year: [],
+      rvpi_by_year: [],
+      convergence_iterations: 1,
+      convergence_delta: 0,
     },
     value_drivers: {
       revenue_growth_contribution_pct: 0,

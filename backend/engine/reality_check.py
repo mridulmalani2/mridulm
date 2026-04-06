@@ -184,6 +184,24 @@ def run_reality_check(
             quantified_impact=f"D&A/Capex ratio: {da_pct/capex_pct:.1f}x",
         ))
 
+    # RULE 9 — Post-Recap Leverage Check (dividend recapitalization)
+    distributions = state.exit.interim_distributions
+    if distributions and any(d > 0 for d in distributions):
+        leverage_threshold = 5.0 if state.sector in ("Technology", "Healthcare") else 4.0
+        for t_idx, dist in enumerate(distributions):
+            if dist > 0 and t_idx < len(debt_schedule.leverage_ratio_by_year):
+                leverage_at_t = debt_schedule.leverage_ratio_by_year[t_idx]
+                if leverage_at_t > leverage_threshold:
+                    flags.append(ExitFlag(
+                        flag_type="post_recap_leverage_excessive",
+                        severity="warning",
+                        description=(
+                            f"Year {t_idx + 1} distribution of {ccy}{dist:.0f}m occurs at "
+                            f"{leverage_at_t:.1f}x leverage — above {leverage_threshold:.0f}x sector threshold."
+                        ),
+                        quantified_impact=f"Post-distribution leverage: {leverage_at_t:.1f}x",
+                    ))
+
     # Verdict
     critical_count = sum(1 for f in flags if f.severity == "critical")
     if critical_count > 0:
