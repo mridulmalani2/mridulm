@@ -595,59 +595,66 @@ function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string): Assumpt
   writeKvRow(ws, 15, 'Exit Method', state.exit.exit_method);
   // Row 16: Mid-Year Convention
   writeKvRow(ws, 16, 'Mid-Year Convention', state.exit.mid_year_convention ? 'Yes' : 'No');
+  // Row 17: Exit EV Override
+  writeKvRow(ws, 17, 'Exit EV Override',
+    state.exit.exit_ev_override != null && state.exit.exit_ev_override > 0
+      ? state.exit.exit_ev_override
+      : 'N/A',
+    { fmt: state.exit.exit_ev_override ? FMT_CCY : undefined },
+  );
 
-  // ── Section 3: Operating Assumptions (rows 17-22) ─────────────────────
+  // ── Section 3: Operating Assumptions (rows 19-23) ─────────────────────
 
-  writeSectionHeader(ws, 17, 'OPERATING ASSUMPTIONS', 2); // row 17 header
-  // Row 18: Target EBITDA Margin
-  writeKvRow(ws, 18, 'Target EBITDA Margin', state.margins.target_ebitda_margin, { fmt: FMT_PCT, input: isAi('margins.target_ebitda_margin') });
-  // Row 19: Margin Trajectory
-  writeKvRow(ws, 19, 'Margin Trajectory', state.margins.margin_trajectory, { input: isAi('margins.margin_trajectory') });
-  // Row 20: D&A % Revenue
-  writeKvRow(ws, 20, 'D&A (% Revenue)', state.margins.da_pct_revenue, { fmt: FMT_PCT, input: true });
-  // Row 21: Capex % Revenue
-  writeKvRow(ws, 21, 'Maintenance Capex (% Revenue)', state.margins.capex_pct_revenue, { fmt: FMT_PCT, input: true });
-  // Row 22: NWC % Revenue
-  writeKvRow(ws, 22, 'NWC (% Revenue)', state.margins.nwc_pct_revenue, { fmt: FMT_PCT, input: true });
+  writeSectionHeader(ws, 18, 'OPERATING ASSUMPTIONS', 2); // row 18 header
+  // Row 19: Target EBITDA Margin
+  writeKvRow(ws, 19, 'Target EBITDA Margin', state.margins.target_ebitda_margin, { fmt: FMT_PCT, input: isAi('margins.target_ebitda_margin') });
+  // Row 20: Margin Trajectory
+  writeKvRow(ws, 20, 'Margin Trajectory', state.margins.margin_trajectory, { input: isAi('margins.margin_trajectory') });
+  // Row 21: D&A % Revenue
+  writeKvRow(ws, 21, 'D&A (% Revenue)', state.margins.da_pct_revenue, { fmt: FMT_PCT, input: true });
+  // Row 22: Capex % Revenue
+  writeKvRow(ws, 22, 'Maintenance Capex (% Revenue)', state.margins.capex_pct_revenue, { fmt: FMT_PCT, input: true });
+  // Row 23: NWC % Revenue
+  writeKvRow(ws, 23, 'NWC (% Revenue)', state.margins.nwc_pct_revenue, { fmt: FMT_PCT, input: true });
 
-  // ── Section 4: Fees & Tax (rows 24-30) ────────────────────────────────
+  // ── Section 4: Fees & Tax (rows 25-31) ────────────────────────────────
 
-  writeSectionHeader(ws, 24, 'FEES & TAX', 2); // row 24 header
-  // Row 25: Tax Rate
-  writeKvRow(ws, 25, 'Tax Rate', state.tax.tax_rate, { fmt: FMT_PCT, input: true });
-  // Row 26: Entry Fee %
-  writeKvRow(ws, 26, 'Entry Fee %', state.fees.entry_fee_pct, { fmt: FMT_PCT, alt: true });
-  // Row 27: Exit Fee %
-  writeKvRow(ws, 27, 'Exit Fee %', state.fees.exit_fee_pct, { fmt: FMT_PCT });
-  // Row 28: Monitoring Fee
-  writeKvRow(ws, 28, 'Monitoring Fee (p.a.)', state.fees.monitoring_fee_annual, { fmt: FMT_CCY, input: true, alt: true });
-  // Row 29: Financing Fee %
-  writeKvRow(ws, 29, 'Financing Fee %', state.fees.financing_fee_pct, { fmt: FMT_PCT });
-  // Row 30: Transaction Costs
-  writeKvRow(ws, 30, 'Transaction Costs', state.fees.transaction_costs, { fmt: FMT_CCY, alt: true });
+  writeSectionHeader(ws, 25, 'FEES & TAX', 2); // row 25 header
+  // Row 26: Tax Rate
+  writeKvRow(ws, 26, 'Tax Rate', state.tax.tax_rate, { fmt: FMT_PCT, input: true });
+  // Row 27: Entry Fee %
+  writeKvRow(ws, 27, 'Entry Fee %', state.fees.entry_fee_pct, { fmt: FMT_PCT, alt: true });
+  // Row 28: Exit Fee %
+  writeKvRow(ws, 28, 'Exit Fee %', state.fees.exit_fee_pct, { fmt: FMT_PCT });
+  // Row 29: Monitoring Fee
+  writeKvRow(ws, 29, 'Monitoring Fee (p.a.)', state.fees.monitoring_fee_annual, { fmt: FMT_CCY, input: true, alt: true });
+  // Row 30: Financing Fee %
+  writeKvRow(ws, 30, 'Financing Fee %', state.fees.financing_fee_pct, { fmt: FMT_PCT });
+  // Row 31: Transaction Costs
+  writeKvRow(ws, 31, 'Transaction Costs', state.fees.transaction_costs, { fmt: FMT_CCY, alt: true });
 
-  // ── Section 5: Year-by-Year Schedule (rows 32-35) ─────────────────────
+  // ── Section 5: Year-by-Year Schedule (rows 33-36) ─────────────────────
 
-  writeSectionHeader(ws, 32, 'YEAR-BY-YEAR ASSUMPTIONS', maxCol); // row 32 header
+  writeSectionHeader(ws, 33, 'YEAR-BY-YEAR ASSUMPTIONS', maxCol); // row 33 header
 
-  // Row 33: column headers (Entry, Y1, Y2, ...)
-  ws.getCell(33, 1).value = ''; ws.getCell(33, 1).font = F_HEADER;
-  ws.getCell(33, 2).value = 'Entry (LTM)'; ws.getCell(33, 2).font = F_HEADER;
-  for (let i = 0; i < hp; i++) { ws.getCell(33, i + 3).value = `Year ${i + 1}`; ws.getCell(33, i + 3).font = F_HEADER; }
-  styleHeaderRow(ws, 33, 1, maxCol);
+  // Row 34: column headers (Entry, Y1, Y2, ...)
+  ws.getCell(34, 1).value = ''; ws.getCell(34, 1).font = F_HEADER;
+  ws.getCell(34, 2).value = 'Entry (LTM)'; ws.getCell(34, 2).font = F_HEADER;
+  for (let i = 0; i < hp; i++) { ws.getCell(34, i + 3).value = `Year ${i + 1}`; ws.getCell(34, i + 3).font = F_HEADER; }
+  styleHeaderRow(ws, 34, 1, maxCol);
 
-  // Row 34: Revenue Growth Rates
+  // Row 35: Revenue Growth Rates
   const growthVals: CellVal[] = ['--', ...state.revenue.growth_rates.slice(0, hp)];
-  writeDataRow(ws, 34, 'Revenue Growth %', growthVals, FMT_PCT, { inputCols: new Set(Array.from({ length: hp }, (_, i) => i + 1)) });
+  writeDataRow(ws, 35, 'Revenue Growth %', growthVals, FMT_PCT, { inputCols: new Set(Array.from({ length: hp }, (_, i) => i + 1)) });
 
-  // Row 35: EBITDA Margin Schedule
+  // Row 36: EBITDA Margin Schedule
   const years = state.projections.years;
   const marginVals: CellVal[] = [state.margins.base_ebitda_margin, ...years.slice(0, hp).map(y => y.ebitda_margin)];
-  writeDataRow(ws, 35, 'EBITDA Margin %', marginVals, FMT_PCT, { alt: true, inputCols: new Set([0, ...Array.from({ length: hp }, (_, i) => i + 1)]) });
+  writeDataRow(ws, 36, 'EBITDA Margin %', marginVals, FMT_PCT, { alt: true, inputCols: new Set([0, ...Array.from({ length: hp }, (_, i) => i + 1)]) });
 
-  // ── Section 6: Debt Structure (variable-length, starts at row 37) ─────
+  // ── Section 6: Debt Structure (variable-length, starts at row 38) ─────
 
-  row = 37;
+  row = 38;
   row = writeSectionHeader(ws, row, 'DEBT STRUCTURE', 2);
   for (const t of state.debt_tranches) {
     ws.getCell(row, 1).value = t.name; ws.getCell(row, 1).font = F_BODY_BOLD; ws.getCell(row, 1).fill = MID_FILL;
@@ -1023,9 +1030,13 @@ function buildCashFlowDebtSheet(
     const trancheSched = ds.tranche_schedules[tIdx];
     if (!trancheSched.length) continue;
     const name = trancheSched[0]?.tranche_name || `Tranche ${tIdx + 1}`;
+    const trancheType = tIdx < state.debt_tranches.length
+      ? ((state.debt_tranches[tIdx] as Record<string, unknown>).tranche_type as string || 'senior')
+      : 'senior';
+    const trancheLabel = `${name} (${trancheType.replace('_', ' ')})`;
 
     // Tranche sub-header
-    ws.getCell(row, 1).value = name; ws.getCell(row, 1).font = F_BODY_BOLD; ws.getCell(row, 1).fill = MID_FILL;
+    ws.getCell(row, 1).value = trancheLabel; ws.getCell(row, 1).font = F_BODY_BOLD; ws.getCell(row, 1).fill = MID_FILL;
     for (let c = 2; c <= hp + 1; c++) ws.getCell(row, c).fill = MID_FILL;
     row++;
 

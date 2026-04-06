@@ -166,7 +166,11 @@ def calculate_returns(
     # Exit calculations
     exit_yr = projections.years[-1] if projections.years else None
     exit_ebitda = exit_yr.ebitda_adj if exit_yr else 0.0
-    exit_ev = exit_ebitda * state.exit.exit_ebitda_multiple
+    exit_ev = (
+        state.exit.exit_ev_override
+        if state.exit.exit_ev_override is not None and state.exit.exit_ev_override > 0
+        else exit_ebitda * state.exit.exit_ebitda_multiple
+    )
     exit_net_debt = debt_schedule.total_debt_by_year[-1] if debt_schedule.total_debt_by_year else 0.0
     exit_fee = state.fees.exit_fee_pct * exit_ev
 

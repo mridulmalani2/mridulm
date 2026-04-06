@@ -4,7 +4,16 @@ import type { ModelState } from '../dealEngineTypes';
 
 export function deriveEntryFields(state: ModelState): void {
   const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-  if (state.entry.enterprise_value === 0 && ebitda > 0) {
+  if (ebitda > 0) {
+    const impliedEV = ebitda * state.entry.entry_ebitda_multiple;
+    if (state.entry.enterprise_value > 0 && Math.abs(state.entry.enterprise_value - impliedEV) > 0.1) {
+      // EV was edited directly — back-solve multiple
+      state.entry.entry_ebitda_multiple = state.entry.enterprise_value / ebitda;
+    } else {
+      // Multiple was edited (or first derivation) — forward-solve EV
+      state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
+    }
+  } else if (state.entry.enterprise_value === 0 && ebitda > 0) {
     state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
   }
   if (state.entry.enterprise_value > 0 && state.revenue.base_revenue > 0) {
@@ -169,6 +178,7 @@ export function createDefaultModelState(): ModelState {
       exit_method: 'secondary_buyout',
       mid_year_convention: false,
       interim_distributions: [],
+      exit_ev_override: null,
       exit_ebitda: 0,
       exit_ev: 0,
       exit_net_debt: 0,

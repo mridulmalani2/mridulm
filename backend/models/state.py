@@ -125,6 +125,10 @@ class ExitAssumptions(BaseModel):
         default_factory=list,
         description="Per-year cash distributions to equity (£m). Dividend recaps, special dividends.",
     )
+    exit_ev_override: Optional[float] = Field(
+        default=None,
+        description="Direct exit EV input (£m). If set, overrides exit_ebitda × exit_multiple.",
+    )
     exit_ebitda: float = Field(default=0.0, description="Derived from projection")
     exit_ev: float = Field(default=0.0, description="exit_ebitda x exit_multiple")
     exit_net_debt: float = Field(default=0.0)
@@ -185,9 +189,17 @@ class ModelState(BaseModel):
     # ── Derived-field computation ─────────────────────────────────
 
     def derive_entry_fields(self) -> None:
-        """Compute derived entry fields from inputs."""
+        """Compute derived entry fields from inputs (bidirectional EV ↔ multiple)."""
         ebitda = self.revenue.base_revenue * self.margins.base_ebitda_margin
-        if self.entry.enterprise_value == 0 and ebitda > 0:
+        if ebitda > 0:
+            implied_ev = ebitda * self.entry.entry_ebitda_multiple
+            if self.entry.enterprise_value > 0 and abs(self.entry.enterprise_value - implied_ev) > 0.1:
+                # EV was edited directly — back-solve multiple
+                self.entry.entry_ebitda_multiple = self.entry.enterprise_value / ebitda
+            else:
+                # Multiple was edited (or first derivation) — forward-solve EV
+                self.entry.enterprise_value = ebitda * self.entry.entry_ebitda_multiple
+        elif self.entry.enterprise_value == 0 and ebitda > 0:
             self.entry.enterprise_value = ebitda * self.entry.entry_ebitda_multiple
         if self.entry.enterprise_value > 0 and self.revenue.base_revenue > 0:
             self.entry.entry_revenue_multiple = (

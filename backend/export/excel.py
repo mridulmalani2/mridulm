@@ -526,6 +526,11 @@ def _build_assumptions_sheet(wb: Workbook, state: ModelState, ccy: str):
     add("Exit EBITDA Multiple", state.exit.exit_ebitda_multiple, "exit.exit_ebitda_multiple", FMT_MULT, True)
     add("Exit Method", state.exit.exit_method)
     add("Mid-Year Convention", "Yes" if state.exit.mid_year_convention else "No")
+    add(
+        "Exit EV Override",
+        state.exit.exit_ev_override if state.exit.exit_ev_override and state.exit.exit_ev_override > 0 else "N/A",
+        fmt=FMT_CCY if state.exit.exit_ev_override and state.exit.exit_ev_override > 0 else None,
+    )
     # Show interim distributions if any are non-zero
     distributions = state.exit.interim_distributions or []
     if any(d > 0 for d in distributions):
@@ -634,7 +639,13 @@ def _build_cash_flow_debt_sheet(wb: Workbook, state: ModelState, ccy: str, hp: i
         if not tranche_sched:
             continue
         name = tranche_sched[0].tranche_name if tranche_sched else f"Tranche {t_idx + 1}"
-        ws.cell(row=row, column=1, value=name).font = F_BODY_BOLD
+        tranche_type = (
+            state.debt_tranches[t_idx].tranche_type
+            if t_idx < len(state.debt_tranches) and hasattr(state.debt_tranches[t_idx], 'tranche_type')
+            else "senior"
+        )
+        tranche_label = f"{name} ({tranche_type.replace('_', ' ')})"
+        ws.cell(row=row, column=1, value=tranche_label).font = F_BODY_BOLD
         ws.cell(row=row, column=1).fill = MID_FILL
         for c in range(2, hp + 2):
             ws.cell(row=row, column=c).fill = MID_FILL

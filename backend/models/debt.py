@@ -13,6 +13,10 @@ class DebtTranche(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str = Field(default="Senior Term Loan A", description="Tranche identifier")
+    tranche_type: str = Field(
+        default="senior",
+        description="Classification: senior|mezzanine|unitranche|revolver|pik_note",
+    )
     principal: float = Field(default=0.0, ge=0, description="£m at entry")
     interest_rate: float = Field(
         default=0.05, ge=0, le=1.0, description="Annual rate (e.g. 0.07)"

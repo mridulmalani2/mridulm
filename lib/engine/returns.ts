@@ -176,7 +176,9 @@ export function calculateReturns(
 
   const exitYr = projections.length ? projections[projections.length - 1] : null;
   const exitEbitda = exitYr ? exitYr.ebitda_adj : 0;
-  const exitEv = exitEbitda * state.exit.exit_ebitda_multiple;
+  const exitEv = (state.exit.exit_ev_override != null && state.exit.exit_ev_override > 0)
+    ? state.exit.exit_ev_override
+    : exitEbitda * state.exit.exit_ebitda_multiple;
   const exitNetDebt = debtSchedule.total_debt_by_year.length
     ? debtSchedule.total_debt_by_year[debtSchedule.total_debt_by_year.length - 1]
     : 0;

@@ -100,6 +100,8 @@ interface DealEngineStore {
   saveModel: () => void;
   loadModel: (file: File) => Promise<void>;
   refreshPanelInsights: () => Promise<void>;
+  addTranche: () => void;
+  removeTranche: (index: number) => void;
   generateMemo: () => Promise<void>;
   setActiveScenario: (s: string) => void;
   setActiveSensitivityTable: (t: number) => void;
@@ -184,6 +186,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
       state.debt_tranches = [
         {
           name: 'Senior Term Loan A',
+          tranche_type: 'senior',
           principal: Math.round(totalDebt * 0.65 * 10) / 10,
           interest_rate: sd.seniorRate,
           rate_type: 'fixed',
@@ -199,6 +202,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
         },
         {
           name: 'Senior Term Loan B',
+          tranche_type: 'senior',
           principal: Math.round(totalDebt * 0.35 * 10) / 10,
           interest_rate: sd.seniorRate + 0.02,
           rate_type: 'fixed',
@@ -291,13 +295,27 @@ Be specific. Use the company name to infer business type and calibrate according
       applyUpdate(stateDict, path, value);
       const state = stateDict as unknown as ModelState;
 
-      // Reset EV if entry multiple changed to allow re-derivation
+      // When multiple changes, forward-solve EV; when EV changes, back-solve multiple
       if (path === 'entry.entry_ebitda_multiple') {
-        state.entry.enterprise_value = 0;
+        const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+        if (ebitda > 0) {
+          state.entry.enterprise_value = ebitda * (value as number);
+        }
+      } else if (path === 'entry.enterprise_value') {
+        const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+        if (ebitda > 0) {
+          state.entry.entry_ebitda_multiple = (value as number) / ebitda;
+        }
+      } else if (path === 'exit.exit_ev_override') {
+        // When exit EV override is set, back-solve exit multiple from projected EBITDA
+        const exitEvVal = value as number;
+        if (exitEvVal > 0 && state.exit.exit_ebitda > 0) {
+          state.exit.exit_ebitda_multiple = exitEvVal / state.exit.exit_ebitda;
+        }
       }
 
       const result = fullRecalc(state);
-      set({ modelState: result, isCalculating: false, memoContent: null });
+      set({ modelState: result, isCalculating: false, memoContent: null, scenarios: [] });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -349,7 +367,7 @@ Be specific. Use the company name to infer business type and calibrate according
         lastDiffs: result.appliedDiffs,
         lastAnalysis: result.analysis,
         isCalculating: false,
-        ...(result.appliedDiffs.length > 0 ? { memoContent: null } : {}),
+        ...(result.appliedDiffs.length > 0 ? { memoContent: null, scenarios: [] } : {}),
       });
 
       // Refresh panel insights in background after model changes
@@ -483,13 +501,56 @@ Be specific. Use the company name to infer business type and calibrate according
     }
   },
 
+  addTranche: () => {
+    const ms = get().modelState;
+    if (!ms) return;
+    const newTranche = {
+      name: `Tranche ${ms.debt_tranches.length + 1}`,
+      tranche_type: 'senior' as const,
+      principal: 0,
+      interest_rate: 0.05,
+      rate_type: 'fixed' as const,
+      base_rate: 0,
+      spread: 0,
+      amortization_type: 'bullet' as const,
+      amortization_schedule: [] as number[],
+      pik_rate: 0,
+      cash_interest: true,
+      commitment_fee: 0,
+      floor: 0,
+      cash_sweep_pct: 0,
+    };
+    const updated = { ...ms, debt_tranches: [...ms.debt_tranches, newTranche] };
+    const result = fullRecalc(updated);
+    set({ modelState: result, memoContent: null, scenarios: [] });
+  },
+
+  removeTranche: (index: number) => {
+    const ms = get().modelState;
+    if (!ms || ms.debt_tranches.length <= 1) return;
+    const updated = { ...ms, debt_tranches: ms.debt_tranches.filter((_, i) => i !== index) };
+    const result = fullRecalc(updated);
+    set({ modelState: result, memoContent: null, scenarios: [] });
+  },
+
   generateMemo: async () => {
     const { modelState, apiKey, aiProvider } = get();
     if (!modelState || !apiKey) return;
     set({ isMemoGenerating: true, memoContent: null, error: null });
     try {
+      // Compute scenarios if not already loaded — scenarios live at store root,
+      // but memo generator reads modelState.scenarios which would otherwise be empty.
+      let scenarios = get().scenarios;
+      if (!scenarios || scenarios.length === 0) {
+        scenarios = generateScenarios(modelState);
+        set({ scenarios });
+      }
+
+      // Inject scenarios into a modelState copy for the memo generator
+      const msWithScenarios = { ...modelState, scenarios };
+
       const config = buildProviderConfig(aiProvider, apiKey);
-      const memo = await generateInvestmentMemo(modelState, config);
+      const memo = await generateInvestmentMemo(msWithScenarios, config);
       set({ memoContent: memo, isMemoGenerating: false });
     } catch (e: unknown) {
       set({ isMemoGenerating: false, error: (e as Error).message });
