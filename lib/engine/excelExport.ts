@@ -1031,7 +1031,7 @@ function buildCashFlowDebtSheet(
     if (!trancheSched.length) continue;
     const name = trancheSched[0]?.tranche_name || `Tranche ${tIdx + 1}`;
     const trancheType = tIdx < state.debt_tranches.length
-      ? ((state.debt_tranches[tIdx] as Record<string, unknown>).tranche_type as string || 'senior')
+      ? (state.debt_tranches[tIdx].tranche_type || 'senior')
       : 'senior';
     const trancheLabel = `${name} (${trancheType.replace('_', ' ')})`;
 

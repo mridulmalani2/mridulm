@@ -22,8 +22,8 @@ export function fullRecalc(state: ModelState): ModelState {
   if (!state.exit.interim_distributions) state.exit.interim_distributions = [];
   if (state.exit.exit_ev_override === undefined) state.exit.exit_ev_override = null;
   for (const t of state.debt_tranches) {
-    if (!(t as Record<string, unknown>).tranche_type) {
-      (t as Record<string, unknown>).tranche_type = 'senior';
+    if (!t.tranche_type) {
+      t.tranche_type = 'senior';
     }
   }
 
