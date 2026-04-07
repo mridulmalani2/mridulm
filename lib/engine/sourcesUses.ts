@@ -4,14 +4,12 @@ import type { ModelState, SourcesAndUses } from '../dealEngineTypes';
 
 export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
   const ev = state.entry.enterprise_value;
-  // Transaction fees: use explicit amount if set, otherwise derive from entry_fee_pct * EV
-  const txnFees = state.fees.transaction_costs > 0
-    ? state.fees.transaction_costs
-    : state.fees.entry_fee_pct * ev;
+  const entryFee = state.fees.entry_fee_pct * ev;
+  const totalTxnFees = entryFee + state.fees.transaction_costs;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const cashToBs = 0; // no excess cash modeled currently
 
-  const totalUses = ev + txnFees + financingFees + cashToBs;
+  const totalUses = ev + totalTxnFees + financingFees + cashToBs;
 
   // Debt sources from tranches
   const debtSources = state.debt_tranches.map((t) => ({
@@ -30,7 +28,7 @@ export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
 
   return {
     enterprise_value: ev,
-    transaction_fees: txnFees,
+    transaction_fees: totalTxnFees,
     financing_fees: financingFees,
     cash_to_balance_sheet: cashToBs,
     total_uses: totalUses,

@@ -20,6 +20,12 @@ export function fullRecalc(state: ModelState): ModelState {
   if (!state.add_on_acquisitions) state.add_on_acquisitions = [];
   if (state.exit.mid_year_convention === undefined) state.exit.mid_year_convention = false;
   if (!state.exit.interim_distributions) state.exit.interim_distributions = [];
+  if (state.exit.exit_ev_override === undefined) state.exit.exit_ev_override = null;
+  for (const t of state.debt_tranches) {
+    if (!t.tranche_type) {
+      t.tranche_type = 'senior';
+    }
+  }
 
   deriveEntryFields(state);
   ensureListLengths(state);

@@ -152,8 +152,8 @@ export function buildDebtSchedule(
     netDebtByYear.push(totDebt);
     leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 0);
     coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 99);
-    const debtService = totCashInt + mandatoryAmort;
-    dscrByYear.push(debtService > 0 ? fcfPre / debtService : 99);
+    // DSCR: FCF / cash interest only (principal excluded per IC convention, matches backend)
+    dscrByYear.push(totCashInt > 0 ? fcfPre / totCashInt : 99);
     cashInterestByYear.push(totCashInt);
     repaymentByYear.push(totRepay);
     shieldByYear.push(totShield);

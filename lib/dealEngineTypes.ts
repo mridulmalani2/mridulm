@@ -2,6 +2,7 @@
 
 export interface DebtTranche {
   name: string;
+  tranche_type: 'senior' | 'mezzanine' | 'unitranche' | 'revolver' | 'pik_note';
   principal: number;
   interest_rate: number;
   rate_type: 'fixed' | 'floating';
@@ -78,6 +79,7 @@ export interface ExitAssumptions {
   exit_method: 'strategic' | 'secondary_buyout' | 'ipo' | 'recapitalization';
   mid_year_convention: boolean;
   interim_distributions: number[];
+  exit_ev_override: number | null;
   exit_ebitda: number;
   exit_ev: number;
   exit_net_debt: number;

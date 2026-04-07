@@ -62,12 +62,19 @@ function buildMemoPrompt(state: ModelState): string {
   const pct = (v: number | null | undefined) =>
     v != null ? `${(v * 100).toFixed(1)}%` : 'N/C';
 
+  const baseCase = scenarios.find((s) => s.name === 'base');
   const bearCase = scenarios.find((s) => s.name === 'bear');
   const bullCase = scenarios.find((s) => s.name === 'bull');
+  const stressCase = scenarios.find((s) => s.name === 'stress');
+
+  const fmtScenario = (label: string, s: typeof baseCase) =>
+    s ? `${label}: IRR ${pct(s.irr)}, MOIC ${s.moic.toFixed(2)}x` : `${label}: N/C`;
 
   const scenarioLines = [
-    `Bear case: IRR ${pct(bearCase?.irr)}, MOIC ${bearCase ? bearCase.moic.toFixed(2) + 'x' : 'N/C'}`,
-    `Bull case: IRR ${pct(bullCase?.irr)}, MOIC ${bullCase ? bullCase.moic.toFixed(2) + 'x' : 'N/C'}`,
+    fmtScenario('Base case', baseCase),
+    fmtScenario('Bear case', bearCase),
+    fmtScenario('Bull case', bullCase),
+    fmtScenario('Stress case', stressCase),
   ];
 
   if (frag && frag.score > 0) {

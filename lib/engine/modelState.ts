@@ -4,8 +4,15 @@ import type { ModelState } from '../dealEngineTypes';
 
 export function deriveEntryFields(state: ModelState): void {
   const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-  if (state.entry.enterprise_value === 0 && ebitda > 0) {
-    state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
+  if (ebitda > 0) {
+    const impliedEV = ebitda * state.entry.entry_ebitda_multiple;
+    if (state.entry.enterprise_value > 0 && Math.abs(state.entry.enterprise_value - impliedEV) > 0.1) {
+      // EV was edited directly — back-solve multiple
+      state.entry.entry_ebitda_multiple = state.entry.enterprise_value / ebitda;
+    } else {
+      // Multiple was edited (or first derivation) — forward-solve EV
+      state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
+    }
   }
   if (state.entry.enterprise_value > 0 && state.revenue.base_revenue > 0) {
     state.entry.entry_revenue_multiple = state.entry.enterprise_value / state.revenue.base_revenue;
@@ -14,12 +21,10 @@ export function deriveEntryFields(state: ModelState): void {
   if (ebitda > 0 && state.entry.total_debt_raised > 0) {
     state.entry.leverage_ratio = state.entry.total_debt_raised / ebitda;
   }
+  const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
-  const txnCosts = state.fees.transaction_costs > 0
-    ? state.fees.transaction_costs
-    : state.fees.entry_fee_pct * state.entry.enterprise_value;
   state.entry.equity_check =
-    state.entry.enterprise_value + txnCosts + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
 }
 
 function pad(lst: number[], defaultVal: number, length: number): number[] {
@@ -169,6 +174,7 @@ export function createDefaultModelState(): ModelState {
       exit_method: 'secondary_buyout',
       mid_year_convention: false,
       interim_distributions: [],
+      exit_ev_override: null,
       exit_ebitda: 0,
       exit_ev: 0,
       exit_net_debt: 0,

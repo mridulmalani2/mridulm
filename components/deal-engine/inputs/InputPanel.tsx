@@ -11,6 +11,7 @@ const CURRENCIES = ['INR', 'EUR', 'USD', 'GBP', 'JPY'].map((c) => ({ value: c, l
 const TRAJECTORIES = ['linear', 'front_loaded', 'back_loaded', 'step'].map((t) => ({ value: t, label: t.replace('_', ' ') }));
 const EXIT_METHODS = ['strategic', 'secondary_buyout', 'ipo', 'recapitalization'].map((m) => ({ value: m, label: m.replace('_', ' ') }));
 const AMORT_TYPES = ['bullet', 'straight_line', 'cash_sweep', 'PIK'].map((a) => ({ value: a, label: a.replace('_', ' ') }));
+const TRANCHE_TYPES = ['senior', 'mezzanine', 'unitranche', 'revolver', 'pik_note'].map((t) => ({ value: t, label: t.replace('_', ' ') }));
 
 interface SectionProps {
   title: string;
@@ -39,6 +40,8 @@ const Section: React.FC<SectionProps> = ({ title, children, defaultOpen = true }
 const InputPanel: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
   const updateField = useDealEngineStore((s) => s.updateField);
+  const addTranche = useDealEngineStore((s) => s.addTranche);
+  const removeTranche = useDealEngineStore((s) => s.removeTranche);
   const [showDistributions, setShowDistributions] = useState(false);
 
   if (!ms) return null;
@@ -59,7 +62,7 @@ const InputPanel: React.FC = () => {
         <InputField label="LTM Revenue" path="revenue.base_revenue" value={ms.revenue.base_revenue} suffix="£m" />
         <InputField label="EBITDA Margin" path="margins.base_ebitda_margin" value={ms.margins.base_ebitda_margin} suffix="%" step={0.01} />
         <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} />
-        <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+        <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix="£m" formatter={(v) => v.toFixed(1)} />
         <InputField label="Revenue Multiple" path="entry.entry_revenue_multiple" value={ms.entry.entry_revenue_multiple} suffix="x" readOnly formatter={(v) => v.toFixed(1)} />
         <InputField label="Equity Check" path="entry.equity_check" value={ms.entry.equity_check} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
       </Section>
@@ -67,14 +70,34 @@ const InputPanel: React.FC = () => {
       {/* Debt Structure */}
       <Section title="Debt Structure" defaultOpen={false}>
         {ms.debt_tranches.map((t, i) => (
-          <div key={i} className="mb-4 p-3" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+          <div key={i} className="mb-4 p-3 relative" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+            {ms.debt_tranches.length > 1 && (
+              <button
+                onClick={() => removeTranche(i)}
+                className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center text-xs transition-colors hover:bg-[rgba(17,17,17,0.08)]"
+                style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(17,17,17,0.12)' }}
+                title="Remove tranche"
+              >
+                ×
+              </button>
+            )}
             <InputField label="Name" path={`debt_tranches.${i}.name`} value={t.name} type="text" />
+            <InputField label="Type" path={`debt_tranches.${i}.tranche_type`} value={t.tranche_type || 'senior'} type="select" options={TRANCHE_TYPES} />
             <InputField label="Principal" path={`debt_tranches.${i}.principal`} value={t.principal} suffix="£m" />
             <InputField label="Rate Type" path={`debt_tranches.${i}.rate_type`} value={t.rate_type} type="select" options={[{ value: 'fixed', label: 'Fixed' }, { value: 'floating', label: 'Floating' }]} />
             <InputField label="Interest Rate" path={`debt_tranches.${i}.interest_rate`} value={t.interest_rate} suffix="%" step={0.005} />
             <InputField label="Amortization" path={`debt_tranches.${i}.amortization_type`} value={t.amortization_type} type="select" options={AMORT_TYPES} />
           </div>
         ))}
+        <div className="mb-3">
+          <button
+            onClick={() => addTranche()}
+            className="text-[10px] tracking-wider px-2 py-1 transition-colors hover:bg-[rgba(17,17,17,0.04)]"
+            style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", border: '1px dashed rgba(17,17,17,0.15)' }}
+          >
+            + Add Tranche
+          </button>
+        </div>
         <InputField label="Total Debt" path="" value={ms.entry.total_debt_raised} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
         <InputField label="Leverage" path="entry.leverage_ratio" value={ms.entry.leverage_ratio} suffix="x" readOnly warning={levWarn} formatter={(v) => v.toFixed(1)} />
       </Section>
@@ -162,6 +185,7 @@ const InputPanel: React.FC = () => {
             </button>
           </div>
         )}
+        <InputField label="Exit EV Override" path="exit.exit_ev_override" value={ms.exit.exit_ev_override ?? 0} suffix="£m" />
         <InputField label="Exit EV" path="exit.exit_ev" value={ms.exit.exit_ev} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
         <InputField label="Exit Net Debt" path="exit.exit_net_debt" value={ms.exit.exit_net_debt} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
         <InputField label="Exit Equity" path="exit.exit_equity" value={ms.exit.exit_equity} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
