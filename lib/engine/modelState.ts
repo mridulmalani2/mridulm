@@ -13,8 +13,6 @@ export function deriveEntryFields(state: ModelState): void {
       // Multiple was edited (or first derivation) — forward-solve EV
       state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
     }
-  } else if (state.entry.enterprise_value === 0 && ebitda > 0) {
-    state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
   }
   if (state.entry.enterprise_value > 0 && state.revenue.base_revenue > 0) {
     state.entry.entry_revenue_multiple = state.entry.enterprise_value / state.revenue.base_revenue;
@@ -23,12 +21,10 @@ export function deriveEntryFields(state: ModelState): void {
   if (ebitda > 0 && state.entry.total_debt_raised > 0) {
     state.entry.leverage_ratio = state.entry.total_debt_raised / ebitda;
   }
+  const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
-  const txnCosts = state.fees.transaction_costs > 0
-    ? state.fees.transaction_costs
-    : state.fees.entry_fee_pct * state.entry.enterprise_value;
   state.entry.equity_check =
-    state.entry.enterprise_value + txnCosts + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
 }
 
 function pad(lst: number[], defaultVal: number, length: number): number[] {

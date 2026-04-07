@@ -156,12 +156,9 @@ export function calculateReturns(
   const times = buildTimeVector(hp, midYear);
 
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
-  // Transaction costs: use explicit amount if set, otherwise derive from entry_fee_pct * EV
-  const txnCosts = state.fees.transaction_costs > 0
-    ? state.fees.transaction_costs
-    : state.fees.entry_fee_pct * state.entry.enterprise_value;
+  const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const entryEquity =
-    state.entry.enterprise_value + txnCosts + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
 
   if (entryEquity <= 0) {
     return {
@@ -353,11 +350,9 @@ export function decomposeValueDrivers(
 
   // Fees drag
   const vdFinancingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
-  const vdTxnCosts = state.fees.transaction_costs > 0
-    ? state.fees.transaction_costs
-    : state.fees.entry_fee_pct * state.entry.enterprise_value;
+  const vdEntryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const exitFee = state.fees.exit_fee_pct * exitEv;
-  const feesDrag = vdTxnCosts + vdFinancingFees + exitFee + returns.mip_payout;
+  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout;
 
   const totalDistributions = returns.total_distributions ?? 0;
   const totalGain = exitEquity + totalDistributions - entryEquity;
