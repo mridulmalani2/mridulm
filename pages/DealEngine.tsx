@@ -23,6 +23,21 @@ const INIT_DEFAULTS = {
   entry_multiple: 10,
   currency: 'INR',
   sector: 'Technology',
+  _ebitdaMarginInput: undefined as string | undefined,
+  _entryMultipleInput: undefined as string | undefined,
+};
+
+// Sector comps data — median EV/EBITDA multiples from precedent PE transactions
+const SECTOR_COMPS: Record<string, { low: number; median: number; high: number }> = {
+  Technology:            { low: 9.0, median: 12.0, high: 18.0 },
+  Healthcare:            { low: 8.0, median: 11.0, high: 16.0 },
+  Industrials:           { low: 6.0, median: 8.0,  high: 11.0 },
+  Consumer:              { low: 7.0, median: 9.5,  high: 13.0 },
+  'Financial Services':  { low: 7.0, median: 10.0, high: 14.0 },
+  'Real Estate':         { low: 10.0, median: 14.0, high: 20.0 },
+  Energy:                { low: 5.0, median: 7.0,  high: 10.0 },
+  'Business Services':   { low: 8.0, median: 10.5, high: 14.0 },
+  Other:                 { low: 7.0, median: 9.0,  high: 13.0 },
 };
 
 const inputStyle = {
@@ -224,10 +239,18 @@ const InitializeForm: React.FC = () => {
               <label className="block">
                 <span className="block mb-1 text-[10px] tracking-widest uppercase" style={monoLabel}>EBITDA Margin (%)</span>
                 <input
-                  type="number"
-                  value={(form.ebitda_or_margin * 100).toFixed(1)}
-                  onChange={(e) => setForm({ ...form, ebitda_or_margin: Number(e.target.value) / 100 })}
-                  step={0.5}
+                  type="text"
+                  value={form._ebitdaMarginInput ?? (form.ebitda_or_margin * 100).toFixed(1)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const num = parseFloat(raw);
+                    if (!isNaN(num)) {
+                      setForm((prev) => ({ ...prev, ebitda_or_margin: num / 100, _ebitdaMarginInput: raw }));
+                    } else {
+                      setForm((prev) => ({ ...prev, _ebitdaMarginInput: raw }));
+                    }
+                  }}
+                  onBlur={() => setForm((prev) => ({ ...prev, _ebitdaMarginInput: undefined }))}
                   className="w-full px-3 py-2 text-sm"
                   style={inputStyle}
                 />
@@ -238,13 +261,32 @@ const InitializeForm: React.FC = () => {
               <label className="block">
                 <span className="block mb-1 text-[10px] tracking-widest uppercase" style={monoLabel}>Entry Multiple (x)</span>
                 <input
-                  type="number"
-                  value={form.entry_multiple}
-                  onChange={(e) => setForm({ ...form, entry_multiple: Number(e.target.value) })}
-                  step={0.5}
+                  type="text"
+                  value={form._entryMultipleInput ?? form.entry_multiple}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const num = parseFloat(raw);
+                    if (!isNaN(num)) {
+                      setForm((prev) => ({ ...prev, entry_multiple: num, _entryMultipleInput: raw }));
+                    } else {
+                      setForm((prev) => ({ ...prev, _entryMultipleInput: raw }));
+                    }
+                  }}
+                  onBlur={() => setForm((prev) => ({ ...prev, _entryMultipleInput: undefined }))}
                   className="w-full px-3 py-2 text-sm"
                   style={inputStyle}
                 />
+                {(() => {
+                  const comps = SECTOR_COMPS[form.sector] || SECTOR_COMPS['Other'];
+                  const val = form.entry_multiple;
+                  const position = val < comps.low ? 'below comps' : val > comps.high ? 'above comps' : val <= comps.median ? 'low–mid' : 'mid–high';
+                  const color = val < comps.low || val > comps.high ? '#b91c1c' : 'rgba(17,17,17,0.4)';
+                  return (
+                    <span className="block mt-1 text-[9px]" style={{ color, fontFamily: "'JetBrains Mono', monospace" }}>
+                      {form.sector} comps: {comps.low}–{comps.high}x (med {comps.median}x) · {position}
+                    </span>
+                  );
+                })()}
               </label>
               <label className="block">
                 <span className="block mb-1 text-[10px] tracking-widest uppercase" style={monoLabel}>Currency</span>
@@ -272,6 +314,19 @@ const InitializeForm: React.FC = () => {
                 ))}
               </select>
             </label>
+
+            {/* Implied snapshot */}
+            {(() => {
+              const ebitda = form.revenue * (form.ebitda_or_margin < 1 ? form.ebitda_or_margin : (form.revenue > 0 ? form.ebitda_or_margin / form.revenue : 0));
+              const ev = ebitda * form.entry_multiple;
+              return ebitda > 0 ? (
+                <div className="mb-4 px-3 py-2" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+                  <span className="text-[9px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+                    Implied: EBITDA {ebitda.toFixed(1)}m · EV {ev.toFixed(0)}m · Rev Multiple {form.revenue > 0 ? (ev / form.revenue).toFixed(1) : '–'}x
+                  </span>
+                </div>
+              ) : null;
+            })()}
 
             {/* API Key section */}
             <div className="mb-5 p-3" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>

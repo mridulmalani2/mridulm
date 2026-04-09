@@ -17,9 +17,19 @@ export interface NormalizedTextResponse {
 export function buildAnthropicRequest(
   messages: { role: string; content: string }[],
   systemPrompt: string,
-  toolDef: Record<string, unknown>,
+  toolDef: Record<string, unknown> | null,
   config: ProviderConfig,
 ): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
+  const body: Record<string, unknown> = {
+    model: config.model,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+  };
+  if (toolDef) {
+    body.tools = [toolDef];
+    body.tool_choice = { type: 'auto' };
+  }
   return {
     url: config.apiUrl,
     headers: {
@@ -28,14 +38,7 @@ export function buildAnthropicRequest(
       'anthropic-dangerous-direct-browser-access': 'true',
       'content-type': 'application/json',
     },
-    body: {
-      model: config.model,
-      max_tokens: 4096,
-      system: systemPrompt,
-      tools: [toolDef],
-      tool_choice: { type: 'auto' },
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    },
+    body,
   };
 }
 

@@ -24,7 +24,9 @@ export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
   // Sponsor equity = plug (total uses - debt - rollover)
   const sponsorEquity = totalUses - totalDebt - rolloverEquity;
 
-  const totalSources = totalDebt + rolloverEquity + sponsorEquity;
+  // Use actual sponsor equity (can be negative to flag over-leveraged deals)
+  const effectiveSponsorEquity = sponsorEquity;
+  const totalSources = totalDebt + rolloverEquity + effectiveSponsorEquity;
 
   return {
     enterprise_value: ev,
@@ -35,14 +37,14 @@ export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
     debt_sources: debtSources,
     total_debt: totalDebt,
     rollover_equity: rolloverEquity,
-    sponsor_equity: Math.max(0, sponsorEquity),
+    sponsor_equity: effectiveSponsorEquity,
     total_sources: totalSources,
-    equity_pct_of_total: totalSources > 0 ? (sponsorEquity + rolloverEquity) / totalSources : 0,
+    equity_pct_of_total: totalSources > 0 ? (effectiveSponsorEquity + rolloverEquity) / totalSources : 0,
     debt_pct_of_total: totalSources > 0 ? totalDebt / totalSources : 0,
     implied_leverage: state.revenue.base_revenue * state.margins.base_ebitda_margin > 0
       ? totalDebt / (state.revenue.base_revenue * state.margins.base_ebitda_margin)
       : 0,
-    // Audit check: Sources = Uses
+    // Audit check: Sources = Uses (always true by construction since sponsor equity is the plug)
     sources_uses_balanced: Math.abs(totalSources - totalUses) < 0.01,
     imbalance: totalSources - totalUses,
   };

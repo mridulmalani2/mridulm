@@ -305,6 +305,15 @@ export interface ModelState {
   ai_overrides: Record<string, unknown>;
   ai_toggle_fields: string[];
   chat_history: ChatMessage[];
+  // Transient: tracks which entry field was last edited for EV/Multiple sync
+  _lastEditedEntryField?: 'multiple' | 'ev' | null;
+}
+
+export interface PendingEdit {
+  field: string;       // dot-notation path
+  oldValue: unknown;
+  newValue: unknown;
+  reason: string;      // AI's explanation
 }
 
 export interface AppliedDiff {

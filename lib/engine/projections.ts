@@ -23,8 +23,9 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   for (let t = 0; t < hp; t++) {
     const growth = state.revenue.growth_rates[t];
     const acqRev = state.revenue.acquisition_revenue[t] || 0;
+    const churnDrag = state.revenue.churn_rate > 0 ? prevRevenue * state.revenue.churn_rate : 0;
 
-    const revenue = prevRevenue * (1 + growth) + acqRev;
+    const revenue = prevRevenue * (1 + growth) - churnDrag + acqRev;
     const margin = state.margins.margin_by_year[t];
 
     const ebitda = revenue * margin;

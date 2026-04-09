@@ -71,6 +71,14 @@ EXAMPLE (tool call for assumption change):
 analysis.message: "Set revenue growth to 5% flat across all years. IRR drops from 24% to 19% — growth was contributing 280bps. At 5% growth, the deal depends almost entirely on margin expansion and exit multiple, making it significantly more fragile."`;
 
 
+const EDIT_MODE_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
+
+IMPORTANT: The user prefixed their message with /edit. You MUST suggest changes but they will NOT be applied yet — the user must explicitly accept them.
+- Call the update_deal_model tool with the assumption_updates you would make.
+- In analysis.message, list each change as a clear action statement, e.g.: "Change revenue.growth_rates.0 from 12% to 8% — compress Year 1 growth for conservatism."
+- Be specific and decisive. State exactly what you would change and why. Reference actual model numbers.
+- The user will see your suggestions and decide whether to /accept or /reject them.`;
+
 // ── Tool Definition ─────────────────────────────────────────────────────
 
 const DEAL_ENGINE_TOOL = {
@@ -226,18 +234,23 @@ export function buildModelContext(state: ModelState): string {
 function buildRequest(
   messages: { role: string; content: string }[],
   config: ProviderConfig,
+  systemPromptOverride?: string,
+  excludeTool?: boolean,
 ): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
+  const sysPrompt = systemPromptOverride || SYSTEM_PROMPT;
+  // When excludeTool is true (inquiry mode), pass null so AI cannot modify the model
+  const tool = excludeTool ? null : DEAL_ENGINE_TOOL;
   switch (config.provider) {
     case 'anthropic':
-      return buildAnthropicRequest(messages, SYSTEM_PROMPT, DEAL_ENGINE_TOOL, config);
+      return buildAnthropicRequest(messages, sysPrompt, tool, config);
     case 'openai':
     case 'mistral':
     case 'groq':
-      return buildOpenAIRequest(messages, SYSTEM_PROMPT, DEAL_ENGINE_TOOL, config);
+      return buildOpenAIRequest(messages, sysPrompt, tool, config);
     case 'google':
-      return buildGoogleRequest(messages, SYSTEM_PROMPT, DEAL_ENGINE_TOOL, config);
+      return buildGoogleRequest(messages, sysPrompt, tool, config);
     default:
-      return buildOpenAIRequest(messages, SYSTEM_PROMPT, DEAL_ENGINE_TOOL, config);
+      return buildOpenAIRequest(messages, sysPrompt, tool, config);
   }
 }
 
@@ -451,6 +464,7 @@ export async function callAI(
   modelState: ModelState,
   chatHistory: { role: string; content: string }[],
   config: ProviderConfig,
+  options?: { editMode?: boolean; inquiryOnly?: boolean },
 ): Promise<AIResult> {
   const intent = classifyIntent(message);
 
@@ -468,7 +482,10 @@ export async function callAI(
     },
   ];
 
-  const { url, headers, body } = buildRequest(messages, config);
+  // In edit mode, use the edit system prompt; in inquiry mode, exclude the tool
+  const systemPromptOverride = options?.editMode ? EDIT_MODE_SYSTEM_PROMPT : undefined;
+  const excludeTool = options?.inquiryOnly === true;
+  const { url, headers, body } = buildRequest(messages, config, systemPromptOverride, excludeTool);
 
   let response: Response;
   try {
