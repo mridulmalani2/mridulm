@@ -37,6 +37,15 @@ const Section: React.FC<SectionProps> = ({ title, children, defaultOpen = true }
   );
 };
 
+const DerivedMetrics: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="mt-2 pt-2" style={{ borderTop: '1px dashed rgba(17,17,17,0.1)' }}>
+    <span className="text-[9px] tracking-widest uppercase mb-1.5 block" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>
+      Derived
+    </span>
+    {children}
+  </div>
+);
+
 const InputPanel: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
   const updateField = useDealEngineStore((s) => s.updateField);
@@ -63,8 +72,10 @@ const InputPanel: React.FC = () => {
         <InputField label="EBITDA Margin" path="margins.base_ebitda_margin" value={ms.margins.base_ebitda_margin} suffix="%" step={0.01} />
         <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} />
         <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix="£m" formatter={(v) => v.toFixed(1)} />
-        <InputField label="Revenue Multiple" path="entry.entry_revenue_multiple" value={ms.entry.entry_revenue_multiple} suffix="x" readOnly formatter={(v) => v.toFixed(1)} />
-        <InputField label="Equity Check" path="entry.equity_check" value={ms.entry.equity_check} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+        <DerivedMetrics>
+          <InputField label="Revenue Multiple" path="entry.entry_revenue_multiple" value={ms.entry.entry_revenue_multiple} suffix="x" readOnly formatter={(v) => v.toFixed(1)} />
+          <InputField label="Equity Check" path="entry.equity_check" value={ms.entry.equity_check} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+        </DerivedMetrics>
       </Section>
 
       {/* Debt Structure */}
@@ -98,8 +109,10 @@ const InputPanel: React.FC = () => {
             + Add Tranche
           </button>
         </div>
-        <InputField label="Total Debt" path="" value={ms.entry.total_debt_raised} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-        <InputField label="Leverage" path="entry.leverage_ratio" value={ms.entry.leverage_ratio} suffix="x" readOnly warning={levWarn} formatter={(v) => v.toFixed(1)} />
+        <DerivedMetrics>
+          <InputField label="Total Debt" path="" value={ms.entry.total_debt_raised} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+          <InputField label="Leverage" path="entry.leverage_ratio" value={ms.entry.leverage_ratio} suffix="x" readOnly warning={levWarn} formatter={(v) => v.toFixed(1)} />
+        </DerivedMetrics>
       </Section>
 
       {/* Revenue */}
@@ -186,9 +199,11 @@ const InputPanel: React.FC = () => {
           </div>
         )}
         <InputField label="Exit EV Override" path="exit.exit_ev_override" value={ms.exit.exit_ev_override ?? 0} suffix="£m" />
-        <InputField label="Exit EV" path="exit.exit_ev" value={ms.exit.exit_ev} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-        <InputField label="Exit Net Debt" path="exit.exit_net_debt" value={ms.exit.exit_net_debt} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-        <InputField label="Exit Equity" path="exit.exit_equity" value={ms.exit.exit_equity} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+        <DerivedMetrics>
+          <InputField label="Exit EV" path="exit.exit_ev" value={ms.exit.exit_ev} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+          <InputField label="Exit Net Debt" path="exit.exit_net_debt" value={ms.exit.exit_net_debt} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+          <InputField label="Exit Equity" path="exit.exit_equity" value={ms.exit.exit_equity} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
+        </DerivedMetrics>
       </Section>
 
       {/* MIP */}

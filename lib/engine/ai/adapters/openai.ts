@@ -18,7 +18,7 @@ function toOpenAITool(toolDef: Record<string, unknown>): Record<string, unknown>
 export function buildOpenAIRequest(
   messages: { role: string; content: string }[],
   systemPrompt: string,
-  toolDef: Record<string, unknown>,
+  toolDef: Record<string, unknown> | null,
   config: ProviderConfig,
 ): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
   const openAIMessages = [
@@ -26,19 +26,22 @@ export function buildOpenAIRequest(
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
+  const body: Record<string, unknown> = {
+    model: config.model,
+    max_tokens: 4096,
+    messages: openAIMessages,
+  };
+  if (toolDef) {
+    body.tools = [toOpenAITool(toolDef)];
+    body.tool_choice = 'auto';
+  }
   return {
     url: config.apiUrl,
     headers: {
       'Authorization': `Bearer ${config.apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: {
-      model: config.model,
-      max_tokens: 4096,
-      messages: openAIMessages,
-      tools: [toOpenAITool(toolDef)],
-      tool_choice: 'auto',
-    },
+    body,
   };
 }
 

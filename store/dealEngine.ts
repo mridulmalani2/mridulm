@@ -8,6 +8,7 @@ import type {
   SensitivityTable,
   AppliedDiff,
   AIAnalysis,
+  PendingEdit,
 } from '../lib/dealEngineTypes';
 import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
 import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
@@ -76,6 +77,7 @@ interface DealEngineStore {
   memoContent: string | null;
   isMemoGenerating: boolean;
   error: string | null;
+  pendingEdits: PendingEdit[];
 
   setApiKey: (key: string) => void;
   setAiProvider: (provider: AIProvider) => void;
@@ -93,6 +95,8 @@ interface DealEngineStore {
   resetModel: () => void;
   updateField: (path: string, value: unknown) => Promise<void>;
   sendChatMessage: (message: string) => Promise<void>;
+  acceptEdits: () => Promise<void>;
+  rejectEdits: () => void;
   generateAssumptions: () => Promise<void>;
   loadScenarios: () => Promise<void>;
   loadSensitivity: (tableId: number) => Promise<void>;
@@ -124,6 +128,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   memoContent: null,
   isMemoGenerating: false,
   error: null,
+  pendingEdits: [],
 
   setApiKey: (key) => {
     localStorage.setItem('deal-engine-api-key', key);
@@ -149,7 +154,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     set({ apiKey: null, aiProvider: 'anthropic' });
   },
 
-  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null }),
+  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null, pendingEdits: [] }),
 
   initializeModel: async (inputs) => {
     set({ isCalculating: true, error: null });
@@ -295,13 +300,15 @@ Be specific. Use the company name to infer business type and calibrate according
       applyUpdate(stateDict, path, value);
       const state = stateDict as unknown as ModelState;
 
-      // When multiple changes, forward-solve EV; when EV changes, back-solve multiple
+      // Track which entry field was edited for clean bidirectional sync in deriveEntryFields
       if (path === 'entry.entry_ebitda_multiple') {
+        state._lastEditedEntryField = 'multiple';
         const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
         if (ebitda > 0) {
           state.entry.enterprise_value = ebitda * (value as number);
         }
       } else if (path === 'entry.enterprise_value') {
+        state._lastEditedEntryField = 'ev';
         const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
         if (ebitda > 0) {
           state.entry.entry_ebitda_multiple = (value as number) / ebitda;
@@ -312,6 +319,8 @@ Be specific. Use the company name to infer business type and calibrate according
         if (exitEvVal > 0 && state.exit.exit_ebitda > 0) {
           state.exit.exit_ebitda_multiple = exitEvVal / state.exit.exit_ebitda;
         }
+      } else {
+        state._lastEditedEntryField = null;
       }
 
       const result = fullRecalc(state);
@@ -325,16 +334,45 @@ Be specific. Use the company name to infer business type and calibrate according
     const { modelState, apiKey, aiProvider, chatHistory } = get();
     if (!modelState || !apiKey) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: message, timestamp: new Date().toISOString() };
+    const trimmed = message.trim();
+    const trimmedLower = trimmed.toLowerCase();
+
+    // Handle /accept command
+    if (trimmedLower === '/accept') {
+      const { pendingEdits } = get();
+      if (pendingEdits.length === 0) {
+        const msg: ChatMessage = { role: 'assistant', content: 'No pending edits to accept.', timestamp: new Date().toISOString() };
+        set({ chatHistory: [...chatHistory, { role: 'user', content: trimmed, timestamp: new Date().toISOString() }, msg] });
+        return;
+      }
+      const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
+      set({ chatHistory: [...chatHistory, userMsg] });
+      await get().acceptEdits();
+      return;
+    }
+
+    // Handle /reject command
+    if (trimmedLower === '/reject') {
+      const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
+      set({ chatHistory: [...chatHistory, userMsg] });
+      get().rejectEdits();
+      return;
+    }
+
+    const isEditMode = trimmedLower.startsWith('/edit ');
+    const actualMessage = isEditMode ? trimmed.replace(/^\/edit\s+/i, '') : trimmed;
+
+    const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
     set({ chatHistory: [...chatHistory, userMsg], isCalculating: true, error: null });
 
     try {
       const config = buildProviderConfig(aiProvider, apiKey);
       const result = await callAI(
-        message,
+        actualMessage,
         modelState,
         chatHistory.map((m) => ({ role: m.role, content: m.content })),
         config,
+        { editMode: isEditMode, inquiryOnly: !isEditMode },
       );
 
       if (result.error) {
@@ -342,41 +380,90 @@ Be specific. Use the company name to infer business type and calibrate according
         return;
       }
 
-      // Apply AI updates to state
-      let updatedState = modelState;
-      if (result.updatedStateDict) {
-        updatedState = result.updatedStateDict as unknown as ModelState;
-      }
-      if (result.triggerRecalculation || result.appliedDiffs.length > 0) {
-        updatedState = fullRecalc(updatedState);
-      }
+      if (isEditMode && result.appliedDiffs.length > 0) {
+        // Edit mode: store as pending edits instead of applying
+        const pending: PendingEdit[] = result.appliedDiffs.map((d) => ({
+          field: d.field,
+          oldValue: d.old,
+          newValue: d.new,
+          reason: '',
+        }));
 
-      const aiMsg: ChatMessage = {
-        role: 'assistant',
-        content: result.analysis?.message || result.analysis?.return_decomposition || 'Model updated.',
-        timestamp: new Date().toISOString(),
-        assumption_updates: result.appliedDiffs.length
-          ? Object.fromEntries(result.appliedDiffs.map((d) => [d.field, d.new]))
-          : undefined,
-        analysis: result.analysis || undefined,
-      };
+        const aiMsg: ChatMessage = {
+          role: 'assistant',
+          content: result.analysis?.message || `Suggested ${pending.length} change(s). Type /accept to apply or /reject to discard.`,
+          timestamp: new Date().toISOString(),
+          assumption_updates: Object.fromEntries(result.appliedDiffs.map((d) => [d.field, d.new])),
+          analysis: result.analysis || undefined,
+        };
 
-      set({
-        modelState: updatedState,
-        chatHistory: [...get().chatHistory, aiMsg],
-        lastDiffs: result.appliedDiffs,
-        lastAnalysis: result.analysis,
-        isCalculating: false,
-        ...(result.appliedDiffs.length > 0 ? { memoContent: null, scenarios: [] } : {}),
-      });
+        set({
+          pendingEdits: pending,
+          chatHistory: [...get().chatHistory, aiMsg],
+          lastAnalysis: result.analysis,
+          isCalculating: false,
+        });
+      } else {
+        // Inquiry mode or edit mode with no diffs: just display text response
+        const aiMsg: ChatMessage = {
+          role: 'assistant',
+          content: result.analysis?.message || result.analysis?.return_decomposition || 'No changes suggested.',
+          timestamp: new Date().toISOString(),
+          analysis: result.analysis || undefined,
+        };
 
-      // Refresh panel insights in background after model changes
-      if (result.appliedDiffs.length > 0) {
-        get().refreshPanelInsights();
+        set({
+          chatHistory: [...get().chatHistory, aiMsg],
+          lastAnalysis: result.analysis,
+          isCalculating: false,
+        });
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
+  },
+
+  acceptEdits: async () => {
+    const { modelState, pendingEdits, chatHistory } = get();
+    if (!modelState || pendingEdits.length === 0) return;
+    set({ isCalculating: true });
+    try {
+      const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
+      for (const edit of pendingEdits) {
+        applyUpdate(stateDict, edit.field, edit.newValue);
+      }
+      const state = stateDict as unknown as ModelState;
+      // Handle EV/multiple sync if either was in the edits
+      const evEdit = pendingEdits.find(e => e.field === 'entry.enterprise_value');
+      const multEdit = pendingEdits.find(e => e.field === 'entry.entry_ebitda_multiple');
+      if (evEdit) state._lastEditedEntryField = 'ev';
+      else if (multEdit) state._lastEditedEntryField = 'multiple';
+
+      const result = fullRecalc(state);
+      const confirmMsg: ChatMessage = {
+        role: 'assistant',
+        content: `Applied ${pendingEdits.length} change(s) to the model.`,
+        timestamp: new Date().toISOString(),
+        assumption_updates: Object.fromEntries(pendingEdits.map(e => [e.field, e.newValue])),
+      };
+      set({
+        modelState: result,
+        pendingEdits: [],
+        chatHistory: [...chatHistory, confirmMsg],
+        isCalculating: false,
+        memoContent: null,
+        scenarios: [],
+      });
+      get().refreshPanelInsights();
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isCalculating: false });
+    }
+  },
+
+  rejectEdits: () => {
+    const { chatHistory } = get();
+    const msg: ChatMessage = { role: 'assistant', content: 'Edits discarded.', timestamp: new Date().toISOString() };
+    set({ pendingEdits: [], chatHistory: [...chatHistory, msg] });
   },
 
   generateAssumptions: async () => {

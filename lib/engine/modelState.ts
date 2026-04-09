@@ -5,12 +5,11 @@ import type { ModelState } from '../dealEngineTypes';
 export function deriveEntryFields(state: ModelState): void {
   const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
   if (ebitda > 0) {
-    const impliedEV = ebitda * state.entry.entry_ebitda_multiple;
-    if (state.entry.enterprise_value > 0 && Math.abs(state.entry.enterprise_value - impliedEV) > 0.1) {
-      // EV was edited directly — back-solve multiple
+    if (state._lastEditedEntryField === 'ev') {
+      // EV was explicitly edited — back-solve multiple
       state.entry.entry_ebitda_multiple = state.entry.enterprise_value / ebitda;
     } else {
-      // Multiple was edited (or first derivation) — forward-solve EV
+      // Multiple was edited, or neither was explicitly edited — forward-solve EV
       state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
     }
   }
@@ -25,6 +24,8 @@ export function deriveEntryFields(state: ModelState): void {
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   state.entry.equity_check =
     state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
+  // Clear the flag after use so subsequent recalcs default to forward-solve
+  state._lastEditedEntryField = null;
 }
 
 function pad(lst: number[], defaultVal: number, length: number): number[] {

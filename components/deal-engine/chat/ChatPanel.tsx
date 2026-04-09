@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
-import type { ChatMessage, AIAnalysis } from '../../../lib/dealEngineTypes';
+import type { ChatMessage, AIAnalysis, PendingEdit } from '../../../lib/dealEngineTypes';
 
 // ── Web Speech API type shims (not in default TS lib) ──────────────────
 interface SpeechRecognitionResultItem { readonly transcript: string; }
@@ -84,6 +84,45 @@ const DiffBadges: React.FC<{ updates: Record<string, unknown> }> = ({ updates })
   </div>
 );
 
+const PendingEditsCard: React.FC<{ edits: PendingEdit[]; onAccept: () => void; onReject: () => void }> = ({ edits, onAccept, onReject }) => (
+  <div className="mb-3 mx-1 p-3" style={{ background: '#fffbeb', border: '1px solid rgba(180,83,9,0.2)' }}>
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: '#92400e', fontFamily: "'JetBrains Mono', monospace" }}>
+        Pending Changes
+      </span>
+      <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+        {edits.length} edit{edits.length !== 1 ? 's' : ''}
+      </span>
+    </div>
+    {edits.map((e, i) => (
+      <div key={i} className="flex items-baseline gap-1.5 mb-1">
+        <span className="text-[10px] px-1 py-0.5" style={{ background: 'rgba(180,83,9,0.1)', color: '#92400e', fontFamily: "'JetBrains Mono', monospace" }}>
+          {e.field.split('.').pop()}
+        </span>
+        <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+          {e.oldValue != null ? String(e.oldValue) : '?'} &rarr; {String(e.newValue)}
+        </span>
+      </div>
+    ))}
+    <div className="flex gap-2 mt-2.5">
+      <button
+        onClick={onAccept}
+        className="px-3 py-1 text-[10px] font-medium tracking-widest uppercase transition-colors"
+        style={{ background: '#111111', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace", border: '1px solid #111111' }}
+      >
+        Accept
+      </button>
+      <button
+        onClick={onReject}
+        className="px-3 py-1 text-[10px] font-medium tracking-widest uppercase transition-colors hover:bg-[rgba(17,17,17,0.04)]"
+        style={{ color: 'rgba(17,17,17,0.5)', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(17,17,17,0.15)' }}
+      >
+        Reject
+      </button>
+    </div>
+  </div>
+);
+
 const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
   const isUser = msg.role === 'user';
   return (
@@ -128,6 +167,9 @@ const ChatPanel: React.FC = () => {
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const apiKey = useDealEngineStore((s) => s.apiKey);
   const error = useDealEngineStore((s) => s.error);
+  const pendingEdits = useDealEngineStore((s) => s.pendingEdits);
+  const acceptEdits = useDealEngineStore((s) => s.acceptEdits);
+  const rejectEdits = useDealEngineStore((s) => s.rejectEdits);
 
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -233,9 +275,9 @@ const ChatPanel: React.FC = () => {
 
   const suggestions = [
     'What drives the IRR here?',
-    'Stress test leverage at 7x',
-    'Compare to a secondary buyout exit',
     'How fragile is this deal?',
+    '/edit Make the model more conservative',
+    '/edit Stress test with compressed margins',
   ];
 
   return (
@@ -302,6 +344,9 @@ const ChatPanel: React.FC = () => {
           </div>
         ) : (
           chatHistory.map((msg, i) => <MessageBubble key={i} msg={msg} />)
+        )}
+        {pendingEdits.length > 0 && (
+          <PendingEditsCard edits={pendingEdits} onAccept={acceptEdits} onReject={rejectEdits} />
         )}
         {isCalculating && chatHistory.length > 0 && (
           <div className="flex justify-start mb-3">
@@ -375,7 +420,7 @@ const ChatPanel: React.FC = () => {
               isListening
                 ? 'Listening...'
                 : apiKey
-                ? 'Ask about this deal...'
+                ? 'Ask about this deal... (/edit to suggest changes)'
                 : 'Set API key first'
             }
             disabled={!apiKey}

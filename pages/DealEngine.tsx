@@ -227,7 +227,6 @@ const InitializeForm: React.FC = () => {
                   type="number"
                   value={(form.ebitda_or_margin * 100).toFixed(1)}
                   onChange={(e) => setForm({ ...form, ebitda_or_margin: Number(e.target.value) / 100 })}
-                  step={0.5}
                   className="w-full px-3 py-2 text-sm"
                   style={inputStyle}
                 />
@@ -241,7 +240,6 @@ const InitializeForm: React.FC = () => {
                   type="number"
                   value={form.entry_multiple}
                   onChange={(e) => setForm({ ...form, entry_multiple: Number(e.target.value) })}
-                  step={0.5}
                   className="w-full px-3 py-2 text-sm"
                   style={inputStyle}
                 />

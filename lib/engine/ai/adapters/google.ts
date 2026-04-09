@@ -15,7 +15,7 @@ function toGeminiFunctionDeclaration(toolDef: Record<string, unknown>): Record<s
 export function buildGoogleRequest(
   messages: { role: string; content: string }[],
   systemPrompt: string,
-  toolDef: Record<string, unknown>,
+  toolDef: Record<string, unknown> | null,
   config: ProviderConfig,
 ): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
   // Gemini uses a different message format
@@ -24,23 +24,26 @@ export function buildGoogleRequest(
     parts: [{ text: m.content }],
   }));
 
+  const body: Record<string, unknown> = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents,
+    generationConfig: { maxOutputTokens: 4096 },
+  };
+  if (toolDef) {
+    body.tools = [{ functionDeclarations: [toGeminiFunctionDeclaration(toolDef)] }];
+    body.tool_config = {
+      function_calling_config: {
+        mode: 'AUTO',
+        allowed_function_names: ['update_deal_model'],
+      },
+    };
+  }
   return {
     url: `${config.apiUrl}/${config.model}:generateContent?key=${config.apiKey}`,
     headers: {
       'Content-Type': 'application/json',
     },
-    body: {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-      tools: [{ functionDeclarations: [toGeminiFunctionDeclaration(toolDef)] }],
-      tool_config: {
-        function_calling_config: {
-          mode: 'AUTO',
-          allowed_function_names: ['update_deal_model'],
-        },
-      },
-      generationConfig: { maxOutputTokens: 4096 },
-    },
+    body,
   };
 }
 
