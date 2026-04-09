@@ -313,12 +313,29 @@ Be specific. Use the company name to infer business type and calibrate according
         if (ebitda > 0) {
           state.entry.entry_ebitda_multiple = (value as number) / ebitda;
         }
+      } else if (path === 'entry.leverage_ratio') {
+        // Leverage drives tranche sizing: scale all tranche principals proportionally
+        const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+        const targetLeverage = value as number;
+        if (ebitda > 0 && targetLeverage > 0) {
+          const newTotalDebt = ebitda * targetLeverage;
+          const currentTotalDebt = state.debt_tranches.reduce((s, t) => s + t.principal, 0);
+          if (currentTotalDebt > 0) {
+            const scaleFactor = newTotalDebt / currentTotalDebt;
+            for (const tranche of state.debt_tranches) {
+              tranche.principal = Math.round(tranche.principal * scaleFactor * 10) / 10;
+            }
+          }
+          state.entry.leverage_ratio = targetLeverage;
+        }
+        state._lastEditedEntryField = null;
       } else if (path === 'exit.exit_ev_override') {
         // When exit EV override is set, back-solve exit multiple from projected EBITDA
         const exitEvVal = value as number;
         if (exitEvVal > 0 && state.exit.exit_ebitda > 0) {
           state.exit.exit_ebitda_multiple = exitEvVal / state.exit.exit_ebitda;
         }
+        state._lastEditedEntryField = null;
       } else {
         state._lastEditedEntryField = null;
       }

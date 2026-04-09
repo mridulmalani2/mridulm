@@ -37,15 +37,6 @@ const Section: React.FC<SectionProps> = ({ title, children, defaultOpen = true }
   );
 };
 
-const DerivedMetrics: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mt-2 pt-2" style={{ borderTop: '1px dashed rgba(17,17,17,0.1)' }}>
-    <span className="text-[9px] tracking-widest uppercase mb-1.5 block" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>
-      Derived
-    </span>
-    {children}
-  </div>
-);
-
 const InputPanel: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
   const updateField = useDealEngineStore((s) => s.updateField);
@@ -72,14 +63,11 @@ const InputPanel: React.FC = () => {
         <InputField label="EBITDA Margin" path="margins.base_ebitda_margin" value={ms.margins.base_ebitda_margin} suffix="%" step={0.01} />
         <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} />
         <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix="£m" formatter={(v) => v.toFixed(1)} />
-        <DerivedMetrics>
-          <InputField label="Revenue Multiple" path="entry.entry_revenue_multiple" value={ms.entry.entry_revenue_multiple} suffix="x" readOnly formatter={(v) => v.toFixed(1)} />
-          <InputField label="Equity Check" path="entry.equity_check" value={ms.entry.equity_check} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-        </DerivedMetrics>
       </Section>
 
       {/* Debt Structure */}
       <Section title="Debt Structure" defaultOpen={false}>
+        <InputField label="Target Leverage" path="entry.leverage_ratio" value={ms.entry.leverage_ratio} suffix="x" warning={levWarn} />
         {ms.debt_tranches.map((t, i) => (
           <div key={i} className="mb-4 p-3 relative" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
             {ms.debt_tranches.length > 1 && (
@@ -109,18 +97,21 @@ const InputPanel: React.FC = () => {
             + Add Tranche
           </button>
         </div>
-        <DerivedMetrics>
-          <InputField label="Total Debt" path="" value={ms.entry.total_debt_raised} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-          <InputField label="Leverage" path="entry.leverage_ratio" value={ms.entry.leverage_ratio} suffix="x" readOnly warning={levWarn} formatter={(v) => v.toFixed(1)} />
-        </DerivedMetrics>
       </Section>
 
       {/* Revenue */}
       <Section title="Revenue" defaultOpen={false}>
         {ms.revenue.growth_rates.map((g, i) => (
-          <InputField key={i} label={`Year ${i + 1} Growth`} path={`revenue.growth_rates.${i}`} value={g} suffix="%" step={0.01} aiToggleable />
+          <InputField key={i} label={`Year ${i + 1} Organic Growth`} path={`revenue.growth_rates.${i}`} value={g} suffix="%" step={0.01} aiToggleable />
         ))}
-        <InputField label="Churn Rate" path="revenue.churn_rate" value={ms.revenue.churn_rate} suffix="%" step={0.01} />
+        <InputField label="Annual Churn Rate" path="revenue.churn_rate" value={ms.revenue.churn_rate} suffix="%" step={0.01} />
+        {ms.revenue.acquisition_revenue.some((a: number) => a > 0) && (
+          <>
+            {ms.revenue.acquisition_revenue.map((a: number, i: number) => (
+              <InputField key={`acq-${i}`} label={`Year ${i + 1} Acq. Revenue`} path={`revenue.acquisition_revenue.${i}`} value={a} suffix="£m" />
+            ))}
+          </>
+        )}
       </Section>
 
       {/* Margins */}
@@ -147,6 +138,30 @@ const InputPanel: React.FC = () => {
       <Section title="Exit" defaultOpen={false}>
         <InputField label="Holding Period" path="exit.holding_period" value={ms.exit.holding_period} suffix="yrs" min={1} max={10} />
         <InputField label="Exit EBITDA Multiple" path="exit.exit_ebitda_multiple" value={ms.exit.exit_ebitda_multiple} suffix="x" aiToggleable />
+        {/* Implied exit multiple context based on margin expansion */}
+        {(() => {
+          const entryMult = ms.entry.entry_ebitda_multiple;
+          const entryMargin = ms.margins.base_ebitda_margin;
+          const exitMargin = ms.margins.target_ebitda_margin;
+          const marginDelta = exitMargin - entryMargin;
+          // Heuristic: multiples expand ~0.5x per 1% of margin improvement, compress ~0.3x per 1% growth deceleration
+          const marginEffect = marginDelta * 100 * 0.5;
+          const growthY1 = ms.revenue.growth_rates[0] || 0;
+          const growthExit = ms.revenue.growth_rates[ms.exit.holding_period - 1] || 0;
+          const growthDecel = (growthY1 - growthExit) * 100 * 0.3;
+          const impliedExit = Math.max(3, entryMult + marginEffect - growthDecel);
+          const userExit = ms.exit.exit_ebitda_multiple;
+          const delta = userExit - impliedExit;
+          const deltaLabel = delta > 0.3 ? 'aggressive' : delta < -0.3 ? 'conservative' : 'in-line';
+          const color = Math.abs(delta) > 1.0 ? '#b91c1c' : 'rgba(17,17,17,0.4)';
+          return (
+            <div className="mb-2.5 px-2 py-1.5" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.06)' }}>
+              <span className="text-[9px] block" style={{ color, fontFamily: "'JetBrains Mono', monospace" }}>
+                Implied exit: {impliedExit.toFixed(1)}x (margin effect {marginEffect >= 0 ? '+' : ''}{marginEffect.toFixed(1)}x, growth decel {growthDecel > 0 ? '−' : '+'}{Math.abs(growthDecel).toFixed(1)}x) · {deltaLabel}
+              </span>
+            </div>
+          );
+        })()}
         <InputField label="Exit Method" path="exit.exit_method" value={ms.exit.exit_method} type="select" options={EXIT_METHODS} />
         {/* Mid-Year Convention Toggle */}
         <div className="mb-2.5">
@@ -199,11 +214,6 @@ const InputPanel: React.FC = () => {
           </div>
         )}
         <InputField label="Exit EV Override" path="exit.exit_ev_override" value={ms.exit.exit_ev_override ?? 0} suffix="£m" />
-        <DerivedMetrics>
-          <InputField label="Exit EV" path="exit.exit_ev" value={ms.exit.exit_ev} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-          <InputField label="Exit Net Debt" path="exit.exit_net_debt" value={ms.exit.exit_net_debt} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-          <InputField label="Exit Equity" path="exit.exit_equity" value={ms.exit.exit_equity} suffix="£m" readOnly formatter={(v) => v.toFixed(1)} />
-        </DerivedMetrics>
       </Section>
 
       {/* MIP */}
