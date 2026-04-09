@@ -25,7 +25,9 @@ export function buildDebtSchedule(
     dscr_by_year: [],
     total_cash_interest_by_year: [],
     total_repayment_by_year: [],
+    total_mandatory_amort_by_year: [],
     total_interest_tax_shield_by_year: [],
+    ecf_by_year: [],
   };
 
   if (!tranches.length) return empty;
@@ -69,7 +71,14 @@ export function buildDebtSchedule(
         ? Math.min(sched[yrIdx], begBal + pikAccrual)
         : 0;
 
-      const commitmentFeePaid = begBal * tranche.commitment_fee;
+      // Commitment fee: for revolvers charge on the UNDRAWN portion;
+      // for all other tranches commitment_fee represents an OID / upfront fee
+      // amortised as a running cost on the outstanding balance (typically 0 for
+      // term debt, non-zero only when explicitly set by user).
+      const undrawnBal = tranche.tranche_type === 'revolver'
+        ? Math.max(0, tranche.principal - begBal)   // fee on undrawn capacity
+        : begBal;                                    // legacy: user-specified running fee on drawn
+      const commitmentFeePaid = undrawnBal * tranche.commitment_fee;
 
       totalMandatoryAmort += scheduledRepayment;
       totalCashInterest += cashInterest;
@@ -91,8 +100,12 @@ export function buildDebtSchedule(
     }
 
     // Second pass: cash sweep (respect minimum cash balance)
+    // ECF = FCF pre-debt minus mandatory obligations (interest + scheduled principal).
+    // A negative ECF signals that the company cannot meet its debt-service obligations
+    // from operating cash flow alone — a potential covenant breach / default event.
     const minCash = state.entry.min_cash_balance || 0;
-    let availableForSweep = Math.max(0, fcfPreDebt - totalMandatoryAmort - totalCashInterest - minCash);
+    const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - minCash;
+    let availableForSweep = Math.max(0, ecf);
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       const tranche = tranches[tIdx];
       const entry = yearEntries[tIdx];
@@ -126,37 +139,50 @@ export function buildDebtSchedule(
   const dscrByYear: number[] = [];
   const cashInterestByYear: number[] = [];
   const repaymentByYear: number[] = [];
+  const mandatoryAmortByYear: number[] = [];
   const shieldByYear: number[] = [];
+  const ecfByYear: number[] = [];
 
   for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
     let totDebt = 0;
     let totCashInt = 0;
     let totRepay = 0;
+    let totMandatoryAmort = 0;
     let totShield = 0;
-    let mandatoryAmort = 0;
 
     for (let t = 0; t < tranches.length; t++) {
       const entry = trancheYears[t][yrIdx];
       totDebt += entry.ending_balance;
       totCashInt += entry.cash_interest;
       totRepay += entry.total_repayment;
+      totMandatoryAmort += entry.scheduled_repayment;
       totShield += entry.interest_tax_shield;
-      mandatoryAmort += entry.scheduled_repayment;
     }
 
     const projYr = yrIdx < projections.length ? projections[yrIdx] : null;
     const ebitdaAdj = projYr ? projYr.ebitda_adj : 1;
     const fcfPre = projYr ? projYr.fcf_pre_debt : 0;
 
+    // Excess Cash Flow = FCF pre-debt minus mandatory debt service (interest + scheduled principal).
+    // Negative ECF means the company cannot service mandatory obligations from operations.
+    const minCash = state.entry.min_cash_balance || 0;
+    const ecf = fcfPre - totMandatoryAmort - totCashInt - minCash;
+
+    // DSCR: FCF pre-debt / (Cash Interest + Mandatory Scheduled Amortization)
+    // Lender standard — both interest and contractual principal repayment are obligatory.
+    // Discretionary cash sweeps are excluded from the denominator.
+    const debtService = totCashInt + totMandatoryAmort;
+
     totalDebtByYear.push(totDebt);
     netDebtByYear.push(totDebt);
     leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 0);
     coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 99);
-    // DSCR: FCF / cash interest only (principal excluded per IC convention, matches backend)
-    dscrByYear.push(totCashInt > 0 ? fcfPre / totCashInt : 99);
+    dscrByYear.push(debtService > 0 ? fcfPre / debtService : 99);
     cashInterestByYear.push(totCashInt);
     repaymentByYear.push(totRepay);
+    mandatoryAmortByYear.push(totMandatoryAmort);
     shieldByYear.push(totShield);
+    ecfByYear.push(ecf);
   }
 
   return {
@@ -168,6 +194,8 @@ export function buildDebtSchedule(
     dscr_by_year: dscrByYear,
     total_cash_interest_by_year: cashInterestByYear,
     total_repayment_by_year: repaymentByYear,
+    total_mandatory_amort_by_year: mandatoryAmortByYear,
     total_interest_tax_shield_by_year: shieldByYear,
+    ecf_by_year: ecfByYear,
   };
 }

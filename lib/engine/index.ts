@@ -11,7 +11,10 @@ import { computeCreditAnalysis } from './creditAnalysis';
 import { computeEBITDABridge } from './ebitdaBridge';
 import { computeFragility } from './fragility';
 
-const MAX_CONVERGENCE_ITER = 5;
+// Increase iterations to give PIK-heavy structures enough room to converge.
+// PIK interest compounds onto the principal each period, so the interest/tax
+// feedback loop can take more cycles to stabilise than a plain cash-pay deal.
+const MAX_CONVERGENCE_ITER = 10;
 const CONVERGENCE_TOLERANCE = 0.01; // £m
 
 export function fullRecalc(state: ModelState): ModelState {
@@ -21,6 +24,9 @@ export function fullRecalc(state: ModelState): ModelState {
   if (state.exit.mid_year_convention === undefined) state.exit.mid_year_convention = false;
   if (!state.exit.interim_distributions) state.exit.interim_distributions = [];
   if (state.exit.exit_ev_override === undefined) state.exit.exit_ev_override = null;
+  if (!state.credit_covenants) {
+    state.credit_covenants = { leverage_covenant: 6.0, dscr_covenant: 1.15, fccr_covenant: 1.10 };
+  }
   for (const t of state.debt_tranches) {
     if (!t.tranche_type) {
       t.tranche_type = 'senior';
@@ -71,9 +77,16 @@ export function fullRecalc(state: ModelState): ModelState {
     proj = updatedProj;
   }
 
+  // Detect debt-model convergence failure: if we exhausted all iterations and the
+  // delta still exceeds tolerance the balance sheet is unbalanced.  Flag it so
+  // the UI and Excel report can warn the user rather than silently showing
+  // incorrect numbers.
+  const debtConvergenceFailed = convergenceDelta > CONVERGENCE_TOLERANCE;
+
   const ret = calculateReturns(state, updatedProj, ds);
   ret.convergence_iterations = iterations;
   ret.convergence_delta = convergenceDelta;
+  ret.debt_convergence_failed = debtConvergenceFailed;
 
   const vd = decomposeValueDrivers(state, updatedProj, ds, ret);
   const rc = runRealityCheck(state, updatedProj, ds, ret);

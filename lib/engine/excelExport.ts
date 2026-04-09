@@ -231,6 +231,7 @@ interface AssumptionCells {
   ltmEbitda: string;
   entryMultiple: string;
   ev: string;
+  leverageRatio: string;   // B9 — used to derive total debt for financing fee formula
   holdingPeriod: string;
   exitMultiple: string;
   targetMargin: string;
@@ -707,26 +708,40 @@ function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string): Assumpt
 
   // ── Build cross-sheet reference map ───────────────────────────────────
 
+  // Row map (hardcoded in buildAssumptionsSheet above):
+  //   B4  LTM Revenue        B5  Base EBITDA Margin  B6  LTM EBITDA
+  //   B7  Entry Multiple     B8  Enterprise Value    B9  Leverage Ratio
+  //   B10 Equity Check
+  //   B13 Holding Period     B14 Exit Multiple
+  //   B18 OPERATING ASSUMPTIONS header (section title — data starts B19)
+  //   B19 Target EBITDA Margin   B20 Margin Trajectory
+  //   B21 D&A % Revenue          B22 Capex % Revenue   B23 NWC % Revenue
+  //   B25 FEES & TAX header (section title — data starts B26)
+  //   B26 Tax Rate    B27 Entry Fee %  B28 Exit Fee %
+  //   B29 Monitoring Fee          B30 Financing Fee %  B31 Transaction Costs
+  //   Row 33 YEAR-BY-YEAR header  Row 34 column headers (Year 1..n)
+  //   Row 35 Revenue Growth rates  Row 36 EBITDA Margin schedule
   return {
     baseRevenue: `${ASHEET}!B4`,
     baseMargin: `${ASHEET}!B5`,
     ltmEbitda: `${ASHEET}!B6`,
     entryMultiple: `${ASHEET}!B7`,
     ev: `${ASHEET}!B8`,
+    leverageRatio: `${ASHEET}!B9`,
     holdingPeriod: `${ASHEET}!B13`,
     exitMultiple: `${ASHEET}!B14`,
-    targetMargin: `${ASHEET}!B18`,
-    daPct: `${ASHEET}!B20`,
-    capexPct: `${ASHEET}!B21`,
-    nwcPct: `${ASHEET}!B22`,
-    taxRate: `${ASHEET}!B25`,
-    entryFeePct: `${ASHEET}!B26`,
-    exitFeePct: `${ASHEET}!B27`,
-    monitoringFee: `${ASHEET}!B28`,
-    financingFeePct: `${ASHEET}!B29`,
-    growthRate: (i: number) => `${ASHEET}!${cl(i + 3)}34`,
-    margin: (i: number) => `${ASHEET}!${cl(i + 3)}35`,
-    entryMargin: `${ASHEET}!B35`,
+    targetMargin: `${ASHEET}!B19`,
+    daPct: `${ASHEET}!B21`,
+    capexPct: `${ASHEET}!B22`,
+    nwcPct: `${ASHEET}!B23`,
+    taxRate: `${ASHEET}!B26`,
+    entryFeePct: `${ASHEET}!B27`,
+    exitFeePct: `${ASHEET}!B28`,
+    monitoringFee: `${ASHEET}!B29`,
+    financingFeePct: `${ASHEET}!B30`,
+    growthRate: (i: number) => `${ASHEET}!${cl(i + 3)}35`,
+    margin: (i: number) => `${ASHEET}!${cl(i + 3)}36`,
+    entryMargin: `${ASHEET}!B36`,
   };
 }
 
@@ -838,12 +853,18 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   R.interest = row;
   row = writeDataRow(ws, row, 'Interest Expense', [null, ...years.map(y => -y.interest_expense)], FMT_CCY);
 
-  // --- Financing Fee Amort = -(EV * Financing Fee %) / Holding Period (linked to Assumptions) ---
+  // --- Financing Fee Amort = -(TotalDebt * Financing Fee %) / Holding Period ---
+  // TotalDebt = LTM EBITDA × Leverage Ratio (B6 × B9 on Assumptions sheet).
+  // Previously this used EV × fee % which is incorrect; financing fees are charged
+  // on total debt raised, not on the enterprise value.
   R.finFee = row;
   const finFeeVals: CellVal[] = [null as CellVal];
-  const totalFinFee = state.entry.enterprise_value * state.fees.financing_fee_pct;
+  const totalFinFee = state.entry.total_debt_raised * state.fees.financing_fee_pct;
   for (let i = 0; i < hp; i++) {
-    finFeeVals.push(fv(`-(${aRefs.ev}*${aRefs.financingFeePct})/${aRefs.holdingPeriod}`, -(totalFinFee / hp)));
+    finFeeVals.push(fv(
+      `-(${aRefs.ltmEbitda}*${aRefs.leverageRatio}*${aRefs.financingFeePct})/${aRefs.holdingPeriod}`,
+      -(totalFinFee / hp),
+    ));
   }
   row = writeDataRow(ws, row, 'Financing Fee Amort.', finFeeVals, FMT_CCY, { alt: true });
 
@@ -1196,9 +1217,19 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
   addRet('Exit Net Debt', ret.exit_net_debt, FMT_CCY, true, 'exitDebt');
   addRet('MIP Payout', ret.mip_payout, FMT_CCY, false, 'mip');
   // Convergence metadata (audit transparency)
-  if ((ret.convergence_iterations ?? 1) > 1) {
+  if ((ret.convergence_iterations ?? 1) > 1 || ret.debt_convergence_failed) {
     addRet('Convergence Iterations', ret.convergence_iterations, '0');
     addRet('Convergence Delta (£m)', ret.convergence_delta, '0.0000', true);
+    if (ret.debt_convergence_failed) {
+      ws.mergeCells(row, 1, row, 3);
+      const warnCell = ws.getCell(row, 1);
+      warnCell.value = '⚠ CONVERGENCE WARNING: Debt/interest loop did not converge — balance sheet may be unbalanced. Review PIK rates and amortization schedules.';
+      warnCell.font = { ...F_RED, bold: true };
+      warnCell.fill = RED_BG_FILL;
+      warnCell.alignment = { wrapText: true };
+      ws.getRow(row).height = 32;
+      row++;
+    }
   }
   row += 2;
 
@@ -1546,14 +1577,86 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
 
     row++;
 
-    // Covenant headroom
+    // Covenant headroom — all three covenants
+    const cov = state.credit_covenants ?? { leverage_covenant: 6.0, dscr_covenant: 1.15, fccr_covenant: 1.10 };
     if (ca.covenant_headroom_by_year.length) {
-      row = writeSectionHeader(ws, row, 'COVENANT HEADROOM (vs 6.0x)', hp + 1);
+      row = writeSectionHeader(ws, row, `COVENANT HEADROOM (Leverage ≤${cov.leverage_covenant.toFixed(1)}x | DSCR ≥${cov.dscr_covenant.toFixed(2)}x | FCCR ≥${cov.fccr_covenant.toFixed(2)}x)`, hp + 1);
       ws.getCell(row, 1).value = '';
       for (let i = 0; i < hp; i++) ws.getCell(row, i + 2).value = `Year ${i + 1}`;
       styleHeaderRow(ws, row, 1, hp + 1);
       row++;
-      row = writeDataRow(ws, row, 'Leverage Headroom (turns)', ca.covenant_headroom_by_year, FMT_NUM);
+
+      // Leverage headroom (positive = in compliance)
+      row = writeDataRow(ws, row, `Leverage Headroom vs ${cov.leverage_covenant.toFixed(1)}x (turns)`,
+        ca.covenant_headroom_by_year.map(h => parseFloat(h.toFixed(2))), FMT_NUM);
+
+      // DSCR headroom (positive = in compliance, negative = breach)
+      if (ca.dscr_headroom_by_year?.length) {
+        const dscrHRow: CellVal[] = ca.dscr_headroom_by_year.map(h => parseFloat(h.toFixed(2)));
+        const dscrHeadrowOpts = {
+          alt: true,
+          font: undefined as object | undefined,
+        };
+        row = writeDataRow(ws, row, `DSCR Headroom vs ${cov.dscr_covenant.toFixed(2)}x (turns)`,
+          dscrHRow, FMT_NUM, { alt: true });
+        // Colour cells red where DSCR covenant is breached
+        for (let i = 0; i < ca.dscr_headroom_by_year.length; i++) {
+          const cell = ws.getCell(row - 1, i + 2);
+          if (ca.dscr_headroom_by_year[i] < 0) {
+            cell.font = F_RED;
+            cell.fill = RED_BG_FILL;
+          } else {
+            cell.font = F_GREEN;
+          }
+        }
+      }
+
+      // FCCR headroom
+      if (ca.fccr_headroom_by_year?.length) {
+        row = writeDataRow(ws, row, `FCCR Headroom vs ${cov.fccr_covenant.toFixed(2)}x (turns)`,
+          ca.fccr_headroom_by_year.map(h => parseFloat(h.toFixed(2))), FMT_NUM);
+        for (let i = 0; i < ca.fccr_headroom_by_year.length; i++) {
+          const cell = ws.getCell(row - 1, i + 2);
+          if (ca.fccr_headroom_by_year[i] < 0) {
+            cell.font = F_RED;
+            cell.fill = RED_BG_FILL;
+          } else {
+            cell.font = F_GREEN;
+          }
+        }
+      }
+    }
+
+    // Insolvency / ECF warnings
+    const hasInsolvency = ca.insolvency_warning_by_year?.some(w => w);
+    if (ca.ecf_by_year?.length) {
+      row++;
+      row = writeSectionHeader(ws, row, 'EXCESS CASH FLOW (ECF = FCF − Mandatory Amort − Cash Interest)', hp + 1);
+      ws.getCell(row, 1).value = '';
+      for (let i = 0; i < hp; i++) ws.getCell(row, i + 2).value = `Year ${i + 1}`;
+      styleHeaderRow(ws, row, 1, hp + 1);
+      row++;
+      row = writeDataRow(ws, row, `ECF (${state.currency}m)`, ca.ecf_by_year.map(v => parseFloat(v.toFixed(2))), FMT_CCY);
+      for (let i = 0; i < ca.ecf_by_year.length; i++) {
+        const cell = ws.getCell(row - 1, i + 2);
+        if (ca.ecf_by_year[i] < 0) {
+          cell.font = { ...F_RED, bold: true };
+          cell.fill = RED_BG_FILL;
+        } else {
+          cell.font = F_GREEN;
+        }
+      }
+      if (hasInsolvency) {
+        row++;
+        ws.mergeCells(row, 1, row, hp + 1);
+        const warnCell = ws.getCell(row, 1);
+        warnCell.value = '⚠ INSOLVENCY RISK: One or more years show negative Excess Cash Flow. The company cannot meet mandatory debt service from operating cash flow — potential covenant breach / default. Review debt structure, covenants and available liquidity sources (revolver draw, equity cure).';
+        warnCell.font = { ...F_RED, bold: true };
+        warnCell.fill = RED_BG_FILL;
+        warnCell.alignment = { wrapText: true };
+        ws.getRow(row).height = 40;
+        row++;
+      }
     }
   }
 
