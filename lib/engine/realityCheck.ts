@@ -227,7 +227,10 @@ function computeImpliedBuyerIrr(
   }
 
   const buyerExitEv = futureEbitda * entryMultiple;
-  const buyerExitEquity = buyerExitEv - buyerDebt * 0.7;
+  // Assume buyer debt amortizes linearly over buyerHold (conservative estimate)
+  const annualAmort = buyerDebt / (buyerHold * 2); // ~50% paydown over hold, typical PE
+  const buyerExitDebt = Math.max(0, buyerDebt - annualAmort * buyerHold);
+  const buyerExitEquity = buyerExitEv - buyerExitDebt;
 
   const buyerCfs = [-buyerEquity, ...Array(buyerHold - 1).fill(0), buyerExitEquity];
   return solveIrr(buyerCfs);

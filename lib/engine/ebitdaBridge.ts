@@ -29,8 +29,9 @@ export function computeEBITDABridge(
     costSynergies += addon.synergy_cost;
   }
 
-  // Monitoring fees (cumulative drag over holding period, but bridge shows annual)
-  const monitoringFees = state.fees.monitoring_fee_annual * state.exit.holding_period;
+  // Monitoring fees: annual fee already deducted from each year's ebitda_adj in projections,
+  // so the bridge shows the annual amount (what reduces the exit year EBITDA vs unadjusted)
+  const monitoringFees = state.fees.monitoring_fee_annual;
 
   return {
     entry_ebitda: entryEbitda,
