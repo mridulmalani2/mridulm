@@ -1593,10 +1593,6 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
       // DSCR headroom (positive = in compliance, negative = breach)
       if (ca.dscr_headroom_by_year?.length) {
         const dscrHRow: CellVal[] = ca.dscr_headroom_by_year.map(h => parseFloat(h.toFixed(2)));
-        const dscrHeadrowOpts = {
-          alt: true,
-          font: undefined as object | undefined,
-        };
         row = writeDataRow(ws, row, `DSCR Headroom vs ${cov.dscr_covenant.toFixed(2)}x (turns)`,
           dscrHRow, FMT_NUM, { alt: true });
         // Colour cells red where DSCR covenant is breached
