@@ -2,15 +2,23 @@ import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 
 const fmt = (v: number, decimals = 1) => v.toFixed(decimals);
+const fmtCcy = (v: number, decimals = 1) => (v >= 0 ? '' : '(') + Math.abs(v).toFixed(decimals) + (v < 0 ? ')' : '');
 const pct = (v: number) => (v * 100).toFixed(1) + '%';
 
 const CreditPanel: React.FC = () => {
   const ca = useDealEngineStore((s) => s.modelState?.credit_analysis);
+  const cov = useDealEngineStore((s) => s.modelState?.credit_covenants);
   const currency = useDealEngineStore((s) => s.modelState?.currency || 'GBP');
 
   if (!ca || ca.metrics_by_year.length === 0) return null;
 
   const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'INR' ? '\u20B9' : currency === 'JPY' ? '\u00A5' : '\u00A3';
+
+  const leverageCov = cov?.leverage_covenant ?? 6.0;
+  const dscrCov = cov?.dscr_covenant ?? 1.15;
+  const fccrCov = cov?.fccr_covenant ?? 1.10;
+
+  const hasInsolvencyRisk = ca.insolvency_warning_by_year?.some(w => w);
 
   const headerStyle = {
     fontFamily: "'JetBrains Mono', monospace",
@@ -37,6 +45,9 @@ const CreditPanel: React.FC = () => {
     : ca.credit_rating_estimate.startsWith('BB') ? '#b45309'
     : '#b91c1c';
 
+  // Helper: colour a headroom value (positive = OK, negative = breach)
+  const headroomColor = (h: number) => h < 0 ? '#b91c1c' : h < 0.25 ? '#b45309' : '#111';
+
   return (
     <div className="p-4" style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}>
       <div className="flex items-center justify-between mb-3">
@@ -47,6 +58,11 @@ const CreditPanel: React.FC = () => {
           <span className="text-[10px]" style={{ color: ratingColor, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
             Est. {ca.credit_rating_estimate}
           </span>
+          {hasInsolvencyRisk && (
+            <span className="text-[10px] px-1.5 py-0.5" style={{ background: '#fff5f5', color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(185,28,28,0.2)', fontWeight: 700 }}>
+              DEFAULT RISK
+            </span>
+          )}
           {ca.refinancing_risk && (
             <span className="text-[10px] px-1.5 py-0.5" style={{ background: '#fff5f5', color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(185,28,28,0.2)' }}>
               REFI RISK
@@ -54,6 +70,14 @@ const CreditPanel: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Insolvency warning banner */}
+      {hasInsolvencyRisk && (
+        <div className="mb-3 p-2 text-[10px]" style={{ background: '#fff5f5', border: '1px solid rgba(185,28,28,0.3)', fontFamily: "'JetBrains Mono', monospace", color: '#b91c1c', fontWeight: 600 }}>
+          ⚠ INSOLVENCY RISK: Negative Excess Cash Flow detected — mandatory debt service exceeds operating cash flow.
+          This is a covenant breach / potential default scenario. Consider revolver availability, equity cure rights, or debt restructuring.
+        </div>
+      )}
 
       {/* Credit metrics table */}
       <div className="overflow-x-auto">
@@ -69,10 +93,11 @@ const CreditPanel: React.FC = () => {
             </tr>
           </thead>
           <tbody>
+            {/* Leverage */}
             <tr>
               <td style={labelCell}>Leverage (x)</td>
               {ca.metrics_by_year.map((m) => (
-                <td key={m.year} style={{ ...cellStyle, color: m.leverage > 6 ? '#b91c1c' : m.leverage > 4.5 ? '#b45309' : '#111' }}>
+                <td key={m.year} style={{ ...cellStyle, color: m.leverage > leverageCov ? '#b91c1c' : m.leverage > leverageCov * 0.75 ? '#b45309' : '#111' }}>
                   {fmt(m.leverage)}x
                 </td>
               ))}
@@ -83,6 +108,7 @@ const CreditPanel: React.FC = () => {
                 <td key={m.year} style={cellStyle}>{fmt(m.senior_leverage)}x</td>
               ))}
             </tr>
+            {/* ICR */}
             <tr>
               <td style={labelCell}>ICR (x)</td>
               {ca.metrics_by_year.map((m) => (
@@ -91,31 +117,68 @@ const CreditPanel: React.FC = () => {
                 </td>
               ))}
             </tr>
+            {/* FCCR with covenant */}
             <tr style={{ background: '#F9F9F7' }}>
-              <td style={labelCell}>FCCR (x)</td>
+              <td style={{ ...labelCell, fontWeight: 600 }}>FCCR (x) ≥{fccrCov.toFixed(2)}x</td>
               {ca.metrics_by_year.map((m) => (
-                <td key={m.year} style={{ ...cellStyle, color: m.fccr < 1.1 ? '#b91c1c' : m.fccr < 1.5 ? '#b45309' : '#111' }}>
+                <td key={m.year} style={{ ...cellStyle, color: m.fccr < fccrCov ? '#b91c1c' : m.fccr < fccrCov + 0.25 ? '#b45309' : '#111' }}>
                   {fmt(m.fccr)}x
                 </td>
               ))}
             </tr>
-            <tr>
-              <td style={labelCell}>DSCR (x)</td>
+            {/* FCCR covenant headroom */}
+            {ca.fccr_headroom_by_year?.length > 0 && (
+              <tr>
+                <td style={{ ...labelCell, fontSize: 10, color: 'rgba(17,17,17,0.45)' }}>  FCCR Headroom</td>
+                {ca.fccr_headroom_by_year.map((h, i) => (
+                  <td key={i} style={{ ...cellStyle, fontSize: 10, color: headroomColor(h) }}>
+                    {h >= 0 ? '+' : ''}{fmt(h)}x
+                  </td>
+                ))}
+              </tr>
+            )}
+            {/* DSCR with covenant */}
+            <tr style={{ background: '#F9F9F7' }}>
+              <td style={{ ...labelCell, fontWeight: 600 }}>DSCR (x) ≥{dscrCov.toFixed(2)}x</td>
               {ca.metrics_by_year.map((m) => (
-                <td key={m.year} style={{ ...cellStyle, color: m.dscr < 1 ? '#b91c1c' : '#111' }}>
+                <td key={m.year} style={{ ...cellStyle, color: m.dscr < dscrCov ? '#b91c1c' : m.dscr < dscrCov + 0.15 ? '#b45309' : '#111' }}>
                   {fmt(m.dscr)}x
                 </td>
               ))}
             </tr>
+            {/* DSCR covenant headroom */}
+            {ca.dscr_headroom_by_year?.length > 0 && (
+              <tr>
+                <td style={{ ...labelCell, fontSize: 10, color: 'rgba(17,17,17,0.45)' }}>  DSCR Headroom</td>
+                {ca.dscr_headroom_by_year.map((h, i) => (
+                  <td key={i} style={{ ...cellStyle, fontSize: 10, color: headroomColor(h) }}>
+                    {h >= 0 ? '+' : ''}{fmt(h)}x
+                  </td>
+                ))}
+              </tr>
+            )}
+            {/* Leverage covenant headroom */}
             <tr style={{ background: '#F9F9F7' }}>
-              <td style={labelCell}>Cov. Headroom</td>
+              <td style={labelCell}>Lev. Headroom vs {leverageCov.toFixed(1)}x</td>
               {ca.covenant_headroom_by_year.map((h, i) => (
-                <td key={i} style={{ ...cellStyle, color: h < 1 ? '#b91c1c' : h < 2 ? '#b45309' : '#15803d' }}>
+                <td key={i} style={{ ...cellStyle, color: h < 0 ? '#b91c1c' : h < 1 ? '#b45309' : '#15803d' }}>
                   {fmt(h)}x
                 </td>
               ))}
             </tr>
-            <tr>
+            {/* ECF — Excess Cash Flow */}
+            {ca.ecf_by_year?.length > 0 && (
+              <tr>
+                <td style={{ ...labelCell, fontWeight: 600 }}>ECF ({sym}m)</td>
+                {ca.ecf_by_year.map((ecf, i) => (
+                  <td key={i} style={{ ...cellStyle, color: ecf < 0 ? '#b91c1c' : '#15803d', fontWeight: ecf < 0 ? 700 : 400 }}>
+                    {ecf < 0 ? '⚠ ' : ''}{fmtCcy(ecf)}
+                  </td>
+                ))}
+              </tr>
+            )}
+            {/* Debt Paydown */}
+            <tr style={{ background: '#F9F9F7' }}>
               <td style={labelCell}>Debt Paydown</td>
               {ca.metrics_by_year.map((m) => (
                 <td key={m.year} style={cellStyle}>{pct(m.debt_paydown_pct)}</td>
@@ -135,7 +198,7 @@ const CreditPanel: React.FC = () => {
             {[
               { label: '4.0x EBITDA', value: ca.max_debt_capacity_at_4x },
               { label: '5.0x EBITDA', value: ca.max_debt_capacity_at_5x },
-              { label: '6.0x EBITDA', value: ca.max_debt_capacity_at_6x },
+              { label: `${leverageCov.toFixed(1)}x EBITDA`, value: ca.max_debt_capacity_at_6x },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
                 <span style={{ color: 'rgba(17,17,17,0.5)' }}>{label}</span>

@@ -137,7 +137,9 @@ export interface DebtScheduleResult {
   dscr_by_year: number[];
   total_cash_interest_by_year: number[];
   total_repayment_by_year: number[];
+  total_mandatory_amort_by_year: number[];   // Scheduled repayments only (excludes discretionary sweeps)
   total_interest_tax_shield_by_year: number[];
+  ecf_by_year: number[];                     // Excess Cash Flow = FCF - mandatory amort - cash interest
 }
 
 export interface Returns {
@@ -151,6 +153,7 @@ export interface Returns {
   irr_levered: number | null;
   irr_unlevered: number | null;
   irr_convergence_failed: boolean;
+  debt_convergence_failed: boolean;          // True when debt/interest loop didn't converge
   entry_equity: number;
   exit_equity: number;
   exit_ev: number;
@@ -287,6 +290,7 @@ export interface ModelState {
   fees: FeeStructure;
   mip: ManagementIncentive;
   exit: ExitAssumptions;
+  credit_covenants: CreditCovenants;
   // New: segments and add-ons
   revenue_segments: RevenueSegment[];
   add_on_acquisitions: AddOnAcquisition[];
@@ -350,14 +354,15 @@ export interface SourcesAndUses {
 
 export interface CreditMetricsYear {
   year: number;
-  fccr: number;                    // (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Amort)
+  fccr: number;                    // (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Scheduled Amort)
   interest_coverage: number;       // EBITDA / Cash Interest
-  dscr: number;                    // FCF pre-debt / (Cash Interest + Mandatory Amort)
+  dscr: number;                    // FCF pre-debt / (Cash Interest + Mandatory Scheduled Amort)
   leverage: number;                // Net Debt / EBITDA
   senior_leverage: number;         // Senior Debt / EBITDA
   total_debt: number;
   cumulative_debt_paydown: number;
   debt_paydown_pct: number;
+  ecf: number;                     // Excess Cash Flow = FCF pre-debt - mandatory amort - cash interest
 }
 
 export interface CreditAnalysis {
@@ -365,11 +370,23 @@ export interface CreditAnalysis {
   max_debt_capacity_at_4x: number;
   max_debt_capacity_at_5x: number;
   max_debt_capacity_at_6x: number;
-  covenant_headroom_by_year: number[];  // leverage headroom vs 6x covenant
+  covenant_headroom_by_year: number[];       // Leverage headroom = covenant_leverage - actual leverage
+  dscr_headroom_by_year: number[];           // DSCR headroom = actual DSCR - covenant_dscr
+  fccr_headroom_by_year: number[];           // FCCR headroom = actual FCCR - covenant_fccr
+  insolvency_warning_by_year: boolean[];     // True when ECF < 0 (default risk)
+  ecf_by_year: number[];                     // Excess Cash Flow per year
   refinancing_risk: boolean;
   refinancing_risk_detail: string;
   recovery_waterfall: { tranche: string; recovery_pct: number }[];
   credit_rating_estimate: string;
+}
+
+// ── Credit Covenants ─────────────────────────────────────────────────────
+
+export interface CreditCovenants {
+  leverage_covenant: number;   // Maximum net leverage (e.g., 6.0x)
+  dscr_covenant: number;       // Minimum DSCR (e.g., 1.15x)
+  fccr_covenant: number;       // Minimum FCCR (e.g., 1.10x)
 }
 
 // ── Revenue Segments ─────────────────────────────────────────────────────

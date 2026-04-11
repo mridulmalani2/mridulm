@@ -164,7 +164,8 @@ export function calculateReturns(
     return {
       irr: null, moic: 0, dpi: 0, rvpi: 0, cash_yield_avg: 0, payback_years: 0,
       irr_gross: null, irr_levered: null, irr_unlevered: null,
-      irr_convergence_failed: true, entry_equity: entryEquity,
+      irr_convergence_failed: true, debt_convergence_failed: false,
+      entry_equity: entryEquity,
       exit_equity: 0, exit_ev: 0, exit_net_debt: 0, mip_payout: 0,
       total_distributions: 0, dpi_by_year: [], rvpi_by_year: [],
       convergence_iterations: 1, convergence_delta: 0,
@@ -181,22 +182,33 @@ export function calculateReturns(
     : 0;
   const exitFee = state.fees.exit_fee_pct * exitEv;
 
-  const exitEquityPreMip = exitEv - exitNetDebt - exitFee;
-  const grossMoic = entryEquity > 0 ? exitEquityPreMip / entryEquity : 0;
-
-  const mipPayout = grossMoic >= state.mip.hurdle_moic
-    ? state.mip.mip_pool_pct * exitEquityPreMip
-    : 0;
-
-  const exitEquity = exitEquityPreMip - mipPayout;
-
   // ── Interim distributions (dividend recaps) ──
+  // Must be computed before the MIP check so that total return MOIC
+  // (exit proceeds + all distributions) can be used as the hurdle trigger.
+  // In most PE deal docs the hurdle is based on Total True Return, not just
+  // the exit proceeds — missing distributions here would fail to trigger the
+  // management catch-up after a large mid-hold dividend recap.
   const rawDist = state.exit.interim_distributions || [];
   const distributions: number[] = [];
   for (let i = 0; i < hp; i++) {
     distributions.push(i < rawDist.length ? rawDist[i] : 0);
   }
   const totalDistributions = distributions.reduce((s, d) => s + d, 0);
+
+  const exitEquityPreMip = exitEv - exitNetDebt - exitFee;
+
+  // MIP hurdle check: use Total Return MOIC = (Exit Equity pre-MIP + All Distributions) / Entry Equity.
+  // Using gross MOIC on exit proceeds alone would incorrectly fail to trigger the catch-up when
+  // management has hit the target return via interim distributions during the hold.
+  const totalReturnMoic = entryEquity > 0
+    ? (exitEquityPreMip + totalDistributions) / entryEquity
+    : 0;
+
+  const mipPayout = totalReturnMoic >= state.mip.hurdle_moic
+    ? state.mip.mip_pool_pct * exitEquityPreMip
+    : 0;
+
+  const exitEquity = exitEquityPreMip - mipPayout;
 
   // MOIC includes all distributions
   const moic = entryEquity > 0 ? (exitEquity + totalDistributions) / entryEquity : 0;
@@ -298,6 +310,7 @@ export function calculateReturns(
     irr_levered: irrLevered,
     irr_unlevered: irrUnlevered,
     irr_convergence_failed: irr === null,
+    debt_convergence_failed: false,   // set by fullRecalc after convergence loop
     entry_equity: entryEquity,
     exit_equity: exitEquity,
     exit_ev: exitEv,

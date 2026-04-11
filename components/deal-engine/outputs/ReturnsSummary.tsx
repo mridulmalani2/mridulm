@@ -45,6 +45,13 @@ const ReturnsSummary: React.FC = () => {
         </div>
       </div>
 
+      {/* Debt convergence warning — shown when the debt/interest loop didn't stabilise */}
+      {ret.debt_convergence_failed && (
+        <div className="mb-3 px-2 py-1.5 text-[10px]" style={{ background: '#fff5f5', border: '1px solid rgba(185,28,28,0.25)', fontFamily: "'JetBrains Mono', monospace", color: '#b91c1c', fontWeight: 600 }}>
+          ⚠ MODEL WARNING: Debt convergence failed — balance sheet may be unbalanced. Returns are indicative only. Check PIK rates and amortization schedules.
+        </div>
+      )}
+
       {/* Hero IRR */}
       <div className="mb-5">
         <div className="font-playfair text-5xl font-bold mb-1" style={{ color: irrColor(displayIrr) }}>
