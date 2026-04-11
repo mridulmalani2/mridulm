@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../store/dealEngine';
+import { getInputTemplate, getAiPrompt } from '../lib/importTemplate';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
 import ReturnsSummary from '../components/deal-engine/outputs/ReturnsSummary';
@@ -131,6 +132,26 @@ const InitializeForm: React.FC = () => {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiInfo, setShowApiInfo] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showAiImport, setShowAiImport] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const handleCopyPrompt = () => {
+    navigator.clipboard.writeText(getAiPrompt()).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    });
+  };
+
+  const handleDownloadTemplate = () => {
+    const json = JSON.stringify(getInputTemplate(), null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'deal-engine-template.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -420,6 +441,63 @@ const InitializeForm: React.FC = () => {
             >
               Suggestions
             </button>
+
+            {/* AI Import Kit */}
+            <div className="mt-2.5">
+              <button
+                type="button"
+                onClick={() => setShowAiImport(!showAiImport)}
+                className="w-full py-1.5 text-[10px] tracking-widest uppercase transition-colors flex items-center justify-between px-3"
+                style={{
+                  background: 'transparent',
+                  color: showAiImport ? '#CC0000' : 'rgba(17,17,17,0.35)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  border: `1px solid ${showAiImport ? 'rgba(204,0,0,0.25)' : 'rgba(17,17,17,0.1)'}`,
+                  letterSpacing: '0.12em',
+                }}
+              >
+                <span>AI Import Kit</span>
+                <span style={{ fontSize: 8, opacity: 0.7 }}>{showAiImport ? '▲' : '▼'}</span>
+              </button>
+
+              {showAiImport && (
+                <div className="mt-1.5 p-3" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+                  <p className="mb-3 leading-relaxed" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 12, lineHeight: 1.7 }}>
+                    Download a JSON template + copy an AI prompt. Feed any deal data to an AI, get structured JSON back, then load it here via the Load button.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyPrompt}
+                      className="py-2 text-[10px] tracking-widest uppercase transition-colors"
+                      style={{
+                        background: promptCopied ? 'rgba(21,128,61,0.06)' : 'transparent',
+                        color: promptCopied ? '#15803d' : 'rgba(17,17,17,0.5)',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        border: `1px solid ${promptCopied ? 'rgba(21,128,61,0.3)' : 'rgba(17,17,17,0.15)'}`,
+                        letterSpacing: '0.1em',
+                      }}
+                    >
+                      {promptCopied ? '✓ Copied' : 'Copy Prompt'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadTemplate}
+                      className="py-2 text-[10px] tracking-widest uppercase transition-colors"
+                      style={{
+                        background: 'transparent',
+                        color: 'rgba(17,17,17,0.5)',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        border: '1px solid rgba(17,17,17,0.15)',
+                        letterSpacing: '0.1em',
+                      }}
+                    >
+                      Download JSON
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </form>
         </div>
 

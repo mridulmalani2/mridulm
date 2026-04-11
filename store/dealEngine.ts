@@ -569,7 +569,44 @@ Be specific. Use the company name to infer business type and calibrate according
 
   loadModel: async (file) => {
     const text = await file.text();
-    const data = JSON.parse(text) as ModelState;
+    const raw = JSON.parse(text) as Partial<ModelState>;
+    // Deep-merge with defaults so an input-only template JSON (no output fields)
+    // doesn't crash fullRecalc. For full saved models, outputs are reset anyway
+    // because fullRecalc recomputes them all from scratch.
+    const defaults = createDefaultModelState();
+    const data: ModelState = {
+      ...defaults,
+      ...raw,
+      // Nested input objects — merge field-by-field so partial overrides work
+      revenue: { ...defaults.revenue, ...(raw.revenue || {}) },
+      margins: { ...defaults.margins, ...(raw.margins || {}) },
+      tax: { ...defaults.tax, ...(raw.tax || {}) },
+      entry: { ...defaults.entry, ...(raw.entry || {}) },
+      fees: { ...defaults.fees, ...(raw.fees || {}) },
+      mip: { ...defaults.mip, ...(raw.mip || {}) },
+      exit: { ...defaults.exit, ...(raw.exit || {}) },
+      credit_covenants: { ...defaults.credit_covenants, ...(raw.credit_covenants || {}) },
+      // Arrays — use raw if present
+      debt_tranches: raw.debt_tranches ?? defaults.debt_tranches,
+      revenue_segments: raw.revenue_segments ?? defaults.revenue_segments,
+      add_on_acquisitions: raw.add_on_acquisitions ?? defaults.add_on_acquisitions,
+      // Preserve user-generated data from full saves; empty for input-only templates
+      scenarios: raw.scenarios ?? [],
+      sensitivity_tables: raw.sensitivity_tables ?? [],
+      chat_history: raw.chat_history ?? [],
+      ai_overrides: raw.ai_overrides ?? {},
+      ai_toggle_fields: raw.ai_toggle_fields ?? [],
+      // Output fields — always reset; fullRecalc recomputes all of these
+      projections: defaults.projections,
+      debt_schedule: defaults.debt_schedule,
+      returns: defaults.returns,
+      value_drivers: defaults.value_drivers,
+      sources_and_uses: defaults.sources_and_uses,
+      credit_analysis: defaults.credit_analysis,
+      ebitda_bridge: defaults.ebitda_bridge,
+      fragility: defaults.fragility,
+      exit_reality_check: defaults.exit_reality_check,
+    };
     set({ isCalculating: true });
     try {
       const result = fullRecalc(data);
