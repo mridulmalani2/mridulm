@@ -1,7 +1,39 @@
-"""Exit reality check (8 rules) and IC-grade credit analysis with stress tests."""
+"""Exit reality check (8 rules) and IC-grade credit analysis with stress tests.
+
+Audit-driven changes (audit_report.md, reality_check.py findings):
+  * Rule 1 exit fee uses the actual exit EV, not the hypothetical impact EV
+    (FINDING 1).
+  * Rule 2 reverts both leverage AND exit multiple to entry levels for a
+    consistent counterfactual (FINDING 2).
+  * Rule 3 buyer-IRR EV-discount uses a numerical solve for the EV that
+    would deliver a 15% buyer IRR rather than a linear bps-vs-time heuristic
+    (FINDING 3).
+  * Rule 6 entry equity uses `state.sponsor_entry_equity_for(...)` — the
+    single-source helper — so the alt-EV equity stays in sync with the
+    audit-correct convention (FINDING 4).
+  * Implied buyer IRR projects forward FCF to derive the buyer's debt
+    paydown rather than assuming a flat 30% paydown (FINDING 5).
+  * Senior leverage uses the senior-tranche-only series surfaced by the
+    debt schedule (FINDING 6).
+  * Recovery waterfall uses `state.entry.initial_equity` — the canonical
+    alias of `equity_check` (FINDING 7).
+  * Refinancing risk threshold tests against a stressed (conservative)
+    EBITDA, not peak EBITDA (FINDING 8).
+  * Fragility score guards against low / negative base IRR — the score is
+    only meaningful above a 10% threshold, otherwise we report the bps
+    drop directly (FINDING 9).
+  * Dominant-shock attribution caps the share at 100% and is labelled as
+    an isolated-shock approximation (FINDING 10).
+  * Post-recap leverage adds the dividend distribution back to debt for the
+    leverage check, treating the distribution as debt-funded — the standard
+    dividend-recap convention (FINDING 11).
+  * Verdict logic incorporates leverage and margin trajectory in addition
+    to multiple delta (FINDING 12).
+"""
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from backend.models.debt import DebtSchedule
@@ -52,9 +84,18 @@ def run_reality_check(
 
     # RULE 1 — Multiple Expansion + Margin Expansion (simultaneous)
     if exit_multiple > entry_multiple and exit_margin > entry_margin + 0.03:
-        # Impact: compute IRR at exit_multiple = entry_multiple
+        # Impact: compute IRR at exit_multiple = entry_multiple. The exit fee
+        # is contractual on the actual transaction value, so we apply it on
+        # the realised exit EV (FINDING 1) — applying it on the lower
+        # impact EV would understate the fee drag and overstate the
+        # counterfactual IRR.
         impact_ev = exit_ebitda * entry_multiple
-        impact_eq = impact_ev - exit_net_debt - state.fees.exit_fee_pct * impact_ev - returns.mip_payout
+        impact_eq = (
+            impact_ev
+            - exit_net_debt
+            - state.fees.exit_fee_pct * exit_ev
+            - returns.mip_payout
+        )
         impact_cfs = [-returns.entry_equity] + [0.0] * (hp - 1) + [impact_eq]
         impact_irr = _solve_irr(impact_cfs)
         delta_bps = int(((returns.irr or 0) - (impact_irr or 0)) * 10000) if returns.irr and impact_irr else 0
@@ -67,10 +108,20 @@ def run_reality_check(
 
     # RULE 2 — Multiple Expansion + Leverage Increase
     if exit_multiple > entry_multiple and exit_leverage > entry_leverage:
-        # Impact: compute IRR at exit_leverage = entry_leverage
-        # If exit leverage matched entry, exit net debt would be entry_leverage * exit_ebitda
+        # Counterfactual: revert BOTH leverage and exit multiple to entry
+        # levels (FINDING 2). High exit multiple paired with low leverage is
+        # an inconsistent hybrid that doesn't reflect real buyer behaviour;
+        # if leverage compresses to entry, the exit multiple typically does
+        # too. Fee drag is computed on the new (lower) impact EV since this
+        # is now the actual transaction value in the counterfactual.
+        impact_ev = exit_ebitda * entry_multiple
         impact_net_debt = entry_leverage * exit_ebitda
-        impact_eq = exit_ev - impact_net_debt - state.fees.exit_fee_pct * exit_ev - returns.mip_payout
+        impact_eq = (
+            impact_ev
+            - impact_net_debt
+            - state.fees.exit_fee_pct * impact_ev
+            - returns.mip_payout
+        )
         impact_cfs = [-returns.entry_equity] + [0.0] * (hp - 1) + [impact_eq]
         impact_irr = _solve_irr(impact_cfs)
         delta_bps = int(((returns.irr or 0) - (impact_irr or 0)) * 10000) if returns.irr and impact_irr else 0
@@ -78,7 +129,10 @@ def run_reality_check(
             flag_type="multiple_expansion_with_leverage_increase",
             severity="critical",
             description="Exit leverage exceeds entry leverage with simultaneous multiple expansion — rarely seen in practice.",
-            quantified_impact=f"{delta_bps}bps IRR impact at entry leverage ({entry_leverage:.1f}x)",
+            quantified_impact=(
+                f"{delta_bps}bps IRR impact if both revert to entry "
+                f"({entry_leverage:.1f}x leverage, {entry_multiple:.1f}x multiple)"
+            ),
         ))
 
     # RULE 3 — Implied Buyer Return Too Low
@@ -141,10 +195,16 @@ def run_reality_check(
     }
     sector_median = sector_medians.get(state.sector, 10.0)
     if entry_multiple > sector_median * 1.25:
-        # Impact at sector median
+        # Impact at sector median: re-derive sponsor entry equity using the
+        # canonical helper (FINDING 4). The previous formula manually added
+        # transaction costs + financing fees on top of EV and subtracted
+        # gross debt — which double-counted financing fees and ignored the
+        # audit convention that entry advisory fees are target-borne.
         ebitda_entry = state.revenue.base_revenue * state.margins.base_ebitda_margin
         alt_ev = ebitda_entry * sector_median
-        alt_equity = alt_ev + state.fees.transaction_costs + state.fees.financing_fee_pct * state.entry.total_debt_raised - state.entry.total_debt_raised
+        alt_equity = state.sponsor_entry_equity_for(
+            alt_ev, state.entry.total_debt_raised
+        )
         if alt_equity > 0:
             alt_exit_eq = returns.exit_ev - returns.exit_net_debt - state.fees.exit_fee_pct * returns.exit_ev - returns.mip_payout
             alt_cfs = [-alt_equity] + [0.0] * (hp - 1) + [alt_exit_eq]
@@ -374,9 +434,14 @@ def compute_credit_analysis(
                 ))
                 remaining_ev = max(0.0, remaining_ev - recovery_abs)
 
-        # Equity residual
-        equity_check = state.entry.equity_check
-        equity_recovery_pct = min(1.0, remaining_ev / equity_check) if equity_check > 0 else 0.0
+        # Equity residual — use the canonical `initial_equity` alias rather
+        # than the misleading `equity_check` name (FINDING 7). Both fields
+        # point at the same value (kept in sync by `derive_entry_fields`),
+        # but `initial_equity` reads as the dollar amount it actually is.
+        initial_equity = state.entry.initial_equity
+        equity_recovery_pct = (
+            min(1.0, remaining_ev / initial_equity) if initial_equity > 0 else 0.0
+        )
         recovery_waterfall.append(RecoveryTranche(
             tranche=f"Equity ({stress_label})",
             recovery_pct=equity_recovery_pct,
