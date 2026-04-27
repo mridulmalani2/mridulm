@@ -1515,7 +1515,6 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
   row += 1;
 
   // ── Ranked Value Drivers (engine-computed, IC grade) ───────────────────
-  const vd = state.value_drivers;
   if (vd.ranked_drivers && vd.ranked_drivers.length) {
     row = writeSectionHeader(ws, row, 'VALUE DRIVER RANKING', 7);
     ws.getCell(row, 1).value = 'Rank'; ws.getCell(row, 2).value = 'Driver';
