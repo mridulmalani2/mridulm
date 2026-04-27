@@ -1,9 +1,10 @@
-/** Client-side Excel export engine -- 8-sheet professional PE workbook. */
+/** Client-side Excel export engine -- 9-sheet banking-grade PE workbook. */
 
 import type {
   ModelState,
   AnnualProjectionYear,
 } from '../dealEngineTypes';
+import { solveIrr } from './returns';
 
 let ExcelJS: typeof import('exceljs') | null = null;
 
@@ -262,6 +263,64 @@ interface PLRefs {
 const ASHEET = "'Assumptions'";
 const PLSHEET = "'P&L'";
 
+// ── Sensitivity helpers ──────────────────────────────────────────────────
+
+/**
+ * Fast IRR computation for a given entry × exit multiple combination.
+ * Holds all operating assumptions fixed (debt, exit EBITDA, fees) and only
+ * varies the multiple — the standard "quick sensitivity" methodology used
+ * in investment banking pitch books and IC memos.
+ */
+function irrForMultiples(state: ModelState, entryMult: number, exitMult: number): number | null {
+  const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+  const totalDebt = state.entry.total_debt_raised;
+  const su = state.sources_and_uses;
+  const entryFees = su.transaction_fees + su.financing_fees;
+  const exitEbitda = state.exit.exit_ebitda;
+  const exitNetDebt = state.returns.exit_net_debt;
+  const mip = state.returns.mip_payout;
+  const exitFeePct = state.fees.exit_fee_pct;
+  const hp = state.exit.holding_period;
+  const distributions = (state.exit.interim_distributions ?? []).reduce((a, b) => a + b, 0);
+
+  const entryEV = entryEbitda * entryMult;
+  const entryEq = entryEV - totalDebt - entryFees;
+  if (entryEq <= 0) return null;
+
+  const exitEV = exitEbitda * exitMult;
+  const exitEq = exitEV - exitNetDebt - exitFeePct * exitEV - mip + distributions;
+  if (exitEq <= 0) return null;
+
+  const cfs = [-entryEq, ...Array(hp - 1).fill(0), exitEq];
+  return solveIrr(cfs);
+}
+
+function moicForMultiples(state: ModelState, entryMult: number, exitMult: number): number | null {
+  const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+  const totalDebt = state.entry.total_debt_raised;
+  const su = state.sources_and_uses;
+  const entryFees = su.transaction_fees + su.financing_fees;
+  const exitEbitda = state.exit.exit_ebitda;
+  const exitNetDebt = state.returns.exit_net_debt;
+  const mip = state.returns.mip_payout;
+  const exitFeePct = state.fees.exit_fee_pct;
+  const distributions = (state.exit.interim_distributions ?? []).reduce((a, b) => a + b, 0);
+
+  const entryEV = entryEbitda * entryMult;
+  const entryEq = entryEV - totalDebt - entryFees;
+  if (entryEq <= 0) return null;
+
+  const exitEV = exitEbitda * exitMult;
+  const exitEq = exitEV - exitNetDebt - exitFeePct * exitEV - mip + distributions;
+  return exitEq / entryEq;
+}
+
+/** Build a range of multiples centered on the base, stepped by `step`. */
+function multRange(base: number, steps: number, step: number): number[] {
+  const half = Math.floor(steps / 2);
+  return Array.from({ length: steps }, (_, i) => Math.round((base + (i - half) * step) * 4) / 4);
+}
+
 // ── Main Export ──────────────────────────────────────────────────────────
 
 export async function buildExcel(state: ModelState): Promise<Blob> {
@@ -447,7 +506,81 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
   ws.getCell(row, 4).font = convFailed ? F_RED : F_GREEN;
   ws.getCell(row, 4).fill = convFailed ? RED_BG_FILL : GREEN_BG_FILL;
   ws.getCell(row, 4).alignment = { horizontal: 'center' };
-  row += 2;
+  row += 1;
+
+  // Entry vs Exit Snapshot
+  row = writeSectionHeader(ws, row, 'ENTRY vs EXIT SNAPSHOT', 5);
+
+  const eiColHeaders = ['METRIC', 'ENTRY', 'EXIT', 'DELTA'];
+  for (let i = 0; i < eiColHeaders.length; i++) {
+    const cell = ws.getCell(row, i + 2);
+    cell.value = eiColHeaders[i];
+    cell.fill = NAVY_FILL;
+    cell.font = F_HEADER;
+    cell.alignment = { horizontal: i > 0 ? 'right' : 'left', vertical: 'middle' };
+    cell.border = THIN_BOTTOM;
+  }
+  row += 1;
+
+  {
+    const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+    const snapshotHp = state.exit.holding_period;
+    const snapshotYears = state.projections.years;
+    const lastYrRev = snapshotHp > 0 && snapshotYears.length >= snapshotHp
+      ? snapshotYears[snapshotHp - 1].revenue
+      : state.revenue.base_revenue;
+    const exitMarginPct = lastYrRev > 0 ? state.exit.exit_ebitda / lastYrRev : 0;
+    const exitNdEbitda = state.exit.exit_ebitda > 0 ? state.returns.exit_net_debt / state.exit.exit_ebitda : 0;
+
+    const eiRows: [string, number, number, string, boolean][] = [
+      ['Revenue', state.revenue.base_revenue, lastYrRev, `"${ccy}"#,##0.0`, false],
+      ['EBITDA', entryEbitda, state.exit.exit_ebitda, `"${ccy}"#,##0.0`, true],
+      ['EBITDA Margin', state.margins.base_ebitda_margin, exitMarginPct, FMT_PCT, false],
+      ['EV / EBITDA Multiple', state.entry.entry_ebitda_multiple, state.exit.exit_ebitda_multiple, FMT_MULT, true],
+      ['Enterprise Value', state.entry.enterprise_value, state.returns.exit_ev, `"${ccy}"#,##0.0`, false],
+      ['Net Debt / EBITDA', state.entry.leverage_ratio, exitNdEbitda, FMT_MULT, true],
+    ];
+
+    for (const [label, entryVal, exitVal, fmt, isAlt] of eiRows) {
+      const lc = ws.getCell(row, 2);
+      lc.value = label; lc.font = F_BODY; lc.border = THIN_BOTTOM;
+      if (isAlt) lc.fill = LIGHT_FILL;
+
+      const ec = ws.getCell(row, 3);
+      ec.value = entryVal; ec.numFmt = fmt; ec.font = F_BODY;
+      ec.alignment = { horizontal: 'right' }; ec.border = THIN_BOTTOM;
+      if (isAlt) ec.fill = LIGHT_FILL;
+
+      const xc = ws.getCell(row, 4);
+      xc.value = exitVal; xc.numFmt = fmt; xc.font = F_BODY;
+      xc.alignment = { horizontal: 'right' }; xc.border = THIN_BOTTOM;
+      if (isAlt) xc.fill = LIGHT_FILL;
+
+      let deltaText: string;
+      const lowerIsBetter = label === 'Net Debt / EBITDA';
+      if (fmt === FMT_PCT) {
+        const bps = Math.round((exitVal - entryVal) * 10000);
+        deltaText = `${bps >= 0 ? '+' : ''}${bps}bps`;
+      } else if (fmt === FMT_MULT) {
+        const diff = exitVal - entryVal;
+        deltaText = `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}x`;
+      } else {
+        const pct = entryVal > 0 ? (exitVal - entryVal) / Math.abs(entryVal) : 0;
+        deltaText = `${pct >= 0 ? '+' : ''}${(pct * 100).toFixed(0)}%`;
+      }
+      const isPositive = lowerIsBetter ? exitVal <= entryVal : exitVal >= entryVal;
+
+      const dc = ws.getCell(row, 5);
+      dc.value = deltaText;
+      dc.font = isPositive ? F_GREEN : F_RED;
+      dc.alignment = { horizontal: 'right' }; dc.border = THIN_BOTTOM;
+      if (isAlt) dc.fill = isPositive ? GREEN_BG_FILL : RED_BG_FILL;
+
+      row += 1;
+    }
+  }
+
+  row += 1;
 
   // Sheet navigation guide
   row = writeSectionHeader(ws, row, 'WORKBOOK GUIDE', 5);
@@ -1178,6 +1311,64 @@ function buildCashFlowDebtSheet(
     row = writeDataRow(ws, row, 'Debt Paydown (% Entry)', ca.metrics_by_year.map(m => m.debt_paydown_pct), FMT_PCT);
   }
 
+  // ── Debt Cost & Service Summary ────────────────────────────────────────
+  row++;
+  row = writeSectionHeader(ws, row, 'DEBT COST & SERVICE SUMMARY', hp + 1);
+  ws.getCell(row, 1).value = '';
+  for (let i = 0; i < hp; i++) ws.getCell(row, i + 2).value = `Year ${i + 1}`;
+  styleHeaderRow(ws, row, 1, hp + 1);
+  row++;
+
+  // Weighted Average Cost of Debt = total cash interest / average debt outstanding
+  const wacdVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const avgDebt = i === 0
+      ? (state.entry.total_debt_raised + (ds.total_debt_by_year[i] ?? 0)) / 2
+      : ((ds.total_debt_by_year[i - 1] ?? 0) + (ds.total_debt_by_year[i] ?? 0)) / 2;
+    const wacd = avgDebt > 0 ? ds.total_cash_interest_by_year[i] / avgDebt : 0;
+    wacdVals.push(wacd);
+  }
+  row = writeDataRow(ws, row, 'Weighted Avg. Cost of Debt (WACD)', wacdVals, FMT_PCT);
+
+  // Total Debt Service = Cash Interest + Mandatory Amortisation
+  const totalDebtSvcVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const svc = ds.total_cash_interest_by_year[i] + (ds.total_mandatory_amort_by_year?.[i] ?? 0);
+    totalDebtSvcVals.push(-svc);
+  }
+  row = writeDataRow(ws, row, 'Total Debt Service (Int + Mandatory Amort)', totalDebtSvcVals, FMT_CCY, { alt: true });
+
+  // Debt Service Coverage (FCF Pre-Debt / Total Debt Service)
+  const dscVals: CellVal[] = [];
+  for (let i = 0; i < hp; i++) {
+    const svc = ds.total_cash_interest_by_year[i] + (ds.total_mandatory_amort_by_year?.[i] ?? 0);
+    const fcf = years[i].fcf_pre_debt;
+    dscVals.push(svc > 0 ? fcf / svc : null);
+  }
+  row = writeDataRow(ws, row, 'Debt Service Coverage (FCF / Svc)', dscVals, FMT_NUM);
+  // Colour code < 1.0x red, 1.0–1.5x amber
+  for (let i = 0; i < hp; i++) {
+    const v = typeof dscVals[i] === 'number' ? dscVals[i] as number : null;
+    const cell = ws.getCell(row - 1, i + 2);
+    if (v !== null) {
+      cell.font = v < 1.0 ? F_RED : v < 1.5 ? F_AMBER : F_GREEN;
+      cell.fill = v < 1.0 ? RED_BG_FILL : v < 1.5 ? AMBER_BG_FILL : GREEN_BG_FILL;
+    }
+  }
+
+  // Interest Tax Shield (value created by debt deductibility)
+  if (ds.total_interest_tax_shield_by_year?.length) {
+    row = writeDataRow(ws, row, 'Interest Tax Shield', ds.total_interest_tax_shield_by_year, FMT_CCY, { alt: true });
+    const cumTs = ds.total_interest_tax_shield_by_year.reduce((a, b) => a + b, 0);
+    const cumTsCell = ws.getCell(row - 1, hp + 2);
+    cumTsCell.value = cumTs;
+    cumTsCell.numFmt = FMT_CCY;
+    cumTsCell.font = F_GREEN;
+    cumTsCell.border = THIN_BOTTOM;
+    ws.getCell(row - 1, hp + 2 - 1).value = 'Cumul.:';
+    ws.getCell(row - 1, hp + 2 - 1).font = { ...F_BODY, size: 8 };
+  }
+
   freezeAndPrint(ws, 3, 1);
 }
 
@@ -1323,6 +1514,66 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
   }
   row += 1;
 
+  // ── Ranked Value Drivers (engine-computed, IC grade) ───────────────────
+  const vd = state.value_drivers;
+  if (vd.ranked_drivers && vd.ranked_drivers.length) {
+    row = writeSectionHeader(ws, row, 'VALUE DRIVER RANKING', 7);
+    ws.getCell(row, 1).value = 'Rank'; ws.getCell(row, 2).value = 'Driver';
+    ws.getCell(row, 3).value = `Contribution (${ccy}m)`; ws.getCell(row, 4).value = '% of Gain';
+    styleHeaderRow(ws, row, 1, 4);
+    row++;
+    for (let i = 0; i < vd.ranked_drivers.length; i++) {
+      const d = vd.ranked_drivers[i];
+      const alt = i % 2 === 1;
+      ws.getCell(row, 1).value = d.rank; ws.getCell(row, 1).font = F_BODY_BOLD;
+      ws.getCell(row, 1).border = THIN_BOTTOM; if (alt) ws.getCell(row, 1).fill = LIGHT_FILL;
+      ws.getCell(row, 2).value = d.driver.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      ws.getCell(row, 2).font = F_BODY; ws.getCell(row, 2).border = THIN_BOTTOM;
+      if (alt) ws.getCell(row, 2).fill = LIGHT_FILL;
+      ws.getCell(row, 3).value = d.contribution_abs; ws.getCell(row, 3).numFmt = FMT_CCY;
+      ws.getCell(row, 3).font = d.contribution_abs >= 0 ? F_GREEN : F_RED;
+      ws.getCell(row, 3).border = THIN_BOTTOM; ws.getCell(row, 3).alignment = { horizontal: 'right' };
+      if (alt) ws.getCell(row, 3).fill = LIGHT_FILL;
+      ws.getCell(row, 4).value = d.contribution_pct / 100; ws.getCell(row, 4).numFmt = FMT_PCT;
+      ws.getCell(row, 4).font = F_BODY; ws.getCell(row, 4).border = THIN_BOTTOM;
+      ws.getCell(row, 4).alignment = { horizontal: 'right' };
+      if (alt) ws.getCell(row, 4).fill = LIGHT_FILL;
+      row++;
+    }
+    // Operational vs financial engineering summary
+    row++;
+    ws.getCell(row, 1).value = 'Operational (Rev + Margin)'; ws.getCell(row, 1).font = F_BODY_BOLD;
+    ws.getCell(row, 2).value = `${(vd.operational_pct).toFixed(1)}%`; ws.getCell(row, 2).font = F_BODY;
+    ws.getCell(row, 3).value = 'Financial Engineering (Multiple + Debt + Fees)'; ws.getCell(row, 3).font = F_BODY_BOLD;
+    ws.getCell(row, 4).value = `${(vd.financial_engineering_pct).toFixed(1)}%`; ws.getCell(row, 4).font = F_BODY;
+    for (let c = 1; c <= 4; c++) {
+      ws.getCell(row, c).fill = MID_FILL;
+      ws.getCell(row, c).border = MED_BOTTOM;
+    }
+    row += 2;
+  }
+
+  // ── Interim Distributions ───────────────────────────────────────────────
+  const dists = state.exit.interim_distributions ?? [];
+  if (dists.some(d => d > 0)) {
+    row = writeSectionHeader(ws, row, 'INTERIM DISTRIBUTIONS', 3);
+    ws.getCell(row, 1).value = 'Year'; ws.getCell(row, 2).value = `Amount (${ccy}m)`; ws.getCell(row, 3).value = 'Cumulative';
+    styleHeaderRow(ws, row, 1, 3);
+    row++;
+    let cumDist = 0;
+    for (let i = 0; i < dists.length; i++) {
+      if (dists[i] <= 0) continue;
+      cumDist += dists[i];
+      ws.getCell(row, 1).value = `Year ${i + 1}`; ws.getCell(row, 1).font = F_BODY; ws.getCell(row, 1).border = THIN_BOTTOM;
+      ws.getCell(row, 2).value = dists[i]; ws.getCell(row, 2).numFmt = FMT_CCY; ws.getCell(row, 2).font = F_GREEN;
+      ws.getCell(row, 2).border = THIN_BOTTOM; ws.getCell(row, 2).alignment = { horizontal: 'right' };
+      ws.getCell(row, 3).value = cumDist; ws.getCell(row, 3).numFmt = FMT_CCY; ws.getCell(row, 3).font = F_BODY;
+      ws.getCell(row, 3).border = THIN_BOTTOM; ws.getCell(row, 3).alignment = { horizontal: 'right' };
+      row++;
+    }
+    row++;
+  }
+
   // EBITDA Bridge
   const eb = state.ebitda_bridge;
   if (eb && eb.entry_ebitda > 0) {
@@ -1352,6 +1603,140 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
       if (alt && !isTotal) { ws.getCell(row, 1).fill = LIGHT_FILL; ws.getCell(row, 2).fill = LIGHT_FILL; }
       row++;
     }
+  }
+  row += 2;
+
+  // ── IRR Sensitivity: Entry × Exit EBITDA Multiple ──────────────────────
+  // Standard IC / pitch-book 2-D sensitivity table. Computes IRR analytically
+  // (one solveIrr call per cell) — fast; no full recalc required.
+  const baseEntry = state.entry.entry_ebitda_multiple;
+  const baseExit = state.exit.exit_ebitda_multiple;
+  const entryMults = multRange(baseEntry, 5, 0.5);
+  const exitMults  = multRange(baseExit,  5, 0.5);
+  const nCols = exitMults.length + 1; // +1 for row-header column
+
+  row = writeSectionHeader(ws, row, 'IRR SENSITIVITY  —  Entry EBITDA Multiple × Exit EBITDA Multiple', nCols + 1);
+  ws.getCell(row, 1).value = 'Entry \\ Exit';
+  ws.getCell(row, 1).font = F_HEADER;
+  for (let j = 0; j < exitMults.length; j++) {
+    ws.getCell(row, j + 2).value = `${exitMults[j].toFixed(1)}x`;
+    ws.getCell(row, j + 2).font = F_HEADER;
+    ws.getCell(row, j + 2).alignment = { horizontal: 'center' };
+  }
+  styleHeaderRow(ws, row, 1, nCols);
+  row++;
+
+  for (let i = 0; i < entryMults.length; i++) {
+    const em = entryMults[i];
+    const isBaseRow = Math.abs(em - baseEntry) < 0.26;
+    const rh = ws.getCell(row, 1);
+    rh.value = `${em.toFixed(1)}x`;
+    rh.font = isBaseRow ? F_BODY_BOLD : F_BODY;
+    rh.fill = isBaseRow ? MID_FILL : LIGHT_FILL;
+    rh.border = THIN_BOTTOM;
+    rh.alignment = { horizontal: 'center' };
+
+    for (let j = 0; j < exitMults.length; j++) {
+      const xm = exitMults[j];
+      const irr = irrForMultiples(state, em, xm);
+      const isBaseCell = isBaseRow && Math.abs(xm - baseExit) < 0.26;
+      const cell = ws.getCell(row, j + 2);
+      cell.value = irr;
+      cell.numFmt = FMT_PCT;
+      cell.alignment = { horizontal: 'center' };
+      cell.border = THIN_BOTTOM;
+      if (isBaseCell) {
+        cell.font = { ...irrFont(irr), bold: true };
+        cell.fill = MID_FILL;
+        cell.border = { top: { style: 'medium', color: { argb: NAVY } }, bottom: { style: 'medium', color: { argb: NAVY } }, left: { style: 'medium', color: { argb: NAVY } }, right: { style: 'medium', color: { argb: NAVY } } };
+      } else {
+        cell.font = irrFont(irr);
+        const bg = irrBgFill(irr);
+        if (bg) cell.fill = bg;
+        else if (i % 2 === 1) cell.fill = LIGHT_FILL;
+      }
+    }
+    row++;
+  }
+
+  // Legend
+  row++;
+  const legendItems: [string, object, object][] = [
+    ['>25% IRR', F_GREEN, GREEN_BG_FILL],
+    ['15–25% IRR', F_AMBER, AMBER_BG_FILL],
+    ['<15% IRR', F_RED, RED_BG_FILL],
+    ['■ Base Case', F_BODY_BOLD, MID_FILL],
+  ];
+  ws.getCell(row, 1).value = 'Legend:'; ws.getCell(row, 1).font = { ...F_BODY, size: 8 };
+  for (let i = 0; i < legendItems.length; i++) {
+    const [label, font, fill] = legendItems[i];
+    const cell = ws.getCell(row, i + 2);
+    cell.value = label;
+    cell.font = { ...(font as object), size: 8 } as import('exceljs').Font;
+    cell.fill = fill as import('exceljs').Fill;
+    cell.alignment = { horizontal: 'center' };
+    cell.border = THIN_BOTTOM;
+  }
+  row += 2;
+
+  // ── MOIC Sensitivity: Entry × Exit EBITDA Multiple ─────────────────────
+  row = writeSectionHeader(ws, row, 'MOIC SENSITIVITY  —  Entry EBITDA Multiple × Exit EBITDA Multiple', nCols + 1);
+  ws.getCell(row, 1).value = 'Entry \\ Exit'; ws.getCell(row, 1).font = F_HEADER;
+  for (let j = 0; j < exitMults.length; j++) {
+    ws.getCell(row, j + 2).value = `${exitMults[j].toFixed(1)}x`;
+    ws.getCell(row, j + 2).font = F_HEADER;
+    ws.getCell(row, j + 2).alignment = { horizontal: 'center' };
+  }
+  styleHeaderRow(ws, row, 1, nCols);
+  row++;
+
+  for (let i = 0; i < entryMults.length; i++) {
+    const em = entryMults[i];
+    const isBaseRow = Math.abs(em - baseEntry) < 0.26;
+    const rh = ws.getCell(row, 1);
+    rh.value = `${em.toFixed(1)}x`; rh.font = isBaseRow ? F_BODY_BOLD : F_BODY;
+    rh.fill = isBaseRow ? MID_FILL : LIGHT_FILL; rh.border = THIN_BOTTOM;
+    rh.alignment = { horizontal: 'center' };
+
+    for (let j = 0; j < exitMults.length; j++) {
+      const xm = exitMults[j];
+      const moic = moicForMultiples(state, em, xm);
+      const isBaseCell = isBaseRow && Math.abs(xm - baseExit) < 0.26;
+      const cell = ws.getCell(row, j + 2);
+      cell.value = moic ?? null;
+      cell.numFmt = FMT_MULT;
+      cell.alignment = { horizontal: 'center' };
+      cell.border = THIN_BOTTOM;
+      const moicColor = (moic ?? 0) >= 3.0 ? F_GREEN : (moic ?? 0) >= 2.0 ? F_AMBER : F_RED;
+      const moicBg   = (moic ?? 0) >= 3.0 ? GREEN_BG_FILL : (moic ?? 0) >= 2.0 ? AMBER_BG_FILL : RED_BG_FILL;
+      if (isBaseCell) {
+        cell.font = { ...moicColor, bold: true };
+        cell.fill = MID_FILL;
+        cell.border = { top: { style: 'medium', color: { argb: NAVY } }, bottom: { style: 'medium', color: { argb: NAVY } }, left: { style: 'medium', color: { argb: NAVY } }, right: { style: 'medium', color: { argb: NAVY } } };
+      } else {
+        cell.font = moicColor;
+        cell.fill = isBaseRow ? MID_FILL : (i % 2 === 1 ? LIGHT_FILL : moicBg);
+      }
+    }
+    row++;
+  }
+
+  // MOIC legend
+  row++;
+  const moicLegend: [string, object, object][] = [
+    ['>3.0x MOIC', F_GREEN, GREEN_BG_FILL],
+    ['2.0–3.0x MOIC', F_AMBER, AMBER_BG_FILL],
+    ['<2.0x MOIC', F_RED, RED_BG_FILL],
+  ];
+  ws.getCell(row, 1).value = 'Legend:'; ws.getCell(row, 1).font = { ...F_BODY, size: 8 };
+  for (let i = 0; i < moicLegend.length; i++) {
+    const [label, font, fill] = moicLegend[i];
+    const cell = ws.getCell(row, i + 2);
+    cell.value = label;
+    cell.font = { ...(font as object), size: 8 } as import('exceljs').Font;
+    cell.fill = fill as import('exceljs').Fill;
+    cell.alignment = { horizontal: 'center' };
+    cell.border = THIN_BOTTOM;
   }
 
   freezeAndPrint(ws, 3, 1);
