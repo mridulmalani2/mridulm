@@ -260,29 +260,61 @@ def run_reality_check(
         ))
 
     # RULE 9 — Post-Recap Leverage Check (dividend recapitalization)
+    # FINDING 11: the recorded `leverage_ratio_by_year` reflects the
+    # year-end balance BEFORE the distribution is funded — i.e., it is
+    # pre-recap. Dividend recaps are typically debt-funded, so the
+    # incremental debt-to-EBITDA after the distribution is higher than
+    # what the schedule shows. We add the distribution back to the
+    # year-end debt to derive a post-recap leverage figure for the check.
     distributions = state.exit.interim_distributions
     if distributions and any(d > 0 for d in distributions):
         leverage_threshold = 5.0 if state.sector in ("Technology", "Healthcare") else 4.0
         for t_idx, dist in enumerate(distributions):
-            if dist > 0 and t_idx < len(debt_schedule.leverage_ratio_by_year):
-                leverage_at_t = debt_schedule.leverage_ratio_by_year[t_idx]
-                if leverage_at_t > leverage_threshold:
-                    flags.append(ExitFlag(
-                        flag_type="post_recap_leverage_excessive",
-                        severity="warning",
-                        description=(
-                            f"Year {t_idx + 1} distribution of {ccy}{dist:.0f}m occurs at "
-                            f"{leverage_at_t:.1f}x leverage — above {leverage_threshold:.0f}x sector threshold."
-                        ),
-                        quantified_impact=f"Post-distribution leverage: {leverage_at_t:.1f}x",
-                    ))
+            if dist <= 0 or t_idx >= len(debt_schedule.total_debt_by_year):
+                continue
+            proj_yr = (
+                projections.years[t_idx] if t_idx < len(projections.years) else None
+            )
+            if proj_yr is None or proj_yr.ebitda_adj <= 0:
+                continue
+            recorded_debt = debt_schedule.total_debt_by_year[t_idx]
+            post_recap_debt = recorded_debt + dist
+            post_recap_leverage = post_recap_debt / proj_yr.ebitda_adj
+            if post_recap_leverage > leverage_threshold:
+                pre_recap_leverage = (
+                    debt_schedule.leverage_ratio_by_year[t_idx]
+                    if t_idx < len(debt_schedule.leverage_ratio_by_year)
+                    else recorded_debt / proj_yr.ebitda_adj
+                )
+                flags.append(ExitFlag(
+                    flag_type="post_recap_leverage_excessive",
+                    severity="warning",
+                    description=(
+                        f"Year {t_idx + 1} distribution of {ccy}{dist:.0f}m pushes leverage to "
+                        f"{post_recap_leverage:.1f}x post-recap (vs {pre_recap_leverage:.1f}x pre-recap) — "
+                        f"above {leverage_threshold:.0f}x sector threshold."
+                    ),
+                    quantified_impact=(
+                        f"Post-distribution leverage: {post_recap_leverage:.1f}x "
+                        f"(pre-recap {pre_recap_leverage:.1f}x)"
+                    ),
+                ))
 
-    # Verdict
+    # Verdict (FINDING 12). A multiple compression alone does not make a
+    # deal conservative: aggressive growth, expanding margins, or rising
+    # leverage can all offset it. We only label the deal "conservative"
+    # when ALL three primary value drivers are flat-to-down vs entry —
+    # multiple, leverage, and margin (with a 100bps tolerance band on
+    # margin to allow for measurement noise from trajectory smoothing).
     critical_count = sum(1 for f in flags if f.severity == "critical")
     if critical_count > 0:
         verdict = "aggressive"
-    elif len(flags) == 0 or (len(flags) > 0 and exit_multiple < entry_multiple):
-        verdict = "conservative" if exit_multiple < entry_multiple else "realistic"
+    elif (
+        exit_multiple < entry_multiple
+        and exit_leverage <= entry_leverage
+        and exit_margin <= entry_margin + 0.01
+    ):
+        verdict = "conservative"
     else:
         verdict = "realistic"
 
@@ -761,16 +793,41 @@ def compute_fragility(
         ),
     ]
 
-    # ── Fragility score ──
+    # ── Fragility score (FINDING 9) ──
+    # The relative score (drop / base_irr) is unstable when base IRR is at
+    # or below ~10%: a small absolute drop translates to an enormous
+    # percentage decline, and the ratio is undefined for non-positive base
+    # IRR. Below the 10% floor we fall back to absolute bps thresholds for
+    # classification — < 500bps Robust, < 1000bps Moderate, otherwise
+    # Fragile — which keep the deal honest without dividing by something
+    # near zero.
     combined_drop = abs(_delta_irr(c_irr) or 0.0)
-    fragility_score = combined_drop / base_irr if (base_irr and base_irr > 0) else 0.0
+    relative_floor = 0.10
 
-    if fragility_score < 0.20:
-        classification = "Robust"
-    elif fragility_score < 0.40:
-        classification = "Moderate Risk"
+    if base_irr is not None and base_irr > relative_floor:
+        fragility_score = combined_drop / base_irr
+        score_basis = "relative"
+        if fragility_score < 0.20:
+            classification = "Robust"
+        elif fragility_score < 0.40:
+            classification = "Moderate Risk"
+        else:
+            classification = "Fragile"
     else:
-        classification = "Fragile"
+        # Below floor: classify on absolute bps drop. The displayed score
+        # uses the floor as the denominator so it is always a finite,
+        # comparable upper bound on how exposed the deal is — but the
+        # classification ignores the score entirely.
+        fragility_score = (
+            combined_drop / relative_floor if combined_drop > 0 else 0.0
+        )
+        score_basis = "absolute"
+        if combined_drop < 0.05:
+            classification = "Robust"
+        elif combined_drop < 0.10:
+            classification = "Moderate Risk"
+        else:
+            classification = "Fragile"
 
     # Dominant individual shock (largest IRR drop)
     individual = [
@@ -784,25 +841,61 @@ def compute_fragility(
     # ── Structured insight text (data-only, no generic statements) ──
     base_irr_str = f"{base_irr:.1%}" if base_irr else "N/A"
     c_irr_str = f"{c_irr:.1%}" if c_irr else "N/A"
-    insight_irr_drop = (
-        f"IRR drops from {base_irr_str} → {c_irr_str} under combined stress "
-        f"({fragility_score:.0%} decline). "
-        f"Base MOIC {base_moic:.2f}x → {c_moic:.2f}x stressed."
-    )
+    if score_basis == "relative":
+        insight_irr_drop = (
+            f"IRR drops from {base_irr_str} → {c_irr_str} under combined stress "
+            f"({fragility_score:.0%} decline). "
+            f"Base MOIC {base_moic:.2f}x → {c_moic:.2f}x stressed."
+        )
+    else:
+        insight_irr_drop = (
+            f"IRR drops from {base_irr_str} → {c_irr_str} under combined stress "
+            f"({combined_drop * 100:.0f}bps absolute decline; base IRR below "
+            f"{relative_floor:.0%} floor — relative fragility score not meaningful). "
+            f"Base MOIC {base_moic:.2f}x → {c_moic:.2f}x stressed."
+        )
 
-    # What fraction of combined IRR drop is from the dominant shock?
+    # Dominant shock attribution. Individual shocks are not strictly
+    # additive (they interact nonlinearly with leverage and the multiple),
+    # so the sum of isolated drops can either over- or under-state the
+    # combined drop. We cap the share at 100% (FINDING 10) and flag the
+    # number as an isolated-shock approximation rather than a clean
+    # variance decomposition (the latter would require a Shapley
+    # decomposition).
     combined_drop_val = abs(_delta_irr(c_irr) or 0.0)
-    dominant_share = dominant_drop / combined_drop_val if combined_drop_val > 0 else 0.0
+    if combined_drop_val > 0:
+        dominant_share_raw = dominant_drop / combined_drop_val
+    else:
+        dominant_share_raw = 0.0
+    dominant_share = min(1.0, dominant_share_raw)
+    if dominant_share_raw > 1.0:
+        attribution_caveat = (
+            f" Isolated shocks sum to >100% of combined drop "
+            f"({dominant_share_raw:.0%}) — diversification benefit indicates "
+            f"shocks partially offset when applied jointly."
+        )
+    else:
+        attribution_caveat = ""
     insight_dominant = (
         f"{dominant_share:.0%} of combined downside driven by {dominant} compression "
-        f"({dominant_drop * 100:.0f}bps IRR impact in isolation)."
+        f"({dominant_drop * 100:.0f}bps IRR impact in isolation; "
+        f"attribution is an approximation, not a Shapley decomposition).{attribution_caveat}"
     )
 
-    insight_class = (
-        f"Deal classified as {classification}: combined IRR drop of "
-        f"{fragility_score:.0%} vs base under mild stress (-2% growth, "
-        f"-100bps margin, -1x exit multiple)."
-    )
+    if score_basis == "relative":
+        insight_class = (
+            f"Deal classified as {classification}: combined IRR drop of "
+            f"{fragility_score:.0%} vs base under mild stress (-2% growth, "
+            f"-100bps margin, -1x exit multiple)."
+        )
+    else:
+        insight_class = (
+            f"Deal classified as {classification}: combined IRR drop of "
+            f"{combined_drop * 100:.0f}bps under mild stress (-2% growth, "
+            f"-100bps margin, -1x exit multiple). Base IRR below {relative_floor:.0%} "
+            f"floor — classification uses absolute bps thresholds rather than "
+            f"a ratio that would divide by a small / non-positive base."
+        )
 
     return FragilityAnalysis(
         base_irr=base_irr,
