@@ -968,7 +968,7 @@ function buildCashFlowDebtSheet(
   wb: WB, state: ModelState, ccy: string, hp: number,
   years: AnnualProjectionYear[],
   ds: ModelState['debt_schedule'],
-  aRefs: AssumptionCells,
+  _aRefs: AssumptionCells,
   plRefs: PLRefs,
 ) {
   const ws = wb.addWorksheet('Cash Flow & Debt', { properties: { tabColor: { argb: '1e8449' } } });
