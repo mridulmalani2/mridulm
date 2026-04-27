@@ -141,15 +141,30 @@ def run_reality_check(
     )
     if implied_buyer_irr is not None and implied_buyer_irr < 0.15:
         gap_bps = int((0.15 - implied_buyer_irr) * 10000)
-        # Compute what exit EV discount would restore a 15% buyer IRR
-        # Buyer equity = EV - debt, so to get 15%: buyer_equity_req is smaller → lower EV
         buyer_leverage = state.entry.leverage_ratio
-        buyer_debt = exit_ebitda * buyer_leverage
-        # At 15% IRR: exit_equity_15 = (entry_equity_at_15) * (1.15)^hold
-        # Approximate: EV reduction needed ≈ gap in returns * holding period
-        buyer_equity_current = max(0.0, exit_ev - buyer_debt)
-        ev_pct_discount_for_hurdle = gap_bps / 10000 * 5  # rough linear approx over 5yr hold
-        implied_discount_ev = exit_ev * ev_pct_discount_for_hurdle
+        # Numerically solve for the exit EV at which a hypothetical buyer
+        # would clear a 15% IRR (FINDING 3). The previous heuristic
+        # `gap_bps/10000 * holding_period` linearised an inherently
+        # nonlinear relationship and broke down at large gaps or long
+        # holds. The solve uses the same FCF-projected debt paydown as
+        # the IRR calc, so the discount is internally consistent.
+        implied_entry_ev = _solve_buyer_ev_for_hurdle(
+            state,
+            exit_ev=exit_ev,
+            exit_ebitda=exit_ebitda,
+            exit_margin=exit_margin,
+            exit_growth=exit_growth,
+            entry_multiple=entry_multiple,
+            hurdle=0.15,
+        )
+        if implied_entry_ev is not None and implied_entry_ev < exit_ev:
+            implied_discount_ev = exit_ev - implied_entry_ev
+            ev_pct_discount_for_hurdle = (
+                implied_discount_ev / exit_ev if exit_ev > 0 else 0.0
+            )
+        else:
+            implied_discount_ev = 0.0
+            ev_pct_discount_for_hurdle = 0.0
         flags.append(ExitFlag(
             flag_type="implied_buyer_return_too_low",
             severity="critical",
@@ -287,6 +302,78 @@ def run_reality_check(
     )
 
 
+def _project_buyer_path(
+    state: ModelState,
+    exit_ebitda: float,
+    exit_margin: float,
+    exit_growth: float,
+    buyer_hold: int,
+    buyer_debt: float,
+) -> tuple[float, float]:
+    """Project a buyer's forward EBITDA and remaining debt at exit.
+
+    Returns (future_ebitda, remaining_debt_at_buyer_exit).
+
+    The previous implementation assumed a flat 30% debt paydown
+    (`buyer_debt * 0.7`) regardless of operating performance, an arbitrary
+    figure flagged as critical (audit FINDING 5). This helper instead
+    projects FCFF year by year using the same operating assumptions the
+    buyer is presumed to inherit (growth, margin, capex, NWC, tax) and
+    sweeps free cash after cash interest service to pay down debt. Debt is
+    floored at zero and paydown is capped at the rolling balance, so the
+    exit debt always reflects what the buyer can plausibly amortise out of
+    operating cash. No mandatory amortisation is assumed — buyer-side
+    refinancing typically runs through a unitranche / term loan with
+    bullet maturity inside the hold period.
+    """
+    if buyer_hold <= 0 or exit_margin <= 0 or exit_ebitda <= 0:
+        return exit_ebitda, max(0.0, buyer_debt)
+
+    # Operating assumptions (held flat over the buyer's hold for tractability)
+    capex_pct = state.margins.capex_pct_revenue
+    nwc_pct = state.margins.nwc_pct_revenue
+    da_pct = state.margins.da_pct_revenue
+    tax_rate = state.tax.tax_rate
+
+    # Buyer's cost of debt: weighted-average effective rate of the
+    # original deal's tranches, falling back to a 7% baseline if
+    # nothing is configured. This stays in line with the leverage assumption
+    # being a continuation of the originating sponsor's capital structure.
+    if state.debt_tranches:
+        total_principal = sum(t.principal for t in state.debt_tranches) or 1.0
+        weighted_rate = sum(
+            t.principal * (t.interest_rate or (t.base_rate + t.spread))
+            for t in state.debt_tranches
+        ) / total_principal
+        buyer_rate = max(0.01, weighted_rate)
+    else:
+        buyer_rate = 0.07
+
+    rev = exit_ebitda / exit_margin
+    prev_rev = rev
+    debt = max(0.0, buyer_debt)
+    future_ebitda = exit_ebitda
+
+    for _ in range(buyer_hold):
+        rev *= (1.0 + exit_growth)
+        future_ebitda = rev * exit_margin
+        ebit = future_ebitda - rev * da_pct
+        # FCFF = NOPAT + D&A − Capex − ΔNWC (consistent with the audit-
+        # corrected projection engine).
+        nopat = ebit * (1.0 - tax_rate)
+        capex = rev * capex_pct
+        delta_nwc = (rev - prev_rev) * nwc_pct
+        fcff = nopat + rev * da_pct - capex - delta_nwc
+        # Cash interest serviced first, then residual sweeps debt.
+        cash_interest = debt * buyer_rate
+        available = fcff - cash_interest
+        paydown = max(0.0, min(debt, available))
+        debt = max(0.0, debt - paydown)
+        prev_rev = rev
+
+    return future_ebitda, debt
+
+
 def _compute_implied_buyer_irr(
     state: ModelState,
     exit_ev: float,
@@ -295,7 +382,11 @@ def _compute_implied_buyer_irr(
     exit_growth: float,
     entry_multiple: float,
 ) -> Optional[float]:
-    """Solve IRR for hypothetical buyer at exit_ev, same growth/margins, 5yr hold, exit at entry_multiple."""
+    """Solve IRR for hypothetical buyer at `exit_ev`, same growth/margins, 5yr hold, exit at entry_multiple.
+
+    Buyer's debt paydown is FCF-projected (FINDING 5) instead of a flat
+    30% heuristic.
+    """
     buyer_hold = 5
     buyer_leverage = state.entry.leverage_ratio
     buyer_debt = exit_ebitda * buyer_leverage
@@ -304,18 +395,62 @@ def _compute_implied_buyer_irr(
     if buyer_equity <= 0:
         return None
 
-    # Project forward 5 years with same growth/margin
-    rev = exit_ebitda / exit_margin if exit_margin > 0 else 0.0
-    future_ebitda = exit_ebitda
-    for _ in range(buyer_hold):
-        rev *= (1.0 + exit_growth)
-        future_ebitda = rev * exit_margin
+    future_ebitda, exit_debt = _project_buyer_path(
+        state, exit_ebitda, exit_margin, exit_growth, buyer_hold, buyer_debt
+    )
 
     buyer_exit_ev = future_ebitda * entry_multiple
-    buyer_exit_equity = buyer_exit_ev - buyer_debt * 0.7  # assume ~30% debt paydown
+    buyer_exit_equity = buyer_exit_ev - exit_debt
 
     buyer_cfs = [-buyer_equity] + [0.0] * (buyer_hold - 1) + [buyer_exit_equity]
     return _solve_irr(buyer_cfs)
+
+
+def _solve_buyer_ev_for_hurdle(
+    state: ModelState,
+    *,
+    exit_ev: float,
+    exit_ebitda: float,
+    exit_margin: float,
+    exit_growth: float,
+    entry_multiple: float,
+    hurdle: float,
+    buyer_hold: int = 5,
+) -> Optional[float]:
+    """Numerically solve for the entry EV that yields the buyer's hurdle IRR.
+
+    Audit FINDING 3: replaces the prior linear `gap_bps × hold_period`
+    heuristic with a proper IRR-consistent solve. The buyer's debt and
+    operating projection are independent of the entry EV (debt is sized on
+    the company's EBITDA at the time of buyer entry, and the FCF path is
+    operating-driven), so the entry equity required to clear the hurdle
+    is closed-form once the buyer-exit equity is known:
+
+        required_entry_equity = buyer_exit_equity / (1 + hurdle) ** hold
+        implied_entry_ev      = required_entry_equity + buyer_debt
+    """
+    if exit_ebitda <= 0 or exit_margin <= 0 or hurdle <= -1.0:
+        return None
+
+    buyer_leverage = state.entry.leverage_ratio
+    buyer_debt = exit_ebitda * buyer_leverage
+
+    future_ebitda, exit_debt = _project_buyer_path(
+        state, exit_ebitda, exit_margin, exit_growth, buyer_hold, buyer_debt
+    )
+
+    buyer_exit_ev = future_ebitda * entry_multiple
+    buyer_exit_equity = buyer_exit_ev - exit_debt
+    if buyer_exit_equity <= 0:
+        return None
+
+    discount = (1.0 + hurdle) ** buyer_hold
+    if not math.isfinite(discount) or discount <= 0:
+        return None
+
+    required_entry_equity = buyer_exit_equity / discount
+    implied_entry_ev = required_entry_equity + buyer_debt
+    return max(0.0, implied_entry_ev)
 
 
 # ── Credit Analysis with Stress Tests & Recovery Waterfall ───────────────
@@ -375,6 +510,17 @@ def compute_credit_analysis(
 
         leverage = tot_debt / ebitda_adj if ebitda_adj > 0 else 0.0
 
+        # Senior leverage tracks senior tranches only (FINDING 6). The
+        # debt schedule already exposes a senior-only series — reuse it
+        # so credit analysis matches the rest of the engine.
+        if (
+            debt_schedule.senior_leverage_by_year
+            and yr_idx < len(debt_schedule.senior_leverage_by_year)
+        ):
+            senior_leverage = debt_schedule.senior_leverage_by_year[yr_idx]
+        else:
+            senior_leverage = leverage
+
         # Cumulative debt paydown since entry
         cumulative_paydown = initial_debt - tot_debt
         paydown_pct = cumulative_paydown / initial_debt if initial_debt > 0 else 0.0
@@ -385,7 +531,7 @@ def compute_credit_analysis(
             interest_coverage=interest_coverage,
             dscr=dscr,
             leverage=leverage,
-            senior_leverage=leverage,
+            senior_leverage=senior_leverage,
             total_debt=tot_debt,
             cumulative_debt_paydown=cumulative_paydown,
             debt_paydown_pct=paydown_pct,
@@ -457,12 +603,41 @@ def compute_credit_analysis(
             covenant_headroom.append(yr.ebitda_adj - ebitda_required)
 
     ebitda_at_entry = state.revenue.base_revenue * state.margins.base_ebitda_margin
-    refinancing_risk = exit_debt > exit_ebitda * 4.5 if exit_ebitda > 0 else False
-    refinancing_detail = (
-        f"Exit leverage {exit_debt / exit_ebitda:.1f}x exceeds 4.5x refinancing threshold"
-        if refinancing_risk and exit_ebitda > 0
-        else ""
-    )
+    # Refinancing capacity is underwritten by lenders against a conservative
+    # / normalised EBITDA, not the peak exit EBITDA (audit FINDING 8). We
+    # take the more conservative of (a) 80% of exit EBITDA and (b) the
+    # second-to-last forecast year, which approximates a normalised
+    # through-cycle figure when EBITDA growth is back-loaded.
+    if exit_ebitda > 0:
+        prior_ebitda = (
+            projections.years[-2].ebitda_adj
+            if len(projections.years) > 1
+            else exit_ebitda
+        )
+        conservative_ebitda = min(exit_ebitda * 0.8, prior_ebitda)
+        # Floor at zero — negative EBITDA collapses to "no refinancing capacity"
+        conservative_ebitda = max(0.0, conservative_ebitda)
+    else:
+        conservative_ebitda = 0.0
+    refinancing_threshold = 4.5
+    refinancing_risk = (
+        conservative_ebitda <= 0 or exit_debt > conservative_ebitda * refinancing_threshold
+    ) if exit_ebitda > 0 else False
+    if refinancing_risk and conservative_ebitda > 0:
+        stress_leverage = exit_debt / conservative_ebitda
+        peak_leverage_str = (
+            f" (peak {exit_debt / exit_ebitda:.1f}x)" if exit_ebitda > 0 else ""
+        )
+        refinancing_detail = (
+            f"Exit leverage on stressed EBITDA {stress_leverage:.1f}x"
+            f"{peak_leverage_str} exceeds {refinancing_threshold:.1f}x refinancing threshold"
+        )
+    elif refinancing_risk:
+        refinancing_detail = (
+            "Stressed EBITDA non-positive — no refinancing capacity"
+        )
+    else:
+        refinancing_detail = ""
 
     return CreditAnalysis(
         metrics_by_year=metrics,
