@@ -582,8 +582,10 @@ function buildAssumptionsSheet(wb: WB, state: ModelState, _ccy: string): Assumpt
   ws.getCell(8, 2).font = F_BODY_BOLD; ws.getCell(8, 2).numFmt = FMT_CCY; ws.getCell(8, 2).border = THIN_BOTTOM; ws.getCell(8, 2).alignment = { horizontal: 'right' };
   // Row 9: Leverage Ratio
   writeKvRow(ws, 9, 'Leverage Ratio', state.entry.leverage_ratio, { fmt: FMT_MULT });
-  // Row 10: Equity Check
-  writeKvRow(ws, 10, 'Equity Check', state.entry.equity_check, { fmt: FMT_CCY, alt: true });
+  // Row 10: Initial Equity (canonical name; mirrors `equity_check` for backward
+  // compatibility with the TS engine, which has not yet adopted the audit-
+  // driven `initial_equity` alias).
+  writeKvRow(ws, 10, 'Initial Equity (Sponsor)', state.entry.equity_check, { fmt: FMT_CCY, alt: true });
 
   // ── Section 2: Exit Assumptions (rows 12-15) ──────────────────────────
 
@@ -1112,13 +1114,25 @@ function buildCashFlowDebtSheet(
   // --- Credit Metrics with formulas ---
   row = writeSectionHeader(ws, row, 'CREDIT METRICS', hp + 1);
 
-  // Leverage = Total Debt / EBITDA Adj
+  // Leverage = Total Debt / EBITDA Adj. The series `leverage_ratio_by_year`
+  // is GROSS debt / EBITDA in the TS engine — label accordingly to avoid
+  // confusion with the separate net-debt row below.
   const levVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
     const col = i + 2;
     levVals.push(fv(`IF(${cr(R.ebitdaAdj, col)}=0,0,${cr(R.totalDebt, col)}/${cr(R.ebitdaAdj, col)})`, ds.leverage_ratio_by_year[i]));
   }
-  row = writeDataRow(ws, row, 'Net Debt / EBITDA', levVals, FMT_MULT, { bold: true });
+  row = writeDataRow(ws, row, 'Gross Debt / EBITDA', levVals, FMT_MULT, { bold: true });
+
+  // True net leverage from `ds.net_debt_by_year` (gross − cash on BS). Only
+  // emit the row when the engine actually populates it.
+  if (ds.net_debt_by_year && ds.net_debt_by_year.length === hp) {
+    const netLevVals: CellVal[] = ds.net_debt_by_year.map((nd, i) => {
+      const ebitda = years[i]?.ebitda_adj ?? 0;
+      return ebitda > 0 ? nd / ebitda : 0;
+    });
+    row = writeDataRow(ws, row, 'Net Debt / EBITDA', netLevVals, FMT_MULT, { alt: true });
+  }
 
   // Interest Coverage = EBITDA Adj / -Cash Interest (cash interest row is negative)
   const icVals: CellVal[] = [];
