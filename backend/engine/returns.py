@@ -176,13 +176,10 @@ def calculate_returns(
     mid_year = state.exit.mid_year_convention
     times = _build_time_vector(hp, mid_year) if mid_year else None
 
-    # Sponsor entry equity (FINDING 1): excludes entry advisory fee
-    financing_fees = state.fees.financing_fee_pct * state.entry.total_debt_raised
-    entry_equity = (
-        state.entry.enterprise_value
-        + state.fees.transaction_costs
-        + financing_fees
-        - state.entry.total_debt_raised
+    # Sponsor entry equity (FINDING 1) — uses the single-source helper to
+    # ensure every caller (this module, scenarios, reality_check) agrees.
+    entry_equity = state.sponsor_entry_equity_for(
+        state.entry.enterprise_value, state.entry.total_debt_raised
     )
 
     if entry_equity <= 0:

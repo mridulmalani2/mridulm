@@ -226,19 +226,28 @@ class ModelState(BaseModel):
         self.entry.total_debt_raised = sum(t.principal for t in self.debt_tranches)
         if ebitda > 0 and self.entry.total_debt_raised > 0:
             self.entry.leverage_ratio = self.entry.total_debt_raised / ebitda
-        # Sponsor equity contribution.
-        # Convention: entry advisory fee is paid by the target company out of EV proceeds —
-        # it does not increase the sponsor's equity check (audit FINDING [1] returns.py).
-        # Sponsor-funded fees = transaction costs + financing fees.
-        # Debt raised is treated as gross proceeds; financing fees are an equity-funded outflow.
-        financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised
-        sponsor_funded_fees = self.fees.transaction_costs + financing_fees
-        self.entry.equity_check = (
-            self.entry.enterprise_value
-            + sponsor_funded_fees
-            - self.entry.total_debt_raised
+        # Sponsor equity contribution — single source of truth lives in
+        # sponsor_entry_equity_for(). Entry advisory fee is target-borne.
+        self.entry.equity_check = self.sponsor_entry_equity_for(
+            self.entry.enterprise_value, self.entry.total_debt_raised
         )
         self.entry.initial_equity = self.entry.equity_check
+
+    def sponsor_entry_equity_for(self, enterprise_value: float, total_debt_raised: float) -> float:
+        """Return the sponsor entry equity at a hypothetical EV / debt level.
+
+        Single source of truth for the entry-equity formula — all callers
+        (returns, scenarios, reality check, value bridge) should use this so
+        they stay aligned with each other and with the audit-driven
+        convention (entry advisory fee is target-borne, not sponsor-borne).
+        """
+        financing_fees = self.fees.financing_fee_pct * total_debt_raised
+        return (
+            enterprise_value
+            + self.fees.transaction_costs
+            + financing_fees
+            - total_debt_raised
+        )
 
     def compute_sources_and_uses(self) -> None:
         """Compute and populate SourcesAndUses — hard-checks Sources = Uses.
