@@ -285,6 +285,9 @@ export async function buildExcel(state: ModelState): Promise<Blob> {
     buildScenariosSheet(wb, state, ccy);
   }
   buildRiskSheet(wb, state, ccy, hp);
+  if (state.fragility) {
+    buildFragilitySheet(wb, state, ccy);
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -418,11 +421,67 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
   ws.getCell(row, 4).alignment = { horizontal: 'center' };
   row += 1;
 
-  row += 3;
+  // Fragility classification (if computed)
+  if (state.fragility) {
+    const fr = state.fragility;
+    ws.mergeCells(row, 2, row, 3);
+    ws.getCell(row, 2).value = 'STRESS CLASSIFICATION';
+    ws.getCell(row, 2).font = F_SECTION;
+    const fragilityColor = fr.classification === 'Robust' ? GREEN_C
+      : fr.classification === 'Fragile' ? RED_C : AMBER_C;
+    const fragilityBgFill = fr.classification === 'Robust' ? GREEN_BG_FILL
+      : fr.classification === 'Fragile' ? RED_BG_FILL : AMBER_BG_FILL;
+    ws.getCell(row, 4).value = fr.classification.toUpperCase();
+    ws.getCell(row, 4).font = { name: 'Calibri', size: 10, bold: true, color: { argb: fragilityColor } };
+    ws.getCell(row, 4).fill = fragilityBgFill;
+    ws.getCell(row, 4).alignment = { horizontal: 'center' };
+    row += 1;
+  }
+
+  // Convergence status
+  const convFailed = state.returns.debt_convergence_failed;
+  ws.mergeCells(row, 2, row, 3);
+  ws.getCell(row, 2).value = 'DEBT MODEL CONVERGENCE';
+  ws.getCell(row, 2).font = F_SECTION;
+  ws.getCell(row, 4).value = convFailed ? '⚠ FAILED' : '✓ CONVERGED';
+  ws.getCell(row, 4).font = convFailed ? F_RED : F_GREEN;
+  ws.getCell(row, 4).fill = convFailed ? RED_BG_FILL : GREEN_BG_FILL;
+  ws.getCell(row, 4).alignment = { horizontal: 'center' };
+  row += 2;
+
+  // Sheet navigation guide
+  row = writeSectionHeader(ws, row, 'WORKBOOK GUIDE', 5);
+  const sheets: [string, string][] = [
+    ['Cover', 'Key metrics and deal overview (this page)'],
+    ['Sources & Uses', 'Entry capitalisation — equity, debt, fees breakdown'],
+    ['Assumptions', 'All model inputs: revenue, margins, debt, fees, tax'],
+    ['P&L', 'Income statement — engine-computed, churn & add-ons included'],
+    ['Cash Flow & Debt', 'Free cash flow build and tranche-level debt schedule'],
+    ['Returns', 'IRR, MOIC, value creation bridge, EBITDA waterfall'],
+    ['Scenarios', 'Bull / Base / Bear / Stress scenario comparison (if generated)'],
+    ['Risk', 'Exit reality check, credit analysis, covenant headroom, ECF'],
+    ['Stress Testing', 'Fragility analysis — individual & combined stress scenarios'],
+  ];
+  for (let i = 0; i < sheets.length; i++) {
+    const [sheet, desc] = sheets[i];
+    const alt = i % 2 === 1;
+    ws.getCell(row, 2).value = sheet;
+    ws.getCell(row, 2).font = F_BODY_BOLD;
+    ws.getCell(row, 2).border = THIN_BOTTOM;
+    if (alt) ws.getCell(row, 2).fill = LIGHT_FILL;
+    ws.mergeCells(row, 3, row, 6);
+    ws.getCell(row, 3).value = desc;
+    ws.getCell(row, 3).font = F_BODY;
+    ws.getCell(row, 3).border = THIN_BOTTOM;
+    if (alt) ws.getCell(row, 3).fill = LIGHT_FILL;
+    row++;
+  }
+
+  row += 2;
 
   // Footer
   ws.mergeCells(row, 2, row, 6);
-  ws.getCell(row, 2).value = `Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} | Deal Intelligence Engine | Confidential`;
+  ws.getCell(row, 2).value = `Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} | Deal Intelligence Engine | All values engine-computed via audited fullRecalc pipeline | Confidential`;
   ws.getCell(row, 2).font = { name: 'Calibri', size: 8, color: { argb: 'FF999999' } };
 
   freezeAndPrint(ws, 1, 1, false);
@@ -779,17 +838,16 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   // Track row positions for formula references
   const R: Record<string, number> = {};
 
-  // --- Revenue: Entry = Assumptions!BaseRevenue; Year N = Year N-1 * (1 + Growth N) ---
+  // --- Revenue: engine-computed (accounts for organic growth, acquisitions, churn) ---
+  // Static values from fullRecalc engine; growth rates shown as lookup to Assumptions below.
   R.rev = row;
-  const revValues: CellVal[] = [fv(aRefs.baseRevenue, state.revenue.base_revenue)];
+  const revValues: CellVal[] = [state.revenue.base_revenue as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    const prevCol = col - 1;
-    revValues.push(fv(`${cr(R.rev, prevCol)}*(1+${cr(R.rev + 1, col)})`, years[i].revenue));
+    revValues.push(years[i].revenue);
   }
   row = writeDataRow(ws, row, 'Revenue', revValues, FMT_CCY, { bold: true });
 
-  // --- Revenue Growth: linked to Assumptions year-by-year schedule ---
+  // --- Revenue Growth: cross-sheet lookup from Assumptions row 35 ---
   R.growth = row;
   const growthVals: CellVal[] = ['--' as CellVal];
   for (let i = 0; i < hp; i++) {
@@ -798,16 +856,15 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   row = writeDataRow(ws, row, 'Revenue Growth', growthVals, FMT_PCT, { alt: true });
   row++; // blank
 
-  // --- EBITDA = Revenue * EBITDA Margin ---
+  // --- EBITDA: engine-computed (accounts for segment-weighted margins, add-ons) ---
   R.ebitda = row;
-  const ebitdaVals: CellVal[] = [fv(`${cr(R.rev, 2)}*${cr(row + 1, 2)}`, state.revenue.base_revenue * state.margins.base_ebitda_margin)];
+  const ebitdaVals: CellVal[] = [(state.revenue.base_revenue * state.margins.base_ebitda_margin) as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    ebitdaVals.push(fv(`${cr(R.rev, col)}*${cr(row + 1, col)}`, years[i].ebitda));
+    ebitdaVals.push(years[i].ebitda);
   }
   row = writeDataRow(ws, row, 'EBITDA', ebitdaVals, FMT_CCY, { bold: true });
 
-  // --- EBITDA Margin: linked to Assumptions year-by-year schedule ---
+  // --- EBITDA Margin: cross-sheet lookup from Assumptions row 36 ---
   R.margin = row;
   const marginVals: CellVal[] = [fv(aRefs.entryMargin, state.margins.base_ebitda_margin)];
   for (let i = 0; i < hp; i++) {
@@ -815,97 +872,77 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   }
   row = writeDataRow(ws, row, 'EBITDA Margin', marginVals, FMT_PCT, { alt: true });
 
-  // --- Monitoring Fee: linked to Assumptions ---
+  // --- Monitoring Fee: static scalar applied uniformly across projection years ---
   R.monFee = row;
   const monFeeVals: CellVal[] = [0 as CellVal];
   for (let i = 0; i < hp; i++) {
-    monFeeVals.push(fv(`-${aRefs.monitoringFee}`, -state.fees.monitoring_fee_annual));
+    monFeeVals.push(-state.fees.monitoring_fee_annual);
   }
   row = writeDataRow(ws, row, 'Monitoring Fee Adj.', monFeeVals, FMT_CCY);
 
-  // --- EBITDA Adjusted = EBITDA + Monitoring Fee ---
+  // --- EBITDA Adjusted: engine-computed (convergence-loop aware) ---
   R.ebitdaAdj = row;
-  const ebitdaAdjVals: CellVal[] = [fv(`${cr(R.ebitda, 2)}+${cr(R.monFee, 2)}`, state.revenue.base_revenue * state.margins.base_ebitda_margin)];
+  const ebitdaAdjVals: CellVal[] = [(state.revenue.base_revenue * state.margins.base_ebitda_margin) as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    ebitdaAdjVals.push(fv(`${cr(R.ebitda, col)}+${cr(R.monFee, col)}`, years[i].ebitda_adj));
+    ebitdaAdjVals.push(years[i].ebitda_adj);
   }
   row = writeDataRow(ws, row, 'EBITDA Adjusted', ebitdaAdjVals, FMT_CCY, { bold: true, alt: true });
   row++; // blank
 
-  // --- D&A = -Revenue * D&A% (linked to Assumptions) ---
+  // --- D&A: engine-computed ---
   R.da = row;
   const daVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    daVals.push(fv(`-${cr(R.rev, col)}*${aRefs.daPct}`, -years[i].da));
+    daVals.push(-years[i].da);
   }
   row = writeDataRow(ws, row, 'D&A', daVals, FMT_CCY);
 
-  // --- EBIT = EBITDA Adj + D&A (D&A is negative on sheet) ---
+  // --- EBIT: engine-computed ---
   R.ebit = row;
   const ebitVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    ebitVals.push(fv(`${cr(R.ebitdaAdj, col)}+${cr(R.da, col)}`, years[i].ebit));
+    ebitVals.push(years[i].ebit);
   }
   row = writeDataRow(ws, row, 'EBIT', ebitVals, FMT_CCY, { bold: true, alt: true });
 
-  // --- Interest Expense: static (from debt schedule — complex tranche-level logic) ---
+  // --- Interest Expense: engine-computed (debt schedule convergence loop) ---
   R.interest = row;
   row = writeDataRow(ws, row, 'Interest Expense', [null, ...years.map(y => -y.interest_expense)], FMT_CCY);
 
-  // --- Financing Fee Amort = -(TotalDebt * Financing Fee %) / Holding Period ---
-  // TotalDebt = LTM EBITDA × Leverage Ratio (B6 × B9 on Assumptions sheet).
-  // Previously this used EV × fee % which is incorrect; financing fees are charged
-  // on total debt raised, not on the enterprise value.
+  // --- Financing Fee Amort: engine-computed (total_debt_raised × fee% / hp) ---
   R.finFee = row;
   const finFeeVals: CellVal[] = [null as CellVal];
-  const totalFinFee = state.entry.total_debt_raised * state.fees.financing_fee_pct;
   for (let i = 0; i < hp; i++) {
-    finFeeVals.push(fv(
-      `-(${aRefs.ltmEbitda}*${aRefs.leverageRatio}*${aRefs.financingFeePct})/${aRefs.holdingPeriod}`,
-      -(totalFinFee / hp),
-    ));
+    finFeeVals.push(-years[i].financing_fee_amort);
   }
   row = writeDataRow(ws, row, 'Financing Fee Amort.', finFeeVals, FMT_CCY, { alt: true });
 
-  // --- EBT = EBIT + Interest + Fin Fee Amort (interest & fin fee are negative) ---
+  // --- EBT: engine-computed ---
   R.ebt = row;
   const ebtVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    ebtVals.push(fv(`${cr(R.ebit, col)}+${cr(R.interest, col)}+${cr(R.finFee, col)}`, years[i].ebt));
+    ebtVals.push(years[i].ebt);
   }
   row = writeDataRow(ws, row, 'EBT', ebtVals, FMT_CCY, { bold: true });
 
-  // --- Tax = -MAX(EBT * Tax Rate, 0) linked to Assumptions ---
-  // Note: if NOL carryforward exists, engine uses complex logic — use hardcoded values
+  // --- Tax: always engine-computed (handles NOL, minimum tax, convergence) ---
   R.tax = row;
   const hasNol = state.tax.nol_carryforward > 0;
+  row = writeDataRow(ws, row, 'Tax', [null, ...years.map(y => -y.tax)], FMT_CCY, { alt: true });
   if (hasNol) {
-    row = writeDataRow(ws, row, 'Tax', [null, ...years.map(y => -y.tax)], FMT_CCY, { alt: true });
     row = writeDataRow(ws, row, '  NOL Utilised', [null, ...years.map(y => y.nol_used)], FMT_CCY);
-  } else {
-    const taxVals: CellVal[] = [null as CellVal];
-    for (let i = 0; i < hp; i++) {
-      const col = i + 3;
-      taxVals.push(fv(`-MAX(${cr(R.ebt, col)}*${aRefs.taxRate},0)`, -years[i].tax));
-    }
-    row = writeDataRow(ws, row, 'Tax', taxVals, FMT_CCY, { alt: true });
   }
 
-  // --- Net Income = EBT + Tax (tax is negative on sheet) ---
+  // --- Net Income: engine-computed ---
   R.netIncome = row;
   const niVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    niVals.push(fv(`${cr(R.ebt, col)}+${cr(R.tax, col)}`, years[i].net_income));
+    niVals.push(years[i].net_income);
   }
   row = writeDataRow(ws, row, 'Net Income', niVals, FMT_CCY, { bold: true, topBorder: true });
   row++; // blank
 
-  // --- Net Income Margin = Net Income / Revenue ---
+  // --- Net Income Margin: formula referencing engine-sourced static cells above ---
   const niMarginVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
     const col = i + 3;
@@ -913,11 +950,10 @@ function buildPLSheet(wb: WB, state: ModelState, ccy: string, hp: number, years:
   }
   row = writeDataRow(ws, row, 'Net Income Margin', niMarginVals, FMT_PCT, { alt: true });
 
-  // --- NOPAT = EBIT * (1 - Tax Rate) linked to Assumptions ---
+  // --- NOPAT: engine-computed (handles minimum tax rate correctly) ---
   const nopatVals: CellVal[] = [null as CellVal];
   for (let i = 0; i < hp; i++) {
-    const col = i + 3;
-    nopatVals.push(fv(`${cr(R.ebit, col)}*(1-${aRefs.taxRate})`, years[i].nopat));
+    nopatVals.push(years[i].nopat);
   }
   row = writeDataRow(ws, row, 'NOPAT', nopatVals, FMT_CCY);
 
@@ -981,35 +1017,24 @@ function buildCashFlowDebtSheet(
   }
   row = writeDataRow(ws, row, 'Tax Paid', taxVals, FMT_CCY, { alt: true });
 
-  // --- Maintenance Capex = -Revenue * Capex% (linked to P&L Revenue and Assumptions) ---
+  // --- Maintenance Capex: engine-computed (handles add-on acquisitions correctly) ---
   R.maintCapex = row;
-  const capexVals: CellVal[] = [];
-  for (let i = 0; i < hp; i++) {
-    const col = i + 2;
-    capexVals.push(fv(`-${plRef(plRefs.revenueRow, col)}*${aRefs.capexPct}`, -years[i].maintenance_capex));
-  }
-  row = writeDataRow(ws, row, 'Maintenance Capex', capexVals, FMT_CCY);
+  row = writeDataRow(ws, row, 'Maintenance Capex', years.map(y => -y.maintenance_capex), FMT_CCY);
 
-  // --- Growth Capex: static (complex add-on acquisition logic) ---
+  // --- Growth Capex: engine-computed ---
   R.growthCapex = row;
   row = writeDataRow(ws, row, 'Growth Capex', years.map(y => -y.growth_capex), FMT_CCY, { alt: true });
 
-  // --- Change in NWC = -NWC% * (Revenue_Y(i) - Revenue_Y(i-1)), linked to Assumptions & P&L ---
+  // --- Change in NWC: engine-computed (handles both pct_change and explicit methods) ---
   R.nwc = row;
-  const nwcVals: CellVal[] = [];
-  for (let i = 0; i < hp; i++) {
-    // P&L revenue: entry is col 2 (plRefs.entryCol), Y1 is col 3, so Y(i) is col i+3
-    const plRevCurr = `${PLSHEET}!${cr(plRefs.revenueRow, i + 3)}`;
-    const plRevPrev = `${PLSHEET}!${cr(plRefs.revenueRow, i + 2)}`;
-    nwcVals.push(fv(`-${aRefs.nwcPct}*(${plRevCurr}-${plRevPrev})`, -years[i].delta_nwc));
-  }
-  row = writeDataRow(ws, row, 'Change in NWC', nwcVals, FMT_CCY);
+  row = writeDataRow(ws, row, 'Change in NWC', years.map(y => -y.delta_nwc), FMT_CCY);
 
-  // --- FCF Pre-Debt = EBITDA Adj + Tax + Maint Capex + Growth Capex + NWC ---
+  // --- FCF Pre-Debt: engine-computed (sum of all operating cash flow components) ---
   R.fcfPreDebt = row;
   const fcfPreVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
     const col = i + 2;
+    // Formula references the in-sheet engine values for auditability
     fcfPreVals.push(fv(
       `${cr(R.ebitdaAdj, col)}+${cr(R.tax, col)}+${cr(R.maintCapex, col)}+${cr(R.growthCapex, col)}+${cr(R.nwc, col)}`,
       years[i].fcf_pre_debt,
@@ -1023,7 +1048,7 @@ function buildCashFlowDebtSheet(
   R.debtRepay = row;
   row = writeDataRow(ws, row, 'Debt Repayment', ds.total_repayment_by_year.map(v => -v), FMT_CCY, { alt: true });
 
-  // --- FCF to Equity = FCF Pre-Debt + Cash Interest + Debt Repayment ---
+  // --- FCF to Equity: engine-computed ---
   R.fcfEquity = row;
   const fcfEqVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
@@ -1036,7 +1061,7 @@ function buildCashFlowDebtSheet(
   row = writeDataRow(ws, row, 'FCF to Equity', fcfEqVals, FMT_CCY, { bold: true, topBorder: true });
   row++;
 
-  // --- Cash Conversion = FCF Pre-Debt / EBITDA Adj ---
+  // --- Cash Conversion = FCF Pre-Debt / EBITDA Adj (formula over engine-sourced cells) ---
   const ccVals: CellVal[] = [];
   for (let i = 0; i < hp; i++) {
     const col = i + 2;
@@ -1669,6 +1694,230 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
       }
     }
   }
+
+  freezeAndPrint(ws, 3, 1, false);
+}
+
+// ── Sheet 9: Fragility / Stress Testing ────────────────────────────────
+
+function buildFragilitySheet(wb: WB, state: ModelState, ccy: string) {
+  const fr = state.fragility;
+  if (!fr) return;
+
+  const ws = wb.addWorksheet('Stress Testing', { properties: { tabColor: { argb: '922b21' } } });
+  ws.getColumn(1).width = 34;
+  ws.getColumn(2).width = 16;
+  ws.getColumn(3).width = 16;
+  ws.getColumn(4).width = 16;
+  ws.getColumn(5).width = 16;
+  ws.getColumn(6).width = 40;
+
+  let row = 1;
+
+  // Title
+  ws.mergeCells(row, 1, row, 6);
+  ws.getCell(row, 1).value = `${state.deal_name} — Stress Testing & Fragility Analysis`;
+  ws.getCell(row, 1).font = F_SECTION;
+  ws.getCell(row, 1).border = THICK_BOTTOM;
+  row += 2;
+
+  // Classification banner
+  const classColor = fr.classification === 'Robust' ? GREEN_C
+    : fr.classification === 'Fragile' ? RED_C
+    : AMBER_C;
+  const classLabel = fr.classification === 'Robust' ? 'ROBUST — Model withstands standard stress scenarios'
+    : fr.classification === 'Fragile' ? 'FRAGILE — Model is highly sensitive to adverse conditions'
+    : 'MODERATE RISK — Model shows meaningful sensitivity to stress';
+
+  ws.mergeCells(row, 1, row, 6);
+  const bannerCell = ws.getCell(row, 1);
+  bannerCell.value = classLabel;
+  bannerCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: WHITE } };
+  bannerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: classColor } };
+  bannerCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(row).height = 28;
+  row += 2;
+
+  // Summary metrics
+  row = writeSectionHeader(ws, row, 'FRAGILITY SUMMARY', 3);
+  row = writeKvRow(ws, row, 'Base Case IRR', fr.base_irr, { fmt: FMT_PCT, font: irrFont(fr.base_irr) });
+  row = writeKvRow(ws, row, 'Base Case MOIC', fr.base_moic, { fmt: FMT_MULT, alt: true });
+  row = writeKvRow(ws, row, 'Combined Stress IRR', fr.combined_irr, { fmt: FMT_PCT, font: irrFont(fr.combined_irr) });
+  row = writeKvRow(ws, row, 'Combined Stress MOIC', fr.combined_moic, { fmt: FMT_MULT, alt: true });
+  row = writeKvRow(ws, row, 'IRR Drop (Base → Combined)', fr.irr_drop, { fmt: FMT_PCT });
+  row = writeKvRow(ws, row, 'Fragility Score (IRR Drop / Base IRR)', fr.score, { fmt: '0.00', alt: true });
+  row = writeKvRow(ws, row, 'Classification', fr.classification, {
+    font: fr.classification === 'Robust' ? F_GREEN : fr.classification === 'Fragile' ? F_RED : F_AMBER,
+  });
+  row = writeKvRow(ws, row, 'Dominant Stress Driver', fr.dominant_stress_driver, { alt: true });
+  row += 1;
+
+  // Stress scenarios table
+  if (fr.stress_results.length) {
+    row = writeSectionHeader(ws, row, 'INDIVIDUAL STRESS SCENARIOS', 6);
+
+    // Column headers
+    ws.getCell(row, 1).value = 'Scenario';
+    ws.getCell(row, 2).value = 'Stressed IRR';
+    ws.getCell(row, 3).value = 'Stressed MOIC';
+    ws.getCell(row, 4).value = 'IRR Delta';
+    ws.getCell(row, 5).value = 'MOIC Delta';
+    ws.getCell(row, 6).value = 'Interpretation';
+    styleHeaderRow(ws, row, 1, 6);
+    row++;
+
+    for (let i = 0; i < fr.stress_results.length; i++) {
+      const s = fr.stress_results[i];
+      const alt = i % 2 === 1;
+
+      ws.getCell(row, 1).value = s.scenario;
+      ws.getCell(row, 1).font = F_BODY_BOLD;
+      ws.getCell(row, 1).border = THIN_BOTTOM;
+      if (alt) ws.getCell(row, 1).fill = LIGHT_FILL;
+
+      const irrCell = ws.getCell(row, 2);
+      irrCell.value = s.irr;
+      irrCell.numFmt = FMT_PCT;
+      irrCell.font = irrFont(s.irr);
+      const irrBg = irrBgFill(s.irr);
+      if (irrBg) irrCell.fill = irrBg;
+      irrCell.alignment = { horizontal: 'center' };
+      irrCell.border = THIN_BOTTOM;
+
+      const moicCell = ws.getCell(row, 3);
+      moicCell.value = s.moic;
+      moicCell.numFmt = FMT_MULT;
+      moicCell.font = F_BODY;
+      moicCell.alignment = { horizontal: 'center' };
+      moicCell.border = THIN_BOTTOM;
+      if (alt) moicCell.fill = LIGHT_FILL;
+
+      const deltaIrrCell = ws.getCell(row, 4);
+      deltaIrrCell.value = s.delta_irr;
+      deltaIrrCell.numFmt = FMT_PCT;
+      deltaIrrCell.font = s.delta_irr < -0.05 ? F_RED : s.delta_irr < -0.02 ? F_AMBER : F_GREEN;
+      deltaIrrCell.alignment = { horizontal: 'center' };
+      deltaIrrCell.border = THIN_BOTTOM;
+      if (alt) deltaIrrCell.fill = LIGHT_FILL;
+
+      const deltaMoicCell = ws.getCell(row, 5);
+      deltaMoicCell.value = s.delta_moic;
+      deltaMoicCell.numFmt = '0.00"x"';
+      deltaMoicCell.font = s.delta_moic < -0.5 ? F_RED : s.delta_moic < -0.2 ? F_AMBER : F_GREEN;
+      deltaMoicCell.alignment = { horizontal: 'center' };
+      deltaMoicCell.border = THIN_BOTTOM;
+      if (alt) deltaMoicCell.fill = LIGHT_FILL;
+
+      const interp = s.delta_irr < -0.08 ? 'Critical sensitivity — material return impairment'
+        : s.delta_irr < -0.04 ? 'High sensitivity — return at risk under stress'
+        : s.delta_irr < -0.02 ? 'Moderate sensitivity — IRR impact manageable'
+        : 'Low sensitivity — returns resilient under this stress';
+      const interpCell = ws.getCell(row, 6);
+      interpCell.value = interp;
+      interpCell.font = { ...F_BODY, size: 9 };
+      interpCell.border = THIN_BOTTOM;
+      if (alt) interpCell.fill = LIGHT_FILL;
+
+      row++;
+    }
+
+    row++;
+
+    // Combined stress row
+    ws.mergeCells(row, 1, row, 1);
+    ws.getCell(row, 1).value = 'Combined Stress (All Factors)';
+    ws.getCell(row, 1).font = F_BODY_BOLD;
+    ws.getCell(row, 1).border = MED_BOTTOM;
+    ws.getCell(row, 1).fill = MID_FILL;
+
+    const combIrrCell = ws.getCell(row, 2);
+    combIrrCell.value = fr.combined_irr;
+    combIrrCell.numFmt = FMT_PCT;
+    combIrrCell.font = irrFont(fr.combined_irr);
+    const combBg = irrBgFill(fr.combined_irr);
+    if (combBg) combIrrCell.fill = combBg;
+    combIrrCell.alignment = { horizontal: 'center' };
+    combIrrCell.border = MED_BOTTOM;
+
+    ws.getCell(row, 3).value = fr.combined_moic;
+    ws.getCell(row, 3).numFmt = FMT_MULT;
+    ws.getCell(row, 3).font = F_BODY_BOLD;
+    ws.getCell(row, 3).alignment = { horizontal: 'center' };
+    ws.getCell(row, 3).border = MED_BOTTOM;
+    ws.getCell(row, 3).fill = MID_FILL;
+
+    const combDelta = (fr.combined_irr ?? 0) - (fr.base_irr ?? 0);
+    ws.getCell(row, 4).value = combDelta;
+    ws.getCell(row, 4).numFmt = FMT_PCT;
+    ws.getCell(row, 4).font = combDelta < -0.05 ? F_RED : combDelta < -0.02 ? F_AMBER : F_GREEN;
+    ws.getCell(row, 4).alignment = { horizontal: 'center' };
+    ws.getCell(row, 4).border = MED_BOTTOM;
+    ws.getCell(row, 4).fill = MID_FILL;
+
+    ws.getCell(row, 5).value = fr.combined_moic - fr.base_moic;
+    ws.getCell(row, 5).numFmt = '0.00"x"';
+    ws.getCell(row, 5).font = F_BODY_BOLD;
+    ws.getCell(row, 5).alignment = { horizontal: 'center' };
+    ws.getCell(row, 5).border = MED_BOTTOM;
+    ws.getCell(row, 5).fill = MID_FILL;
+
+    ws.mergeCells(row, 6, row, 6);
+    ws.getCell(row, 6).value = 'Simultaneous application of all stress factors';
+    ws.getCell(row, 6).font = { ...F_BODY, size: 9, italic: true };
+    ws.getCell(row, 6).border = MED_BOTTOM;
+    ws.getCell(row, 6).fill = MID_FILL;
+    row += 2;
+  }
+
+  // Methodology note
+  row = writeSectionHeader(ws, row, 'STRESS TESTING METHODOLOGY', 4);
+  const methodNotes = [
+    ['Growth Shock', 'Revenue growth rates reduced by −200bps across all projection years'],
+    ['Margin Shock', 'EBITDA margins compressed by −200bps (absolute) in every year'],
+    ['Interest Rate Shock', 'Floating-rate debt rates increased by +200bps; fixed-rate unaffected'],
+    ['Exit Multiple Shock', 'Exit EBITDA multiple contracted by −1.0x'],
+    ['Combined Stress', 'All four shocks applied simultaneously — extreme downside scenario'],
+  ];
+  for (let i = 0; i < methodNotes.length; i++) {
+    const [factor, desc] = methodNotes[i];
+    const alt = i % 2 === 1;
+    ws.getCell(row, 1).value = factor;
+    ws.getCell(row, 1).font = F_BODY_BOLD;
+    ws.getCell(row, 1).border = THIN_BOTTOM;
+    if (alt) ws.getCell(row, 1).fill = LIGHT_FILL;
+    ws.mergeCells(row, 2, row, 4);
+    ws.getCell(row, 2).value = desc;
+    ws.getCell(row, 2).font = F_BODY;
+    ws.getCell(row, 2).border = THIN_BOTTOM;
+    if (alt) ws.getCell(row, 2).fill = LIGHT_FILL;
+    row++;
+  }
+  row += 1;
+
+  // Insights
+  if (fr.insights && fr.insights.length) {
+    row = writeSectionHeader(ws, row, 'ANALYST INSIGHTS', 4);
+    for (let i = 0; i < fr.insights.length; i++) {
+      ws.mergeCells(row, 1, row, 6);
+      const cell = ws.getCell(row, 1);
+      cell.value = `• ${fr.insights[i]}`;
+      cell.font = { ...F_BODY, size: 10 };
+      cell.alignment = { wrapText: true, vertical: 'top' };
+      cell.border = THIN_BOTTOM;
+      if (i % 2 === 1) cell.fill = LIGHT_FILL;
+      ws.getRow(row).height = 28;
+      row++;
+    }
+  }
+
+  // IRR sensitivity note
+  row += 1;
+  ws.mergeCells(row, 1, row, 6);
+  const noteCell = ws.getCell(row, 1);
+  noteCell.value = `Note: All stress scenarios use the same convergence-loop engine (${ccy}m, ${state.exit.holding_period}-year hold) as the base case. Fragility score = IRR drop under combined stress ÷ base IRR. Score < 0.2 = Robust; 0.2–0.4 = Moderate Risk; > 0.4 = Fragile.`;
+  noteCell.font = { name: 'Calibri', size: 8, italic: true, color: { argb: 'FF888888' } };
+  noteCell.alignment = { wrapText: true };
+  ws.getRow(row).height = 32;
 
   freezeAndPrint(ws, 3, 1, false);
 }
