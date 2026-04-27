@@ -37,6 +37,9 @@ class AnnualProjectionYear(BaseModel):
     delta_nwc: float = 0.0
     fcf_pre_debt: float = 0.0
     fcf_to_equity: float = 0.0
+    cash_balance: float = 0.0
+    new_borrowings: float = 0.0
+    debt_repayment: float = 0.0
 
 
 class AnnualProjection(BaseModel):

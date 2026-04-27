@@ -50,6 +50,23 @@ class DebtTranche(BaseModel):
     cash_sweep_pct: float = Field(
         default=0.5, ge=0, le=1.0, description="% of excess CF swept to repay debt"
     )
+    sweep_priority: int = Field(
+        default=0,
+        ge=0,
+        description="Sweep ordering — lower values get swept first (0 = most senior). Pro-rata when equal.",
+    )
+    financing_fee_amort_years: int = Field(
+        default=0,
+        ge=0,
+        le=30,
+        description="Tax amortization period for financing fees in years; 0 = use loan term/holding period.",
+    )
+    term_years: int = Field(
+        default=0,
+        ge=0,
+        le=30,
+        description="Stated loan term in years; 0 = falls back to holding period.",
+    )
 
     @field_validator("interest_rate")
     @classmethod
@@ -100,8 +117,15 @@ class DebtSchedule(BaseModel):
     total_debt_by_year: list[float] = Field(default_factory=list)
     net_debt_by_year: list[float] = Field(default_factory=list)
     leverage_ratio_by_year: list[float] = Field(default_factory=list)
+    senior_leverage_by_year: list[float] = Field(default_factory=list)
     interest_coverage_by_year: list[float] = Field(default_factory=list)
+    interest_coverage_ebit_by_year: list[float] = Field(default_factory=list)
     dscr_by_year: list[float] = Field(default_factory=list)
+    fccr_by_year: list[float] = Field(default_factory=list)
     total_cash_interest_by_year: list[float] = Field(default_factory=list)
+    total_pik_interest_by_year: list[float] = Field(default_factory=list)
+    total_mandatory_amort_by_year: list[float] = Field(default_factory=list)
     total_repayment_by_year: list[float] = Field(default_factory=list)
     total_interest_tax_shield_by_year: list[float] = Field(default_factory=list)
+    interest_shortfall_by_year: list[float] = Field(default_factory=list)
+    cash_balance_by_year: list[float] = Field(default_factory=list)

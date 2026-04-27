@@ -85,9 +85,19 @@ class TaxAssumptions(BaseModel):
 
     tax_rate: float = Field(default=0.25, ge=0, le=0.60)
     tax_shield_on_interest: bool = True
+    pik_interest_tax_deductible: bool = Field(
+        default=True,
+        description="Whether PIK interest is tax-deductible in the relevant jurisdiction.",
+    )
     dtl_unwind_years: int = Field(default=0, ge=0, le=30)
     nol_carryforward: float = Field(default=0.0, ge=0)
     minimum_tax_rate: float = Field(default=0.0, ge=0, le=0.60)
+    financing_fee_amort_years: int = Field(
+        default=0,
+        ge=0,
+        le=30,
+        description="Default tax amortization period for financing fees (years). 0 = use loan term/holding period.",
+    )
 
 
 class EntryAssumptions(BaseModel):
@@ -97,7 +107,14 @@ class EntryAssumptions(BaseModel):
     entry_ebitda_multiple: float = Field(default=10.0, ge=1.0, le=30.0)
     entry_revenue_multiple: float = Field(default=0.0, ge=0)
     net_debt_at_entry: float = Field(default=0.0, ge=0)
-    equity_check: float = Field(default=0.0, description="Derived: EV + all fees - debt")
+    equity_check: float = Field(
+        default=0.0,
+        description="Sponsor equity contribution (£m). = EV + sponsor-funded fees − debt raised. Renamed from prior misleading boolean-sounding name.",
+    )
+    initial_equity: float = Field(
+        default=0.0,
+        description="Alias of equity_check exposed under a clearer name; kept in sync.",
+    )
     total_debt_raised: float = Field(default=0.0, ge=0)
     leverage_ratio: float = Field(default=4.0, ge=0, le=10.0)
     min_cash_balance: float = Field(default=0.0, ge=0, description="Minimum cash retained on BS (£m) — limits cash sweep")
@@ -209,32 +226,49 @@ class ModelState(BaseModel):
         self.entry.total_debt_raised = sum(t.principal for t in self.debt_tranches)
         if ebitda > 0 and self.entry.total_debt_raised > 0:
             self.entry.leverage_ratio = self.entry.total_debt_raised / ebitda
-        # Equity check = EV + all upfront fees - debt raised
-        # Includes: entry advisory fee (% EV), absolute transaction costs, financing fees (% debt)
-        entry_fee = self.fees.entry_fee_pct * self.entry.enterprise_value
+        # Sponsor equity contribution.
+        # Convention: entry advisory fee is paid by the target company out of EV proceeds —
+        # it does not increase the sponsor's equity check (audit FINDING [1] returns.py).
+        # Sponsor-funded fees = transaction costs + financing fees.
+        # Debt raised is treated as gross proceeds; financing fees are an equity-funded outflow.
         financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised
+        sponsor_funded_fees = self.fees.transaction_costs + financing_fees
         self.entry.equity_check = (
             self.entry.enterprise_value
-            + entry_fee
-            + self.fees.transaction_costs
-            + financing_fees
+            + sponsor_funded_fees
             - self.entry.total_debt_raised
         )
+        self.entry.initial_equity = self.entry.equity_check
 
     def compute_sources_and_uses(self) -> None:
-        """Compute and populate SourcesAndUses — hard-checks Sources = Uses."""
+        """Compute and populate SourcesAndUses — hard-checks Sources = Uses.
+
+        Convention: entry advisory fee (entry_fee_pct × EV) is treated as a target-
+        company-borne cost (sourced from existing company cash), not a sponsor
+        equity outflow. Sponsor equity funds EV + transaction costs + financing
+        fees less debt raised.
+        """
         from .outputs import DebtSource, SourcesAndUses
 
-        entry_fee = self.fees.entry_fee_pct * self.entry.enterprise_value
+        entry_advisory_fee = self.fees.entry_fee_pct * self.entry.enterprise_value
         financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised
-        total_transaction_fees = entry_fee + self.fees.transaction_costs
+        total_transaction_fees = entry_advisory_fee + self.fees.transaction_costs
 
         total_uses = (
             self.entry.enterprise_value + total_transaction_fees + financing_fees
         )
         total_debt = self.entry.total_debt_raised
-        sponsor_equity = max(0.0, total_uses - total_debt)
-        total_sources = total_debt + sponsor_equity  # by construction = total_uses
+        # Sponsor equity excludes entry advisory fee (target-borne)
+        sponsor_equity = max(
+            0.0,
+            self.entry.enterprise_value
+            + self.fees.transaction_costs
+            + financing_fees
+            - total_debt,
+        )
+        # Cash from target balance sheet covers any residual gap (entry advisory fee)
+        cash_from_company = max(0.0, total_uses - total_debt - sponsor_equity)
+        total_sources = total_debt + sponsor_equity + cash_from_company
 
         ebitda = self.revenue.base_revenue * self.margins.base_ebitda_margin
         implied_leverage = total_debt / ebitda if ebitda > 0 else 0.0
@@ -256,7 +290,7 @@ class ModelState(BaseModel):
             enterprise_value=self.entry.enterprise_value,
             transaction_fees=total_transaction_fees,
             financing_fees=financing_fees,
-            cash_to_balance_sheet=0.0,
+            cash_to_balance_sheet=cash_from_company,
             total_uses=total_uses,
             debt_sources=debt_sources,
             total_debt=total_debt,
