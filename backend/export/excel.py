@@ -482,7 +482,10 @@ def _build_assumptions_sheet(wb: Workbook, state: ModelState, ccy: str):
     add("Enterprise Value", state.entry.enterprise_value, fmt=FMT_CCY, alt=True)
     add("Total Debt Raised", state.entry.total_debt_raised, fmt=FMT_CCY)
     add("Leverage Ratio", state.entry.leverage_ratio, "entry.leverage_ratio", FMT_MULT, True)
-    add("Equity Check", state.entry.equity_check, fmt=FMT_CCY)
+    # FINDING 7 — `equity_check` is a £m amount, not a validation flag.
+    # Surface the canonical `initial_equity` value with a clearer label.
+    add("Initial Equity (Sponsor)", state.entry.initial_equity, fmt=FMT_CCY)
+    add("  Min Cash on BS", state.entry.min_cash_balance, fmt=FMT_CCY, alt=True)
     row += 1
 
     row = _write_section_header(ws, row, "DEBT STRUCTURE", 2)
@@ -621,16 +624,38 @@ def _build_cash_flow_debt_sheet(wb: Workbook, state: ModelState, ccy: str, hp: i
     _style_header_row(ws, row, 1, hp + 1)
     row += 1
 
-    row = _write_section_header(ws, row, "FREE CASH FLOW BUILD", hp + 1)
-    row = _write_data_row(ws, row, "EBITDA Adjusted", [y.ebitda_adj for y in years], FMT_CCY, bold=True)
-    row = _write_data_row(ws, row, "Tax Paid", [-y.tax for y in years], FMT_CCY, alt=True)
+    # FCFF (unlevered FCF) build — `NOPAT + D&A − Capex − ΔNWC − monitoring fee`
+    # per audit FINDINGS 4 & 6. EBITDA Adjusted is now equal to clean EBITDA;
+    # the monitoring fee is shown explicitly as a sponsor-level cash outflow
+    # below the operating section.
+    row = _write_section_header(ws, row, "FREE CASH FLOW BUILD (FCFF)", hp + 1)
+    row = _write_data_row(ws, row, "EBITDA", [y.ebitda for y in years], FMT_CCY, bold=True)
+    row = _write_data_row(ws, row, "D&A", [-y.da for y in years], FMT_CCY, alt=True)
+    row = _write_data_row(ws, row, "EBIT", [y.ebit for y in years], FMT_CCY)
+    row = _write_data_row(ws, row, "Tax (Effective)", [-y.tax for y in years], FMT_CCY, alt=True)
+    row = _write_data_row(ws, row, "NOPAT", [y.nopat for y in years], FMT_CCY, bold=True, top_border=True)
+    row = _write_data_row(ws, row, "(+) D&A Add-back", [y.da for y in years], FMT_CCY, alt=True)
     row = _write_data_row(ws, row, "Maintenance Capex", [-y.maintenance_capex for y in years], FMT_CCY)
     row = _write_data_row(ws, row, "Growth Capex", [-y.growth_capex for y in years], FMT_CCY, alt=True)
     row = _write_data_row(ws, row, "Change in NWC", [-y.delta_nwc for y in years], FMT_CCY)
-    row = _write_data_row(ws, row, "FCF Pre-Debt Service", [y.fcf_pre_debt for y in years], FMT_CCY, bold=True, top_border=True, alt=True)
+    if state.fees.monitoring_fee_annual > 0:
+        row = _write_data_row(ws, row, "Monitoring Fee", [-state.fees.monitoring_fee_annual] * hp, FMT_CCY, alt=True)
+    row = _write_data_row(ws, row, "FCF Pre-Debt Service (FCFF)", [y.fcf_pre_debt for y in years], FMT_CCY, bold=True, top_border=True, alt=True)
     row = _write_data_row(ws, row, "Cash Interest", [-v for v in ds.total_cash_interest_by_year], FMT_CCY)
-    row = _write_data_row(ws, row, "Debt Repayment", [-v for v in ds.total_repayment_by_year], FMT_CCY, alt=True)
-    row = _write_data_row(ws, row, "FCF to Equity", [y.fcf_to_equity for y in years], FMT_CCY, bold=True, top_border=True)
+    row = _write_data_row(ws, row, "Debt Repayment (Mandatory + Sweep)", [-v for v in ds.total_repayment_by_year], FMT_CCY, alt=True)
+    if any(b > 0 for b in (y.new_borrowings for y in years)):
+        row = _write_data_row(ws, row, "New Borrowings", [y.new_borrowings for y in years], FMT_CCY)
+    row = _write_data_row(ws, row, "FCF to Equity (FCFE)", [y.fcf_to_equity for y in years], FMT_CCY, bold=True, top_border=True)
+    # Audit FINDING 4 (debt_schedule): if any year shows an interest shortfall
+    # we surface it. Default is zero, in which case we suppress the row.
+    if ds.interest_shortfall_by_year and any(s > 0 for s in ds.interest_shortfall_by_year):
+        row = _write_data_row(
+            ws, row, "Interest Shortfall (Stress Indicator)",
+            ds.interest_shortfall_by_year, FMT_CCY, alt=True,
+        )
+    # Roll-forward cash balance (FINDING 9 — sweep / net-debt input).
+    if ds.cash_balance_by_year:
+        row = _write_data_row(ws, row, "Cash Balance (BS)", ds.cash_balance_by_year, FMT_CCY)
     row += 1
 
     # Debt schedule
@@ -659,18 +684,42 @@ def _build_cash_flow_debt_sheet(wb: Workbook, state: ModelState, ccy: str, hp: i
         row += 1
 
     row = _write_data_row(ws, row, "Total Debt Outstanding", ds.total_debt_by_year, FMT_CCY, bold=True)
+    if ds.net_debt_by_year:
+        row = _write_data_row(ws, row, "Net Debt (Gross − Retained Cash)", ds.net_debt_by_year, FMT_CCY, alt=True)
+    if ds.total_pik_interest_by_year and any(p > 0 for p in ds.total_pik_interest_by_year):
+        row = _write_data_row(ws, row, "PIK Interest Accrued", ds.total_pik_interest_by_year, FMT_CCY)
+    if ds.total_mandatory_amort_by_year and any(m > 0 for m in ds.total_mandatory_amort_by_year):
+        row = _write_data_row(ws, row, "Mandatory Amortisation", ds.total_mandatory_amort_by_year, FMT_CCY, alt=True)
+    if ds.total_interest_tax_shield_by_year and any(s > 0 for s in ds.total_interest_tax_shield_by_year):
+        row = _write_data_row(ws, row, "Interest Tax Shield", ds.total_interest_tax_shield_by_year, FMT_CCY)
     row += 1
 
+    # Credit metrics — leverage decomposed into gross-, net-, senior-only
+    # per audit FINDINGS 6 (reality_check) and 9 (debt_schedule). DSCR uses
+    # the lender convention `(interest + mandatory amort)`; interest
+    # coverage is exposed against both EBITDA and EBIT denominators.
     row = _write_section_header(ws, row, "CREDIT METRICS", hp + 1)
-    row = _write_data_row(ws, row, "Net Debt / EBITDA", ds.leverage_ratio_by_year, FMT_MULT, bold=True)
-    row = _write_data_row(ws, row, "Interest Coverage", [min(v, 99) for v in ds.interest_coverage_by_year], FMT_NUM, alt=True)
-    row = _write_data_row(ws, row, "DSCR", [min(v, 99) for v in ds.dscr_by_year], FMT_NUM)
+    row = _write_data_row(ws, row, "Gross Debt / EBITDA", ds.leverage_ratio_by_year, FMT_MULT, bold=True)
+    if ds.senior_leverage_by_year:
+        row = _write_data_row(ws, row, "Senior Debt / EBITDA", ds.senior_leverage_by_year, FMT_MULT, alt=True)
+    if ds.net_debt_by_year:
+        # Derive net leverage on the fly from the audit-corrected net debt
+        net_lev = []
+        for i, nd in enumerate(ds.net_debt_by_year):
+            ebitda = years[i].ebitda_adj if i < len(years) else 0.0
+            net_lev.append(nd / ebitda if ebitda > 0 else 0.0)
+        row = _write_data_row(ws, row, "Net Debt / EBITDA", net_lev, FMT_MULT)
+    row = _write_data_row(ws, row, "Interest Coverage (EBITDA)", [min(v, 99) for v in ds.interest_coverage_by_year], FMT_NUM, alt=True)
+    if ds.interest_coverage_ebit_by_year:
+        row = _write_data_row(ws, row, "Interest Coverage (EBIT)", [min(v, 99) for v in ds.interest_coverage_ebit_by_year], FMT_NUM)
+    row = _write_data_row(ws, row, "DSCR (Int + Mandatory Amort)", [min(v, 99) for v in ds.dscr_by_year], FMT_NUM, alt=True)
+    if ds.fccr_by_year:
+        row = _write_data_row(ws, row, "FCCR", [min(v, 99) for v in ds.fccr_by_year], FMT_NUM)
 
     ca = state.credit_analysis
     if ca.metrics_by_year:
-        row = _write_data_row(ws, row, "FCCR", [min(m.fccr, 99) for m in ca.metrics_by_year], FMT_NUM, alt=True)
-        row = _write_data_row(ws, row, "Cumulative Paydown", [m.cumulative_debt_paydown for m in ca.metrics_by_year], FMT_CCY)
-        row = _write_data_row(ws, row, "Paydown (% Entry)", [m.debt_paydown_pct for m in ca.metrics_by_year], FMT_PCT, alt=True)
+        row = _write_data_row(ws, row, "Cumulative Paydown", [m.cumulative_debt_paydown for m in ca.metrics_by_year], FMT_CCY, alt=True)
+        row = _write_data_row(ws, row, "Paydown (% Entry)", [m.debt_paydown_pct for m in ca.metrics_by_year], FMT_PCT)
 
     _set_print(ws)
 

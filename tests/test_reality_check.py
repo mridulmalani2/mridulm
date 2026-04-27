@@ -143,8 +143,26 @@ class TestVerdict:
             assert rc.verdict == "aggressive"
 
     def test_conservative_with_compression(self):
+        # Per audit FINDING 12, a multiple compression alone does not make a
+        # deal conservative — margin expansion or rising leverage can offset
+        # it. The verdict is "conservative" only when ALL three drivers
+        # (multiple, leverage, margin) are flat-to-down vs entry. This test
+        # case sets target margin = base (no expansion) and zero growth so
+        # leverage naturally compresses from amortising principal, then
+        # confirms the verdict still reads as "conservative".
         state = _base_state()
         state.exit.exit_ebitda_multiple = 8.0  # below entry 10x
+        state.margins.target_ebitda_margin = state.margins.base_ebitda_margin
+        state.revenue.growth_rates = [0.0] * 5
         rc = _run_full(state)
-        # Exit multiple < entry → conservative
         assert rc.verdict == "conservative"
+
+    def test_compression_with_margin_expansion_is_realistic(self):
+        # Exit multiple below entry but the deal is still relying on margin
+        # expansion to deliver returns — under the audit-correct verdict
+        # this is "realistic", NOT conservative (FINDING 12).
+        state = _base_state()
+        state.exit.exit_ebitda_multiple = 8.0
+        # base state has margin 0.20 → target 0.25 (expansion)
+        rc = _run_full(state)
+        assert rc.verdict == "realistic"

@@ -1,4 +1,14 @@
-"""Scenario engine and sensitivity table generator — Sections 3.6 & 3.7."""
+"""Scenario engine and sensitivity table generator — Sections 3.6 & 3.7.
+
+Audit-driven changes (audit_report_part2.md, scenarios.py findings):
+  * Stress exit multiple uses base EXIT multiple (not entry) (FINDING 3).
+  * Debt sizing in Bear / leverage sensitivities uses forward (Year 1) EBITDA
+    consistent with the scenario's growth and margin assumptions (FINDINGS 1 & 8).
+  * Leverage adjustments scale only the most junior tranche by default,
+    preserving senior tranche structure (FINDINGS 2 & 9).
+  * Sensitivity centering uses CAGR (geometric mean) of growth rates (FINDING 4).
+  * Margins are clamped at assignment in Bull and Bear (FINDINGS 10, 11).
+"""
 
 from __future__ import annotations
 
@@ -10,6 +20,68 @@ from backend.models.state import ModelState
 from backend.engine.projections import build_projections, update_projections_with_debt
 from backend.engine.debt_schedule import build_debt_schedule
 from backend.engine.returns import calculate_returns
+
+
+_MARGIN_FLOOR = 0.01
+_MARGIN_CEIL = 0.95
+
+
+def _clamp_margin(value: float) -> float:
+    return max(min(value, _MARGIN_CEIL), _MARGIN_FLOOR)
+
+
+def _forward_ebitda(state: ModelState) -> float:
+    """Return Year 1 forward EBITDA consistent with current scenario assumptions.
+
+    Uses the first growth rate and either the first margin in margin_by_year (if
+    populated) or the base EBITDA margin. This is the canonical lender-style
+    EBITDA basis for leverage capacity (audit FINDINGS 1 & 8).
+    """
+    growth = state.revenue.growth_rates[0] if state.revenue.growth_rates else 0.0
+    fwd_revenue = state.revenue.base_revenue * (1.0 + growth)
+    if state.margins.margin_by_year:
+        margin = state.margins.margin_by_year[0]
+    else:
+        margin = state.margins.base_ebitda_margin
+    return fwd_revenue * margin
+
+
+def _resize_debt_to_target(state: ModelState, target_total_debt: float) -> None:
+    """Resize the capital structure to hit `target_total_debt`.
+
+    Per audit FINDINGS 2 & 9: senior tranches are preserved; the most-junior
+    tranche absorbs the leverage delta. If the change is negative and exceeds
+    the junior tranche, fall back to pro-rata scaling across remaining tranches.
+    """
+    if not state.debt_tranches:
+        return
+    tranches = state.debt_tranches
+    target_total_debt = max(0.0, target_total_debt)
+
+    # Identify junior tranche: last tranche, or pik / mezzanine if present.
+    junior_idx = len(tranches) - 1
+    for i, t in enumerate(tranches):
+        ttype = (t.tranche_type or "").lower()
+        if any(k in ttype for k in ("pik", "mezz", "subordinate", "second_lien", "junior")):
+            junior_idx = i
+
+    senior_total = sum(
+        t.principal for i, t in enumerate(tranches) if i != junior_idx
+    )
+    delta = target_total_debt - senior_total
+    if delta >= 0:
+        tranches[junior_idx].principal = delta
+        tranches[junior_idx].amortization_schedule = []
+    else:
+        # Cannot fit the target with junior alone — pro-rata scale the seniors
+        tranches[junior_idx].principal = 0.0
+        tranches[junior_idx].amortization_schedule = []
+        if senior_total > 0:
+            scale = target_total_debt / senior_total
+            for i, t in enumerate(tranches):
+                if i != junior_idx:
+                    t.principal = t.principal * scale
+                    t.amortization_schedule = []
 
 
 def _run_full_model(state: ModelState) -> tuple:
@@ -24,12 +96,13 @@ def _run_full_model(state: ModelState) -> tuple:
     prev_total_interest = 0.0
     iterations = 0
     convergence_delta = 0.0
+    ds = None
 
     for iteration in range(MAX_ITER):
         iterations = iteration + 1
         ds = build_debt_schedule(state, proj)
 
-        # Build PIK array
+        # Build PIK / new-borrowing arrays
         pik_by_year = []
         for yr_idx in range(state.exit.holding_period):
             pik = sum(
@@ -37,12 +110,14 @@ def _run_full_model(state: ModelState) -> tuple:
                 for t in range(len(ds.tranche_schedules))
             ) if ds.tranche_schedules else 0.0
             pik_by_year.append(pik)
+        new_borrowings_by_year = [0.0] * state.exit.holding_period
 
         proj = update_projections_with_debt(
             proj, state,
             ds.total_cash_interest_by_year,
             pik_by_year,
             ds.total_repayment_by_year,
+            new_borrowings_by_year,
         )
 
         # Check convergence
@@ -72,7 +147,6 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     base_growth = list(state.revenue.growth_rates)
     base_margins = list(state.margins.margin_by_year)
     base_exit_mult = state.exit.exit_ebitda_multiple
-    base_entry_mult = state.entry.entry_ebitda_multiple
     base_margin_expansion = state.margins.target_ebitda_margin - state.margins.base_ebitda_margin
 
     scenarios: list[ScenarioSet] = []
@@ -96,20 +170,20 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     bear.revenue.growth_rates = [max(g - 0.02, -0.10) for g in base_growth]
     bear.exit.exit_ebitda_multiple = max(base_exit_mult - 1.5, 1.0)
     half_expansion = base_margin_expansion * 0.5
-    bear.margins.target_ebitda_margin = state.margins.base_ebitda_margin + half_expansion
+    # FINDING 11: clamp at assignment
+    bear.margins.target_ebitda_margin = _clamp_margin(
+        state.margins.base_ebitda_margin + half_expansion
+    )
     bear.margins.margin_by_year = []  # force rebuild
-    # Leverage: Base - 0.5x (reduce debt proportionally)
-    bear_leverage = max(state.entry.leverage_ratio - 0.5, 0.0)
-    ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin
-    bear_debt = bear_leverage * ebitda
-    old_total = sum(t.principal for t in bear.debt_tranches)
-    if old_total > 0:
-        scale = bear_debt / old_total
-        for t in bear.debt_tranches:
-            t.principal = t.principal * scale
-            t.amortization_schedule = []  # force rebuild
+    # Rebuild margins/lengths BEFORE sizing debt so forward EBITDA reflects
+    # the new growth and margin assumptions (FINDING 1 — no circular dep).
     bear.ensure_list_lengths()
+    bear_leverage = max(state.entry.leverage_ratio - 0.5, 0.0)
+    fwd_ebitda_bear = _forward_ebitda(bear)
+    bear_debt = bear_leverage * fwd_ebitda_bear
+    _resize_debt_to_target(bear, bear_debt)
     bear.derive_entry_fields()
+    bear.ensure_list_lengths()
     irr_bear, moic_bear, eq_bear = _quick_irr_moic(bear)
     scenarios.append(ScenarioSet(
         name="bear",
@@ -127,7 +201,10 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     bull = copy.deepcopy(state)
     bull.revenue.growth_rates = [g + 0.02 for g in base_growth]
     bull.exit.exit_ebitda_multiple = base_exit_mult + 1.0
-    bull.margins.target_ebitda_margin = state.margins.base_ebitda_margin + base_margin_expansion * 1.3
+    # FINDING 10: clamp at assignment
+    bull.margins.target_ebitda_margin = _clamp_margin(
+        state.margins.base_ebitda_margin + base_margin_expansion * 1.3
+    )
     bull.margins.margin_by_year = []
     bull.ensure_list_lengths()
     bull.derive_entry_fields()
@@ -144,7 +221,7 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
         description="Bull: +200bps growth, +1.0x exit multiple, 130% margin expansion.",
     ))
 
-    # Stress: 0% growth yr1-2, then base×0.5; entry multiple -1.0x; flat margin
+    # Stress: 0% growth yr1-2, then base×0.5; exit multiple -1.0x; flat margin
     stress = copy.deepcopy(state)
     stress_growth = []
     for t in range(hp):
@@ -153,7 +230,8 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
         else:
             stress_growth.append(base_growth[t] * 0.5 if t < len(base_growth) else 0.0)
     stress.revenue.growth_rates = stress_growth
-    stress.exit.exit_ebitda_multiple = max(base_entry_mult - 1.0, 1.0)
+    # FINDING 3: must use base EXIT multiple, not entry multiple
+    stress.exit.exit_ebitda_multiple = max(base_exit_mult - 1.0, 1.0)
     stress.margins.target_ebitda_margin = state.margins.base_ebitda_margin  # flat
     stress.margins.margin_by_year = []
     stress.ensure_list_lengths()
@@ -176,11 +254,28 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
 
 # ── Sensitivity Tables ───────────────────────────────────────────────────
 
+def _growth_cagr(state: ModelState) -> float:
+    """CAGR of revenue across the projected growth rates (FINDING 4)."""
+    rates = state.revenue.growth_rates
+    if not rates:
+        return 0.05
+    base_rev = state.revenue.base_revenue
+    if base_rev <= 0:
+        return 0.05
+    final_rev = base_rev
+    for g in rates:
+        final_rev *= (1.0 + g)
+    n = len(rates)
+    if n == 0 or final_rev <= 0:
+        return 0.05
+    return (final_rev / base_rev) ** (1.0 / n) - 1.0
+
+
 def generate_sensitivity_tables(state: ModelState) -> list[SensitivityTable]:
     """Generate all 4 sensitivity tables per Section 3.7."""
     tables: list[SensitivityTable] = []
 
-    base_growth_avg = sum(state.revenue.growth_rates) / len(state.revenue.growth_rates) if state.revenue.growth_rates else 0.05
+    base_growth_avg = _growth_cagr(state)
     base_exit_mult = state.exit.exit_ebitda_multiple
     base_entry_mult = state.entry.entry_ebitda_multiple
     base_exit_margin = state.margins.target_ebitda_margin
@@ -213,7 +308,6 @@ def generate_sensitivity_tables(state: ModelState) -> list[SensitivityTable]:
     # Table 4: Leverage × Exit Multiple (9 rows centered on base leverage, 0.5x steps)
     base_lev = state.entry.leverage_ratio
     leverage_range_9 = [base_lev + (i - 4) * 0.5 for i in range(9)]
-    # Clamp to non-negative
     leverage_range_9 = [max(0.0, lv) for lv in leverage_range_9]
     tables.append(_build_table(
         state, 4, "leverage", "exit_multiple",
@@ -269,25 +363,22 @@ def _apply_growth_exit_mult(s: ModelState, growth: float, exit_mult: float) -> N
 
 def _apply_growth_margin(s: ModelState, growth: float, margin: float) -> None:
     s.revenue.growth_rates = [growth] * s.exit.holding_period
-    s.margins.target_ebitda_margin = max(min(margin, 0.95), 0.01)
+    s.margins.target_ebitda_margin = _clamp_margin(margin)
 
 
 def _apply_entry_exit_mult(s: ModelState, entry_mult: float, exit_mult: float) -> None:
     s.entry.entry_ebitda_multiple = max(entry_mult, 1.0)
-    s.entry.enterprise_value = 0  # force recalc from multiple
+    # Force EV recalc from multiple — derive_entry_fields back-solves when EV=0
+    s.entry.enterprise_value = 0
     s.exit.exit_ebitda_multiple = max(exit_mult, 1.0)
 
 
 def _apply_leverage_exit_mult(s: ModelState, leverage: float, exit_mult: float) -> None:
-    ebitda = s.revenue.base_revenue * s.margins.base_ebitda_margin
-    new_debt = leverage * ebitda
-    # Scale debt tranches proportionally
-    old_total = sum(t.principal for t in s.debt_tranches)
-    if old_total > 0 and s.debt_tranches:
-        scale = new_debt / old_total
-        for t in s.debt_tranches:
-            t.principal = t.principal * scale
-            t.amortization_schedule = []  # force rebuild
-    elif s.debt_tranches:
-        s.debt_tranches[0].principal = new_debt
+    # Forward EBITDA basis (FINDING 8) — must rebuild margin/length lists first
+    s.margins.margin_by_year = []
+    s.ensure_list_lengths()
+    fwd_ebitda = _forward_ebitda(s)
+    new_debt = leverage * fwd_ebitda
+    # FINDING 9: junior-tranche-only adjustment preserves senior structure
+    _resize_debt_to_target(s, new_debt)
     s.exit.exit_ebitda_multiple = max(exit_mult, 1.0)

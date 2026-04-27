@@ -70,11 +70,15 @@ class TestProjections:
             state.margins.target_ebitda_margin, abs=0.01
         )
 
-    def test_monitoring_fee_reduces_ebitda(self):
+    def test_monitoring_fee_excluded_from_ebitda(self):
+        """Per audit FINDING [6] projections.py: monitoring fee is a sponsor-level
+        cash outflow, not an operating expense. EBITDA / EBITDA_adj should be
+        clean and the fee is deducted in the FCF build."""
         state = _make_base_state()
         proj = build_projections(state)
         for yr in proj.years:
-            assert yr.ebitda_adj == pytest.approx(yr.ebitda - 1.0, rel=0.01)
+            # ebitda_adj equals clean EBITDA (no monitoring fee deduction)
+            assert yr.ebitda_adj == pytest.approx(yr.ebitda, rel=0.001)
 
     def test_fcf_positive(self):
         state = _make_base_state()
