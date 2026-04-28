@@ -16,7 +16,6 @@ export const ITERATIVE_FIELDS = new Set([
   'projections.nopat',
   'projections.fcf_pre_debt',
   'projections.fcf_to_equity',
-  'projections.cash_balance',
   'debt_schedule.total_debt_at_exit',
 ]);
 
@@ -69,8 +68,8 @@ export const TRACE_MAP: Record<string, TraceMapEntry> = {
   },
   'returns.exit_net_debt': {
     label: 'Exit Net Debt',
-    formula_symbolic: 'max(0, Gross Debt[HP] − max(Min Cash, Cash[HP]))',
-    inputs: ['debt_schedule.total_debt_at_exit', 'debt_schedule.cash_balance_at_exit', 'entry.min_cash_balance'],
+    formula_symbolic: 'Total Debt[HP] − Cash Retained[HP]  (tracked via net_debt_by_year)',
+    inputs: ['debt_schedule.total_debt_at_exit', 'entry.min_cash_balance'],
     outputs: ['returns.exit_equity'],
     is_user_input: false,
   },
@@ -243,15 +242,6 @@ export const TRACE_MAP: Record<string, TraceMapEntry> = {
     outputs: ['returns.irr'],
     is_user_input: false,
   },
-  'projections.cash_balance': {
-    label: 'Cash Balance[t]',
-    formula_symbolic:
-      'Cash[t−1] + FCFF[t] − Cash Interest[t] − Repayment[t] + New Borrowing[t]',
-    inputs: ['projections.fcf_pre_debt', 'projections.interest'],
-    outputs: ['returns.exit_net_debt'],
-    is_user_input: false,
-  },
-
   // ── Debt schedule ──────────────────────────────────────────────────────────
   'debt_schedule.total_debt_at_exit': {
     label: 'Total Debt at Exit',
@@ -405,15 +395,10 @@ export function resolveTraceValue(ms: ModelState, fieldPath: string): number | n
     'projections.interest': () => yr?.interest_expense ?? null,
     'projections.fcf_pre_debt': () => yr?.fcf_pre_debt ?? null,
     'projections.fcf_to_equity': () => yr?.fcf_to_equity ?? null,
-    'projections.cash_balance': () => yr?.cash_balance ?? null,
     'projections.tax': () => yr?.tax ?? null,
     'projections.nopat': () => yr?.nopat ?? null,
     'debt_schedule.total_debt_at_exit': () => {
       const arr = ds?.total_debt_by_year;
-      return arr?.length ? arr[arr.length - 1] : null;
-    },
-    'debt_schedule.cash_balance_at_exit': () => {
-      const arr = ds?.cash_balance_by_year;
       return arr?.length ? arr[arr.length - 1] : null;
     },
     'debt_schedule.interest_coverage_at_exit': () => {

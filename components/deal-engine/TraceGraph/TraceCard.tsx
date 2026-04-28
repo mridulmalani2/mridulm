@@ -12,7 +12,6 @@ interface TraceCardProps {
 }
 
 const monoFont = "'JetBrains Mono', monospace";
-const serifFont = 'Lora, serif';
 
 const TraceCard: React.FC<TraceCardProps> = React.memo(
   ({ card, currency, onClose, onOpenCard, onMove, canvasScale }) => {
