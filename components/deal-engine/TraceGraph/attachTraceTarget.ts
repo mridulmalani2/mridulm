@@ -14,7 +14,7 @@ import type { HTMLAttributes } from 'react';
 export interface TraceTargetProps extends HTMLAttributes<HTMLSpanElement> {
   'data-trace-id': string;
   className: string;
-  onDoubleClick?: React.MouseEventHandler<HTMLSpanElement>;
+  onClick?: React.MouseEventHandler<HTMLSpanElement>;
 }
 
 export function attachTraceTarget(
@@ -31,7 +31,7 @@ export function attachTraceTarget(
 
   return {
     ...base,
-    onDoubleClick: (e) => {
+    onClick: (e) => {
       e.stopPropagation();
       onOpenCard(fieldPath);
     },

@@ -1,12 +1,13 @@
 import React, { useRef, useState, useCallback } from 'react';
 import type { TraceCardState } from '../../../lib/traceTypes';
+import type { OpenCardOpts } from './useTraceGraph';
 import { formatTraceValue } from './traceFormatters';
 
 interface TraceCardProps {
   card: TraceCardState;
   currency: string;
   onClose: () => void;
-  onOpenCard: (fieldPath: string) => void;
+  onOpenCard: (fieldPath: string, opts?: OpenCardOpts) => void;
   onMove: (pos: { x: number; y: number }) => void;
   canvasScale: number;
 }
@@ -166,7 +167,7 @@ const TraceCard: React.FC<TraceCardProps> = React.memo(
                 {node.inputs.map((inp) => (
                   <button
                     key={inp.field_path}
-                    onClick={(e) => { e.stopPropagation(); onOpenCard(inp.field_path); }}
+                    onClick={(e) => { e.stopPropagation(); onOpenCard(inp.field_path, { relativeToCard: node.field_path, side: 'left' }); }}
                     style={chipStyle(false)}
                     title={inp.field_path}
                   >
@@ -188,7 +189,7 @@ const TraceCard: React.FC<TraceCardProps> = React.memo(
                 {node.outputs.map((out) => (
                   <button
                     key={out.field_path}
-                    onClick={(e) => { e.stopPropagation(); onOpenCard(out.field_path); }}
+                    onClick={(e) => { e.stopPropagation(); onOpenCard(out.field_path, { relativeToCard: node.field_path, side: 'right' }); }}
                     style={chipStyle(false)}
                     title={out.field_path}
                   >

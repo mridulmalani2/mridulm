@@ -61,14 +61,20 @@ function buildNode(ms: ModelState, fieldPath: string, modelVersion: number): Tra
   };
 }
 
+export interface OpenCardOpts {
+  relativeToCard?: string;
+  side?: 'left' | 'right';
+}
+
 export interface UseTraceGraphReturn {
   cards: Map<string, TraceCardState>;
   isOpen: boolean;
   canvasTransform: { x: number; y: number; scale: number };
   openOverlay: () => void;
   closeOverlay: () => void;
-  openCard: (fieldPath: string) => void;
+  openCard: (fieldPath: string, opts?: OpenCardOpts) => void;
   closeCard: (fieldPath: string) => void;
+  clearCards: () => void;
   moveCard: (fieldPath: string, pos: { x: number; y: number }) => void;
   panCanvas: (dx: number, dy: number) => void;
   zoomCanvas: (delta: number, cx: number, cy: number) => void;
@@ -122,8 +128,12 @@ export function useTraceGraph(
 
   const closeOverlay = useCallback(() => setIsOpen(false), []);
 
+  // CARD_W(350) + GAP_X(56) — same step used by tidy layout so manual and auto
+  // layouts are spatially consistent
+  const CARD_STEP = 406;
+
   const openCard = useCallback(
-    (fieldPath: string) => {
+    (fieldPath: string, opts?: OpenCardOpts) => {
       if (!modelState) return;
       setIsOpen(true);
       setCards((prev) => {
@@ -144,17 +154,38 @@ export function useTraceGraph(
         const card = buildNode(modelState, fieldPath, modelVersion);
         if (!card) return prev;
 
-        // Place new card offset from last card to avoid full overlap
-        const positions = [...next.values()].map((c) => c.position);
-        const lastPos = positions[positions.length - 1] ?? { x: 60, y: 60 };
-        card.position = { x: lastPos.x + 360, y: lastPos.y };
+        // Directional placement:
+        //  - input chip clicked  → new card opens LEFT  of source (upstream)
+        //  - output chip clicked → new card opens RIGHT of source (downstream)
+        //  - dashboard click     → cascade from top-left so first card is always
+        //                          at a predictable location
+        let newPos: { x: number; y: number };
+        if (opts?.relativeToCard && opts?.side) {
+          const ref = next.get(opts.relativeToCard);
+          if (ref) {
+            newPos = {
+              x: opts.side === 'left'
+                ? ref.position.x - CARD_STEP
+                : ref.position.x + CARD_STEP,
+              y: ref.position.y,
+            };
+          } else {
+            newPos = { x: 80 + next.size * 30, y: 80 + next.size * 30 };
+          }
+        } else {
+          // Dashboard entry — first card lands near top-left; extras cascade
+          newPos = { x: 80 + next.size * 30, y: 80 + next.size * 30 };
+        }
 
+        card.position = newPos;
         next.set(fieldPath, card);
         return next;
       });
     },
-    [modelState, modelVersion],
+    [modelState, modelVersion, CARD_STEP],
   );
+
+  const clearCards = useCallback(() => setCards(new Map()), []);
 
   const closeCard = useCallback((fieldPath: string) => {
     setCards((prev) => {
@@ -263,6 +294,7 @@ export function useTraceGraph(
     closeOverlay,
     openCard,
     closeCard,
+    clearCards,
     moveCard,
     panCanvas,
     zoomCanvas,

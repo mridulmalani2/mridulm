@@ -640,18 +640,19 @@ const DealEngine: React.FC = () => {
                   Change Key
                 </button>
               )}
-              {/* Trace Mode toggle (recommendation #8) */}
+              {/* Trace Mode toggle */}
               <button
                 onClick={() => {
+                  // Turning OFF: close the overlay so it doesn't linger
+                  if (traceModeActive) traceGraph.closeOverlay();
                   toggleTraceMode();
-                  if (!traceModeActive) traceGraph.openOverlay();
                 }}
                 className="px-3 py-1.5 mx-1 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
-                title={traceModeActive ? 'Disable trace mode — double-click will no longer open trace cards' : 'Enable trace mode — double-click any number to trace its formula and dependencies'}
+                title={traceModeActive ? 'Disable trace mode' : 'Enable trace mode — underlined numbers become clickable entry points'}
                 style={{
-                  color: traceModeActive ? '#15803d' : 'rgba(17,17,17,0.4)',
-                  border: `1px solid ${traceModeActive ? 'rgba(21,128,61,0.35)' : 'rgba(17,17,17,0.15)'}`,
-                  background: traceModeActive ? 'rgba(21,128,61,0.05)' : 'transparent',
+                  color: traceModeActive ? '#CC0000' : 'rgba(17,17,17,0.4)',
+                  border: `1px solid ${traceModeActive ? 'rgba(204,0,0,0.35)' : 'rgba(17,17,17,0.15)'}`,
+                  background: traceModeActive ? 'rgba(204,0,0,0.05)' : 'transparent',
                   fontFamily: "'JetBrains Mono', monospace",
                 }}
               >

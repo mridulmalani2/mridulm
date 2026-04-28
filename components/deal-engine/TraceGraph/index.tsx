@@ -37,6 +37,7 @@ const TraceGraphOverlay: React.FC<TraceGraphOverlayProps> = ({
     closeOverlay,
     openCard,
     closeCard,
+    clearCards,
     moveCard,
     panCanvas,
     zoomCanvas,
@@ -151,13 +152,22 @@ const TraceGraphOverlay: React.FC<TraceGraphOverlayProps> = ({
           <button
             onClick={tidyLayout}
             style={toolbarBtn(false)}
-            title="Auto-arrange cards in dependency order"
+            title="Auto-arrange cards — inputs left, outputs right"
           >
             Tidy Layout
           </button>
         )}
+        {cards.size > 0 && (
+          <button
+            onClick={clearCards}
+            style={toolbarBtn(false)}
+            title="Close all open trace cards"
+          >
+            Clear All
+          </button>
+        )}
         <button onClick={closeOverlay} style={toolbarBtn(true)}>
-          Close Trace Graph
+          Close
         </button>
       </div>
 
@@ -192,10 +202,10 @@ const TraceGraphOverlay: React.FC<TraceGraphOverlayProps> = ({
           }}
         >
           <div style={{ fontSize: 13, fontFamily: monoFont, color: 'rgba(17,17,17,0.3)', letterSpacing: '0.06em' }}>
-            Double-click any number to open its trace card
+            Click any underlined number on the dashboard to trace it
           </div>
           <div style={{ fontSize: 11, fontFamily: monoFont, color: 'rgba(17,17,17,0.2)', marginTop: 6 }}>
-            Trace Mode is {traceModeActive ? 'ON' : 'OFF'}
+            Trace Mode is {traceModeActive ? 'ON — numbers are highlighted below' : 'OFF'}
           </div>
         </div>
       )}
