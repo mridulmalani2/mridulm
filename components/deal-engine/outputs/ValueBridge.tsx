@@ -4,12 +4,15 @@ import { useDealEngineStore } from '../../../store/dealEngine';
 import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
 import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
+const CSYM: Record<string, string> = { GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' };
+
 const ValueBridge: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
   const aiInsights = useDealEngineStore((s) => s.aiPanelInsights);
   const aiInsightsLoading = useDealEngineStore((s) => s.aiPanelInsightsLoading);
   const { traceModeActive, onOpenCard } = useTraceGraphContext();
   if (!ms) return null;
+  const sym = CSYM[ms.currency ?? 'GBP'] ?? '£';
 
   const vd = ms.value_drivers;
   const data = [
@@ -44,7 +47,7 @@ const ValueBridge: React.FC = () => {
           <Tooltip
             contentStyle={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#111111' }}
             labelStyle={{ color: '#111111' }}
-            formatter={(val) => val != null ? [`£${Number(val).toFixed(1)}m`, ''] : ['—', '']}
+            formatter={(val) => val != null ? [`${sym}${Number(val).toFixed(1)}m`, ''] : ['—', '']}
           />
           {/* Invisible base bar */}
           <Bar dataKey="base" stackId="a" fill="transparent" />

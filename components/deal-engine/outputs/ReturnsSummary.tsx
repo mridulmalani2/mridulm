@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
-import { fmtPct, irrColor } from '../../../lib/formatters';
+import { fmtPct, fmtCurrency, irrColor } from '../../../lib/formatters';
 import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
 import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
@@ -12,6 +12,7 @@ const ReturnsSummary: React.FC = () => {
 
   if (!ms) return null;
   const ret = ms.returns;
+  const currency = ms.currency ?? 'GBP';
   const displayIrr = showUnlevered ? ret.irr_unlevered : showGross ? ret.irr_gross : ret.irr;
   const irrField = showUnlevered ? 'returns.irr' : showGross ? 'returns.irr' : 'returns.irr';
 
@@ -102,9 +103,9 @@ const ReturnsSummary: React.FC = () => {
         <div className="grid grid-cols-3 gap-4 mt-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 12 }}>
           <div>
             <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
-              {ret.total_distributions.toFixed(1)}
+              {fmtCurrency(ret.total_distributions, currency)}
             </div>
-            <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Dist. (£m)</div>
+            <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Distributions</div>
           </div>
           <div>
             <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>

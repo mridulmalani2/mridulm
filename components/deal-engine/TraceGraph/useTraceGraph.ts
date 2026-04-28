@@ -106,6 +106,7 @@ export function useTraceGraph(
   const [isOpen, setIsOpen] = useState(false);
   const [canvasTransform, setCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
   const prevVersionRef = useRef(modelVersion);
+  const prevCurrencyRef = useRef(modelState?.currency);
 
   // Keep a ref of canvasTransform so auto-pan effect reads current value without
   // stale closure issues
@@ -150,16 +151,22 @@ export function useTraceGraph(
     }
   }, [cards, isOpen]);
 
-  // Refresh cards whose field changed after a model update
+  // Refresh cards when field values change or when currency changes (currency change
+  // doesn't alter numeric values so computeChangedTraceFields returns [] — we must
+  // detect it separately so formatted labels/formulas update to the new symbol)
   useEffect(() => {
-    if (!modelState || !isOpen || changedFields.length === 0) return;
+    if (!modelState || !isOpen) return;
+    const currencyChanged = modelState.currency !== prevCurrencyRef.current;
+    prevCurrencyRef.current = modelState.currency;
+    if (changedFields.length === 0 && !currencyChanged) return;
     setCards((prev) => {
       const next = new Map(prev);
-      for (const fp of changedFields) {
+      const toRefresh = currencyChanged ? [...prev.keys()] : changedFields;
+      for (const fp of toRefresh) {
         if (next.has(fp)) {
           const updated = buildNode(modelState, fp, modelVersion);
           if (updated) {
-            next.set(fp, { ...updated, position: prev.get(fp)!.position });
+            next.set(fp, { ...updated, position: prev.get(fp)!.position, openedAt: prev.get(fp)!.openedAt });
           }
         }
       }

@@ -46,6 +46,7 @@ const InputPanel: React.FC = () => {
 
   if (!ms) return null;
 
+  const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[ms.currency ?? 'GBP'] ?? '£';
   const entryMultWarn = ms.entry.entry_ebitda_multiple > 15 ? 'High entry — flag for IC' : undefined;
   const levWarn = ms.entry.leverage_ratio > 7 ? 'Covenant breach risk' : undefined;
 
@@ -59,10 +60,10 @@ const InputPanel: React.FC = () => {
         <InputField label="Deal Name" path="deal_name" value={ms.deal_name} type="text" />
         <InputField label="Sector" path="sector" value={ms.sector} type="select" options={SECTORS} />
         <InputField label="Currency" path="currency" value={ms.currency} type="select" options={CURRENCIES} />
-        <InputField label="LTM Revenue" path="revenue.base_revenue" value={ms.revenue.base_revenue} suffix="£m" />
+        <InputField label="LTM Revenue" path="revenue.base_revenue" value={ms.revenue.base_revenue} suffix={`${csym}m`} />
         <InputField label="EBITDA Margin" path="margins.base_ebitda_margin" value={ms.margins.base_ebitda_margin} suffix="%" step={0.01} />
         <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} />
-        <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix="£m" formatter={(v) => v.toFixed(1)} />
+        <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => v.toFixed(1)} />
       </Section>
 
       {/* Debt Structure */}
@@ -82,7 +83,7 @@ const InputPanel: React.FC = () => {
             )}
             <InputField label="Name" path={`debt_tranches.${i}.name`} value={t.name} type="text" />
             <InputField label="Type" path={`debt_tranches.${i}.tranche_type`} value={t.tranche_type || 'senior'} type="select" options={TRANCHE_TYPES} />
-            <InputField label="Principal" path={`debt_tranches.${i}.principal`} value={t.principal} suffix="£m" />
+            <InputField label="Principal" path={`debt_tranches.${i}.principal`} value={t.principal} suffix={`${csym}m`} />
             <InputField label="Rate Type" path={`debt_tranches.${i}.rate_type`} value={t.rate_type} type="select" options={[{ value: 'fixed', label: 'Fixed' }, { value: 'floating', label: 'Floating' }]} />
             <InputField label="Interest Rate" path={`debt_tranches.${i}.interest_rate`} value={t.interest_rate} suffix="%" step={0.005} />
             <InputField label="Amortization" path={`debt_tranches.${i}.amortization_type`} value={t.amortization_type} type="select" options={AMORT_TYPES} />
@@ -108,7 +109,7 @@ const InputPanel: React.FC = () => {
         {ms.revenue.acquisition_revenue.some((a: number) => a > 0) && (
           <>
             {ms.revenue.acquisition_revenue.map((a: number, i: number) => (
-              <InputField key={`acq-${i}`} label={`Year ${i + 1} Acq. Revenue`} path={`revenue.acquisition_revenue.${i}`} value={a} suffix="£m" />
+              <InputField key={`acq-${i}`} label={`Year ${i + 1} Acq. Revenue`} path={`revenue.acquisition_revenue.${i}`} value={a} suffix={`${csym}m`} />
             ))}
           </>
         )}
@@ -127,11 +128,11 @@ const InputPanel: React.FC = () => {
       <Section title="Costs & Fees" defaultOpen={false}>
         <InputField label="Entry Fee %" path="fees.entry_fee_pct" value={ms.fees.entry_fee_pct} suffix="%" step={0.005} />
         <InputField label="Exit Fee %" path="fees.exit_fee_pct" value={ms.fees.exit_fee_pct} suffix="%" step={0.005} />
-        <InputField label="Monitoring Fee" path="fees.monitoring_fee_annual" value={ms.fees.monitoring_fee_annual} suffix="£m/yr" />
+        <InputField label="Monitoring Fee" path="fees.monitoring_fee_annual" value={ms.fees.monitoring_fee_annual} suffix={`${csym}m/yr`} />
         <InputField label="Financing Fee %" path="fees.financing_fee_pct" value={ms.fees.financing_fee_pct} suffix="%" step={0.005} />
-        <InputField label="Transaction Costs" path="fees.transaction_costs" value={ms.fees.transaction_costs} suffix="£m" />
+        <InputField label="Transaction Costs" path="fees.transaction_costs" value={ms.fees.transaction_costs} suffix={`${csym}m`} />
         <InputField label="Tax Rate" path="tax.tax_rate" value={ms.tax.tax_rate} suffix="%" step={0.01} />
-        <InputField label="NOL Carryforward" path="tax.nol_carryforward" value={ms.tax.nol_carryforward} suffix="£m" />
+        <InputField label="NOL Carryforward" path="tax.nol_carryforward" value={ms.tax.nol_carryforward} suffix={`${csym}m`} />
       </Section>
 
       {/* Exit */}
@@ -189,7 +190,7 @@ const InputPanel: React.FC = () => {
                 Distributions
               </label>
               <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
-                £m/yr
+                {csym}m/yr
               </span>
             </div>
             {Array.from({ length: ms.exit.holding_period }, (_, i) => (
@@ -198,7 +199,7 @@ const InputPanel: React.FC = () => {
                 label={`Year ${i + 1}`}
                 path={`exit.interim_distributions.${i}`}
                 value={(ms.exit.interim_distributions || [])[i] || 0}
-                suffix="£m"
+                suffix={`${csym}m`}
               />
             ))}
           </div>
@@ -213,7 +214,7 @@ const InputPanel: React.FC = () => {
             </button>
           </div>
         )}
-        <InputField label="Exit EV Override" path="exit.exit_ev_override" value={ms.exit.exit_ev_override ?? 0} suffix="£m" />
+        <InputField label="Exit EV Override" path="exit.exit_ev_override" value={ms.exit.exit_ev_override ?? 0} suffix={`${csym}m`} />
       </Section>
 
       {/* MIP */}
