@@ -91,6 +91,49 @@ export function useTraceGraph(
   const [canvasTransform, setCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
   const prevVersionRef = useRef(modelVersion);
 
+  // Keep a ref of canvasTransform so auto-pan effect reads current value without
+  // stale closure issues
+  const canvasTransformRef = useRef(canvasTransform);
+  useEffect(() => { canvasTransformRef.current = canvasTransform; }, [canvasTransform]);
+
+  // Track which cards were already open so the auto-pan effect can detect new ones
+  const prevCardFPsRef = useRef(new Set<string>());
+
+  // Auto-pan: whenever a new card is added, shift the canvas so the card lands
+  // within the visible viewport (prevents cards flowing off-screen on directional
+  // left/right placement)
+  useEffect(() => {
+    if (!isOpen) return;
+    const currentFPs = new Set(cards.keys());
+    const newFPs = [...currentFPs].filter((fp) => !prevCardFPsRef.current.has(fp));
+    prevCardFPsRef.current = currentFPs;
+    if (newFPs.length === 0) return;
+
+    const card = cards.get(newFPs[0]);
+    if (!card) return;
+
+    const { x, y } = card.position;
+    const { x: tx, y: ty, scale } = canvasTransformRef.current;
+    const vw = window.innerWidth;
+    const MARGIN = 40;
+    const TOP_SAFE = 90; // clear fixed toolbar
+    const CW = 350;
+
+    const screenL = tx + x * scale;
+    const screenR = tx + (x + CW) * scale;
+    const screenT = ty + y * scale;
+
+    let nx = tx;
+    let ny = ty;
+    if (screenL < MARGIN)       nx = MARGIN - x * scale;
+    else if (screenR > vw - MARGIN) nx = vw - MARGIN - (x + CW) * scale;
+    if (screenT < TOP_SAFE)     ny = TOP_SAFE - y * scale;
+
+    if (nx !== tx || ny !== ty) {
+      setCanvasTransform((prev) => ({ ...prev, x: nx, y: ny }));
+    }
+  }, [cards, isOpen]);
+
   // Refresh cards whose field changed after a model update
   useEffect(() => {
     if (!modelState || !isOpen || changedFields.length === 0) return;

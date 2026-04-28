@@ -524,6 +524,7 @@ const DealEngine: React.FC = () => {
   const [activeTab, setActiveTab] = useState<OutputTab>('returns');
   const [chatOpen, setChatOpen] = useState(true);
   const [inputPanelOpen, setInputPanelOpen] = useState(false);
+  const [showTraceHint, setShowTraceHint] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   );
@@ -643,8 +644,13 @@ const DealEngine: React.FC = () => {
               {/* Trace Mode toggle */}
               <button
                 onClick={() => {
-                  // Turning OFF: close the overlay so it doesn't linger
-                  if (traceModeActive) traceGraph.closeOverlay();
+                  if (traceModeActive) {
+                    traceGraph.closeOverlay();
+                  } else {
+                    // Show a brief desktop hint on first activation
+                    setShowTraceHint(true);
+                    setTimeout(() => setShowTraceHint(false), 4000);
+                  }
                   toggleTraceMode();
                 }}
                 className="px-3 py-1.5 mx-1 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
@@ -707,6 +713,29 @@ const DealEngine: React.FC = () => {
         currency={modelState.currency ?? 'GBP'}
         traceModeActive={traceModeActive}
       />
+
+      {/* Trace mode screen-size hint — fades in/out, laptop-only advisory */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 200,
+          pointerEvents: 'none',
+          opacity: showTraceHint ? 1 : 0,
+          transition: 'opacity 0.4s ease',
+          background: 'rgba(17,17,17,0.82)',
+          color: 'rgba(255,255,255,0.8)',
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10,
+          letterSpacing: '0.07em',
+          padding: '5px 12px',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        TRACE VIEW · BEST ON LAPTOP OR WIDER SCREEN
+      </div>
     </div>
   );
 };

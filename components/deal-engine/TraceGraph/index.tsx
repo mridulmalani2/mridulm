@@ -92,7 +92,7 @@ const TraceGraphOverlay: React.FC<TraceGraphOverlayProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 100,
-        // Pointer events only on cards/controls — misses pass through to dashboard
+        overflow: 'hidden',
         pointerEvents: isOpen ? 'auto' : 'none',
       }}
       onMouseDown={onOverlayMouseDown}
