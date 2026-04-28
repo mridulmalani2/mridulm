@@ -30,8 +30,12 @@ function buildNode(ms: ModelState, fieldPath: string, modelVersion: number): Tra
 
   const currency = ms.currency ?? 'GBP';
   const value = resolveTraceValue(ms, fieldPath);
+  // Label for THIS node's outgoing edges — shows what value flows out of this card.
+  // Using the upstream (current) value rather than the downstream value prevents
+  // all edges converging on the same node from displaying the same number.
+  const selfLabel = formatTraceValue(value, fieldPath, currency);
 
-  const makeEdge = (fp: string) => {
+  const makeInputEdge = (fp: string) => {
     const v = resolveTraceValue(ms, fp);
     return {
       field_path: fp,
@@ -41,15 +45,27 @@ function buildNode(ms: ModelState, fieldPath: string, modelVersion: number): Tra
     };
   };
 
+  const makeOutputEdge = (fp: string) => {
+    const v = resolveTraceValue(ms, fp);
+    return {
+      field_path: fp,
+      label: traceLabel(fp),
+      value: v,
+      // Arrow label = what THIS node contributes (its own value, not the destination's)
+      linking_label: selfLabel,
+    };
+  };
+
   const node: TraceNode = {
     field_path: fieldPath,
     label: entry.label,
     value,
     formula_symbolic: entry.formula_symbolic,
+    formula_computed: entry.formula_fn ? entry.formula_fn(ms, currency) : null,
     is_user_input: entry.is_user_input,
     converged_via_iteration: ITERATIVE_FIELDS.has(mapKey),
-    inputs: entry.inputs.map(makeEdge),
-    outputs: entry.outputs.map(makeEdge),
+    inputs: entry.inputs.map(makeInputEdge),
+    outputs: entry.outputs.map(makeOutputEdge),
   };
 
   return {

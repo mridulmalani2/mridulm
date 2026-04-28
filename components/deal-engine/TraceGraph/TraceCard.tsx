@@ -121,41 +121,59 @@ const TraceCard: React.FC<TraceCardProps> = React.memo(
 
         {/* Body */}
         <div style={{ padding: '10px 12px' }}>
-          {/* Current value */}
-          <div style={{ marginBottom: 8 }}>
-            {node.is_user_input ? (
+          {/* Value + user-input badge */}
+          <div style={{ marginBottom: node.is_user_input ? 6 : 8 }}>
+            {node.is_user_input && (
               <span style={{ fontSize: 10, fontFamily: monoFont, color: '#b45309', letterSpacing: '0.06em' }}>
-                User input
+                User assumption
               </span>
-            ) : null}
+            )}
             <div style={{ fontSize: 22, fontFamily: monoFont, fontWeight: 700, color: '#111111', lineHeight: 1.2 }}>
               {formatTraceValue(node.value, node.field_path, currency)}
             </div>
           </div>
 
-          {/* Symbolic formula */}
-          <div
-            style={{
-              padding: '5px 8px',
-              background: 'rgba(17,17,17,0.03)',
-              border: '1px solid rgba(17,17,17,0.08)',
-              marginBottom: 10,
-            }}
-          >
-            <pre
+          {/* Formula — only for computed nodes */}
+          {!node.is_user_input && (
+            <div
               style={{
-                fontSize: 11,
-                fontFamily: monoFont,
-                color: '#111111',
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                lineHeight: 1.55,
+                padding: '6px 8px',
+                background: node.formula_computed ? 'rgba(17,17,17,0.03)' : 'rgba(17,17,17,0.02)',
+                border: '1px solid rgba(17,17,17,0.08)',
+                marginBottom: 10,
               }}
             >
-              {node.formula_symbolic}
-            </pre>
-          </div>
+              {/* Computed (numbers substituted) — primary, shown when available */}
+              {node.formula_computed && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontFamily: monoFont,
+                    color: '#111111',
+                    fontWeight: 600,
+                    lineHeight: 1.6,
+                    marginBottom: 3,
+                  }}
+                >
+                  {node.formula_computed}
+                </div>
+              )}
+              {/* Symbolic — secondary context */}
+              <pre
+                style={{
+                  fontSize: node.formula_computed ? 9 : 11,
+                  fontFamily: monoFont,
+                  color: node.formula_computed ? 'rgba(17,17,17,0.38)' : '#111111',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.5,
+                }}
+              >
+                {node.formula_symbolic}
+              </pre>
+            </div>
+          )}
 
           {/* Inputs */}
           {node.inputs.length > 0 && (

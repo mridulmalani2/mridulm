@@ -12,6 +12,8 @@ export interface TraceNode {
   label: string;
   value: number | null;
   formula_symbolic: string;
+  /** Actual numbers substituted into the formula, e.g. "₹25.0m × 10.0x = ₹250.0m" */
+  formula_computed: string | null;
   is_user_input: boolean;
   /** True for fields resolved via the iterative convergence loop (circular deps). */
   converged_via_iteration: boolean;
