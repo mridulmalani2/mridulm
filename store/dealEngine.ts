@@ -18,6 +18,7 @@ import { generateInvestmentMemo } from '../lib/engine/ai/memoGenerator';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
 import type { AIProvider } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
+import { computeChangedTraceFields } from '../lib/traceMap';
 
 /** Apply a dot-notation update to a nested object. */
 function applyUpdate(obj: Record<string, unknown>, path: string, value: unknown): void {
@@ -78,11 +79,18 @@ interface DealEngineStore {
   isMemoGenerating: boolean;
   error: string | null;
   pendingEdits: PendingEdit[];
+  /** Increments on every full recalculation — used by trace cards for stale-value detection. */
+  modelVersion: number;
+  /** Trace fields whose value changed in the last recalculation (recommendation #1). */
+  lastChangedTraceFields: string[];
+  /** Whether Trace Mode is active — double-click opens trace cards only when true (recommendation #8). */
+  traceModeActive: boolean;
 
   setApiKey: (key: string) => void;
   setAiProvider: (provider: AIProvider) => void;
   setProviderAndKey: (provider: AIProvider, key: string) => void;
   clearApiKey: () => void;
+  toggleTraceMode: () => void;
   initializeModel: (inputs: {
     deal_name: string;
     revenue: number;
@@ -129,6 +137,9 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   isMemoGenerating: false,
   error: null,
   pendingEdits: [],
+  modelVersion: 0,
+  lastChangedTraceFields: [],
+  traceModeActive: false,
 
   setApiKey: (key) => {
     localStorage.setItem('deal-engine-api-key', key);
@@ -153,6 +164,8 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
     localStorage.removeItem('deal-engine-ai-provider');
     set({ apiKey: null, aiProvider: 'anthropic' });
   },
+
+  toggleTraceMode: () => set((s) => ({ traceModeActive: !s.traceModeActive })),
 
   resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null, pendingEdits: [] }),
 
@@ -293,7 +306,7 @@ Be specific. Use the company name to infer business type and calibrate according
   updateField: async (path, value) => {
     set({ isCalculating: true, error: null });
     try {
-      const { modelState } = get();
+      const { modelState, modelVersion } = get();
       if (!modelState) throw new Error('No model initialized');
 
       const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
@@ -314,7 +327,6 @@ Be specific. Use the company name to infer business type and calibrate according
           state.entry.entry_ebitda_multiple = (value as number) / ebitda;
         }
       } else if (path === 'entry.leverage_ratio') {
-        // Leverage drives tranche sizing: scale all tranche principals proportionally
         const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
         const targetLeverage = value as number;
         if (ebitda > 0 && targetLeverage > 0) {
@@ -330,7 +342,6 @@ Be specific. Use the company name to infer business type and calibrate according
         }
         state._lastEditedEntryField = null;
       } else if (path === 'exit.exit_ev_override') {
-        // When exit EV override is set, back-solve exit multiple from projected EBITDA
         const exitEvVal = value as number;
         if (exitEvVal > 0 && state.exit.exit_ebitda > 0) {
           state.exit.exit_ebitda_multiple = exitEvVal / state.exit.exit_ebitda;
@@ -341,7 +352,15 @@ Be specific. Use the company name to infer business type and calibrate according
       }
 
       const result = fullRecalc(state);
-      set({ modelState: result, isCalculating: false, memoContent: null, scenarios: [] });
+      const changedFields = computeChangedTraceFields(modelState, result);
+      set({
+        modelState: result,
+        modelVersion: modelVersion + 1,
+        lastChangedTraceFields: changedFields,
+        isCalculating: false,
+        memoContent: null,
+        scenarios: [],
+      });
     } catch (e: unknown) {
       set({ error: (e as Error).message, isCalculating: false });
     }
@@ -441,7 +460,7 @@ Be specific. Use the company name to infer business type and calibrate according
   },
 
   acceptEdits: async () => {
-    const { modelState, pendingEdits, chatHistory } = get();
+    const { modelState, pendingEdits, chatHistory, modelVersion } = get();
     if (!modelState || pendingEdits.length === 0) return;
     set({ isCalculating: true });
     try {
@@ -450,13 +469,13 @@ Be specific. Use the company name to infer business type and calibrate according
         applyUpdate(stateDict, edit.field, edit.newValue);
       }
       const state = stateDict as unknown as ModelState;
-      // Handle EV/multiple sync if either was in the edits
       const evEdit = pendingEdits.find(e => e.field === 'entry.enterprise_value');
       const multEdit = pendingEdits.find(e => e.field === 'entry.entry_ebitda_multiple');
       if (evEdit) state._lastEditedEntryField = 'ev';
       else if (multEdit) state._lastEditedEntryField = 'multiple';
 
       const result = fullRecalc(state);
+      const changedFields = computeChangedTraceFields(modelState, result);
       const confirmMsg: ChatMessage = {
         role: 'assistant',
         content: `Applied ${pendingEdits.length} change(s) to the model.`,
@@ -465,6 +484,8 @@ Be specific. Use the company name to infer business type and calibrate according
       };
       set({
         modelState: result,
+        modelVersion: modelVersion + 1,
+        lastChangedTraceFields: changedFields,
         pendingEdits: [],
         chatHistory: [...chatHistory, confirmMsg],
         isCalculating: false,

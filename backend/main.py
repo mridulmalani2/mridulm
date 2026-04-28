@@ -23,6 +23,7 @@ from backend.engine.scenarios import generate_scenarios, generate_sensitivity_ta
 from backend.export.excel import build_excel
 from backend.models.debt import DebtTranche
 from backend.models.state import ModelState
+from backend.trace_map import TRACE_MAP, build_trace_node, changed_trace_fields
 
 app = FastAPI(title="Deal Intelligence Engine", version="1.0.0")
 
@@ -203,6 +204,7 @@ async def update_field(
         raise HTTPException(status_code=422, detail=f"Invalid field path: {req.field_path}: {e}")
 
     try:
+        old_state = state
         state = ModelState(**state_dict)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -210,7 +212,9 @@ async def update_field(
     state = _full_recalc(state)
     sessions[session_id] = state
 
-    return {"session_id": session_id, "model_state": state.model_dump()}
+    # Diff to tell the frontend which trace fields changed (recommendation #1)
+    delta = changed_trace_fields(old_state, state)
+    return {"session_id": session_id, "model_state": state.model_dump(), "changed_fields": delta}
 
 
 @app.post("/api/model/recalculate")
@@ -388,3 +392,59 @@ async def import_json(
     sessions[session_id] = state
 
     return {"session_id": session_id, "model_state": state.model_dump()}
+
+
+# ── Trace Graph endpoints ─────────────────────────────────────────────────────
+# These accept the full model_state in the request body so the frontend does not
+# need to rely on server-side session state (the frontend engine is self-contained).
+
+class TraceFieldRequest(BaseModel):
+    model_state: dict
+    field_path: str
+
+
+class TraceBatchRequest(BaseModel):
+    model_state: dict
+    field_paths: list[str]
+
+
+@app.post("/api/trace/field")
+async def trace_field(req: TraceFieldRequest):
+    """Return a TraceNode for a single field path, resolved against the provided model state."""
+    try:
+        state = ModelState(**req.model_state)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    node = build_trace_node(state, req.field_path)
+    if node is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Field '{req.field_path}' is not in the trace map. Supported fields: {list(TRACE_MAP.keys())}",
+        )
+    return node.model_dump()
+
+
+@app.post("/api/trace/batch")
+async def trace_batch(req: TraceBatchRequest):
+    """Return TraceNodes for multiple field paths in a single request.
+
+    Avoids cascading per-year fetch chains (recommendation #4).
+    Returns: { field_path: TraceNode | null }
+    """
+    try:
+        state = ModelState(**req.model_state)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    result: dict[str, Any] = {}
+    for fp in req.field_paths:
+        node = build_trace_node(state, fp)
+        result[fp] = node.model_dump() if node else None
+    return result
+
+
+@app.get("/api/trace/fields")
+async def list_trace_fields():
+    """List all traceable field paths."""
+    return {"fields": list(TRACE_MAP.keys())}

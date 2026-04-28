@@ -1,11 +1,14 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
+import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
 const ValueBridge: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
   const aiInsights = useDealEngineStore((s) => s.aiPanelInsights);
   const aiInsightsLoading = useDealEngineStore((s) => s.aiPanelInsightsLoading);
+  const { traceModeActive, onOpenCard } = useTraceGraphContext();
   if (!ms) return null;
 
   const vd = ms.value_drivers;
@@ -55,16 +58,20 @@ const ValueBridge: React.FC = () => {
       {/* Contribution table */}
       <div className="grid grid-cols-5 gap-1 mt-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 12 }}>
         {[
-          { label: 'Revenue', pct: vd.revenue_growth_contribution_pct, abs: vd.revenue_growth_contribution_abs },
-          { label: 'Margin', pct: vd.margin_expansion_contribution_pct, abs: vd.margin_expansion_contribution_abs },
-          { label: 'Multiple', pct: vd.multiple_expansion_contribution_pct, abs: vd.multiple_expansion_contribution_abs },
-          { label: 'Debt', pct: vd.debt_paydown_contribution_pct, abs: vd.debt_paydown_contribution_abs },
-          { label: 'Fees', pct: vd.fees_drag_contribution_pct, abs: vd.fees_drag_contribution_abs },
+          { label: 'Revenue', field: 'value_drivers.revenue_growth_contribution_abs', pct: vd.revenue_growth_contribution_pct },
+          { label: 'Margin', field: 'value_drivers.margin_expansion_contribution_abs', pct: vd.margin_expansion_contribution_pct },
+          { label: 'Multiple', field: 'value_drivers.multiple_expansion_contribution_abs', pct: vd.multiple_expansion_contribution_pct },
+          { label: 'Debt', field: 'value_drivers.debt_paydown_contribution_abs', pct: vd.debt_paydown_contribution_pct },
+          { label: 'Fees', field: 'value_drivers.fees_drag_contribution_abs', pct: vd.fees_drag_contribution_pct },
         ].map((d) => (
           <div key={d.label} className="text-center">
-            <div className="text-xs font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+            <span
+              {...attachTraceTarget(d.field, traceModeActive, onOpenCard)}
+              className="text-xs font-semibold mb-0.5 block"
+              style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}
+            >
               {d.pct.toFixed(0)}%
-            </div>
+            </span>
             <div className="text-[9px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>{d.label}</div>
           </div>
         ))}

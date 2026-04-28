@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { fmtPct, irrColor } from '../../../lib/formatters';
+import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
+import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
 const ReturnsSummary: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
+  const { traceModeActive, onOpenCard } = useTraceGraphContext();
   const [showGross, setShowGross] = useState(false);
   const [showUnlevered, setShowUnlevered] = useState(false);
 
   if (!ms) return null;
   const ret = ms.returns;
   const displayIrr = showUnlevered ? ret.irr_unlevered : showGross ? ret.irr_gross : ret.irr;
+  const irrField = showUnlevered ? 'returns.irr' : showGross ? 'returns.irr' : 'returns.irr';
 
   const toggleBtnStyle = (active: boolean) => ({
     fontFamily: "'JetBrains Mono', monospace",
@@ -54,9 +58,13 @@ const ReturnsSummary: React.FC = () => {
 
       {/* Hero IRR */}
       <div className="mb-5">
-        <div className="font-playfair text-5xl font-bold mb-1" style={{ color: irrColor(displayIrr) }}>
+        <span
+          {...attachTraceTarget(irrField, traceModeActive, onOpenCard)}
+          className={`font-playfair text-5xl font-bold mb-1 block ${traceModeActive ? 'traceable traceable--active' : 'traceable'}`}
+          style={{ color: irrColor(displayIrr) }}
+        >
           {displayIrr != null ? fmtPct(displayIrr) : 'N/C'}
-        </div>
+        </span>
         <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
           {showUnlevered ? 'Unlevered' : showGross ? 'Gross' : 'Equity'} IRR
           {ret.irr_convergence_failed && ' (non-convergent)'}
@@ -66,9 +74,13 @@ const ReturnsSummary: React.FC = () => {
       {/* Secondary metrics */}
       <div className="grid grid-cols-3 gap-4" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 16 }}>
         <div>
-          <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+          <span
+            {...attachTraceTarget('returns.moic', traceModeActive, onOpenCard)}
+            className="text-lg font-semibold mb-0.5 block"
+            style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}
+          >
             {ret.moic.toFixed(2)}x
-          </div>
+          </span>
           <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>MOIC</div>
         </div>
         <div>

@@ -16,6 +16,9 @@ import EBITDABridgeChart from '../components/deal-engine/outputs/EBITDABridgeCha
 import FragilityPanel from '../components/deal-engine/outputs/FragilityPanel';
 import ChatPanel from '../components/deal-engine/chat/ChatPanel';
 import ApiKeyModal from '../components/deal-engine/ApiKeyModal';
+import TraceGraphOverlay from '../components/deal-engine/TraceGraph';
+import { useTraceGraph } from '../components/deal-engine/TraceGraph/useTraceGraph';
+import { TraceGraphProvider } from '../components/deal-engine/TraceGraph/TraceGraphContext';
 
 const INIT_DEFAULTS = {
   deal_name: 'New Deal',
@@ -512,6 +515,11 @@ const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
   const apiKey = useDealEngineStore((s) => s.apiKey);
   const clearApiKey = useDealEngineStore((s) => s.clearApiKey);
+  const traceModeActive = useDealEngineStore((s) => s.traceModeActive);
+  const toggleTraceMode = useDealEngineStore((s) => s.toggleTraceMode);
+  const modelVersion = useDealEngineStore((s) => s.modelVersion);
+  const lastChangedTraceFields = useDealEngineStore((s) => s.lastChangedTraceFields);
+
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [activeTab, setActiveTab] = useState<OutputTab>('returns');
   const [chatOpen, setChatOpen] = useState(true);
@@ -519,6 +527,8 @@ const DealEngine: React.FC = () => {
   const [isLargeScreen, setIsLargeScreen] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   );
+
+  const traceGraph = useTraceGraph(modelState, modelVersion, lastChangedTraceFields);
 
   useEffect(() => {
     const handler = () => setIsLargeScreen(window.innerWidth >= 1024);
@@ -630,6 +640,23 @@ const DealEngine: React.FC = () => {
                   Change Key
                 </button>
               )}
+              {/* Trace Mode toggle (recommendation #8) */}
+              <button
+                onClick={() => {
+                  toggleTraceMode();
+                  if (!traceModeActive) traceGraph.openOverlay();
+                }}
+                className="px-3 py-1.5 mx-1 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
+                title={traceModeActive ? 'Disable trace mode — double-click will no longer open trace cards' : 'Enable trace mode — double-click any number to trace its formula and dependencies'}
+                style={{
+                  color: traceModeActive ? '#15803d' : 'rgba(17,17,17,0.4)',
+                  border: `1px solid ${traceModeActive ? 'rgba(21,128,61,0.35)' : 'rgba(17,17,17,0.15)'}`,
+                  background: traceModeActive ? 'rgba(21,128,61,0.05)' : 'transparent',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                {traceModeActive ? '⬡ Trace On' : '⬡ Trace'}
+              </button>
               <button
                 onClick={() => setChatOpen(!chatOpen)}
                 className="px-3 py-1.5 mx-1 mr-2 text-[10px] tracking-widest uppercase transition-colors flex-shrink-0"
@@ -644,23 +671,25 @@ const DealEngine: React.FC = () => {
             </div>
           </div>
 
-          {/* Output content */}
-          <div className="flex-1 overflow-y-auto p-3 lg:p-4">
-            {activeTab === 'returns' && (
-              <div className="space-y-4">
-                <ReturnsSummary />
-                <ValueBridge />
-                <EBITDABridgeChart />
-              </div>
-            )}
-            {activeTab === 'su' && <SourcesUsesTable />}
-            {activeTab === 'debt' && <DebtScheduleTable />}
-            {activeTab === 'credit' && <CreditPanel />}
-            {activeTab === 'fragility' && <FragilityPanel />}
-            {activeTab === 'sensitivity' && <SensitivityHeatmap />}
-            {activeTab === 'scenarios' && <ScenarioPanel />}
-            {activeTab === 'reality' && <ExitRealityCheck />}
-          </div>
+          {/* Output content — wrapped in TraceGraphProvider so output components can attach trace targets */}
+          <TraceGraphProvider traceModeActive={traceModeActive} onOpenCard={traceGraph.openCard}>
+            <div className="flex-1 overflow-y-auto p-3 lg:p-4">
+              {activeTab === 'returns' && (
+                <div className="space-y-4">
+                  <ReturnsSummary />
+                  <ValueBridge />
+                  <EBITDABridgeChart />
+                </div>
+              )}
+              {activeTab === 'su' && <SourcesUsesTable />}
+              {activeTab === 'debt' && <DebtScheduleTable />}
+              {activeTab === 'credit' && <CreditPanel />}
+              {activeTab === 'fragility' && <FragilityPanel />}
+              {activeTab === 'sensitivity' && <SensitivityHeatmap />}
+              {activeTab === 'scenarios' && <ScenarioPanel />}
+              {activeTab === 'reality' && <ExitRealityCheck />}
+            </div>
+          </TraceGraphProvider>
         </div>
 
         {/* Right: Chat */}
@@ -670,6 +699,13 @@ const DealEngine: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Trace Graph Overlay — always mounted, display:none when closed */}
+      <TraceGraphOverlay
+        graphHook={traceGraph}
+        currency={modelState.currency ?? 'GBP'}
+        traceModeActive={traceModeActive}
+      />
     </div>
   );
 };
