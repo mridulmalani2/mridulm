@@ -101,7 +101,7 @@ const EdgeLayer: React.FC<EdgeLayerProps> = React.memo(({ cards, transform }) =>
       <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
         <defs>
           <marker id="tg-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="rgba(17,17,17,0.2)" />
+            <polygon points="0 0, 8 3, 0 6" fill="rgba(17,17,17,0.55)" />
           </marker>
         </defs>
         {edges.map((edge) => (
@@ -109,7 +109,7 @@ const EdgeLayer: React.FC<EdgeLayerProps> = React.memo(({ cards, transform }) =>
             <path
               d={edge.d}
               fill="none"
-              stroke="rgba(17,17,17,0.18)"
+              stroke="rgba(17,17,17,0.45)"
               strokeWidth={1.5}
               markerEnd="url(#tg-arrow)"
             />
@@ -117,22 +117,23 @@ const EdgeLayer: React.FC<EdgeLayerProps> = React.memo(({ cards, transform }) =>
             {edge.linkingLabel && edge.linkingLabel !== '—' && (
               <g transform={`translate(${edge.midX},${edge.midY})`}>
                 <rect
-                  x={-22}
-                  y={-9}
-                  width={44}
-                  height={18}
-                  rx={9}
+                  x={-26}
+                  y={-10}
+                  width={52}
+                  height={20}
+                  rx={4}
                   fill="#ffffff"
-                  stroke="rgba(17,17,17,0.12)"
+                  stroke="rgba(17,17,17,0.3)"
                   strokeWidth={1}
                 />
                 <text
                   x={0}
-                  y={4}
+                  y={4.5}
                   textAnchor="middle"
                   fontSize={9}
                   fontFamily="'JetBrains Mono', monospace"
-                  fill="rgba(17,17,17,0.5)"
+                  fontWeight="600"
+                  fill="#111111"
                 >
                   {edge.linkingLabel}
                 </text>

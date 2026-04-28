@@ -97,12 +97,12 @@ const TraceGraphOverlay: React.FC<TraceGraphOverlayProps> = ({
       onMouseDown={onOverlayMouseDown}
       onWheel={onWheel}
     >
-      {/* Faint tinted background so user knows the overlay is active */}
+      {/* Opaque background — cards and edges read clearly against it */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(249,249,247,0.75)',
+          background: '#F4F4F0',
           pointerEvents: 'none',
         }}
       />

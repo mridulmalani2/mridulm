@@ -189,42 +189,69 @@ export function useTraceGraph(
     });
   }, []);
 
-  // Tidy Layout — auto-arrange cards in topological dependency order (recommendation #10)
+  // Tidy Layout — column layout by topological depth (recommendation #10)
+  // Depth 0 = user inputs / roots with no open inputs
+  // Depth N = 1 + max depth of open inputs
   const tidyLayout = useCallback(() => {
     setCards((prev) => {
       if (prev.size === 0) return prev;
 
-      // Build a simple topo sort: cards whose inputs are also open come first
       const fps = [...prev.keys()];
       const openSet = new Set(fps);
 
-      // Score by "how many of my inputs are open" (descending = roots first)
-      const score = (fp: string) => {
-        const entry = TRACE_MAP[fp];
-        if (!entry) return 0;
-        return entry.inputs.filter((inp) => openSet.has(inp)).length;
-      };
-      const sorted = [...fps].sort((a, b) => score(a) - score(b));
+      // Strip year-index suffix to get the TRACE_MAP key
+      const mapKey = (fp: string) => fp.replace(/\.(\d+)$/, (_, g) => (isNaN(Number(g)) ? `.${g}` : ''));
 
-      const CARD_W = 340;
-      const CARD_H = 220;
-      const GAP_X = 60;
-      const GAP_Y = 40;
-      const COLS = Math.ceil(Math.sqrt(sorted.length));
+      // Memoised depth via DFS with cycle guard
+      const depthCache = new Map<string, number>();
+      function getDepth(fp: string, stack: Set<string>): number {
+        if (depthCache.has(fp)) return depthCache.get(fp)!;
+        if (stack.has(fp)) return 0; // cycle guard
+        const entry = TRACE_MAP[mapKey(fp)];
+        if (!entry) { depthCache.set(fp, 0); return 0; }
+        const openInputs = entry.inputs.filter((inp) => openSet.has(inp));
+        if (openInputs.length === 0) { depthCache.set(fp, 0); return 0; }
+        const next_ = new Set(stack); next_.add(fp);
+        const d = Math.max(...openInputs.map((inp) => getDepth(inp, next_))) + 1;
+        depthCache.set(fp, d);
+        return d;
+      }
+      fps.forEach((fp) => getDepth(fp, new Set()));
 
+      // Group by column (depth), sort within column by openedAt
+      const columns = new Map<number, string[]>();
+      for (const fp of fps) {
+        const col = depthCache.get(fp) ?? 0;
+        if (!columns.has(col)) columns.set(col, []);
+        columns.get(col)!.push(fp);
+      }
+      for (const col of columns.values()) {
+        col.sort((a, b) => (prev.get(a)?.openedAt ?? 0) - (prev.get(b)?.openedAt ?? 0));
+      }
+
+      const CARD_W = 350;
+      const CARD_H = 310; // realistic card height with chips
+      const GAP_X = 56;
+      const GAP_Y = 28;
+      const START_X = 60;
+      const START_Y = 60;
+
+      const sortedColIdxs = [...columns.keys()].sort((a, b) => a - b);
       const next = new Map(prev);
-      sorted.forEach((fp, i) => {
-        const col = i % COLS;
-        const row = Math.floor(i / COLS);
-        const card = prev.get(fp)!;
-        next.set(fp, {
-          ...card,
-          position: { x: col * (CARD_W + GAP_X) + 60, y: row * (CARD_H + GAP_Y) + 60 },
+      sortedColIdxs.forEach((colIdx, ci) => {
+        columns.get(colIdx)!.forEach((fp, ri) => {
+          const card = prev.get(fp)!;
+          next.set(fp, {
+            ...card,
+            position: {
+              x: START_X + ci * (CARD_W + GAP_X),
+              y: START_Y + ri * (CARD_H + GAP_Y),
+            },
+          });
         });
       });
       return next;
     });
-    // Reset canvas transform to fit the tidy layout
     setCanvasTransform({ x: 0, y: 0, scale: 1 });
   }, []);
 
