@@ -1,5 +1,7 @@
 import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
+import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
 const fmt = (v: number, decimals = 1) => v.toFixed(decimals);
 const pct = (v: number) => (v * 100).toFixed(1) + '%';
@@ -8,6 +10,7 @@ const SourcesUsesTable: React.FC = () => {
   const su = useDealEngineStore((s) => s.modelState?.sources_and_uses);
   const currency = useDealEngineStore((s) => s.modelState?.currency || 'GBP');
 
+  const { traceModeActive, onOpenCard } = useTraceGraphContext();
   if (!su || su.total_uses === 0) return null;
 
   const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'INR' ? '₹' : currency === 'JPY' ? '¥' : '\u00A3';
@@ -53,7 +56,7 @@ const SourcesUsesTable: React.FC = () => {
           <div className="space-y-1">
             <div className="flex justify-between" style={labelStyle}>
               <span>Enterprise Value</span>
-              <span style={rowStyle}>{sym}{fmt(su.enterprise_value)}</span>
+              <span {...attachTraceTarget('entry.enterprise_value', traceModeActive, onOpenCard)} style={rowStyle}>{sym}{fmt(su.enterprise_value)}</span>
             </div>
             <div className="flex justify-between" style={labelStyle}>
               <span>Transaction Fees</span>
@@ -96,7 +99,7 @@ const SourcesUsesTable: React.FC = () => {
             )}
             <div className="flex justify-between" style={labelStyle}>
               <span>Sponsor Equity</span>
-              <span style={rowStyle}>{sym}{fmt(su.sponsor_equity)}</span>
+              <span {...attachTraceTarget('entry.equity_check', traceModeActive, onOpenCard)} style={rowStyle}>{sym}{fmt(su.sponsor_equity)}</span>
             </div>
             <div className="flex justify-between mt-1" style={totalStyle}>
               <span>Total Sources</span>

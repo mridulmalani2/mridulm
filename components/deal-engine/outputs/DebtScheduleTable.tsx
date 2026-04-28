@@ -1,8 +1,11 @@
 import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
+import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
 const DebtScheduleTable: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
+  const { traceModeActive, onOpenCard } = useTraceGraphContext();
   if (!ms || !ms.debt_schedule.tranche_schedules.length) return null;
 
   const ds = ms.debt_schedule;
@@ -62,7 +65,13 @@ const DebtScheduleTable: React.FC = () => {
                 <tr>
                   <td className="py-1 px-2 font-medium text-[10px]" style={{ color: 'rgba(17,17,17,0.4)' }}>End Bal</td>
                   {sched.map((y, i) => (
-                    <td key={i} className="text-right py-1 px-2 font-semibold" style={{ color: '#111111' }}>{y.ending_balance.toFixed(1)}</td>
+                    <td key={i} className="text-right py-1 px-2 font-semibold" style={{ color: '#111111' }}>
+                      {i === hp - 1 && tIdx === ds.tranche_schedules.length - 1 ? (
+                        <span {...attachTraceTarget('debt_schedule.total_debt_at_exit', traceModeActive, onOpenCard)}>
+                          {y.ending_balance.toFixed(1)}
+                        </span>
+                      ) : y.ending_balance.toFixed(1)}
+                    </td>
                   ))}
                 </tr>
               </React.Fragment>
@@ -77,7 +86,15 @@ const DebtScheduleTable: React.FC = () => {
             <tr>
               <td className="py-1.5 px-2 font-medium text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.4)' }}>Coverage</td>
               {ds.interest_coverage_by_year.map((v, i) => (
-                <td key={i} className="text-right py-1.5 px-2" style={{ color: '#111111' }}>{v > 50 ? '>50' : v.toFixed(1)}x</td>
+                <td key={i} className="text-right py-1.5 px-2" style={{ color: '#111111' }}>
+                  {i === hp - 1 ? (
+                    <span {...attachTraceTarget('debt_schedule.interest_coverage_at_exit', traceModeActive, onOpenCard)}>
+                      {v > 50 ? '>50' : v.toFixed(1)}x
+                    </span>
+                  ) : (
+                    <>{v > 50 ? '>50' : v.toFixed(1)}x</>
+                  )}
+                </td>
               ))}
             </tr>
             <tr style={{ background: 'rgba(17,17,17,0.02)' }}>

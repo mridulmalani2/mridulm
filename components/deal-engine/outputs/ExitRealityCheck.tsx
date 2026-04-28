@@ -1,6 +1,8 @@
 import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { fmtPct, irrColor } from '../../../lib/formatters';
+import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
+import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
 
 const VERDICT_COLORS: Record<string, string> = {
   aggressive: '#b91c1c',
@@ -13,6 +15,7 @@ const ExitRealityCheck: React.FC = () => {
   const apiKey = useDealEngineStore((s) => s.apiKey);
   const aiInsights = useDealEngineStore((s) => s.aiPanelInsights);
   const aiInsightsLoading = useDealEngineStore((s) => s.aiPanelInsightsLoading);
+  const { traceModeActive, onOpenCard } = useTraceGraphContext();
   if (!ms) return null;
 
   const rc = ms.exit_reality_check;
@@ -40,7 +43,11 @@ const ExitRealityCheck: React.FC = () => {
       {rc.implied_buyer_irr != null && (
         <div className="mb-4 flex items-center gap-3 pb-4" style={{ borderBottom: '1px solid rgba(17,17,17,0.08)' }}>
           <span className="text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Implied Buyer IRR</span>
-          <span className="font-playfair text-xl font-bold" style={{ color: irrColor(rc.implied_buyer_irr) }}>
+          <span
+            {...attachTraceTarget('returns.exit_ev', traceModeActive, onOpenCard)}
+            className="font-playfair text-xl font-bold"
+            style={{ color: irrColor(rc.implied_buyer_irr) }}
+          >
             {fmtPct(rc.implied_buyer_irr)}
           </span>
         </div>
