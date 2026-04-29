@@ -21,6 +21,46 @@ import type { AIProvider } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
 import { computeChangedTraceFields } from '../lib/traceMap';
 
+// ── LBO Financial Sanity Check ──────────────────────────────────────────
+// Derived from first principles:
+//   - A real LBO over 5 years at 100% IRR = 32x MOIC — genuinely exceptional.
+//     Anything beyond 100% IRR or 20x MOIC indicates a data/unit error.
+//   - Entry equity ≤ 0 means total debt exceeds EV — impossible deal structure.
+//   - Exit equity < 0 means the firm is underwater at exit — valid as a scenario
+//     output only when purposely stressed, not as a result of AI changes.
+
+interface LBOSanityResult {
+  valid: boolean;
+  reason?: string;
+}
+
+function checkLBOSanity(result: ModelState): LBOSanityResult {
+  const ret = result.returns;
+
+  if (ret.entry_equity <= 0) {
+    return {
+      valid: false,
+      reason: `Entry equity is ${ret.entry_equity.toFixed(1)}M — total debt (${result.entry.total_debt_raised.toFixed(1)}M) exceeds enterprise value (${result.entry.enterprise_value.toFixed(1)}M). This deal structure is not viable. Likely cause: leverage or debt principal set too high relative to EV.`,
+    };
+  }
+
+  if (ret.moic > 20) {
+    return {
+      valid: false,
+      reason: `MOIC of ${ret.moic.toFixed(1)}x exceeds the realistic LBO ceiling of ~20x. This almost certainly reflects a unit error in the suggested changes — e.g. a growth rate set as 8 (meaning 800%) instead of 0.08 (8%), or an exit multiple set as a percentage integer instead of a multiplier.`,
+    };
+  }
+
+  if (ret.irr !== null && ret.irr > 1.0) {
+    return {
+      valid: false,
+      reason: `IRR of ${(ret.irr * 100).toFixed(1)}% exceeds the realistic LBO ceiling of ~100%. This almost certainly reflects a unit error in the suggested changes — check that all rates (growth, margin, interest) are expressed as decimals (0.08 = 8%, not 8).`,
+    };
+  }
+
+  return { valid: true };
+}
+
 function OUTPUT_KEY_META_FORMAT(key: string, value: number): string {
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
   const mult = (v: number) => `${v.toFixed(2)}x`;
@@ -473,7 +513,7 @@ Be specific. Use the company name to infer business type and calibrate according
           modelState,
           chatHistory.map((m) => ({ role: m.role, content: m.content })),
           config,
-          { editMode: true, customSystemPrompt: STRUCTURE_SYSTEM_PROMPT },
+          { editMode: true, customSystemPrompt: STRUCTURE_SYSTEM_PROMPT, forceToolUse: true },
         );
         if (result.error) {
           set({ error: result.error, isCalculating: false });
@@ -599,7 +639,12 @@ Be specific. Use the company name to infer business type and calibrate according
     try {
       const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
       for (const edit of pendingEdits) {
-        applyUpdate(stateDict, edit.field, edit.newValue);
+        // Wrap each apply so a bad path (non-existent field) doesn't abort the whole set
+        try {
+          applyUpdate(stateDict, edit.field, edit.newValue);
+        } catch {
+          // skip invalid paths — they'll be absent from the recalc
+        }
       }
       const state = stateDict as unknown as ModelState;
       const evEdit = pendingEdits.find(e => e.field === 'entry.enterprise_value');
@@ -608,6 +653,24 @@ Be specific. Use the company name to infer business type and calibrate according
       else if (multEdit) state._lastEditedEntryField = 'multiple';
 
       const result = fullRecalc(state);
+
+      // ── Financial sanity check — reject before touching store state ──────
+      // This is the atomic revert: modelState is the pre-edit snapshot and is
+      // untouched until set() is called. If sanity fails we simply never call it.
+      const sanity = checkLBOSanity(result);
+      if (!sanity.valid) {
+        const editSummary = pendingEdits
+          .map(e => `${e.field}: ${e.oldValue} → ${e.newValue}`)
+          .join('\n  ');
+        const errorMsg: ChatMessage = {
+          role: 'assistant',
+          content: `**Changes rejected — financial sanity check failed.**\n\nAttempted changes:\n  ${editSummary}\n\nReason: ${sanity.reason}\n\nAll assumptions have been reverted to their prior state. No changes were applied to the model.`,
+          timestamp: new Date().toISOString(),
+        };
+        set({ pendingEdits: [], chatHistory: [...chatHistory, errorMsg], isCalculating: false });
+        return;
+      }
+
       const changedFields = computeChangedTraceFields(modelState, result);
       const confirmMsg: ChatMessage = {
         role: 'assistant',

@@ -60,6 +60,13 @@ WHEN USING THE TOOL:
 - Put your user-facing response in analysis.message
 - Only fill return_decomposition, primary_driver, risk_concentration, fragility_test, improvement_levers for full deal critiques
 
+CRITICAL — VALUE ENCODING (mandatory, wrong encoding causes catastrophic model errors):
+- Growth rates, margins, tax rates, interest rates, capex, NWC, fee percentages: ALWAYS decimals. 0.08 = 8%, NOT 8. 0.25 = 25%, NOT 25.
+- Entry/exit EBITDA multiples: absolute value. 10.0 = 10x. NOT 0.10.
+- Leverage ratios: absolute value. 4.5 = 4.5x. NOT 0.045.
+- Debt principals, EV, revenues: millions in model currency (e.g. 500 = £500m). NOT thousands.
+- If you see "8.0%" in the model context for a growth rate, the stored value is 0.08 — set it as 0.08, not 8.
+
 STYLE:
 - Direct, specific, decisive. Reference real numbers from the model.
 - No preamble, filler, or teaching language. You're talking to PE professionals.
@@ -238,19 +245,36 @@ function buildRequest(
   config: ProviderConfig,
   systemPromptOverride?: string,
   excludeTool?: boolean,
+  forceToolUse?: boolean,
 ): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
   const sysPrompt = systemPromptOverride || SYSTEM_PROMPT;
   // When excludeTool is true (inquiry mode), pass null so AI cannot modify the model
   const tool = excludeTool ? null : DEAL_ENGINE_TOOL;
+
+  let req: { url: string; headers: Record<string, string>; body: Record<string, unknown> };
   switch (config.provider) {
     case 'anthropic':
-      return buildAnthropicRequest(messages, sysPrompt, tool, config);
+      req = buildAnthropicRequest(messages, sysPrompt, tool, config);
+      if (forceToolUse && !excludeTool) {
+        // Override to 'tool' mode so the model always calls update_deal_model
+        (req.body as Record<string, unknown>).tool_choice = { type: 'tool', name: 'update_deal_model' };
+      }
+      return req;
     case 'openai':
     case 'mistral':
     case 'groq':
-      return buildOpenAIRequest(messages, sysPrompt, tool, config);
+      req = buildOpenAIRequest(messages, sysPrompt, tool, config);
+      if (forceToolUse && !excludeTool) {
+        (req.body as Record<string, unknown>).tool_choice = { type: 'function', function: { name: 'update_deal_model' } };
+      }
+      return req;
     case 'google':
-      return buildGoogleRequest(messages, sysPrompt, tool, config);
+      req = buildGoogleRequest(messages, sysPrompt, tool, config);
+      if (forceToolUse && !excludeTool) {
+        ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).mode = 'ANY';
+        ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).allowed_function_names = ['update_deal_model'];
+      }
+      return req;
     default:
       return buildOpenAIRequest(messages, sysPrompt, tool, config);
   }
@@ -466,7 +490,7 @@ export async function callAI(
   modelState: ModelState,
   chatHistory: { role: string; content: string }[],
   config: ProviderConfig,
-  options?: { editMode?: boolean; inquiryOnly?: boolean; customSystemPrompt?: string },
+  options?: { editMode?: boolean; inquiryOnly?: boolean; customSystemPrompt?: string; forceToolUse?: boolean },
 ): Promise<AIResult> {
   const intent = classifyIntent(message);
 
@@ -488,7 +512,7 @@ export async function callAI(
   const systemPromptOverride =
     options?.customSystemPrompt ?? (options?.editMode ? EDIT_MODE_SYSTEM_PROMPT : undefined);
   const excludeTool = options?.inquiryOnly === true;
-  const { url, headers, body } = buildRequest(messages, config, systemPromptOverride, excludeTool);
+  const { url, headers, body } = buildRequest(messages, config, systemPromptOverride, excludeTool, options?.forceToolUse);
 
   let response: Response;
   try {
@@ -529,7 +553,23 @@ export async function callAI(
   if (toolCall) {
     const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
     const appliedDiffs: AppliedDiff[] = [];
+
+    // Paths whose values must be in [0,1] (or close) — unit error if AI writes e.g. 8 for 8%
+    const DECIMAL_RATE_PATTERN = /growth_rate|base_ebitda_margin|target_ebitda_margin|margin_by_year|capex_pct|nwc_pct|da_pct|tax_rate|interest_rate|pik_rate|financing_fee|entry_fee|exit_fee|commitment_fee|mip_pool_pct|cash_sweep_pct/;
+    // Values that are absolute multiples — should NOT be re-encoded as decimals
+    const ABSOLUTE_MULTIPLE_PATTERN = /exit_ebitda_multiple|entry_ebitda_multiple|exit_revenue_multiple|entry_revenue_multiple|leverage_ratio|hurdle_moic|holding_period/;
+    // Absolute currency values (principals, EV, etc.) — no upper bound check needed
+    const CURRENCY_PATH_PATTERN = /principal|enterprise_value|base_revenue|monitoring_fee|transaction_costs|nol_carryforward|growth_capex/;
+
+    const unitErrors: string[] = [];
+
     for (const [path, value] of Object.entries(toolCall.assumptionUpdates)) {
+      if (typeof value === 'number' && !ABSOLUTE_MULTIPLE_PATTERN.test(path) && !CURRENCY_PATH_PATTERN.test(path)) {
+        if (DECIMAL_RATE_PATTERN.test(path) && Math.abs(value) > 1.5) {
+          // Almost certainly meant as a percentage integer — record as a unit error
+          unitErrors.push(`${path}: got ${value} (looks like ${(value * 100).toFixed(0)}% as integer, should be decimal ${(value / 100).toFixed(4)})`);
+        }
+      }
       try {
         const oldVal = getNestedValue(stateDict, path);
         appliedDiffs.push({ field: path, old: oldVal, new: value });
@@ -538,9 +578,27 @@ export async function callAI(
         // skip failed updates
       }
     }
+
+    // Surface unit errors in the analysis message so they're visible before the user accepts
+    const analysis = toolCall.analysis as AIAnalysis | null;
+    if (unitErrors.length > 0) {
+      const warningPrefix = `⚠️ Possible unit errors detected in suggested changes (values may be percentages written as integers):\n${unitErrors.map(e => `  • ${e}`).join('\n')}\n\nPlease review carefully before accepting. If correct, the model will apply a sanity check on accept.\n\n`;
+      const mergedAnalysis: AIAnalysis = {
+        ...(analysis || {} as AIAnalysis),
+        message: warningPrefix + ((analysis?.message) || ''),
+      };
+      return {
+        updatedStateDict: stateDict,
+        analysis: mergedAnalysis,
+        appliedDiffs,
+        triggerRecalculation: toolCall.triggerRecalculation,
+        intent,
+      };
+    }
+
     return {
       updatedStateDict: stateDict,
-      analysis: toolCall.analysis as AIAnalysis | null,
+      analysis,
       appliedDiffs,
       triggerRecalculation: toolCall.triggerRecalculation,
       intent,
@@ -722,16 +780,36 @@ export async function runCetpar(
   const meta = OUTPUT_KEY_META[targetOutputKey];
   if (!meta) return { error: `Unknown output metric: ${targetOutputKey}` };
 
+  // Guard against zero/negative targets that would produce nonsensical results
+  if (targetValue < 0 && ['irr', 'moic', 'dpi', 'gross_irr'].includes(targetOutputKey)) {
+    return { error: `Target ${targetOutputLabel} of ${targetValue} is negative — did you mean a positive return? Specify a positive value, e.g. "20% IRR".` };
+  }
+
+  // Guard against no solver params extracted
+  const validParams = solverParams.filter(p => p.paramPath.length > 0);
+  if (validParams.length === 0) {
+    return { error: 'Could not identify which parameters to adjust. Try specifying explicitly, e.g. "/cetpar I want 20% IRR by adjusting exit multiple"' };
+  }
+
   const options: CetparOption[] = [];
 
-  for (const param of solverParams) {
-    if (!param.paramPath) continue;
+  // Integer-only parameters: the solver returns a float but the model needs an integer
+  const INTEGER_PARAMS = new Set(['exit.holding_period']);
+
+  for (const param of validParams) {
     const currentValue = getCurrentValue(modelState, param.paramPath);
     const result = solveForTarget(modelState, targetOutputKey, param.paramPath, targetValue);
 
+    // Round integer parameters so the pending edit applies a clean integer value.
+    // achievedOutput is the solver's estimate at the rounded value — close enough for display.
+    if (INTEGER_PARAMS.has(param.paramPath)) {
+      result.requiredValue = Math.round(result.requiredValue);
+    }
+
+    // Effort: how much change is needed as a % of current value (0 current → raw absolute)
     const effortPct = currentValue !== 0
       ? Math.abs((result.requiredValue - currentValue) / currentValue) * 100
-      : Math.abs(result.requiredValue - currentValue) * 100;
+      : Math.abs(result.requiredValue) * 100;
 
     options.push({
       paramName: param.paramName,
@@ -889,15 +967,26 @@ export async function callRedlineAI(
   if (!args) return { error: 'AI returned no structured analysis. Try again.' };
 
   const rawItems = (args.items || []) as Array<Record<string, string>>;
+
+  // Guard against the AI returning an empty items array despite the minimum-6 instruction
+  if (!rawItems.length) {
+    return { error: 'AI returned an empty assumptions review. This may be a context or quota issue — try again.' };
+  }
+
+  const VALID_RATINGS = new Set(['aggressive', 'in-line', 'conservative']);
+
   return {
     items: rawItems.map((item) => ({
-      fieldName: item.field_name || '',
-      currentValue: item.current_value || '',
-      rating: (item.rating as 'aggressive' | 'in-line' | 'conservative') || 'in-line',
-      reason: item.reason || '',
+      fieldName: item.field_name || 'Unknown assumption',
+      currentValue: item.current_value || 'N/A',
+      // Normalise any unexpected rating value to 'in-line' so the UI never renders unknown states
+      rating: VALID_RATINGS.has(item.rating)
+        ? (item.rating as 'aggressive' | 'in-line' | 'conservative')
+        : 'in-line',
+      reason: item.reason || 'No reason provided.',
     })),
-    overallAssessment: (args.overall_assessment as string) || '',
-    keyRisk: (args.key_risk as string) || '',
+    overallAssessment: (args.overall_assessment as string) || 'No overall assessment provided.',
+    keyRisk: (args.key_risk as string) || 'No key risk identified.',
   };
 }
 
@@ -905,7 +994,7 @@ export async function callRedlineAI(
 
 export const STRUCTURE_SYSTEM_PROMPT = `You are a senior PE deal advisor specialising in LBO capital structure optimisation.
 
-The user wants to improve returns by restructuring the deal's debt. Your job is to suggest specific, actionable changes using the update_deal_model tool.
+The user wants to improve returns by restructuring the deal's debt. You MUST call the update_deal_model tool with your suggested changes — always call the tool, even if changes are conservative. Do not respond with plain text only.
 
 LEVERS YOU CAN PULL (use exact dot-notation paths):
 - Debt tranche principals:       debt_tranches.0.principal, debt_tranches.1.principal (in model currency millions)
