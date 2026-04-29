@@ -9,16 +9,35 @@ import type {
   AppliedDiff,
   AIAnalysis,
   PendingEdit,
+  CetparResult,
 } from '../lib/dealEngineTypes';
 import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
 import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
-import { callAI, generatePanelInsights } from '../lib/engine/ai/gateway';
+import { callAI, generatePanelInsights, runCetpar, callRedlineAI, STRUCTURE_SYSTEM_PROMPT } from '../lib/engine/ai/gateway';
 import type { PanelInsights } from '../lib/engine/ai/gateway';
 import { generateInvestmentMemo } from '../lib/engine/ai/memoGenerator';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
 import type { AIProvider } from '../lib/engine/ai/providers';
 import { buildExcel } from '../lib/engine/excelExport';
 import { computeChangedTraceFields } from '../lib/traceMap';
+
+function OUTPUT_KEY_META_FORMAT(key: string, value: number): string {
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const mult = (v: number) => `${v.toFixed(2)}x`;
+  switch (key) {
+    case 'irr': case 'gross_irr': return pct(value);
+    case 'moic': case 'dpi': case 'leverage_y1': case 'leverage_y2': case 'leverage_y3': case 'icr_y1': return mult(value);
+    default: return String(value);
+  }
+}
+
+function formatParamValue(path: string, value: number): string {
+  if (/margin|capex|nwc|da_pct|tax|growth_rate|organic/.test(path)) return `${(value * 100).toFixed(2)}%`;
+  if (/multiple/.test(path)) return `${value.toFixed(1)}x`;
+  if (/leverage/.test(path)) return `${value.toFixed(1)}x`;
+  if (/holding_period/.test(path)) return `${Math.round(value)} years`;
+  return value.toFixed(2);
+}
 
 /** Apply a dot-notation update to a nested object. */
 function applyUpdate(obj: Record<string, unknown>, path: string, value: unknown): void {
@@ -85,6 +104,8 @@ interface DealEngineStore {
   lastChangedTraceFields: string[];
   /** Whether Trace Mode is active — double-click opens trace cards only when true (recommendation #8). */
   traceModeActive: boolean;
+  /** Pending ceteris paribus solver result awaiting user option selection. */
+  cetparResult: CetparResult | null;
 
   setApiKey: (key: string) => void;
   setAiProvider: (provider: AIProvider) => void;
@@ -117,6 +138,8 @@ interface DealEngineStore {
   generateMemo: () => Promise<void>;
   setActiveScenario: (s: string) => void;
   setActiveSensitivityTable: (t: number) => void;
+  selectCetparOption: (option: CetparResult['options'][number]) => void;
+  dismissCetpar: () => void;
 }
 
 export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
@@ -140,6 +163,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   modelVersion: 0,
   lastChangedTraceFields: [],
   traceModeActive: false,
+  cetparResult: null,
 
   setApiKey: (key) => {
     localStorage.setItem('deal-engine-api-key', key);
@@ -373,6 +397,115 @@ Be specific. Use the company name to infer business type and calibrate according
     const trimmed = message.trim();
     const trimmedLower = trimmed.toLowerCase();
 
+    // ── /cetpar — ceteris paribus goal-seek ─────────────────────────────
+    if (trimmedLower.startsWith('/cetpar')) {
+      const cetparMsg = trimmed.replace(/^\/cetpar\s*/i, '').trim();
+      if (!cetparMsg) {
+        const hint: ChatMessage = {
+          role: 'assistant',
+          content: 'Usage: /cetpar <goal>\n\nExample: /cetpar I want IRR to be 20%, adjusting exit multiple or Year 1 growth rate',
+          timestamp: new Date().toISOString(),
+        };
+        set({ chatHistory: [...chatHistory, { role: 'user', content: trimmed, timestamp: new Date().toISOString() }, hint] });
+        return;
+      }
+      const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
+      set({ chatHistory: [...chatHistory, userMsg], isCalculating: true, error: null, cetparResult: null });
+      try {
+        const config = buildProviderConfig(aiProvider, apiKey);
+        const result = await runCetpar(cetparMsg, modelState, config);
+        if ('error' in result) {
+          set({ error: result.error, isCalculating: false });
+          return;
+        }
+        const feasibleCount = result.options.filter((o) => o.feasible).length;
+        const summary = feasibleCount > 0
+          ? `Found ${feasibleCount} feasible option${feasibleCount > 1 ? 's' : ''} to achieve ${result.targetOutputLabel} of ${OUTPUT_KEY_META_FORMAT(result.targetOutputKey, result.targetValue)}. Select one to create a pending edit.`
+          : `No single parameter can reach ${result.targetOutputLabel} of ${OUTPUT_KEY_META_FORMAT(result.targetOutputKey, result.targetValue)} within realistic bounds. See details below.`;
+        const aiMsg: ChatMessage = { role: 'assistant', content: summary, timestamp: new Date().toISOString() };
+        set({ cetparResult: result, chatHistory: [...get().chatHistory, aiMsg], isCalculating: false });
+      } catch (e: unknown) {
+        set({ error: (e as Error).message, isCalculating: false });
+      }
+      return;
+    }
+
+    // ── /redline — assumptions quality review ───────────────────────────
+    if (trimmedLower === '/redline') {
+      const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
+      set({ chatHistory: [...chatHistory, userMsg], isCalculating: true, error: null });
+      try {
+        const config = buildProviderConfig(aiProvider, apiKey);
+        const result = await callRedlineAI(modelState, config);
+        if ('error' in result) {
+          set({ error: result.error, isCalculating: false });
+          return;
+        }
+        const aggressiveCount = result.items.filter((i) => i.rating === 'aggressive').length;
+        const summary = `Assumptions review complete. ${aggressiveCount} assumption${aggressiveCount !== 1 ? 's' : ''} flagged as aggressive.`;
+        const aiMsg: ChatMessage = {
+          role: 'assistant',
+          content: summary,
+          timestamp: new Date().toISOString(),
+          redlineData: result,
+        };
+        set({ chatHistory: [...get().chatHistory, aiMsg], isCalculating: false });
+      } catch (e: unknown) {
+        set({ error: (e as Error).message, isCalculating: false });
+      }
+      return;
+    }
+
+    // ── /structure — capital structure optimizer ─────────────────────────
+    if (trimmedLower.startsWith('/structure')) {
+      const targetMatch = trimmed.match(/[\d.]+\s*%/);
+      const targetIrr = targetMatch ? parseFloat(targetMatch[0]) : null;
+      const structurePrompt = targetIrr != null
+        ? `Optimise the capital structure to achieve an IRR of ${targetIrr}%. Suggest specific changes to debt tranches, leverage, rates, and amortisation.`
+        : 'Optimise the capital structure to maximise IRR while keeping credit metrics viable. Suggest specific changes to debt tranches, leverage, rates, and amortisation.';
+
+      const userMsg: ChatMessage = { role: 'user', content: trimmed, timestamp: new Date().toISOString() };
+      set({ chatHistory: [...chatHistory, userMsg], isCalculating: true, error: null });
+      try {
+        const config = buildProviderConfig(aiProvider, apiKey);
+        const result = await callAI(
+          structurePrompt,
+          modelState,
+          chatHistory.map((m) => ({ role: m.role, content: m.content })),
+          config,
+          { editMode: true, customSystemPrompt: STRUCTURE_SYSTEM_PROMPT },
+        );
+        if (result.error) {
+          set({ error: result.error, isCalculating: false });
+          return;
+        }
+        if (result.appliedDiffs.length > 0) {
+          const pending: PendingEdit[] = result.appliedDiffs.map((d) => ({
+            field: d.field, oldValue: d.old, newValue: d.new, reason: 'Capital structure optimisation',
+          }));
+          const aiMsg: ChatMessage = {
+            role: 'assistant',
+            content: result.analysis?.message || `Suggested ${pending.length} structural change(s). Type /accept to apply or /reject to discard.`,
+            timestamp: new Date().toISOString(),
+            assumption_updates: Object.fromEntries(result.appliedDiffs.map((d) => [d.field, d.new])),
+            analysis: result.analysis || undefined,
+          };
+          set({ pendingEdits: pending, chatHistory: [...get().chatHistory, aiMsg], lastAnalysis: result.analysis, isCalculating: false });
+        } else {
+          const aiMsg: ChatMessage = {
+            role: 'assistant',
+            content: result.analysis?.message || 'No structural changes suggested.',
+            timestamp: new Date().toISOString(),
+            analysis: result.analysis || undefined,
+          };
+          set({ chatHistory: [...get().chatHistory, aiMsg], lastAnalysis: result.analysis, isCalculating: false });
+        }
+      } catch (e: unknown) {
+        set({ error: (e as Error).message, isCalculating: false });
+      }
+      return;
+    }
+
     // Handle /accept command
     if (trimmedLower === '/accept') {
       const { pendingEdits } = get();
@@ -502,6 +635,31 @@ Be specific. Use the company name to infer business type and calibrate according
     const { chatHistory } = get();
     const msg: ChatMessage = { role: 'assistant', content: 'Edits discarded.', timestamp: new Date().toISOString() };
     set({ pendingEdits: [], chatHistory: [...chatHistory, msg] });
+  },
+
+  selectCetparOption: (option) => {
+    const { modelState, chatHistory, cetparResult } = get();
+    if (!modelState || !cetparResult) return;
+    const label = cetparResult.targetOutputLabel;
+    const meta = OUTPUT_KEY_META_FORMAT(cetparResult.targetOutputKey, option.achievedOutput);
+    const edit: PendingEdit = {
+      field: option.paramPath,
+      oldValue: option.currentValue,
+      newValue: option.requiredValue,
+      reason: `${option.paramName} change to achieve ${label} of ${meta}`,
+    };
+    const msg: ChatMessage = {
+      role: 'assistant',
+      content: `Selected: set ${option.paramName} to ${formatParamValue(option.paramPath, option.requiredValue)}. Review the pending change below and accept to apply it.`,
+      timestamp: new Date().toISOString(),
+    };
+    set({ pendingEdits: [edit], cetparResult: null, chatHistory: [...chatHistory, msg] });
+  },
+
+  dismissCetpar: () => {
+    const { chatHistory } = get();
+    const msg: ChatMessage = { role: 'assistant', content: 'Ceteris paribus analysis dismissed.', timestamp: new Date().toISOString() };
+    set({ cetparResult: null, chatHistory: [...chatHistory, msg] });
   },
 
   generateAssumptions: async () => {

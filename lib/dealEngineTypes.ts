@@ -265,6 +265,7 @@ export interface ChatMessage {
   timestamp?: string;
   assumption_updates?: Record<string, unknown>;
   analysis?: AIAnalysis;
+  redlineData?: RedlineResult;
 }
 
 export interface AIAnalysis {
@@ -318,6 +319,43 @@ export interface PendingEdit {
   oldValue: unknown;
   newValue: unknown;
   reason: string;      // AI's explanation
+}
+
+// ── Ceteris Paribus (Goal-Seek) ──────────────────────────────────────────
+
+export interface CetparOption {
+  paramName: string;
+  paramPath: string;
+  currentValue: number;
+  requiredValue: number;
+  achievedOutput: number;
+  feasible: boolean;
+  effortPct: number;
+  rank: number;
+  bestAchievableOutput?: number;
+}
+
+export interface CetparResult {
+  targetOutputKey: string;
+  targetOutputLabel: string;
+  targetValue: number;
+  options: CetparOption[];
+  parseMessage: string;
+}
+
+// ── Redline (Assumptions Quality Review) ────────────────────────────────
+
+export interface RedlineItem {
+  fieldName: string;
+  currentValue: string;
+  rating: 'aggressive' | 'in-line' | 'conservative';
+  reason: string;
+}
+
+export interface RedlineResult {
+  items: RedlineItem[];
+  overallAssessment: string;
+  keyRisk: string;
 }
 
 export interface AppliedDiff {

@@ -1,7 +1,9 @@
 /** Unified AI gateway — routes to provider-specific adapters. */
 
-import type { ModelState, AIAnalysis, AppliedDiff } from '../../dealEngineTypes';
+import type { ModelState, AIAnalysis, AppliedDiff, CetparResult, CetparOption, RedlineResult } from '../../dealEngineTypes';
 import type { ProviderConfig } from './providers';
+import { solveForTarget, getCurrentValue, OUTPUT_KEY_META } from './solver';
+import type { OutputKey } from './solver';
 import type { NormalizedToolCall } from './adapters/anthropic';
 import { buildAnthropicRequest, parseAnthropicResponse, extractAnthropicText } from './adapters/anthropic';
 import { buildOpenAIRequest, parseOpenAIResponse, extractOpenAIText } from './adapters/openai';
@@ -464,7 +466,7 @@ export async function callAI(
   modelState: ModelState,
   chatHistory: { role: string; content: string }[],
   config: ProviderConfig,
-  options?: { editMode?: boolean; inquiryOnly?: boolean },
+  options?: { editMode?: boolean; inquiryOnly?: boolean; customSystemPrompt?: string },
 ): Promise<AIResult> {
   const intent = classifyIntent(message);
 
@@ -482,8 +484,9 @@ export async function callAI(
     },
   ];
 
-  // In edit mode, use the edit system prompt; in inquiry mode, exclude the tool
-  const systemPromptOverride = options?.editMode ? EDIT_MODE_SYSTEM_PROMPT : undefined;
+  // Custom prompt > edit mode prompt > default
+  const systemPromptOverride =
+    options?.customSystemPrompt ?? (options?.editMode ? EDIT_MODE_SYSTEM_PROMPT : undefined);
   const excludeTool = options?.inquiryOnly === true;
   const { url, headers, body } = buildRequest(messages, config, systemPromptOverride, excludeTool);
 
@@ -558,3 +561,371 @@ export async function callAI(
 
   return { updatedStateDict: null, analysis: null, appliedDiffs: [], triggerRecalculation: false, intent, error: 'AI returned an empty response' };
 }
+
+// ── /cetpar — Ceteris Paribus Goal-Seek ────────────────────────────────
+
+const CETPAR_PARSE_SYSTEM_PROMPT = `You are parsing a ceteris paribus goal-seeking request from a PE analyst working inside an LBO model. The analyst wants to find what input value would achieve a desired output metric, holding everything else constant.
+
+Extract EXACTLY:
+1. target_output_key — map to one of: irr | moic | dpi | gross_irr | leverage_y1 | leverage_y3 | icr_y1
+2. target_output_label — human label, e.g. "IRR", "MOIC", "Year 3 Leverage"
+3. target_value — numeric. IRR/percentages as decimal (20% → 0.20). MOIC as multiplier (2.5x → 2.5). Leverage/ICR as ratio (4.0x → 4.0).
+4. solver_params — list of parameters the analyst is okay changing. Use exact dot-notation paths.
+5. parse_message — one-line confirmation of what you understood.
+
+Dot-notation path reference:
+- Exit multiple:        exit.exit_ebitda_multiple
+- Entry leverage:       entry.leverage_ratio
+- Base EBITDA margin:   margins.base_ebitda_margin
+- Target EBITDA margin: margins.target_ebitda_margin
+- Capex % revenue:      margins.capex_pct_revenue
+- NWC % revenue:        margins.nwc_pct_revenue
+- Tax rate:             tax.tax_rate
+- Holding period:       exit.holding_period
+- Revenue growth Y1:    revenue.growth_rates.0
+- Revenue growth Y2:    revenue.growth_rates.1
+- Revenue growth Y3:    revenue.growth_rates.2
+- Revenue growth Y4:    revenue.growth_rates.3
+- Revenue growth Y5:    revenue.growth_rates.4
+
+If "growth rate" is mentioned without a year, include Y1 (revenue.growth_rates.0) as the primary lever.
+If "margins" are mentioned without specifying, include target EBITDA margin (margins.target_ebitda_margin).
+Include at most 4 solver params — pick the most impactful if user lists many.`;
+
+const CETPAR_PARSE_TOOL = {
+  name: 'parse_cetpar_request',
+  description: 'Extract structured goal-seek parameters from a natural language PE analyst request.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      target_output_key: {
+        type: 'string',
+        enum: ['irr', 'moic', 'dpi', 'gross_irr', 'leverage_y1', 'leverage_y3', 'icr_y1'],
+      },
+      target_output_label: { type: 'string' },
+      target_value: { type: 'number' },
+      solver_params: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            param_name: { type: 'string' },
+            param_path: { type: 'string' },
+          },
+          required: ['param_name', 'param_path'],
+        },
+      },
+      parse_message: { type: 'string' },
+    },
+    required: ['target_output_key', 'target_output_label', 'target_value', 'solver_params', 'parse_message'],
+  },
+};
+
+interface ParsedCetpar {
+  targetOutputKey: OutputKey;
+  targetOutputLabel: string;
+  targetValue: number;
+  solverParams: { paramName: string; paramPath: string }[];
+  parseMessage: string;
+}
+
+function extractCetparArgs(data: Record<string, unknown>, provider: string): Record<string, unknown> | null {
+  switch (provider) {
+    case 'anthropic': {
+      const content = (data.content || []) as Array<Record<string, unknown>>;
+      for (const block of content) {
+        if (block.type === 'tool_use') return block.input as Record<string, unknown>;
+      }
+      return null;
+    }
+    case 'google': {
+      const candidates = (data.candidates || []) as Array<Record<string, unknown>>;
+      const parts = ((candidates[0]?.content as Record<string, unknown>)?.parts || []) as Array<Record<string, unknown>>;
+      for (const part of parts) {
+        const fc = part.functionCall as Record<string, unknown> | undefined;
+        if (fc) return (fc.args || {}) as Record<string, unknown>;
+      }
+      return null;
+    }
+    default: {
+      const choices = (data.choices || []) as Array<Record<string, unknown>>;
+      const toolCalls = ((choices[0]?.message as Record<string, unknown>)?.tool_calls || []) as Array<Record<string, unknown>>;
+      if (!toolCalls.length) return null;
+      const fn = toolCalls[0].function as Record<string, unknown>;
+      try {
+        return typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments as Record<string, unknown>;
+      } catch { return null; }
+    }
+  }
+}
+
+async function parseCetparRequest(
+  message: string,
+  config: ProviderConfig,
+): Promise<ParsedCetpar | { error: string }> {
+  let req: { url: string; headers: Record<string, string>; body: Record<string, unknown> };
+  const messages = [{ role: 'user' as const, content: message }];
+
+  switch (config.provider) {
+    case 'anthropic':
+      req = buildAnthropicRequest(messages, CETPAR_PARSE_SYSTEM_PROMPT, CETPAR_PARSE_TOOL, config);
+      (req.body as Record<string, unknown>).tool_choice = { type: 'tool', name: 'parse_cetpar_request' };
+      (req.body as Record<string, unknown>).max_tokens = 800;
+      break;
+    case 'google':
+      req = buildGoogleRequest(messages, CETPAR_PARSE_SYSTEM_PROMPT, CETPAR_PARSE_TOOL, config);
+      ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).mode = 'ANY';
+      break;
+    default:
+      req = buildOpenAIRequest(messages, CETPAR_PARSE_SYSTEM_PROMPT, CETPAR_PARSE_TOOL, config);
+      req.body.tool_choice = { type: 'function', function: { name: 'parse_cetpar_request' } };
+      (req.body as Record<string, unknown>).max_tokens = 800;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body) });
+  } catch (err) {
+    return { error: `Network error: ${err}` };
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { error: `API error ${response.status}: ${text.slice(0, 200)}` };
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  const args = extractCetparArgs(data, config.provider);
+  if (!args) return { error: 'Could not parse your request. Try phrasing it as: "/cetpar I want IRR to be 20%, adjusting exit multiple"' };
+
+  return {
+    targetOutputKey: (args.target_output_key as OutputKey) || 'irr',
+    targetOutputLabel: (args.target_output_label as string) || 'IRR',
+    targetValue: (args.target_value as number) ?? 0,
+    solverParams: ((args.solver_params as Array<Record<string, string>>) || []).map((p) => ({
+      paramName: p.param_name || p.paramName || '',
+      paramPath: p.param_path || p.paramPath || '',
+    })),
+    parseMessage: (args.parse_message as string) || '',
+  };
+}
+
+export async function runCetpar(
+  message: string,
+  modelState: ModelState,
+  config: ProviderConfig,
+): Promise<CetparResult | { error: string }> {
+  const parsed = await parseCetparRequest(message, config);
+  if ('error' in parsed) return parsed;
+
+  const { targetOutputKey, targetOutputLabel, targetValue, solverParams, parseMessage } = parsed;
+  const meta = OUTPUT_KEY_META[targetOutputKey];
+  if (!meta) return { error: `Unknown output metric: ${targetOutputKey}` };
+
+  const options: CetparOption[] = [];
+
+  for (const param of solverParams) {
+    if (!param.paramPath) continue;
+    const currentValue = getCurrentValue(modelState, param.paramPath);
+    const result = solveForTarget(modelState, targetOutputKey, param.paramPath, targetValue);
+
+    const effortPct = currentValue !== 0
+      ? Math.abs((result.requiredValue - currentValue) / currentValue) * 100
+      : Math.abs(result.requiredValue - currentValue) * 100;
+
+    options.push({
+      paramName: param.paramName,
+      paramPath: param.paramPath,
+      currentValue,
+      requiredValue: result.requiredValue,
+      achievedOutput: result.achievedOutput,
+      feasible: result.feasible,
+      effortPct,
+      rank: 0,
+      ...(result.bestAchievableOutput != null ? { bestAchievableOutput: result.bestAchievableOutput } : {}),
+    });
+  }
+
+  // Rank feasible options by effort (least change = best rank), infeasible last
+  const feasible = options.filter((o) => o.feasible).sort((a, b) => a.effortPct - b.effortPct);
+  const infeasible = options.filter((o) => !o.feasible);
+  feasible.forEach((o, i) => { o.rank = i + 1; });
+  infeasible.forEach((o, i) => { o.rank = feasible.length + i + 1; });
+
+  return {
+    targetOutputKey,
+    targetOutputLabel,
+    targetValue,
+    options: [...feasible, ...infeasible],
+    parseMessage,
+  };
+}
+
+// ── /redline — Assumptions Quality Review ──────────────────────────────
+
+const REDLINE_SYSTEM_PROMPT = `You are a senior PE deal advisor reviewing model assumptions quality before an IC meeting. Your job is to act as the most rigorous IC chair in the room.
+
+For each major assumption, assess: AGGRESSIVE (optimistic vs. sector data, would face pushback), IN-LINE (defensible, within normal ranges), or CONSERVATIVE (below peer median, creates safety margin).
+
+Cover ALL of the following:
+1. Revenue growth rates — Year 1 and exit-year CAGR vs. sector historical
+2. EBITDA margin trajectory — base, target, and expansion path credibility
+3. Exit multiple vs. entry multiple — arbitrage assumption realism
+4. Entry leverage — x EBITDA vs. market clearing for this credit profile
+5. Capex intensity — % revenue vs. sector maintenance/growth capex norms
+6. NWC requirements — working capital efficiency vs. sector benchmarks
+7. Tax rate — vs. statutory and effective rates for this jurisdiction/structure
+
+Be specific: cite concrete sector ranges, deal archetypes, and historical data. Reference actual model numbers. Write like you're giving the analyst the "straight talk" version — no softening, no generic observations.
+
+Every reason must reference the actual model numbers AND the sector context that makes you rate it as you do.`;
+
+const REDLINE_TOOL = {
+  name: 'analyze_assumption_quality',
+  description: 'Assess deal model assumptions quality vs. sector norms for IC review.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        description: 'One item per assumption reviewed — minimum 6 items.',
+        items: {
+          type: 'object',
+          properties: {
+            field_name: { type: 'string', description: 'Human-readable assumption name, e.g. "Exit Multiple", "Year 1 Revenue Growth"' },
+            current_value: { type: 'string', description: 'Current formatted value, e.g. "10.0x", "8.5%", "28.0%"' },
+            rating: { type: 'string', enum: ['aggressive', 'in-line', 'conservative'] },
+            reason: { type: 'string', description: 'Why this rating. Specific. References model numbers and sector comps. 2-3 sentences.' },
+          },
+          required: ['field_name', 'current_value', 'rating', 'reason'],
+        },
+      },
+      overall_assessment: {
+        type: 'string',
+        description: 'Summary of overall assumption quality. How many aggressive? What will IC scrutinise? What is the overall confidence level?',
+      },
+      key_risk: {
+        type: 'string',
+        description: 'The single most aggressive or concerning assumption: what it is, how wrong it could be, and the IRR impact if it misses.',
+      },
+    },
+    required: ['items', 'overall_assessment', 'key_risk'],
+  },
+};
+
+function extractRedlineArgs(data: Record<string, unknown>, provider: string): Record<string, unknown> | null {
+  switch (provider) {
+    case 'anthropic': {
+      const content = (data.content || []) as Array<Record<string, unknown>>;
+      for (const block of content) {
+        if (block.type === 'tool_use') return block.input as Record<string, unknown>;
+      }
+      return null;
+    }
+    case 'google': {
+      const candidates = (data.candidates || []) as Array<Record<string, unknown>>;
+      const parts = ((candidates[0]?.content as Record<string, unknown>)?.parts || []) as Array<Record<string, unknown>>;
+      for (const part of parts) {
+        const fc = part.functionCall as Record<string, unknown> | undefined;
+        if (fc) return (fc.args || {}) as Record<string, unknown>;
+      }
+      return null;
+    }
+    default: {
+      const choices = (data.choices || []) as Array<Record<string, unknown>>;
+      const toolCalls = ((choices[0]?.message as Record<string, unknown>)?.tool_calls || []) as Array<Record<string, unknown>>;
+      if (!toolCalls.length) return null;
+      const fn = toolCalls[0].function as Record<string, unknown>;
+      try {
+        return typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments as Record<string, unknown>;
+      } catch { return null; }
+    }
+  }
+}
+
+export async function callRedlineAI(
+  modelState: ModelState,
+  config: ProviderConfig,
+): Promise<RedlineResult | { error: string }> {
+  const modelContext = buildModelContext(modelState);
+  const messages = [{
+    role: 'user' as const,
+    content: `[Model Context]\n${modelContext}\n\nConduct a full assumptions quality review (redline) for this deal. Assess each major assumption against sector norms.`,
+  }];
+
+  let req: { url: string; headers: Record<string, string>; body: Record<string, unknown> };
+  switch (config.provider) {
+    case 'anthropic':
+      req = buildAnthropicRequest(messages, REDLINE_SYSTEM_PROMPT, REDLINE_TOOL, config);
+      (req.body as Record<string, unknown>).tool_choice = { type: 'tool', name: 'analyze_assumption_quality' };
+      break;
+    case 'google':
+      req = buildGoogleRequest(messages, REDLINE_SYSTEM_PROMPT, REDLINE_TOOL, config);
+      ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).mode = 'ANY';
+      ((req.body.tool_config as Record<string, unknown>).function_calling_config as Record<string, unknown>).allowed_function_names = ['analyze_assumption_quality'];
+      break;
+    default:
+      req = buildOpenAIRequest(messages, REDLINE_SYSTEM_PROMPT, REDLINE_TOOL, config);
+      req.body.tool_choice = { type: 'function', function: { name: 'analyze_assumption_quality' } };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body) });
+  } catch (err) {
+    return { error: `Network error: ${err}` };
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    if (/429|rate.limit|too.many/i.test(text)) {
+      return { error: 'Rate limited. /redline requires a paid API key with sufficient quota for structured analysis.' };
+    }
+    return { error: `API error ${response.status}: ${text.slice(0, 200)}` };
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  const args = extractRedlineArgs(data, config.provider);
+  if (!args) return { error: 'AI returned no structured analysis. Try again.' };
+
+  const rawItems = (args.items || []) as Array<Record<string, string>>;
+  return {
+    items: rawItems.map((item) => ({
+      fieldName: item.field_name || '',
+      currentValue: item.current_value || '',
+      rating: (item.rating as 'aggressive' | 'in-line' | 'conservative') || 'in-line',
+      reason: item.reason || '',
+    })),
+    overallAssessment: (args.overall_assessment as string) || '',
+    keyRisk: (args.key_risk as string) || '',
+  };
+}
+
+// ── /structure — Capital Structure Optimizer ───────────────────────────
+
+export const STRUCTURE_SYSTEM_PROMPT = `You are a senior PE deal advisor specialising in LBO capital structure optimisation.
+
+The user wants to improve returns by restructuring the deal's debt. Your job is to suggest specific, actionable changes using the update_deal_model tool.
+
+LEVERS YOU CAN PULL (use exact dot-notation paths):
+- Debt tranche principals:       debt_tranches.0.principal, debt_tranches.1.principal (in model currency millions)
+- Interest rates:                debt_tranches.0.interest_rate (decimal, e.g. 0.07 for 7%)
+- Cash sweep percentages:        debt_tranches.0.cash_sweep_pct (decimal, 0.5 = 50% FCF sweep)
+- PIK rates:                     debt_tranches.0.pik_rate (decimal)
+- Entry leverage ratio:          entry.leverage_ratio (x EBITDA)
+
+CONSTRAINTS — NEVER suggest anything that would breach these:
+- Year 1 ICR must stay above 1.5x
+- Entry leverage must stay below 7.5x EBITDA
+- Interest rates must be market-realistic for the credit profile:
+  * Investment-grade adjacent (< 4x leverage): 4–6%
+  * Leveraged (4–6x): 6–9%
+  * Distressed / PIK territory (> 6x): 9–14%
+
+In analysis.message, structure your response as:
+1. What changes you are making and the rationale for each
+2. Estimated IRR impact per lever (e.g., "+90bps from incremental leverage, -30bps from higher rate")
+3. Net estimated IRR improvement
+4. Credit risks introduced and which metrics to watch post-acceptance
+
+Be decisive. Reference actual model numbers. No hedging.`;
