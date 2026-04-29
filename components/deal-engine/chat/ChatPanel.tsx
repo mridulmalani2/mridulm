@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
-import type { ChatMessage, AIAnalysis, PendingEdit } from '../../../lib/dealEngineTypes';
+import type { ChatMessage, AIAnalysis, PendingEdit, CetparResult, CetparOption, RedlineResult } from '../../../lib/dealEngineTypes';
 
 // ── Web Speech API type shims (not in default TS lib) ──────────────────
 interface SpeechRecognitionResultItem { readonly transcript: string; }
@@ -123,6 +123,203 @@ const PendingEditsCard: React.FC<{ edits: PendingEdit[]; onAccept: () => void; o
   </div>
 );
 
+// ── RedlineCard ────────────────────────────────────────────────────────
+
+const RATING_STYLE: Record<RedlineResult['items'][number]['rating'], { bg: string; color: string; label: string }> = {
+  aggressive:   { bg: 'rgba(185,28,28,0.08)',  color: '#b91c1c', label: 'Aggressive' },
+  'in-line':    { bg: 'rgba(21,128,61,0.08)',   color: '#15803d', label: 'In-Line' },
+  conservative: { bg: 'rgba(29,78,216,0.08)',   color: '#1d4ed8', label: 'Conservative' },
+};
+
+const RedlineCard: React.FC<{ data: RedlineResult }> = ({ data }) => (
+  <div className="mt-2 p-2.5 space-y-2" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+    <div className="text-[10px] font-medium tracking-widest uppercase mb-1" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+      Redline
+    </div>
+    {data.items.map((item, i) => {
+      const s = RATING_STYLE[item.rating];
+      return (
+        <div key={i} className="space-y-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] px-1.5 py-0.5" style={{ background: s.bg, color: s.color, fontFamily: "'JetBrains Mono', monospace" }}>
+              {s.label}
+            </span>
+            <span className="text-[10px] font-medium" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
+              {item.fieldName}
+            </span>
+            <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {item.currentValue}
+            </span>
+          </div>
+          <p className="text-[11px] pl-1" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
+            {item.reason}
+          </p>
+        </div>
+      );
+    })}
+    {data.overallAssessment && (
+      <div className="pt-1.5" style={{ borderTop: '1px solid rgba(17,17,17,0.08)' }}>
+        <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>Overall: </span>
+        <span className="text-[11px]" style={{ color: '#111111', fontFamily: 'Lora, serif' }}>{data.overallAssessment}</span>
+      </div>
+    )}
+    {data.keyRisk && (
+      <div>
+        <span className="text-[10px]" style={{ color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>Key Risk: </span>
+        <span className="text-[11px]" style={{ color: '#111111', fontFamily: 'Lora, serif' }}>{data.keyRisk}</span>
+      </div>
+    )}
+  </div>
+);
+
+// ── CetparOptionsCard ──────────────────────────────────────────────────
+
+const CetparOptionsCard: React.FC<{
+  result: CetparResult;
+  onSelect: (option: CetparOption) => void;
+  onDismiss: () => void;
+}> = ({ result, onSelect, onDismiss }) => (
+  <div className="mb-3 mx-1 p-3" style={{ background: '#f0fdf4', border: '1px solid rgba(21,128,61,0.2)' }}>
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: '#15803d', fontFamily: "'JetBrains Mono', monospace" }}>
+        Cetpar — {result.targetOutputLabel}
+      </span>
+      <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+        target: {result.targetValue}
+      </span>
+    </div>
+    <div className="space-y-1.5 mb-3">
+      {result.options.map((opt, i) => (
+        <button
+          key={i}
+          onClick={() => onSelect(opt)}
+          className="w-full text-left p-2 transition-colors"
+          style={{
+            background: opt.feasible ? '#ffffff' : 'rgba(17,17,17,0.03)',
+            border: `1px solid ${opt.feasible ? 'rgba(21,128,61,0.25)' : 'rgba(17,17,17,0.1)'}`,
+          }}
+        >
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] font-medium" style={{ color: opt.feasible ? '#111111' : 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {opt.paramName}
+            </span>
+            <div className="flex items-center gap-1.5">
+              {!opt.feasible && (
+                <span className="text-[9px] px-1 py-0.5" style={{ background: 'rgba(185,28,28,0.08)', color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace" }}>
+                  Best effort
+                </span>
+              )}
+              <span className="text-[10px]" style={{ color: opt.feasible ? '#15803d' : 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+                Rank #{opt.rank}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {opt.currentValue} &rarr; {opt.requiredValue}
+            </span>
+            <span className="text-[9px] px-1 py-0.5" style={{ background: 'rgba(17,17,17,0.05)', color: 'rgba(17,17,17,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {opt.effortPct > 0 ? '+' : ''}{opt.effortPct.toFixed(1)}% change
+            </span>
+          </div>
+        </button>
+      ))}
+    </div>
+    <button
+      onClick={onDismiss}
+      className="text-[10px] tracking-widest uppercase"
+      style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}
+    >
+      Dismiss
+    </button>
+  </div>
+);
+
+// ── FeaturesModal ──────────────────────────────────────────────────────
+
+const FEATURES = [
+  {
+    cmd: '/cetpar',
+    usage: '/cetpar <goal>',
+    desc: 'Goal-seek: find which single assumption to change to hit a target output.',
+    example: '/cetpar I want IRR to be 20%, adjusting exit multiple or Year 1 growth',
+  },
+  {
+    cmd: '/redline',
+    usage: '/redline',
+    desc: 'Rate each key assumption as aggressive, in-line, or conservative vs. market.',
+    example: '/redline',
+  },
+  {
+    cmd: '/structure',
+    usage: '/structure',
+    desc: 'Suggest an optimal capital structure (debt/equity mix) for this deal.',
+    example: '/structure',
+  },
+  {
+    cmd: '/edit',
+    usage: '/edit <instruction>',
+    desc: 'Ask the AI to suggest model changes; review and accept or reject the diff.',
+    example: '/edit Make the model more conservative',
+  },
+];
+
+const FeaturesModal: React.FC<{ onClose: () => void; onInsert: (text: string) => void }> = ({ onClose, onInsert }) => (
+  <div
+    className="absolute inset-0 z-50 flex items-end justify-center"
+    style={{ background: 'rgba(17,17,17,0.35)' }}
+    onClick={onClose}
+  >
+    <div
+      className="w-full p-4 space-y-3"
+      style={{ background: '#ffffff', borderTop: '1px solid rgba(17,17,17,0.12)', maxHeight: '70%', overflowY: 'auto' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+          Commands
+        </span>
+        <button
+          onClick={onClose}
+          className="text-[10px] tracking-widest uppercase"
+          style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}
+        >
+          Close
+        </button>
+      </div>
+      {FEATURES.map((f) => (
+        <div key={f.cmd} style={{ borderBottom: '1px solid rgba(17,17,17,0.07)', paddingBottom: 12 }}>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[11px] font-medium" style={{ color: '#CC0000', fontFamily: "'JetBrains Mono', monospace" }}>
+              {f.cmd}
+            </span>
+            <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {f.usage}
+            </span>
+          </div>
+          <p className="text-[11px] mb-1.5" style={{ color: 'rgba(17,17,17,0.65)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
+            {f.desc}
+          </p>
+          <button
+            onClick={() => { onInsert(f.example); onClose(); }}
+            className="text-[10px] px-2 py-1 transition-colors"
+            style={{
+              color: 'rgba(17,17,17,0.5)',
+              border: '1px solid rgba(17,17,17,0.12)',
+              fontFamily: "'JetBrains Mono', monospace",
+              background: '#F9F9F7',
+            }}
+          >
+            Try: {f.example}
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ── MessageBubble ──────────────────────────────────────────────────────
+
 const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
   const isUser = msg.role === 'user';
   return (
@@ -143,6 +340,9 @@ const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
         )}
         {msg.analysis && (msg.analysis.primary_driver || msg.analysis.risk_concentration || msg.analysis.fragility_test || (msg.analysis.improvement_levers?.length ?? 0) > 0) && (
           <AnalysisCard analysis={msg.analysis} />
+        )}
+        {msg.redlineData && msg.redlineData.items.length > 0 && (
+          <RedlineCard data={msg.redlineData} />
         )}
       </div>
     </div>
@@ -170,11 +370,15 @@ const ChatPanel: React.FC = () => {
   const pendingEdits = useDealEngineStore((s) => s.pendingEdits);
   const acceptEdits = useDealEngineStore((s) => s.acceptEdits);
   const rejectEdits = useDealEngineStore((s) => s.rejectEdits);
+  const cetparResult = useDealEngineStore((s) => s.cetparResult);
+  const selectCetparOption = useDealEngineStore((s) => s.selectCetparOption);
+  const dismissCetpar = useDealEngineStore((s) => s.dismissCetpar);
 
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [triggerVoiceSend, setTriggerVoiceSend] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -281,19 +485,42 @@ const ChatPanel: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col h-full" style={{ borderLeft: '1px solid rgba(17,17,17,0.1)', background: '#F9F9F7' }}>
+    <div className="flex flex-col h-full relative" style={{ borderLeft: '1px solid rgba(17,17,17,0.1)', background: '#F9F9F7' }}>
+
+      {/* ── Features Modal ── */}
+      {showFeatures && (
+        <FeaturesModal
+          onClose={() => setShowFeatures(false)}
+          onInsert={(text) => setInput(text)}
+        />
+      )}
 
       {/* ── Header ── */}
       <div
         className="px-4 py-2.5 flex-shrink-0 flex items-center justify-between"
         style={{ borderBottom: '1px solid rgba(17,17,17,0.1)', background: '#ffffff' }}
       >
-        <span
-          className="text-[10px] font-medium tracking-widest uppercase"
-          style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
-        >
-          AI Chat
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[10px] font-medium tracking-widest uppercase"
+            style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            AI Chat
+          </span>
+          <button
+            onClick={() => setShowFeatures((v) => !v)}
+            className="px-2 py-0.5 text-[9px] tracking-widest uppercase transition-all"
+            style={{
+              color: showFeatures ? '#CC0000' : 'rgba(17,17,17,0.35)',
+              border: `1px solid ${showFeatures ? 'rgba(204,0,0,0.25)' : 'rgba(17,17,17,0.1)'}`,
+              fontFamily: "'JetBrains Mono', monospace",
+              background: 'transparent',
+            }}
+            title="View available commands"
+          >
+            Features
+          </button>
+        </div>
         {ttsSupported && (
           <button
             onClick={toggleAutoSpeak}
@@ -344,6 +571,13 @@ const ChatPanel: React.FC = () => {
           </div>
         ) : (
           chatHistory.map((msg, i) => <MessageBubble key={i} msg={msg} />)
+        )}
+        {cetparResult && (
+          <CetparOptionsCard
+            result={cetparResult}
+            onSelect={selectCetparOption}
+            onDismiss={dismissCetpar}
+          />
         )}
         {pendingEdits.length > 0 && (
           <PendingEditsCard edits={pendingEdits} onAccept={acceptEdits} onReject={rejectEdits} />
@@ -420,7 +654,7 @@ const ChatPanel: React.FC = () => {
               isListening
                 ? 'Listening...'
                 : apiKey
-                ? 'Ask about this deal... (/edit to suggest changes)'
+                ? 'Ask about this deal... (/ for commands)'
                 : 'Set API key first'
             }
             disabled={!apiKey}
