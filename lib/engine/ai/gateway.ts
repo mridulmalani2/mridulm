@@ -9,6 +9,38 @@ import { buildAnthropicRequest, parseAnthropicResponse, extractAnthropicText } f
 import { buildOpenAIRequest, parseOpenAIResponse, extractOpenAIText } from './adapters/openai';
 import { buildGoogleRequest, parseGoogleResponse, extractGoogleText } from './adapters/google';
 
+// ── API Error Parser ────────────────────────────────────────────────────
+// Converts raw HTTP error bodies (often JSON blobs) into clean one-liners.
+
+function parseApiError(status: number, rawText: string): string {
+  // Try to pull a human-readable message out of common JSON error shapes
+  try {
+    const parsed = JSON.parse(rawText) as Record<string, unknown>;
+    const errObj = (parsed.error as Record<string, unknown>) ?? parsed;
+    const raw = (errObj.message as string) ?? (parsed.message as string) ?? (parsed.detail as string);
+    if (typeof raw === 'string' && raw.length > 0) {
+      // Trim to a readable length; strip any trailing JSON/URL fragments
+      const clean = raw.replace(/\s+https?:\/\/\S+/g, '').trim().slice(0, 220);
+      switch (status) {
+        case 429: return `Rate limit reached — ${clean}. Please wait and try again.`;
+        case 401: return 'Invalid API key — please check your key in Settings.';
+        case 403: return 'API key does not have access to this model.';
+        default:  return `AI provider error (${status}): ${clean}`;
+      }
+    }
+  } catch { /* raw text is not JSON */ }
+
+  // Plain-text fallback
+  switch (status) {
+    case 429: return 'Rate limit reached — please wait a moment and try again.';
+    case 401: return 'Invalid API key — please check your key in Settings.';
+    case 403: return 'API key does not have access to this model.';
+    default:  return status >= 500
+      ? `AI provider server error (${status}) — please try again shortly.`
+      : `AI provider error (${status}) — please try again.`;
+  }
+}
+
 // ── Intent Classification ───────────────────────────────────────────────
 
 type Intent =
@@ -543,7 +575,7 @@ export async function callAI(
       }
     }
 
-    return { updatedStateDict: null, analysis: null, appliedDiffs: [], triggerRecalculation: false, intent, error: `API error ${response.status}: ${errorText}` };
+    return { updatedStateDict: null, analysis: null, appliedDiffs: [], triggerRecalculation: false, intent, error: parseApiError(response.status, errorText) };
   }
 
   const result = await response.json();
@@ -749,7 +781,7 @@ async function parseCetparRequest(
 
   if (!response.ok) {
     const text = await response.text();
-    return { error: `API error ${response.status}: ${text.slice(0, 200)}` };
+    return { error: parseApiError(response.status, text) };
   }
 
   const data = await response.json() as Record<string, unknown>;
@@ -956,10 +988,7 @@ export async function callRedlineAI(
 
   if (!response.ok) {
     const text = await response.text();
-    if (/429|rate.limit|too.many/i.test(text)) {
-      return { error: 'Rate limited. /redline requires a paid API key with sufficient quota for structured analysis.' };
-    }
-    return { error: `API error ${response.status}: ${text.slice(0, 200)}` };
+    return { error: parseApiError(response.status, text) };
   }
 
   const data = await response.json() as Record<string, unknown>;

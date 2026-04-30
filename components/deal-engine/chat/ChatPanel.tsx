@@ -235,34 +235,109 @@ const CetparOptionsCard: React.FC<{
   </div>
 );
 
-// ── FeaturesModal ──────────────────────────────────────────────────────
+// ── Commands & Presets ─────────────────────────────────────────────────
 
-const FEATURES = [
+const COMMANDS = [
   {
     cmd: '/cetpar',
-    usage: '/cetpar <goal>',
-    desc: 'Goal-seek: find which single assumption to change to hit a target output.',
-    example: '/cetpar I want IRR to be 20%, adjusting exit multiple or Year 1 growth',
+    label: 'Goal-Seek',
+    desc: 'Hit a target IRR, MOIC, or leverage',
+    insert: '/cetpar I want IRR to be 20%, adjusting exit multiple',
   },
   {
     cmd: '/redline',
-    usage: '/redline',
-    desc: 'Rate each key assumption as aggressive, in-line, or conservative vs. market.',
-    example: '/redline',
+    label: 'Redline',
+    desc: 'Flag aggressive assumptions vs. market',
+    insert: '/redline',
   },
   {
     cmd: '/structure',
-    usage: '/structure',
-    desc: 'Suggest an optimal capital structure (debt/equity mix) for this deal.',
-    example: '/structure',
+    label: 'Structure',
+    desc: 'Optimise capital structure for this deal',
+    insert: '/structure',
   },
   {
     cmd: '/edit',
-    usage: '/edit <instruction>',
-    desc: 'Ask the AI to suggest model changes; review and accept or reject the diff.',
-    example: '/edit Make the model more conservative',
+    label: 'Edit',
+    desc: 'AI-suggested assumption changes with review',
+    insert: '/edit Make the model more conservative',
   },
 ];
+
+const QUICK_QUESTIONS = [
+  'What drives the IRR here?',
+  'How fragile is this deal?',
+];
+
+// ── Empty-state centered launcher ──────────────────────────────────────
+
+const EmptyStateLauncher: React.FC<{ onInsert: (text: string) => void }> = ({ onInsert }) => (
+  <div className="flex flex-col items-center justify-center h-full px-4">
+    <div className="w-full max-w-[280px]">
+      {/* Commands */}
+      <p className="text-[9px] font-medium tracking-widest uppercase mb-2 text-center"
+         style={{ color: 'rgba(17,17,17,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>
+        Commands
+      </p>
+      <div className="space-y-1.5 mb-4">
+        {COMMANDS.map((c) => (
+          <button
+            key={c.cmd}
+            onClick={() => onInsert(c.insert)}
+            className="w-full text-left px-3 py-2.5 transition-colors hover:border-[rgba(17,17,17,0.2)]"
+            style={{
+              background: '#ffffff',
+              border: '1px solid rgba(17,17,17,0.1)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium" style={{ color: '#CC0000', fontFamily: "'JetBrains Mono', monospace" }}>
+                {c.cmd}
+              </span>
+              <span className="text-[9px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {c.label}
+              </span>
+            </div>
+            <p className="text-[11px] mt-0.5" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif' }}>
+              {c.desc}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      {/* Divider */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1" style={{ height: 1, background: 'rgba(17,17,17,0.07)' }} />
+        <span className="text-[9px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
+          or ask
+        </span>
+        <div className="flex-1" style={{ height: 1, background: 'rgba(17,17,17,0.07)' }} />
+      </div>
+
+      {/* Quick questions */}
+      <div className="space-y-1.5">
+        {QUICK_QUESTIONS.map((q) => (
+          <button
+            key={q}
+            onClick={() => onInsert(q)}
+            className="w-full text-left px-3 py-2 transition-colors hover:border-[rgba(17,17,17,0.2)]"
+            style={{
+              background: '#F9F9F7',
+              border: '1px solid rgba(17,17,17,0.08)',
+              color: 'rgba(17,17,17,0.5)',
+              fontFamily: 'Lora, serif',
+              fontSize: 11,
+            }}
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// ── FeaturesModal (shown from header button when chat is active) ────────
 
 const FeaturesModal: React.FC<{ onClose: () => void; onInsert: (text: string) => void }> = ({ onClose, onInsert }) => (
   <div
@@ -287,21 +362,21 @@ const FeaturesModal: React.FC<{ onClose: () => void; onInsert: (text: string) =>
           Close
         </button>
       </div>
-      {FEATURES.map((f) => (
-        <div key={f.cmd} style={{ borderBottom: '1px solid rgba(17,17,17,0.07)', paddingBottom: 12 }}>
+      {COMMANDS.map((c) => (
+        <div key={c.cmd} style={{ borderBottom: '1px solid rgba(17,17,17,0.07)', paddingBottom: 12 }}>
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-[11px] font-medium" style={{ color: '#CC0000', fontFamily: "'JetBrains Mono', monospace" }}>
-              {f.cmd}
+              {c.cmd}
             </span>
             <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
-              {f.usage}
+              {c.label}
             </span>
           </div>
           <p className="text-[11px] mb-1.5" style={{ color: 'rgba(17,17,17,0.65)', fontFamily: 'Lora, serif', lineHeight: '1.5' }}>
-            {f.desc}
+            {c.desc}
           </p>
           <button
-            onClick={() => { onInsert(f.example); onClose(); }}
+            onClick={() => { onInsert(c.insert); onClose(); }}
             className="text-[10px] px-2 py-1 transition-colors"
             style={{
               color: 'rgba(17,17,17,0.5)',
@@ -310,7 +385,7 @@ const FeaturesModal: React.FC<{ onClose: () => void; onInsert: (text: string) =>
               background: '#F9F9F7',
             }}
           >
-            Try: {f.example}
+            Try: {c.insert}
           </button>
         </div>
       ))}
@@ -477,13 +552,6 @@ const ChatPanel: React.FC = () => {
     setAutoSpeak((v) => !v);
   };
 
-  const suggestions = [
-    'What drives the IRR here?',
-    'How fragile is this deal?',
-    '/edit Make the model more conservative',
-    '/edit Stress test with compressed margins',
-  ];
-
   return (
     <div className="flex flex-col h-full relative" style={{ borderLeft: '1px solid rgba(17,17,17,0.1)', background: '#F9F9F7' }}>
 
@@ -542,33 +610,15 @@ const ChatPanel: React.FC = () => {
       {/* ── Messages ── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3">
         {chatHistory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <p className="text-xs mb-4 text-center" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: 'Lora, serif', lineHeight: '1.6', maxWidth: 220 }}>
-              {apiKey
-                ? 'Ask the AI to analyse your deal, update assumptions, or stress test scenarios.'
-                : 'Set your API key to enable AI chat.'}
-            </p>
-            {apiKey && (
-              <div className="space-y-1.5 w-full max-w-[240px]">
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setInput(s)}
-                    className="w-full text-left px-3 py-2 text-xs transition-colors hover:border-[rgba(17,17,17,0.2)]"
-                    style={{
-                      color: 'rgba(17,17,17,0.5)',
-                      border: '1px solid rgba(17,17,17,0.1)',
-                      fontFamily: 'Lora, serif',
-                      background: '#ffffff',
-                      fontSize: 11,
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
+          apiKey
+            ? <EmptyStateLauncher onInsert={(text) => setInput(text)} />
+            : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-xs text-center" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: 'Lora, serif', lineHeight: '1.6', maxWidth: 200 }}>
+                  Set your API key to enable AI chat.
+                </p>
               </div>
-            )}
-          </div>
+            )
         ) : (
           chatHistory.map((msg, i) => <MessageBubble key={i} msg={msg} />)
         )}
