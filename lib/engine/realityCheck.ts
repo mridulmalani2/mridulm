@@ -64,8 +64,11 @@ export function runRealityCheck(
 
   // RULE 2 — Multiple Expansion + Leverage Increase
   if (exitMultiple > entryMultiple && exitLeverage > entryLeverage) {
+    // Revert both exit EV and leverage to entry levels — a buyer facing entry leverage
+    // would also apply the entry multiple, making both assumptions consistent.
+    const impactEv = exitEbitda * entryMultiple;
     const impactNetDebt = entryLeverage * exitEbitda;
-    const impactEq = exitEv - impactNetDebt - state.fees.exit_fee_pct * exitEv - returns.mip_payout;
+    const impactEq = impactEv - impactNetDebt - state.fees.exit_fee_pct * impactEv - returns.mip_payout;
     const impactCfs = [-returns.entry_equity, ...Array(hp - 1).fill(0), impactEq];
     const impactIrr = solveIrr(impactCfs);
     const deltaBps = returns.irr != null && impactIrr != null
@@ -115,7 +118,7 @@ export function runRealityCheck(
   if (entryMultiple > sectorMedian * 1.25) {
     const ebitdaEntry = state.revenue.base_revenue * state.margins.base_ebitda_margin;
     const altEv = ebitdaEntry * sectorMedian;
-    const altEquity = altEv + state.fees.transaction_costs + state.fees.financing_fee_pct * state.entry.total_debt_raised - state.entry.total_debt_raised;
+    const altEquity = altEv + state.fees.entry_fee_pct * altEv + state.fees.transaction_costs + state.fees.financing_fee_pct * state.entry.total_debt_raised - state.entry.total_debt_raised;
     if (altEquity > 0) {
       const altExitEq = returns.exit_ev - returns.exit_net_debt - state.fees.exit_fee_pct * returns.exit_ev - returns.mip_payout;
       const altCfs = [-altEquity, ...Array(hp - 1).fill(0), altExitEq];
@@ -178,13 +181,17 @@ export function runRealityCheck(
     }
   }
 
-  // Verdict
+  // Verdict — require all three dimensions to be non-aggressive for "conservative".
   const criticalCount = flags.filter((f) => f.severity === 'critical').length;
   let verdict: 'aggressive' | 'realistic' | 'conservative';
   if (criticalCount > 0) {
     verdict = 'aggressive';
-  } else if (flags.length === 0 || (flags.length > 0 && exitMultiple < entryMultiple)) {
-    verdict = exitMultiple < entryMultiple ? 'conservative' : 'realistic';
+  } else if (
+    exitMultiple < entryMultiple &&        // multiple compression
+    exitLeverage <= entryLeverage &&       // leverage doesn't increase
+    exitMargin <= entryMargin + 0.03       // margin expansion modest (<300bps)
+  ) {
+    verdict = 'conservative';
   } else {
     verdict = 'realistic';
   }

@@ -134,7 +134,8 @@ export function solveIrrTimed(cashflows: number[], times: number[]): number | nu
 
 function buildTimeVector(hp: number, midYear: boolean): number[] | null {
   if (!midYear) return null;
-  return [0, ...Array.from({ length: hp }, (_, t) => t + 0.5)];
+  // Interim distributions at mid-year (0.5, 1.5, …, hp−1.5); exit at year-end (hp).
+  return [0, ...Array.from({ length: hp - 1 }, (_, t) => t + 0.5), hp];
 }
 
 
@@ -280,7 +281,8 @@ export function calculateReturns(
   }
   if (projections.length) {
     const lastYr = projections[projections.length - 1];
-    unlevCfs.push(lastYr.fcf_pre_debt + exitEv - exitFee);
+    // Unlevered IRR measures asset/enterprise performance — sponsor-level exit fee excluded.
+    unlevCfs.push(lastYr.fcf_pre_debt + exitEv);
   }
   const irrUnlevered = solveIrrAuto(unlevCfs, times);
 
@@ -302,7 +304,9 @@ export function calculateReturns(
   return {
     irr,
     moic,
-    dpi: dpiByYear.length ? dpiByYear[dpiByYear.length - 1] : moic,
+    // At full exit all proceeds are realised, so DPI = MOIC.
+    // dpi_by_year tracks only interim distributions during the hold.
+    dpi: moic,
     rvpi: 0,
     cash_yield_avg: cashYieldAvg,
     payback_years: payback,

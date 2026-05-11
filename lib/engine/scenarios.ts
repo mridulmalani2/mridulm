@@ -68,7 +68,6 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   const hp = state.exit.holding_period;
   const baseGrowth = [...state.revenue.growth_rates];
   const baseExitMult = state.exit.exit_ebitda_multiple;
-  const baseEntryMult = state.entry.entry_ebitda_multiple;
   const baseMarginExpansion = state.margins.target_ebitda_margin - state.margins.base_ebitda_margin;
   const scenarios: ScenarioSet[] = [];
 
@@ -150,7 +149,7 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
     }
   }
   stress.revenue.growth_rates = stressGrowth;
-  stress.exit.exit_ebitda_multiple = Math.max(baseEntryMult - 1.0, 1.0);
+  stress.exit.exit_ebitda_multiple = Math.max(baseExitMult - 1.0, 1.0);
   stress.margins.target_ebitda_margin = state.margins.base_ebitda_margin;
   stress.margins.margin_by_year = [];
   ensureListLengths(stress);
@@ -214,9 +213,17 @@ function buildTable(
 }
 
 export function generateSensitivityTable(state: ModelState, tableId: number): SensitivityTable {
-  const baseGrowthAvg = state.revenue.growth_rates.length
-    ? state.revenue.growth_rates.reduce((a, b) => a + b, 0) / state.revenue.growth_rates.length
-    : 0.05;
+  // Use CAGR (geometric mean) as the sensitivity center — arithmetic mean overstates
+  // true compound growth when rates vary across the hold period.
+  const baseGrowthAvg = (() => {
+    const rates = state.revenue.growth_rates;
+    if (!rates.length) return 0.05;
+    const cagr = Math.pow(
+      rates.reduce((prod, g) => prod * (1 + g), 1),
+      1 / rates.length,
+    ) - 1;
+    return cagr;
+  })();
   const baseExitMult = state.exit.exit_ebitda_multiple;
   const baseEntryMult = state.entry.entry_ebitda_multiple;
   const baseExitMargin = state.margins.target_ebitda_margin;

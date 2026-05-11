@@ -52,11 +52,12 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     let tax: number;
     let nolUsage = 0;
     if (ebt > 0) {
-      const rawTax = ebt * taxRate;
-      nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, rawTax) : 0;
-      const taxAfterNol = rawTax - nolUsage;
-      const minTax = ebt * minTaxRate;
-      tax = Math.max(taxAfterNol, minTax);
+      // NOLs reduce taxable income, not tax liability directly.
+      nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, ebt) : 0;
+      const taxableIncome = ebt - nolUsage;
+      const rawTax = taxableIncome * taxRate;
+      const minTax = taxableIncome * minTaxRate;
+      tax = Math.max(rawTax, minTax);
       nolRemaining -= nolUsage;
     } else {
       tax = 0;
@@ -132,11 +133,11 @@ export function updateProjectionsWithDebt(
     yr.ebt = yr.ebit - totalInterestExpense - finFeeAmort;
 
     if (yr.ebt > 0) {
-      const rawTax = yr.ebt * state.tax.tax_rate;
-      const nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, rawTax) : 0;
-      const taxAfterNol = rawTax - nolUsage;
-      const minTax = yr.ebt * state.tax.minimum_tax_rate;
-      yr.tax = Math.max(taxAfterNol, minTax);
+      const nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, yr.ebt) : 0;
+      const taxableIncome = yr.ebt - nolUsage;
+      const rawTax = taxableIncome * state.tax.tax_rate;
+      const minTax = taxableIncome * state.tax.minimum_tax_rate;
+      yr.tax = Math.max(rawTax, minTax);
       yr.nol_used = nolUsage;
       nolRemaining -= nolUsage;
     } else {

@@ -125,7 +125,8 @@ export function buildDebtSchedule(
         0,
         entry.beginning_balance + entry.pik_accrual - entry.total_repayment,
       );
-      entry.interest_tax_shield = shield ? entry.cash_interest * taxRate : 0;
+      // PIK interest is tax-deductible as it accrues, so include alongside cash interest.
+      entry.interest_tax_shield = shield ? (entry.cash_interest + entry.pik_accrual) * taxRate : 0;
       balances[tIdx] = entry.ending_balance;
       trancheYears[tIdx].push(entry);
     }
@@ -174,10 +175,13 @@ export function buildDebtSchedule(
     const debtService = totCashInt + totMandatoryAmort;
 
     totalDebtByYear.push(totDebt);
-    netDebtByYear.push(totDebt);
-    leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 0);
-    coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 99);
-    dscrByYear.push(debtService > 0 ? fcfPre / debtService : 99);
+    // Net debt subtracts reserved minimum cash, consistent with sweep waterfall logic.
+    netDebtByYear.push(Math.max(0, totDebt - minCash));
+    // Use 9999 sentinel when EBITDA ≤ 0 — returning 0 is misleading (implies no debt).
+    leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 9999);
+    // 9999 = "no interest / no debt service" sentinel; capped in display layer.
+    coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 9999);
+    dscrByYear.push(debtService > 0 ? fcfPre / debtService : 9999);
     cashInterestByYear.push(totCashInt);
     repaymentByYear.push(totRepay);
     mandatoryAmortByYear.push(totMandatoryAmort);
