@@ -150,7 +150,7 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
     }
   }
   stress.revenue.growth_rates = stressGrowth;
-  stress.exit.exit_ebitda_multiple = Math.max(baseEntryMult - 1.0, 1.0);
+  stress.exit.exit_ebitda_multiple = Math.max(baseExitMult - 1.0, 1.0);
   stress.margins.target_ebitda_margin = state.margins.base_ebitda_margin;
   stress.margins.margin_by_year = [];
   ensureListLengths(stress);
