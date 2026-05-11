@@ -68,7 +68,6 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   const hp = state.exit.holding_period;
   const baseGrowth = [...state.revenue.growth_rates];
   const baseExitMult = state.exit.exit_ebitda_multiple;
-  const baseEntryMult = state.entry.entry_ebitda_multiple;
   const baseMarginExpansion = state.margins.target_ebitda_margin - state.margins.base_ebitda_margin;
   const scenarios: ScenarioSet[] = [];
 
