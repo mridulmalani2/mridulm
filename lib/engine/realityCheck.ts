@@ -181,13 +181,17 @@ export function runRealityCheck(
     }
   }
 
-  // Verdict
+  // Verdict — require all three dimensions to be non-aggressive for "conservative".
   const criticalCount = flags.filter((f) => f.severity === 'critical').length;
   let verdict: 'aggressive' | 'realistic' | 'conservative';
   if (criticalCount > 0) {
     verdict = 'aggressive';
-  } else if (flags.length === 0 || (flags.length > 0 && exitMultiple < entryMultiple)) {
-    verdict = exitMultiple < entryMultiple ? 'conservative' : 'realistic';
+  } else if (
+    exitMultiple < entryMultiple &&        // multiple compression
+    exitLeverage <= entryLeverage &&       // leverage doesn't increase
+    exitMargin <= entryMargin + 0.03       // margin expansion modest (<300bps)
+  ) {
+    verdict = 'conservative';
   } else {
     verdict = 'realistic';
   }

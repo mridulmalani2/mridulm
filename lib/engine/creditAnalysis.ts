@@ -58,25 +58,23 @@ export function computeCreditAnalysis(
 
     // Fixed Charge Coverage Ratio: (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Amort)
     const numeratorFCCR = yr.ebitda_adj - yr.total_capex - yr.tax;
-    const fccr = mandatoryDebtService > 0 ? numeratorFCCR / mandatoryDebtService : 99;
+    // 9999 = "no debt service" sentinel; capped at 99 in output for display.
+    const fccr = mandatoryDebtService > 0 ? numeratorFCCR / mandatoryDebtService : 9999;
 
     // Interest Coverage Ratio: EBITDA / Cash Interest
-    const icr = cashInterest > 0 ? yr.ebitda_adj / cashInterest : 99;
+    const icr = cashInterest > 0 ? yr.ebitda_adj / cashInterest : 9999;
 
     // DSCR: FCF pre-debt / (Cash Interest + Mandatory Scheduled Amortization)
-    // The denominator includes contractual principal — lender standard definition.
-    // FCF pre-debt = EBITDA Adj − Tax − Capex − ΔNWC (matches projections.fcf_pre_debt)
     const fcfPreDebt = yr.fcf_pre_debt;
-    const dscr = mandatoryDebtService > 0 ? fcfPreDebt / mandatoryDebtService : 99;
+    const dscr = mandatoryDebtService > 0 ? fcfPreDebt / mandatoryDebtService : 9999;
 
-    // Leverage: Net Debt / EBITDA
-    const leverage = yr.ebitda_adj > 0 ? totalDebt / yr.ebitda_adj : 0;
+    // Leverage: Net Debt / EBITDA; 9999 sentinel when EBITDA ≤ 0 (distressed).
+    const leverage = yr.ebitda_adj > 0 ? totalDebt / yr.ebitda_adj : 9999;
 
-    // Senior leverage (first tranche only as proxy)
     const seniorDebt = debtSchedule.tranche_schedules.length > 0
       ? debtSchedule.tranche_schedules[0][i]?.ending_balance || 0
       : 0;
-    const seniorLeverage = yr.ebitda_adj > 0 ? seniorDebt / yr.ebitda_adj : 0;
+    const seniorLeverage = yr.ebitda_adj > 0 ? seniorDebt / yr.ebitda_adj : 9999;
 
     // Excess Cash Flow = FCF pre-debt minus all mandatory obligations.
     // Negative ECF means the company cannot cover mandatory debt service from operations

@@ -177,9 +177,11 @@ export function buildDebtSchedule(
     totalDebtByYear.push(totDebt);
     // Net debt subtracts reserved minimum cash, consistent with sweep waterfall logic.
     netDebtByYear.push(Math.max(0, totDebt - minCash));
-    leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 0);
-    coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 99);
-    dscrByYear.push(debtService > 0 ? fcfPre / debtService : 99);
+    // Use 9999 sentinel when EBITDA ≤ 0 — returning 0 is misleading (implies no debt).
+    leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 9999);
+    // 9999 = "no interest / no debt service" sentinel; capped in display layer.
+    coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 9999);
+    dscrByYear.push(debtService > 0 ? fcfPre / debtService : 9999);
     cashInterestByYear.push(totCashInt);
     repaymentByYear.push(totRepay);
     mandatoryAmortByYear.push(totMandatoryAmort);

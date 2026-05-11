@@ -213,9 +213,17 @@ function buildTable(
 }
 
 export function generateSensitivityTable(state: ModelState, tableId: number): SensitivityTable {
-  const baseGrowthAvg = state.revenue.growth_rates.length
-    ? state.revenue.growth_rates.reduce((a, b) => a + b, 0) / state.revenue.growth_rates.length
-    : 0.05;
+  // Use CAGR (geometric mean) as the sensitivity center — arithmetic mean overstates
+  // true compound growth when rates vary across the hold period.
+  const baseGrowthAvg = (() => {
+    const rates = state.revenue.growth_rates;
+    if (!rates.length) return 0.05;
+    const cagr = Math.pow(
+      rates.reduce((prod, g) => prod * (1 + g), 1),
+      1 / rates.length,
+    ) - 1;
+    return cagr;
+  })();
   const baseExitMult = state.exit.exit_ebitda_multiple;
   const baseEntryMult = state.entry.entry_ebitda_multiple;
   const baseExitMargin = state.margins.target_ebitda_margin;

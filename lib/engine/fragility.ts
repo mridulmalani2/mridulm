@@ -134,14 +134,26 @@ export function computeFragility(state: ModelState): FragilityAnalysis {
     delta_moic: comb.moic - baseMoic,
   });
 
-  // Fragility score
+  // Fragility score: IRR drop as a fraction of base IRR.
+  // Guard against division by a very small base IRR — below 5% the ratio is
+  // numerically unstable and misleading; use absolute bps drop for classification instead.
   const irrDrop = (baseIrr ?? 0) - (comb.irr ?? 0);
-  const score = baseIrr && baseIrr > 0 ? irrDrop / baseIrr : 0;
+  const score = baseIrr != null && baseIrr >= 0.05 ? irrDrop / baseIrr : 0;
 
+  // Classification thresholds:
+  //   Relative (base ≥ 5%): score < 20% → Robust, ≤ 40% → Moderate, > 40% → Fragile
+  //   Absolute fallback:     bps drop < 400 → Robust, ≤ 800 → Moderate, > 800 → Fragile
   let classification: 'Robust' | 'Moderate Risk' | 'Fragile';
-  if (score < 0.20) classification = 'Robust';
-  else if (score <= 0.40) classification = 'Moderate Risk';
-  else classification = 'Fragile';
+  if (baseIrr != null && baseIrr >= 0.05) {
+    if (score < 0.20) classification = 'Robust';
+    else if (score <= 0.40) classification = 'Moderate Risk';
+    else classification = 'Fragile';
+  } else {
+    const bpsDrop = irrDrop * 10000;
+    if (bpsDrop < 400) classification = 'Robust';
+    else if (bpsDrop <= 800) classification = 'Moderate Risk';
+    else classification = 'Fragile';
+  }
 
   // Find dominant stress driver (largest individual IRR drop)
   const individualStresses = stressResults.slice(0, 3);

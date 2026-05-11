@@ -304,7 +304,9 @@ export function calculateReturns(
   return {
     irr,
     moic,
-    dpi: dpiByYear.length ? dpiByYear[dpiByYear.length - 1] : moic,
+    // At full exit all proceeds are realised, so DPI = MOIC.
+    // dpi_by_year tracks only interim distributions during the hold.
+    dpi: moic,
     rvpi: 0,
     cash_yield_avg: cashYieldAvg,
     payback_years: payback,
