@@ -143,10 +143,12 @@ def build_debt_schedule(
             year_entries.append(entry)
 
         # ── Cash interest shortfall handling (FINDING 4) ──
-        # Cash available to service interest = FCFF + cash on hand − min_cash floor.
+        # Cash available to service interest = FCFF + full beginning cash balance.
+        # The min_cash floor constrains sweep, not interest payment — interest
+        # sits senior in the waterfall and can draw on all available cash.
         # Shortfall is logged but cash_interest is still booked as accrued; in
         # practice the model assumes lenders absorb timing differences.
-        cash_available_for_interest = fcf_pre_debt + (cash_balance - min_cash)
+        cash_available_for_interest = fcf_pre_debt + cash_balance
         if total_cash_interest > 0 and cash_available_for_interest < total_cash_interest:
             shortfall = total_cash_interest - cash_available_for_interest
             interest_shortfall_by_year.append(shortfall)
@@ -158,14 +160,17 @@ def build_debt_schedule(
             interest_shortfall_by_year.append(0.0)
 
         # ── Pooled cash sweep allocation (FINDING 5) ──
-        # Available for sweep = FCFF − mandatory amort − cash interest − min cash buffer
-        # (cash interest has to clear before sweep — debt service waterfall).
+        # Available for sweep = FCFF − mandatory amort − cash interest − incremental
+        # floor shortfall.  min_cash is a balance-sheet floor, not an annual rebuild
+        # cost: only the gap between the floor and the current balance constrains sweep.
+        # Excess beginning cash (cash_balance > min_cash) stays on the balance sheet
+        # and is NOT auto-swept; it reduces net debt at exit.
+        floor_shortfall = max(0.0, min_cash - cash_balance)
         available_for_sweep = (
             fcf_pre_debt
-            + cash_balance  # cash carried from prior years can also sweep
             - total_mandatory_amort
             - total_cash_interest
-            - min_cash
+            - floor_shortfall
         )
         # Order tranches by sweep priority (lower = swept first), pro-rata within tier
         sweep_indices = [
@@ -310,10 +315,11 @@ def build_debt_schedule(
         ebit = proj_yr.ebit if proj_yr else 0.0
         fcf_pre = proj_yr.fcf_pre_debt if proj_yr else 0.0
 
-        # Net debt subtracts the cash retained on BS (FINDING 9)
+        # Net debt subtracts actual cash on hand (FINDING 9).
+        # cash_held is the real balance-sheet cash; min_cash is an operational
+        # floor already enforced by the sweep waterfall, not an additional deduction.
         cash_held = cash_balance_by_year[yr_idx] if yr_idx < len(cash_balance_by_year) else 0.0
-        retained_cash = max(min_cash, cash_held)
-        net_debt = max(0.0, tot_debt - retained_cash)
+        net_debt = max(0.0, tot_debt - cash_held)
 
         total_debt_by_year.append(tot_debt)
         net_debt_by_year.append(net_debt)

@@ -195,6 +195,7 @@ export function createDefaultModelState(): ModelState {
       total_mandatory_amort_by_year: [],
       total_interest_tax_shield_by_year: [],
       ecf_by_year: [],
+      cash_balance_by_year: [],
     },
     returns: {
       irr: null,

@@ -140,6 +140,7 @@ export interface DebtScheduleResult {
   total_mandatory_amort_by_year: number[];   // Scheduled repayments only (excludes discretionary sweeps)
   total_interest_tax_shield_by_year: number[];
   ecf_by_year: number[];                     // Excess Cash Flow = FCF - mandatory amort - cash interest
+  cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service
 }
 
 export interface Returns {
