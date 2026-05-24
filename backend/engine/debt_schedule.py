@@ -340,9 +340,14 @@ def build_debt_schedule(
         dscr_by_year.append(
             float("inf") if debt_service <= 0 else fcf_pre / debt_service
         )
-        # FCCR matches DSCR convention (full debt service in denominator)
+        # FCCR: (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Amort)
+        # Distinct from DSCR — measures ability to cover fixed charges from
+        # cash earnings before interest and debt service, per lender convention.
+        total_capex = proj_yr.total_capex if proj_yr else 0.0
+        tax = proj_yr.tax if proj_yr else 0.0
+        fccr_numerator = ebitda_adj - total_capex - tax
         fccr_by_year.append(
-            float("inf") if debt_service <= 0 else fcf_pre / debt_service
+            float("inf") if debt_service <= 0 else fccr_numerator / debt_service
         )
 
         cash_interest_by_year.append(tot_cash_int)

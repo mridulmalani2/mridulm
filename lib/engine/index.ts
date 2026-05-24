@@ -10,6 +10,7 @@ import { computeSourcesAndUses } from './sourcesUses';
 import { computeCreditAnalysis } from './creditAnalysis';
 import { computeEBITDABridge } from './ebitdaBridge';
 import { computeFragility } from './fragility';
+import { computeAddOnImpact } from './addOns';
 
 // Increase iterations to give PIK-heavy structures enough room to converge.
 // PIK interest compounds onto the principal each period, so the interest/tax
@@ -38,6 +39,12 @@ export function fullRecalc(state: ModelState): ModelState {
 
   // Sources & Uses (computed from entry assumptions)
   state.sources_and_uses = computeSourcesAndUses(state);
+
+  // Add-on acquisition impact: compute per-year revenue/EBITDA contributions and
+  // inject them into acquisition_revenue so projections uses the module's output
+  // (with growth and synergies) rather than the raw user-entered array.
+  const addOnImpact = computeAddOnImpact(state);
+  state.revenue.acquisition_revenue = addOnImpact.revenue_by_year;
 
   // ── Iterative convergence loop: projections → debt → update ──
   const hp = state.exit.holding_period;
@@ -95,7 +102,7 @@ export function fullRecalc(state: ModelState): ModelState {
   state.credit_analysis = computeCreditAnalysis(state, updatedProj, ds);
 
   // EBITDA bridge
-  state.ebitda_bridge = computeEBITDABridge(state, updatedProj);
+  state.ebitda_bridge = computeEBITDABridge(state, updatedProj, addOnImpact);
 
   // Fragility analysis (stress testing)
   state.fragility = computeFragility(state);
