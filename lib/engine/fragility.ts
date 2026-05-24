@@ -18,7 +18,7 @@ function quickCalc(state: ModelState): { irr: number | null; moic: number } {
   deriveEntryFields(state);
   ensureListLengths(state);
 
-  const MAX_ITER = 5;
+  const MAX_ITER = 10;
   const TOLERANCE = 0.01;
   const hp = state.exit.holding_period;
 

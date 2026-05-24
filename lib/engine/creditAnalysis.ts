@@ -49,9 +49,10 @@ export function computeCreditAnalysis(
     const mandatoryAmort = debtSchedule.total_mandatory_amort_by_year[i] || 0;
     const totalRepayment = debtSchedule.total_repayment_by_year[i] || 0;
     const totalDebt = debtSchedule.total_debt_by_year[i] || 0;
+    const commitmentFees = debtSchedule.total_commitment_fees_by_year[i] || 0;
 
-    // Total mandatory debt service = cash interest + contractual principal
-    const mandatoryDebtService = cashInterest + mandatoryAmort;
+    // Mandatory debt service includes commitment fees — they are a real recurring cash cost.
+    const mandatoryDebtService = cashInterest + commitmentFees + mandatoryAmort;
 
     // Cumulative paydown tracks ALL repayments (mandatory + sweep) for balance-sheet accuracy
     cumulativePaydown += totalRepayment;

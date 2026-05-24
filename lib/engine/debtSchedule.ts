@@ -28,6 +28,7 @@ export function buildDebtSchedule(
     total_mandatory_amort_by_year: [],
     total_interest_tax_shield_by_year: [],
     ecf_by_year: [],
+    total_commitment_fees_by_year: [],
     cash_balance_by_year: [],
   };
 
@@ -49,6 +50,7 @@ export function buildDebtSchedule(
 
     let totalMandatoryAmort = 0;
     let totalCashInterest = 0;
+    let totalCommitmentFees = 0;
     const yearEntries: DebtScheduleYear[] = [];
 
     // First pass: interest and mandatory amortization
@@ -63,20 +65,22 @@ export function buildDebtSchedule(
         effRate = tranche.interest_rate;
       }
 
-      let cashInterest: number;
-      let pikAccrual: number;
-      if (tranche.amortization_type === 'PIK') {
-        cashInterest = 0;
-        pikAccrual = begBal * tranche.pik_rate;
-      } else {
-        cashInterest = tranche.cash_interest ? begBal * effRate : 0;
-        pikAccrual = 0;
-      }
+      const pikAccrual = tranche.amortization_type === 'PIK' ? begBal * tranche.pik_rate : 0;
 
       const sched = tranche.amortization_schedule;
       const scheduledRepayment = yrIdx < sched.length
         ? Math.min(sched[yrIdx], begBal + pikAccrual)
         : 0;
+
+      // Standard LBO convention: interest accrues on average balance (beginning +
+      // post-mandatory-amort) / 2, reflecting that principal is repaid throughout the year.
+      let cashInterest: number;
+      if (tranche.amortization_type === 'PIK') {
+        cashInterest = 0;
+      } else {
+        const avgBal = (begBal + Math.max(0, begBal - scheduledRepayment)) / 2;
+        cashInterest = tranche.cash_interest ? avgBal * effRate : 0;
+      }
 
       // Commitment fee: for revolvers charge on the UNDRAWN portion;
       // for all other tranches commitment_fee represents an OID / upfront fee
@@ -89,6 +93,7 @@ export function buildDebtSchedule(
 
       totalMandatoryAmort += scheduledRepayment;
       totalCashInterest += cashInterest;
+      totalCommitmentFees += commitmentFeePaid;
 
       yearEntries.push({
         year: yr,
@@ -106,21 +111,51 @@ export function buildDebtSchedule(
       });
     }
 
-    // Second pass: cash sweep.
+    // Second pass: cash sweep — tiered by sweep_priority, pro-rata within each tier.
     // Available for sweep = post-service FCF minus the incremental floor shortfall.
-    // The floor shortfall is max(0, minCash − cashBalance): once the floor is funded
-    // from prior years, it imposes zero additional constraint on the current period.
     const minCash = state.entry.min_cash_balance || 0;
     const floorShortfall = Math.max(0, minCash - cashBalance);
-    const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - floorShortfall;
+    const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - totalCommitmentFees - floorShortfall;
     let availableForSweep = Math.max(0, ecf);
-    for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
-      const tranche = tranches[tIdx];
-      const entry = yearEntries[tIdx];
-      if (tranche.amortization_type === 'cash_sweep' && availableForSweep > 0) {
-        const maxSweep = Math.max(0, availableForSweep * tranche.cash_sweep_pct);
-        const remaining = entry.beginning_balance + entry.pik_accrual - entry.scheduled_repayment;
-        entry.sweep_repayment = Math.min(maxSweep, Math.max(0, remaining));
+
+    // Group sweep-eligible tranche indices by priority (lower = senior).
+    // Tranches without an explicit sweep_priority default to their array index,
+    // preserving backwards-compatible ordering for legacy models.
+    const sweepIndices = tranches
+      .map((t, i) => i)
+      .filter((i) => tranches[i].amortization_type === 'cash_sweep');
+
+    const priorityTiers = new Map<number, number[]>();
+    for (const idx of sweepIndices) {
+      const priority = tranches[idx].sweep_priority ?? idx;
+      const bucket = priorityTiers.get(priority) ?? [];
+      bucket.push(idx);
+      priorityTiers.set(priority, bucket);
+    }
+
+    for (const priority of [...priorityTiers.keys()].sort((a, b) => a - b)) {
+      if (availableForSweep <= 0) break;
+      const tierIndices = priorityTiers.get(priority)!;
+
+      // Max each tranche can absorb: outstanding balance capped by cash_sweep_pct
+      let tierCapacity = 0;
+      const tierMax: number[] = [];
+      for (const tIdx of tierIndices) {
+        const entry = yearEntries[tIdx];
+        const outstanding = Math.max(0, entry.beginning_balance + entry.pik_accrual - entry.scheduled_repayment);
+        const cap = outstanding * tranches[tIdx].cash_sweep_pct;
+        tierMax.push(cap);
+        tierCapacity += cap;
+      }
+
+      if (tierCapacity <= 0) continue;
+      const tierAlloc = Math.min(availableForSweep, tierCapacity);
+
+      for (let k = 0; k < tierIndices.length; k++) {
+        const tIdx = tierIndices[k];
+        const entry = yearEntries[tIdx];
+        const share = tierMax[k] / tierCapacity;
+        entry.sweep_repayment = share * tierAlloc;
         availableForSweep -= entry.sweep_repayment;
       }
     }
@@ -141,9 +176,8 @@ export function buildDebtSchedule(
       periodTotalRepayment += entry.total_repayment;
     }
 
-    // Roll forward the balance-sheet cash position.
-    // Ending cash = beginning cash + FCF − cash interest − all repayments (mandatory + sweep).
-    cashBalance = Math.max(0, cashBalance + fcfPreDebt - totalCashInterest - periodTotalRepayment);
+    // Roll forward: ending cash = beginning cash + FCF − cash interest − commitment fees − repayments.
+    cashBalance = Math.max(0, cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment);
     cashBalanceByYear.push(cashBalance);
   }
 
@@ -158,6 +192,7 @@ export function buildDebtSchedule(
   const mandatoryAmortByYear: number[] = [];
   const shieldByYear: number[] = [];
   const ecfByYear: number[] = [];
+  const commitmentFeesByYear: number[] = [];
 
   for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
     let totDebt = 0;
@@ -165,6 +200,7 @@ export function buildDebtSchedule(
     let totRepay = 0;
     let totMandatoryAmort = 0;
     let totShield = 0;
+    let totCommFees = 0;
 
     for (let t = 0; t < tranches.length; t++) {
       const entry = trancheYears[t][yrIdx];
@@ -173,6 +209,7 @@ export function buildDebtSchedule(
       totRepay += entry.total_repayment;
       totMandatoryAmort += entry.scheduled_repayment;
       totShield += entry.interest_tax_shield;
+      totCommFees += entry.commitment_fee_paid;
     }
 
     const projYr = yrIdx < projections.length ? projections[yrIdx] : null;
@@ -183,12 +220,12 @@ export function buildDebtSchedule(
     const minCash = state.entry.min_cash_balance || 0;
     const cashHeld = cashBalanceByYear[yrIdx] ?? 0;
     const aggFloorShortfall = Math.max(0, minCash - (yrIdx > 0 ? cashBalanceByYear[yrIdx - 1] : 0));
-    const ecf = fcfPre - totMandatoryAmort - totCashInt - aggFloorShortfall;
+    const ecf = fcfPre - totMandatoryAmort - totCashInt - totCommFees - aggFloorShortfall;
 
-    // DSCR: FCF pre-debt / (Cash Interest + Mandatory Scheduled Amortization)
-    // Lender standard — both interest and contractual principal repayment are obligatory.
-    // Discretionary cash sweeps are excluded from the denominator.
-    const debtService = totCashInt + totMandatoryAmort;
+    // DSCR: FCF pre-debt / (Cash Interest + Commitment Fees + Mandatory Amortization).
+    // Commitment fees are a real recurring cash cost borne before any equity — including them
+    // prevents overstating coverage when undrawn revolvers carry non-zero commitment fees.
+    const debtService = totCashInt + totCommFees + totMandatoryAmort;
 
     totalDebtByYear.push(totDebt);
     // Net debt = gross debt − actual cash on balance sheet (not a conceptual reserve).
@@ -203,6 +240,7 @@ export function buildDebtSchedule(
     mandatoryAmortByYear.push(totMandatoryAmort);
     shieldByYear.push(totShield);
     ecfByYear.push(ecf);
+    commitmentFeesByYear.push(totCommFees);
   }
 
   return {
@@ -217,6 +255,7 @@ export function buildDebtSchedule(
     total_mandatory_amort_by_year: mandatoryAmortByYear,
     total_interest_tax_shield_by_year: shieldByYear,
     ecf_by_year: ecfByYear,
+    total_commitment_fees_by_year: commitmentFeesByYear,
     cash_balance_by_year: cashBalanceByYear,
   };
 }
