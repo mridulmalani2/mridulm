@@ -18,10 +18,11 @@ function amortizingDeal(): ModelState {
   return s;
 }
 
-describe('P3-1 balance sheet closes for well-behaved structures', () => {
+describe('P3-1 balance sheet closes', () => {
+  // All canonical deals now close (bullets carry to exit rather than being repaid
+  // from phantom operating cash), plus a straight-line amortising deal.
   const closing: { name: string; build: () => ModelState }[] = [
-    { name: 'pik', build: canonicalDeals.find((d) => d.name === 'pik')!.build },
-    { name: 'cash-sweep', build: canonicalDeals.find((d) => d.name === 'cash-sweep')!.build },
+    ...canonicalDeals.map((d) => ({ name: d.name, build: d.build })),
     { name: 'amortizing', build: amortizingDeal },
   ];
   for (const deal of closing) {
@@ -36,6 +37,15 @@ describe('P3-1 balance sheet closes for well-behaved structures', () => {
     });
   }
 
+  it('a bullet tranche carries its balance to exit (not repaid from operating cash)', () => {
+    const s = fullRecalc(canonicalDeals.find((d) => d.name === 'simple-bullet')!.build());
+    const sched = s.debt_schedule.tranche_schedules[0];
+    // No scheduled repayment in the final year — the balance is outstanding at exit.
+    expect(sched[sched.length - 1].ending_balance).toBeGreaterThan(70);
+    expect(s.returns.exit_net_debt).toBeGreaterThan(0); // bullet nets against exit proceeds
+    expect(s.balance_sheet.closes).toBe(true);
+  });
+
   it('closes for a debt-funded add-on (acquired goodwill offsets the new debt)', () => {
     const st = canonicalDeals.find((d) => d.name === 'cash-sweep')!.build();
     st.add_on_acquisitions = [debtFundedAddOn()];
@@ -47,22 +57,11 @@ describe('P3-1 balance sheet closes for well-behaved structures', () => {
     expect(gwExit).toBeGreaterThan(gwY1);
   });
 
-  it('closes for a (closing) deal with an interim distribution', () => {
+  it('closes for a deal with an interim distribution', () => {
     const st = canonicalDeals.find((d) => d.name === 'pik')!.build();
     st.exit.interim_distributions = [0, 3, 0, 0, 0];
     const s = fullRecalc(st);
     expect(s.balance_sheet.closes).toBe(true);
-  });
-});
-
-describe('P3-1 integrity check flags an impossible cash position (discovered finding)', () => {
-  it('a bullet repaid from operating cash it does not have does NOT close', () => {
-    // The auto-built bullet schedule forces a final-year principal repayment from
-    // operating cash; when cash is insufficient it floors at zero (phantom cash).
-    // The three-statement check correctly surfaces this rather than hiding it.
-    const s = fullRecalc(canonicalDeals.find((d) => d.name === 'simple-bullet')!.build());
-    expect(s.balance_sheet.closes).toBe(false);
-    expect(s.balance_sheet.max_abs_check).toBeGreaterThan(0.01);
   });
 });
 

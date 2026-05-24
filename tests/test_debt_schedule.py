@@ -21,8 +21,10 @@ def _make_state_with_tranche(tranche: DebtTranche, hp: int = 5) -> ModelState:
 
 
 class TestBulletRepayment:
-    def test_balance_flat_then_repaid(self):
-        """Bullet: balance flat years 1-4, fully repaid year 5."""
+    def test_balance_carries_to_exit(self):
+        """Bullet: balance stays flat at par through the hold and is repaid at exit
+        from sale proceeds (captured in exit net debt), NOT amortised from operating
+        cash in the final modelled year."""
         tranche = DebtTranche(
             name="Bullet",
             principal=80.0,
@@ -35,12 +37,10 @@ class TestBulletRepayment:
         ds = build_debt_schedule(state, proj)
 
         sched = ds.tranche_schedules[0]
-        # Years 1-4: ending balance = 80
-        for yr in sched[:4]:
+        # Balance flat at par every year, including the final year — no scheduled repayment.
+        for yr in sched:
             assert yr.ending_balance == pytest.approx(80.0, abs=0.01)
-        # Year 5: fully repaid
-        assert sched[4].ending_balance == pytest.approx(0.0, abs=0.01)
-        assert sched[4].total_repayment == pytest.approx(80.0, abs=0.01)
+            assert yr.scheduled_repayment == pytest.approx(0.0, abs=0.01)
 
 
 class TestStraightLine:

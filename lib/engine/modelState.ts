@@ -101,13 +101,9 @@ export function ensureListLengths(state: ModelState): void {
       const annual = tranche.principal / hp;
       tranche.amortization_schedule = Array(hp).fill(annual);
     }
-    if (
-      tranche.amortization_type === 'bullet' &&
-      tranche.amortization_schedule.reduce((a, b) => a + b, 0) === 0 &&
-      tranche.principal > 0
-    ) {
-      tranche.amortization_schedule = [...Array(hp - 1).fill(0), tranche.principal];
-    }
+    // Bullets carry their balance to exit (repaid from sale proceeds), so the
+    // schedule stays all-zeros — the principal is captured in exit net debt, not
+    // amortised from operating cash in the final modelled year.
   }
 }
 

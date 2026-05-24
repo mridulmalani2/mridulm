@@ -353,13 +353,9 @@ class ModelState(BaseModel):
             ):
                 annual = tranche.principal / hp
                 tranche.amortization_schedule = [annual] * hp
-            # Bullet: all principal in final year
-            if (
-                tranche.amortization_type == "bullet"
-                and sum(tranche.amortization_schedule) == 0
-                and tranche.principal > 0
-            ):
-                tranche.amortization_schedule = [0.0] * (hp - 1) + [tranche.principal]
+            # Bullets carry their balance to exit (repaid from sale proceeds): the
+            # schedule stays all-zeros so the principal is captured in exit net debt,
+            # not amortised from operating cash in the final modelled year.
 
     def _build_margin_trajectory(self, hp: int) -> list[float]:
         base = self.margins.base_ebitda_margin
