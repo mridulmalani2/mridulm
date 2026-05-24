@@ -9,14 +9,19 @@ import { deriveEntryFields, ensureListLengths } from './modelState';
 import { buildProjections, updateProjectionsWithDebt } from './projections';
 import { buildDebtSchedule } from './debtSchedule';
 import { calculateReturns } from './returns';
+import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 
 function deepClone(state: ModelState): ModelState {
   return JSON.parse(JSON.stringify(state));
 }
 
 function quickCalc(state: ModelState): { irr: number | null; moic: number } {
+  stripSyntheticAddOnTranches(state);
   deriveEntryFields(state);
   ensureListLengths(state);
+  // Inject add-on revenue + acquisition debt so fragility is a true sensitivity on
+  // the base case (which includes add-ons), not on a lower-revenue stripped model.
+  const { originalTranches } = injectAddOns(state);
 
   const MAX_ITER = 10;
   const TOLERANCE = 0.01;
@@ -53,6 +58,7 @@ function quickCalc(state: ModelState): { irr: number | null; moic: number } {
   }
 
   const ret = calculateReturns(state, updatedProj, ds);
+  state.debt_tranches = originalTranches;
   return { irr: ret.irr, moic: ret.moic };
 }
 

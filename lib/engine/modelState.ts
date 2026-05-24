@@ -286,8 +286,8 @@ export function createDefaultModelState(): ModelState {
     },
     credit_covenants: {
       leverage_covenant: 6.0,
-      dscr_covenant: 1.15,
-      fccr_covenant: 1.10,
+      dscr_covenant: 1.25,
+      fccr_covenant: 1.15,
     },
     credit_analysis: {
       metrics_by_year: [],
@@ -302,7 +302,7 @@ export function createDefaultModelState(): ModelState {
       refinancing_risk: false,
       refinancing_risk_detail: '',
       recovery_waterfall: [],
-      credit_rating_estimate: '',
+      leverage_assessment: '',
     },
     ebitda_bridge: {
       entry_ebitda: 0,

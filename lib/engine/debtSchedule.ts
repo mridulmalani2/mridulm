@@ -34,7 +34,10 @@ export function buildDebtSchedule(
 
   if (!tranches.length) return empty;
 
-  const balances = tranches.map((t) => t.principal);
+  // Tranches drawn at entry start at full principal; tranches with a later
+  // draw_year_index (e.g. add-on acquisition debt) start at zero and are drawn
+  // at the beginning of their draw year inside the loop below.
+  const balances = tranches.map((t) => ((t.draw_year_index ?? 0) <= 0 ? t.principal : 0));
   const trancheYears: DebtScheduleYear[][] = tranches.map(() => []);
 
   // Cash balance roll-forward: tracks actual cash on the balance sheet each year.
@@ -56,6 +59,12 @@ export function buildDebtSchedule(
     // First pass: interest and mandatory amortization
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       const tranche = tranches[tIdx];
+
+      // Draw mid-hold debt (add-on acquisition financing) at the start of its draw year.
+      const drawYear = tranche.draw_year_index ?? 0;
+      if (drawYear > 0 && drawYear === yrIdx) {
+        balances[tIdx] = tranche.principal;
+      }
       const begBal = balances[tIdx];
 
       let effRate: number;

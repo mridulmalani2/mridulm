@@ -10,7 +10,7 @@ import { computeSourcesAndUses } from './sourcesUses';
 import { computeCreditAnalysis } from './creditAnalysis';
 import { computeEBITDABridge } from './ebitdaBridge';
 import { computeFragility } from './fragility';
-import { computeAddOnImpact } from './addOns';
+import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 
 // Increase iterations to give PIK-heavy structures enough room to converge.
 // PIK interest compounds onto the principal each period, so the interest/tax
@@ -26,8 +26,11 @@ export function fullRecalc(state: ModelState): ModelState {
   if (!state.exit.interim_distributions) state.exit.interim_distributions = [];
   if (state.exit.exit_ev_override === undefined) state.exit.exit_ev_override = null;
   if (!state.credit_covenants) {
-    state.credit_covenants = { leverage_covenant: 6.0, dscr_covenant: 1.15, fccr_covenant: 1.10 };
+    state.credit_covenants = { leverage_covenant: 6.0, dscr_covenant: 1.25, fccr_covenant: 1.15 };
   }
+  // Defensive: clear any synthetic add-on tranches left over from a prior pass so
+  // entry leverage / equity (derived below) are computed on real entry debt only.
+  stripSyntheticAddOnTranches(state);
   for (const t of state.debt_tranches) {
     if (!t.tranche_type) {
       t.tranche_type = 'senior';
@@ -40,11 +43,12 @@ export function fullRecalc(state: ModelState): ModelState {
   // Sources & Uses (computed from entry assumptions)
   state.sources_and_uses = computeSourcesAndUses(state);
 
-  // Add-on acquisition impact: compute per-year revenue/EBITDA contributions and
-  // inject them into acquisition_revenue so projections uses the module's output
-  // (with growth and synergies) rather than the raw user-entered array.
-  const addOnImpact = computeAddOnImpact(state);
-  state.revenue.acquisition_revenue = addOnImpact.revenue_by_year;
+  // Add-on acquisitions: inject bolt-on revenue into acquisition_revenue AND
+  // transiently append synthetic acquisition-debt tranches so the debt schedule,
+  // leverage, coverage, interest and sweep all reflect the financing cost. The
+  // original tranche list is restored after credit analysis (below) so synthetic
+  // tranches never leak into the input panel or persisted state.
+  const { impact: addOnImpact, originalTranches } = injectAddOns(state);
 
   // ── Iterative convergence loop: projections → debt → update ──
   const hp = state.exit.holding_period;
@@ -104,7 +108,12 @@ export function fullRecalc(state: ModelState): ModelState {
   // EBITDA bridge
   state.ebitda_bridge = computeEBITDABridge(state, updatedProj, addOnImpact);
 
-  // Fragility analysis (stress testing)
+  // Restore the real entry tranche list now that all augmented-schedule consumers
+  // (returns, value drivers, reality check, credit analysis) have run. Synthetic
+  // add-on tranches live only inside the computed debt_schedule from here on.
+  state.debt_tranches = originalTranches;
+
+  // Fragility analysis (stress testing) — clones state and re-applies add-ons itself.
   state.fragility = computeFragility(state);
 
   state.projections = { years: updatedProj };

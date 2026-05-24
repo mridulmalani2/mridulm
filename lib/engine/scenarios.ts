@@ -5,10 +5,15 @@ import { deriveEntryFields, ensureListLengths } from './modelState';
 import { buildProjections, updateProjectionsWithDebt } from './projections';
 import { buildDebtSchedule } from './debtSchedule';
 import { calculateReturns } from './returns';
+import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 
 function runFullModel(state: ModelState) {
+  stripSyntheticAddOnTranches(state);
   deriveEntryFields(state);
   ensureListLengths(state);
+  // Inject add-on revenue + synthetic acquisition-debt tranches so scenario and
+  // sensitivity outputs use the same revenue/leverage base as the base case.
+  const { originalTranches } = injectAddOns(state);
 
   const MAX_ITER = 10;
   const TOLERANCE = 0.01;
@@ -50,6 +55,8 @@ function runFullModel(state: ModelState) {
   const ret = calculateReturns(state, updatedProj, ds);
   ret.convergence_iterations = iterations;
   ret.convergence_delta = convergenceDelta;
+  // Restore real entry tranches so callers / subsequent clones never see synthetics.
+  state.debt_tranches = originalTranches;
   return { returns: ret, projections: updatedProj, debtSchedule: ds };
 }
 
@@ -62,9 +69,28 @@ function deepClone(state: ModelState): ModelState {
   return JSON.parse(JSON.stringify(state));
 }
 
+/**
+ * Resize the capital structure to a target total debt by adjusting ONLY the most
+ * junior tranche. Senior commitments are fixed at close, so all stress/sizing
+ * deltas flow to the junior tranche — scaling every tranche pro-rata produces
+ * capital structures no lender would agree to (the BUG-08 class of error).
+ * Shared by the bear scenario and the leverage sensitivity table.
+ */
+export function resizeJuniorToDebt(state: ModelState, targetDebt: number): void {
+  if (!state.debt_tranches.length) return;
+  const total = state.debt_tranches.reduce((s, t) => s + t.principal, 0);
+  const delta = targetDebt - total;
+  const juniorIdx = state.debt_tranches.length - 1;
+  state.debt_tranches[juniorIdx].principal = Math.max(0, state.debt_tranches[juniorIdx].principal + delta);
+  state.debt_tranches[juniorIdx].amortization_schedule = [];
+}
+
 // ── Scenario Generation ─────────────────────────────────────────────────
 
 export function generateScenarios(state: ModelState): ScenarioSet[] {
+  // Strip synthetic add-on tranches before any cloning/resizing so bear debt-sizing
+  // targets a real junior tranche; runFullModel re-injects add-ons per scenario.
+  stripSyntheticAddOnTranches(state);
   const hp = state.exit.holding_period;
   const baseGrowth = [...state.revenue.growth_rates];
   const baseExitMult = state.exit.exit_ebitda_multiple;
@@ -101,15 +127,8 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   const bearFwdEbitda = bearY1Revenue * bearY1Margin;
   const bearDebt = bearLeverage * bearFwdEbitda;
   // BUG-08 fix: preserve senior tranches; only the most junior tranche absorbs the
-  // debt-sizing delta. Scaling all tranches pro-rata doesn't reflect how capital
-  // structures are actually stressed (senior commitments are fixed at close).
-  const oldTotal = bear.debt_tranches.reduce((s, t) => s + t.principal, 0);
-  const bearDelta = bearDebt - oldTotal;
-  if (bear.debt_tranches.length > 0) {
-    const juniorIdx = bear.debt_tranches.length - 1;
-    bear.debt_tranches[juniorIdx].principal = Math.max(0, bear.debt_tranches[juniorIdx].principal + bearDelta);
-    bear.debt_tranches[juniorIdx].amortization_schedule = [];
-  }
+  // debt-sizing delta (shared helper — same logic as the leverage sensitivity table).
+  resizeJuniorToDebt(bear, bearDebt);
   ensureListLengths(bear);
   deriveEntryFields(bear);
   const { irr: irrBear, moic: moicBear, exitEquity: eqBear } = quickIrrMoic(bear);
@@ -221,6 +240,9 @@ function buildTable(
 }
 
 export function generateSensitivityTable(state: ModelState, tableId: number): SensitivityTable {
+  // Strip synthetic add-on tranches so the leverage-sensitivity resize (case 4)
+  // and clones operate on the real entry capital structure.
+  stripSyntheticAddOnTranches(state);
   // Use CAGR (geometric mean) as the sensitivity center — arithmetic mean overstates
   // true compound growth when rates vary across the hold period.
   const baseGrowthAvg = (() => {
@@ -266,18 +288,10 @@ export function generateSensitivityTable(state: ModelState, tableId: number): Se
     case 4:
       return buildTable(state, 4, 'leverage', 'exit_multiple', leverageRange, exitMultRange,
         (s, leverage, exitMult) => {
+          // Junior-only resize (mirrors the BUG-08 bear-scenario fix): senior commitments
+          // are fixed at close, so the most-junior tranche absorbs the full leverage delta.
           const ebitdaVal = s.revenue.base_revenue * s.margins.base_ebitda_margin;
-          const newDebt = leverage * ebitdaVal;
-          const total = s.debt_tranches.reduce((sum, tr) => sum + tr.principal, 0);
-          if (total > 0 && s.debt_tranches.length) {
-            const scale = newDebt / total;
-            for (const tr of s.debt_tranches) {
-              tr.principal *= scale;
-              tr.amortization_schedule = [];
-            }
-          } else if (s.debt_tranches.length) {
-            s.debt_tranches[0].principal = newDebt;
-          }
+          resizeJuniorToDebt(s, leverage * ebitdaVal);
           s.exit.exit_ebitda_multiple = Math.max(exitMult, 1);
         });
     default:

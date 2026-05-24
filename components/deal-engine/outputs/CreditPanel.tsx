@@ -9,6 +9,9 @@ const CreditPanel: React.FC = () => {
   const ca = useDealEngineStore((s) => s.modelState?.credit_analysis);
   const cov = useDealEngineStore((s) => s.modelState?.credit_covenants);
   const currency = useDealEngineStore((s) => s.modelState?.currency || 'GBP');
+  // When the debt/interest loop didn't converge, credit metrics are computed on an
+  // unconverged schedule — degrade them visually rather than presenting as reliable.
+  const degraded = useDealEngineStore((s) => s.modelState?.returns?.debt_convergence_failed ?? false);
 
   if (!ca || ca.metrics_by_year.length === 0) return null;
 
@@ -41,8 +44,8 @@ const CreditPanel: React.FC = () => {
     color: 'rgba(17,17,17,0.6)',
   };
 
-  const ratingColor = ca.credit_rating_estimate.startsWith('BBB') ? '#15803d'
-    : ca.credit_rating_estimate.startsWith('BB') ? '#b45309'
+  const assessmentColor = (a: string) => (a === 'Conservative' || a === 'Unlevered') ? '#15803d'
+    : (a === 'Moderate' || a === 'Leveraged') ? '#b45309'
     : '#b91c1c';
 
   // Helper: colour a headroom value (positive = OK, negative = breach)
@@ -55,8 +58,12 @@ const CreditPanel: React.FC = () => {
           Credit Analysis
         </span>
         <div className="flex items-center gap-3">
-          <span className="text-[10px]" style={{ color: ratingColor, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
-            Est. {ca.credit_rating_estimate}
+          <span
+            className="text-[10px]"
+            title="Indicative leverage tier based on entry leverage only — not a credit rating. Excludes coverage, industry, business quality and jurisdiction."
+            style={{ color: assessmentColor(ca.leverage_assessment), fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}
+          >
+            Lev: {ca.leverage_assessment}
           </span>
           {hasInsolvencyRisk && (
             <span className="text-[10px] px-1.5 py-0.5" style={{ background: '#fff5f5', color: '#b91c1c', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(185,28,28,0.2)', fontWeight: 700 }}>
@@ -79,8 +86,14 @@ const CreditPanel: React.FC = () => {
         </div>
       )}
 
+      {degraded && (
+        <div className="mb-3 p-2 text-[10px]" style={{ background: '#fff5f5', border: '1px solid rgba(185,28,28,0.3)', fontFamily: "'JetBrains Mono', monospace", color: '#b91c1c', fontWeight: 600 }}>
+          ⚠ UNCONVERGED: Credit metrics below are computed on an unconverged debt schedule — indicative only.
+        </div>
+      )}
+
       {/* Credit metrics table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" style={{ opacity: degraded ? 0.5 : 1 }}>
         <table className="w-full" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(17,17,17,0.1)' }}>

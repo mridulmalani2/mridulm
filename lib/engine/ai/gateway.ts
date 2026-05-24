@@ -235,8 +235,8 @@ export function buildModelContext(state: ModelState): string {
   if (ds.leverage_ratio_by_year.length) {
     lines.push(`CREDIT: Leverage Y1 ${ds.leverage_ratio_by_year[0]?.toFixed(1)}x → Y${hp} ${ds.leverage_ratio_by_year[hp - 1]?.toFixed(1)}x | ICR Y1 ${ds.interest_coverage_by_year[0]?.toFixed(1)}x`);
   }
-  if (ca.credit_rating_estimate) {
-    lines.push(`CREDIT RATING: ${ca.credit_rating_estimate} | Refi Risk: ${ca.refinancing_risk ? 'YES' : 'NO'}`);
+  if (ca.leverage_assessment) {
+    lines.push(`LEVERAGE TIER: ${ca.leverage_assessment} (indicative, entry leverage only) | Refi Risk: ${ca.refinancing_risk ? 'YES' : 'NO'}`);
   }
 
   // Fragility

@@ -17,6 +17,10 @@ export interface DebtTranche {
   cash_sweep_pct: number;
   /** Lower number = higher sweep priority. Tranches in the same tier receive pro-rata allocation. Defaults to array index when omitted. */
   sweep_priority?: number;
+  /** 0-indexed hold year in which the tranche is drawn. Omitted/0 = drawn at entry. Used for add-on acquisition debt funded mid-hold. */
+  draw_year_index?: number;
+  /** Internal flag: tranche synthesised from add-on acquisition debt. Stripped/rebuilt on every recalc — never persisted or user-editable. */
+  _synthetic_addon?: boolean;
 }
 
 export interface FeeStructure {
@@ -52,6 +56,8 @@ export interface MarginAssumptions {
   growth_capex: number[];
   nwc_pct_revenue: number;
   nwc_movement_method: 'pct_change' | 'explicit';
+  /** Per-year NWC movements (£m) used when nwc_movement_method === 'explicit'. Falls back to pct_change when absent. */
+  nwc_explicit_by_year?: number[];
 }
 
 export interface TaxAssumptions {
@@ -419,15 +425,22 @@ export interface CreditAnalysis {
   refinancing_risk: boolean;
   refinancing_risk_detail: string;
   recovery_waterfall: { tranche: string; recovery_pct: number }[];
-  credit_rating_estimate: string;
+  /** Indicative leverage-tier characterisation (entry leverage only). NOT a credit rating —
+   *  does not account for coverage, industry, business quality, or jurisdiction. */
+  leverage_assessment: string;
 }
 
 // ── Credit Covenants ─────────────────────────────────────────────────────
 
 export interface CreditCovenants {
-  leverage_covenant: number;   // Maximum net leverage (e.g., 6.0x)
-  dscr_covenant: number;       // Minimum DSCR (e.g., 1.15x)
-  fccr_covenant: number;       // Minimum FCCR (e.g., 1.10x)
+  leverage_covenant: number;   // Maximum net leverage (e.g., 6.0x) — fallback scalar
+  dscr_covenant: number;       // Minimum DSCR (e.g., 1.25x) — fallback scalar
+  fccr_covenant: number;       // Minimum FCCR (e.g., 1.15x) — fallback scalar
+  // Optional per-year step schedules. When present, override the scalar for that year.
+  // Real credit agreements tighten covenants over the hold (e.g., 6.5x → 5.0x).
+  leverage_covenant_by_year?: number[];
+  dscr_covenant_by_year?: number[];
+  fccr_covenant_by_year?: number[];
 }
 
 // ── Revenue Segments ─────────────────────────────────────────────────────

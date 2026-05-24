@@ -12,6 +12,10 @@ const ReturnsSummary: React.FC = () => {
 
   if (!ms) return null;
   const ret = ms.returns;
+  // When the debt/interest loop didn't converge the headline numbers are unreliable
+  // (systematically favourable for PIK-heavy structures) — degrade them visually so
+  // they can't be read as trustworthy, in addition to the warning banner below.
+  const degraded = ret.debt_convergence_failed;
   const currency = ms.currency ?? 'GBP';
   const displayIrr = showUnlevered ? ret.irr_unlevered : showGross ? ret.irr_gross : ret.irr;
   const irrField = showUnlevered ? 'returns.irr' : showGross ? 'returns.irr' : 'returns.irr';
@@ -58,22 +62,22 @@ const ReturnsSummary: React.FC = () => {
       )}
 
       {/* Hero IRR */}
-      <div className="mb-5">
+      <div className="mb-5" style={{ opacity: degraded ? 0.5 : 1 }}>
         <span
           {...attachTraceTarget(irrField, traceModeActive, onOpenCard)}
           className={`font-playfair text-5xl font-bold mb-1 block ${traceModeActive ? 'traceable traceable--active' : 'traceable'}`}
-          style={{ color: irrColor(displayIrr) }}
+          style={{ color: degraded ? 'rgba(17,17,17,0.4)' : irrColor(displayIrr), textDecoration: degraded ? 'line-through' : 'none' }}
         >
           {displayIrr != null ? fmtPct(displayIrr) : 'N/C'}
         </span>
         <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
           {showUnlevered ? 'Unlevered' : showGross ? 'Gross' : 'Equity'} IRR
-          {ret.irr_convergence_failed && ' (non-convergent)'}
+          {degraded ? ' ⚠ UNCONVERGED' : ret.irr_convergence_failed && ' (non-convergent)'}
         </div>
       </div>
 
       {/* Secondary metrics */}
-      <div className="grid grid-cols-3 gap-4" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 16 }}>
+      <div className="grid grid-cols-3 gap-4" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 16, opacity: degraded ? 0.5 : 1 }}>
         <div>
           <span
             {...attachTraceTarget('returns.moic', traceModeActive, onOpenCard)}

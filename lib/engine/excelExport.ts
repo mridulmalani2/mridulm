@@ -1958,7 +1958,7 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
   if (ca.metrics_by_year.length) {
     row = writeSectionHeader(ws, row, 'CREDIT ANALYSIS', 4);
 
-    row = writeKvRow(ws, row, 'Estimated Credit Rating', ca.credit_rating_estimate);
+    row = writeKvRow(ws, row, 'Leverage Assessment (entry leverage only)', ca.leverage_assessment);
     row = writeKvRow(ws, row, `Max Debt Capacity @ 4.0x (${ccy}m)`, ca.max_debt_capacity_at_4x, { fmt: FMT_CCY, alt: true });
     row = writeKvRow(ws, row, `Max Debt Capacity @ 5.0x (${ccy}m)`, ca.max_debt_capacity_at_5x, { fmt: FMT_CCY });
     row = writeKvRow(ws, row, `Max Debt Capacity @ 6.0x (${ccy}m)`, ca.max_debt_capacity_at_6x, { fmt: FMT_CCY, alt: true });

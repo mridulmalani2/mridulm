@@ -78,6 +78,10 @@ class MarginAssumptions(BaseModel):
     growth_capex: list[float] = Field(default_factory=list)
     nwc_pct_revenue: float = Field(default=0.10, ge=0, le=0.50)
     nwc_movement_method: Literal["pct_change", "explicit"] = "pct_change"
+    nwc_explicit_by_year: list[float] = Field(
+        default_factory=list,
+        description="Per-year NWC movements (£m) used when nwc_movement_method == 'explicit'. Falls back to pct_change when empty.",
+    )
 
 
 class TaxAssumptions(BaseModel):
