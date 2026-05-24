@@ -15,6 +15,8 @@ export interface DebtTranche {
   commitment_fee: number;
   floor: number;
   cash_sweep_pct: number;
+  /** Lower number = higher sweep priority. Tranches in the same tier receive pro-rata allocation. Defaults to array index when omitted. */
+  sweep_priority?: number;
 }
 
 export interface FeeStructure {
@@ -69,7 +71,6 @@ export interface EntryAssumptions {
   total_debt_raised: number;
   leverage_ratio: number;
   min_cash_balance: number;
-  currency: 'INR' | 'EUR' | 'USD' | 'GBP' | 'JPY';
 }
 
 export interface ExitAssumptions {
@@ -139,7 +140,8 @@ export interface DebtScheduleResult {
   total_repayment_by_year: number[];
   total_mandatory_amort_by_year: number[];   // Scheduled repayments only (excludes discretionary sweeps)
   total_interest_tax_shield_by_year: number[];
-  ecf_by_year: number[];                     // Excess Cash Flow = FCF - mandatory amort - cash interest
+  ecf_by_year: number[];                     // Excess Cash Flow = FCF - mandatory amort - cash interest - commitment fees
+  total_commitment_fees_by_year: number[];  // Sum of all commitment fees paid across tranches each year
   cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service
 }
 
@@ -396,7 +398,7 @@ export interface CreditMetricsYear {
   fccr: number;                    // (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Scheduled Amort)
   interest_coverage: number;       // EBITDA / Cash Interest
   dscr: number;                    // FCF pre-debt / (Cash Interest + Mandatory Scheduled Amort)
-  leverage: number;                // Net Debt / EBITDA
+  leverage: number;                // Gross Debt / EBITDA
   senior_leverage: number;         // Senior Debt / EBITDA
   total_debt: number;
   cumulative_debt_paydown: number;

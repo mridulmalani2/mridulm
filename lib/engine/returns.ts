@@ -200,11 +200,10 @@ export function calculateReturns(
 
   const exitEquityPreMip = exitEv - exitNetDebt - exitFee;
 
-  // MIP hurdle check: use Total Return MOIC = (Exit Equity pre-MIP + All Distributions) / Entry Equity.
-  // Using gross MOIC on exit proceeds alone would incorrectly fail to trigger the catch-up when
-  // management has hit the target return via interim distributions during the hold.
+  // MIP hurdle check: gross pre-fee MOIC = exit equity (pre-MIP, pre-exit-fee) / entry equity.
+  // Interim distributions are excluded from the hurdle — matching Python backend convention.
   const totalReturnMoic = entryEquity > 0
-    ? (exitEquityPreMip + totalDistributions) / entryEquity
+    ? exitEquityPreMip / entryEquity
     : 0;
 
   const mipPayout = totalReturnMoic >= state.mip.hurdle_moic
@@ -263,9 +262,14 @@ export function calculateReturns(
   }
   const irrLevered = entryEquityLevered > 0 ? solveIrrAuto(leveredCfs, times) : null;
 
-  // Gross IRR
-  const exitEquityGross = exitEv - exitNetDebt - exitFee;
-  const grossCfs: number[] = [-entryEquity];
+  // Gross IRR: sponsor equity gross of ALL advisory/exit fees (entry and exit).
+  // Entry equity excludes the entry advisory fee (treated as target-borne); exit
+  // equity excludes the exit fee. Transaction costs and financing fees remain in
+  // the cost base as they are unavoidable deal costs borne by the sponsor.
+  const entryEquityGross = state.entry.enterprise_value + state.fees.transaction_costs + financingFees
+    - state.entry.total_debt_raised;
+  const exitEquityGross = exitEv - exitNetDebt; // no exit fee
+  const grossCfs: number[] = [-entryEquityGross];
   for (let i = 0; i < hp; i++) {
     if (i === hp - 1) {
       grossCfs.push(exitEquityGross + distributions[i]);
@@ -273,7 +277,7 @@ export function calculateReturns(
       grossCfs.push(distributions[i]);
     }
   }
-  const irrGross = entryEquity > 0 ? solveIrrAuto(grossCfs, times) : null;
+  const irrGross = entryEquityGross > 0 ? solveIrrAuto(grossCfs, times) : null;
 
   // Unlevered IRR
   const entryCostUnlev = state.entry.enterprise_value + state.fees.transaction_costs;
@@ -373,9 +377,10 @@ export function decomposeValueDrivers(
   const exitFee = state.fees.exit_fee_pct * exitEv;
   const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout;
 
-  const totalDistributions = returns.total_distributions ?? 0;
-  const totalGain = exitEquity + totalDistributions - entryEquity;
-  const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag + totalDistributions;
+  // Bridge decomposes exit_equity − entry_equity only. Distributions are LP cash flows,
+  // not value creation — they are already captured via delta_debt (lower exit cash reduces net debt).
+  const totalGain = exitEquity - entryEquity;
+  const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag;
   const reconDelta = Math.abs(computedGain - totalGain);
 
   const pct = (x: number) => (totalGain !== 0 ? (x / totalGain) * 100 : 0);
