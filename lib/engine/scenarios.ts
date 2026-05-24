@@ -10,7 +10,7 @@ function runFullModel(state: ModelState) {
   deriveEntryFields(state);
   ensureListLengths(state);
 
-  const MAX_ITER = 5;
+  const MAX_ITER = 10;
   const TOLERANCE = 0.01;
   const hp = state.exit.holding_period;
 
@@ -92,15 +92,23 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   bear.margins.target_ebitda_margin = state.margins.base_ebitda_margin + baseMarginExpansion * 0.5;
   bear.margins.margin_by_year = [];
   const bearLeverage = Math.max(state.entry.leverage_ratio - 0.5, 0);
-  const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-  const bearDebt = bearLeverage * ebitda;
+  // BUG-09 fix: size bear debt against forward Year-1 EBITDA (bear scenario's own revenue
+  // and margin), not base EBITDA. Base EBITDA overstates debt capacity when bear
+  // assumptions imply lower revenue or margins.
+  const bearY1Revenue = state.revenue.base_revenue * (1 + bear.revenue.growth_rates[0]);
+  const bearY1Margin = state.margins.base_ebitda_margin
+    + (1 / hp) * (bear.margins.target_ebitda_margin - state.margins.base_ebitda_margin);
+  const bearFwdEbitda = bearY1Revenue * bearY1Margin;
+  const bearDebt = bearLeverage * bearFwdEbitda;
+  // BUG-08 fix: preserve senior tranches; only the most junior tranche absorbs the
+  // debt-sizing delta. Scaling all tranches pro-rata doesn't reflect how capital
+  // structures are actually stressed (senior commitments are fixed at close).
   const oldTotal = bear.debt_tranches.reduce((s, t) => s + t.principal, 0);
-  if (oldTotal > 0) {
-    const scale = bearDebt / oldTotal;
-    for (const t of bear.debt_tranches) {
-      t.principal *= scale;
-      t.amortization_schedule = [];
-    }
+  const bearDelta = bearDebt - oldTotal;
+  if (bear.debt_tranches.length > 0) {
+    const juniorIdx = bear.debt_tranches.length - 1;
+    bear.debt_tranches[juniorIdx].principal = Math.max(0, bear.debt_tranches[juniorIdx].principal + bearDelta);
+    bear.debt_tranches[juniorIdx].amortization_schedule = [];
   }
   ensureListLengths(bear);
   deriveEntryFields(bear);
