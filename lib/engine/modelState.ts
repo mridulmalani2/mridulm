@@ -152,7 +152,6 @@ export function createDefaultModelState(): ModelState {
       total_debt_raised: 0,
       leverage_ratio: 4,
       min_cash_balance: 0,
-      currency: 'GBP',
     },
     debt_tranches: [],
     fees: {
@@ -195,6 +194,7 @@ export function createDefaultModelState(): ModelState {
       total_mandatory_amort_by_year: [],
       total_interest_tax_shield_by_year: [],
       ecf_by_year: [],
+      total_commitment_fees_by_year: [],
       cash_balance_by_year: [],
     },
     returns: {
