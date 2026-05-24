@@ -122,7 +122,7 @@ export function buildDebtSchedule(
     // Tranches without an explicit sweep_priority default to their array index,
     // preserving backwards-compatible ordering for legacy models.
     const sweepIndices = tranches
-      .map((t, i) => i)
+      .map((_t, i) => i)
       .filter((i) => tranches[i].amortization_type === 'cash_sweep');
 
     const priorityTiers = new Map<number, number[]>();
