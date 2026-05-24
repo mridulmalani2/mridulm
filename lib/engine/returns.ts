@@ -178,8 +178,10 @@ export function calculateReturns(
   const exitEv = (state.exit.exit_ev_override != null && state.exit.exit_ev_override > 0)
     ? state.exit.exit_ev_override
     : exitEbitda * state.exit.exit_ebitda_multiple;
-  const exitNetDebt = debtSchedule.total_debt_by_year.length
-    ? debtSchedule.total_debt_by_year[debtSchedule.total_debt_by_year.length - 1]
+  // Use net_debt_by_year (gross debt − actual cash on hand) so that accumulated
+  // cash reduces exit proceeds correctly, matching the Python backend convention.
+  const exitNetDebt = debtSchedule.net_debt_by_year.length
+    ? debtSchedule.net_debt_by_year[debtSchedule.net_debt_by_year.length - 1]
     : 0;
   const exitFee = state.fees.exit_fee_pct * exitEv;
 
@@ -230,7 +232,7 @@ export function calculateReturns(
     } else if (yrIdx < projections.length) {
       const yr = projections[yrIdx];
       const estEv = yr.ebitda_adj * state.exit.exit_ebitda_multiple;
-      const estDebt = yrIdx < debtSchedule.total_debt_by_year.length ? debtSchedule.total_debt_by_year[yrIdx] : 0;
+      const estDebt = yrIdx < debtSchedule.net_debt_by_year.length ? debtSchedule.net_debt_by_year[yrIdx] : 0;
       rvpiByYear.push(entryEquity > 0 ? Math.max(0, estEv - estDebt) / entryEquity : 0);
     } else {
       rvpiByYear.push(0);

@@ -28,12 +28,19 @@ export function buildDebtSchedule(
     total_mandatory_amort_by_year: [],
     total_interest_tax_shield_by_year: [],
     ecf_by_year: [],
+    cash_balance_by_year: [],
   };
 
   if (!tranches.length) return empty;
 
   const balances = tranches.map((t) => t.principal);
   const trancheYears: DebtScheduleYear[][] = tranches.map(() => []);
+
+  // Cash balance roll-forward: tracks actual cash on the balance sheet each year.
+  // min_cash is a floor, not an annual rebuild cost — only the incremental gap
+  // between the floor and current balance constrains sweep each period.
+  let cashBalance = 0;
+  const cashBalanceByYear: number[] = [];
 
   for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
     const yr = yrIdx + 1;
@@ -99,12 +106,13 @@ export function buildDebtSchedule(
       });
     }
 
-    // Second pass: cash sweep (respect minimum cash balance)
-    // ECF = FCF pre-debt minus mandatory obligations (interest + scheduled principal).
-    // A negative ECF signals that the company cannot meet its debt-service obligations
-    // from operating cash flow alone — a potential covenant breach / default event.
+    // Second pass: cash sweep.
+    // Available for sweep = post-service FCF minus the incremental floor shortfall.
+    // The floor shortfall is max(0, minCash − cashBalance): once the floor is funded
+    // from prior years, it imposes zero additional constraint on the current period.
     const minCash = state.entry.min_cash_balance || 0;
-    const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - minCash;
+    const floorShortfall = Math.max(0, minCash - cashBalance);
+    const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - floorShortfall;
     let availableForSweep = Math.max(0, ecf);
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       const tranche = tranches[tIdx];
@@ -118,6 +126,7 @@ export function buildDebtSchedule(
     }
 
     // Third pass: finalize
+    let periodTotalRepayment = 0;
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       const entry = yearEntries[tIdx];
       entry.total_repayment = entry.scheduled_repayment + entry.sweep_repayment;
@@ -129,7 +138,13 @@ export function buildDebtSchedule(
       entry.interest_tax_shield = shield ? (entry.cash_interest + entry.pik_accrual) * taxRate : 0;
       balances[tIdx] = entry.ending_balance;
       trancheYears[tIdx].push(entry);
+      periodTotalRepayment += entry.total_repayment;
     }
+
+    // Roll forward the balance-sheet cash position.
+    // Ending cash = beginning cash + FCF − cash interest − all repayments (mandatory + sweep).
+    cashBalance = Math.max(0, cashBalance + fcfPreDebt - totalCashInterest - periodTotalRepayment);
+    cashBalanceByYear.push(cashBalance);
   }
 
   // Aggregate metrics
@@ -164,10 +179,11 @@ export function buildDebtSchedule(
     const ebitdaAdj = projYr ? projYr.ebitda_adj : 1;
     const fcfPre = projYr ? projYr.fcf_pre_debt : 0;
 
-    // Excess Cash Flow = FCF pre-debt minus mandatory debt service (interest + scheduled principal).
-    // Negative ECF means the company cannot service mandatory obligations from operations.
+    // ECF: post-service FCF minus the incremental floor shortfall for this year.
     const minCash = state.entry.min_cash_balance || 0;
-    const ecf = fcfPre - totMandatoryAmort - totCashInt - minCash;
+    const cashHeld = cashBalanceByYear[yrIdx] ?? 0;
+    const aggFloorShortfall = Math.max(0, minCash - (yrIdx > 0 ? cashBalanceByYear[yrIdx - 1] : 0));
+    const ecf = fcfPre - totMandatoryAmort - totCashInt - aggFloorShortfall;
 
     // DSCR: FCF pre-debt / (Cash Interest + Mandatory Scheduled Amortization)
     // Lender standard — both interest and contractual principal repayment are obligatory.
@@ -175,8 +191,8 @@ export function buildDebtSchedule(
     const debtService = totCashInt + totMandatoryAmort;
 
     totalDebtByYear.push(totDebt);
-    // Net debt subtracts reserved minimum cash, consistent with sweep waterfall logic.
-    netDebtByYear.push(Math.max(0, totDebt - minCash));
+    // Net debt = gross debt − actual cash on balance sheet (not a conceptual reserve).
+    netDebtByYear.push(Math.max(0, totDebt - cashHeld));
     // Use 9999 sentinel when EBITDA ≤ 0 — returning 0 is misleading (implies no debt).
     leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 9999);
     // 9999 = "no interest / no debt service" sentinel; capped in display layer.
@@ -201,5 +217,6 @@ export function buildDebtSchedule(
     total_mandatory_amort_by_year: mandatoryAmortByYear,
     total_interest_tax_shield_by_year: shieldByYear,
     ecf_by_year: ecfByYear,
+    cash_balance_by_year: cashBalanceByYear,
   };
 }
