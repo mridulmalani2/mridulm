@@ -108,21 +108,51 @@ export function buildDebtSchedule(
       });
     }
 
-    // Second pass: cash sweep.
+    // Second pass: cash sweep — tiered by sweep_priority, pro-rata within each tier.
     // Available for sweep = post-service FCF minus the incremental floor shortfall.
-    // The floor shortfall is max(0, minCash − cashBalance): once the floor is funded
-    // from prior years, it imposes zero additional constraint on the current period.
     const minCash = state.entry.min_cash_balance || 0;
     const floorShortfall = Math.max(0, minCash - cashBalance);
     const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - floorShortfall;
     let availableForSweep = Math.max(0, ecf);
-    for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
-      const tranche = tranches[tIdx];
-      const entry = yearEntries[tIdx];
-      if (tranche.amortization_type === 'cash_sweep' && availableForSweep > 0) {
-        const maxSweep = Math.max(0, availableForSweep * tranche.cash_sweep_pct);
-        const remaining = entry.beginning_balance + entry.pik_accrual - entry.scheduled_repayment;
-        entry.sweep_repayment = Math.min(maxSweep, Math.max(0, remaining));
+
+    // Group sweep-eligible tranche indices by priority (lower = senior).
+    // Tranches without an explicit sweep_priority default to their array index,
+    // preserving backwards-compatible ordering for legacy models.
+    const sweepIndices = tranches
+      .map((t, i) => i)
+      .filter((i) => tranches[i].amortization_type === 'cash_sweep');
+
+    const priorityTiers = new Map<number, number[]>();
+    for (const idx of sweepIndices) {
+      const priority = tranches[idx].sweep_priority ?? idx;
+      const bucket = priorityTiers.get(priority) ?? [];
+      bucket.push(idx);
+      priorityTiers.set(priority, bucket);
+    }
+
+    for (const priority of [...priorityTiers.keys()].sort((a, b) => a - b)) {
+      if (availableForSweep <= 0) break;
+      const tierIndices = priorityTiers.get(priority)!;
+
+      // Max each tranche can absorb: outstanding balance capped by cash_sweep_pct
+      let tierCapacity = 0;
+      const tierMax: number[] = [];
+      for (const tIdx of tierIndices) {
+        const entry = yearEntries[tIdx];
+        const outstanding = Math.max(0, entry.beginning_balance + entry.pik_accrual - entry.scheduled_repayment);
+        const cap = outstanding * tranches[tIdx].cash_sweep_pct;
+        tierMax.push(cap);
+        tierCapacity += cap;
+      }
+
+      if (tierCapacity <= 0) continue;
+      const tierAlloc = Math.min(availableForSweep, tierCapacity);
+
+      for (let k = 0; k < tierIndices.length; k++) {
+        const tIdx = tierIndices[k];
+        const entry = yearEntries[tIdx];
+        const share = tierMax[k] / tierCapacity;
+        entry.sweep_repayment = share * tierAlloc;
         availableForSweep -= entry.sweep_repayment;
       }
     }

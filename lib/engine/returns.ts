@@ -373,9 +373,10 @@ export function decomposeValueDrivers(
   const exitFee = state.fees.exit_fee_pct * exitEv;
   const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout;
 
-  const totalDistributions = returns.total_distributions ?? 0;
-  const totalGain = exitEquity + totalDistributions - entryEquity;
-  const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag + totalDistributions;
+  // Bridge decomposes exit_equity − entry_equity only. Distributions are LP cash flows,
+  // not value creation — they are already captured via delta_debt (lower exit cash reduces net debt).
+  const totalGain = exitEquity - entryEquity;
+  const computedGain = deltaRev + deltaMargin + deltaMultiple + deltaDebt - feesDrag;
   const reconDelta = Math.abs(computedGain - totalGain);
 
   const pct = (x: number) => (totalGain !== 0 ? (x / totalGain) * 100 : 0);

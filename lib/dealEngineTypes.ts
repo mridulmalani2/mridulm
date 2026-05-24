@@ -15,6 +15,8 @@ export interface DebtTranche {
   commitment_fee: number;
   floor: number;
   cash_sweep_pct: number;
+  /** Lower number = higher sweep priority. Tranches in the same tier receive pro-rata allocation. Defaults to array index when omitted. */
+  sweep_priority?: number;
 }
 
 export interface FeeStructure {
