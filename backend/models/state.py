@@ -11,6 +11,7 @@ from .debt import DebtSchedule, DebtTranche
 from .outputs import (
     AddOnAcquisition,
     AnnualProjection,
+    BalanceSheet,
     ChatMessage,
     CreditAnalysis,
     EBITDABridge,
@@ -198,6 +199,7 @@ class ModelState(BaseModel):
     credit_analysis: CreditAnalysis = Field(default_factory=CreditAnalysis)
     fragility_analysis: FragilityAnalysis = Field(default_factory=FragilityAnalysis)
     ebitda_bridge: EBITDABridge = Field(default_factory=EBITDABridge)
+    balance_sheet: BalanceSheet = Field(default_factory=BalanceSheet)
     scenarios: list[ScenarioSet] = Field(default_factory=list)
     sensitivity_tables: list[SensitivityTable] = Field(default_factory=list)
     exit_reality_check: ExitRealityCheck = Field(default_factory=ExitRealityCheck)

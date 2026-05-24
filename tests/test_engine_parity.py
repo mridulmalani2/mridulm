@@ -16,6 +16,8 @@ from backend.models.state import ModelState
 from backend.models.debt import DebtTranche
 from backend.engine.projections import build_projections
 from backend.engine.debt_schedule import build_debt_schedule
+from backend.engine.balance_sheet import compute_balance_sheet
+from backend.engine.scenarios import _run_full_model
 
 
 def _base_state() -> ModelState:
@@ -166,6 +168,55 @@ class TestFloatingRateSteps:
         sched = ds.tranche_schedules[0]
         assert abs(sched[0].effective_rate - 0.07) < 1e-9   # 0.03 + 0.04
         assert abs(sched[2].effective_rate - 0.10) < 1e-9   # 0.06 + 0.04 (year-3 step)
+
+
+class TestBalanceSheetCloses:
+    """P3-1 (Python mirror) — the three-statement balance sheet closes."""
+
+    @staticmethod
+    def _converged(state: ModelState):
+        ret, proj, _ = _run_full_model(state)
+        # Rebuild the schedule from the converged projections so cash and NI align.
+        ds = build_debt_schedule(state, proj)
+        return ret, proj, ds
+
+    def test_bullet_deal_closes(self):
+        state = _base_state()  # senior bullet 80 (carries to exit)
+        ret, proj, ds = self._converged(state)
+        bs = compute_balance_sheet(state, proj, ds, ret)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01
+
+    def test_amortizing_deal_closes(self):
+        state = _base_state()
+        # Loan sized so operating cash comfortably covers each year's amortisation
+        # (no min-cash floor masking a shortfall).
+        state.debt_tranches = [
+            DebtTranche(name="TLA", tranche_type="senior", principal=40.0,
+                        interest_rate=0.06, rate_type="fixed", amortization_type="straight_line")
+        ]
+        state.derive_entry_fields()
+        state.ensure_list_lengths()
+        ret, proj, ds = self._converged(state)
+        bs = compute_balance_sheet(state, proj, ds, ret)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01
+
+    def test_pik_deal_closes(self):
+        state = _base_state()
+        state.debt_tranches = [
+            DebtTranche(name="TLB", tranche_type="senior", principal=70.0,
+                        interest_rate=0.07, rate_type="fixed", amortization_type="bullet"),
+            DebtTranche(name="PIK", tranche_type="pik_note", principal=30.0,
+                        interest_rate=0.12, pik_rate=0.12, rate_type="fixed",
+                        amortization_type="PIK", cash_interest=False),
+        ]
+        state.derive_entry_fields()
+        state.ensure_list_lengths()
+        ret, proj, ds = self._converged(state)
+        bs = compute_balance_sheet(state, proj, ds, ret)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01
 
 
 class TestDynamicRevolver:

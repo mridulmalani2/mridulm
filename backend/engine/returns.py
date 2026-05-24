@@ -39,8 +39,50 @@ logger = logging.getLogger(__name__)
 
 # ── IRR Solver ────────────────────────────────────────────────────────────
 
+def _solve_irr_pure(cashflows: list[float], times: list[float]) -> Optional[float]:
+    """Pure-Python IRR (Newton-Raphson with bisection fallback) — no external deps.
+
+    Guarantees the engine can solve IRR even when numpy-financial / scipy are not
+    installed, so a missing optional dependency never silently yields a null IRR.
+    """
+    def npv(r: float) -> float:
+        return sum(cf / (1.0 + r) ** t for cf, t in zip(cashflows, times))
+
+    def dnpv(r: float) -> float:
+        return sum(-t * cf / (1.0 + r) ** (t + 1) for cf, t in zip(cashflows, times))
+
+    # Newton-Raphson
+    r = 0.1
+    for _ in range(200):
+        d = dnpv(r)
+        if abs(d) < 1e-15:
+            break
+        step = npv(r) / d
+        r -= step
+        if abs(step) < 1e-10 and -0.999 <= r <= 100.0:
+            return float(r)
+    if -0.999 <= r <= 100.0 and abs(npv(r)) < 0.01:
+        return float(r)
+
+    # Bisection
+    lo, hi = -0.999, 100.0
+    f_lo, f_hi = npv(lo), npv(hi)
+    if f_lo * f_hi > 0:
+        return None
+    for _ in range(500):
+        mid = (lo + hi) / 2.0
+        f_mid = npv(mid)
+        if abs(f_mid) < 1e-10 or (hi - lo) < 1e-12:
+            return float(mid)
+        if f_lo * f_mid < 0:
+            hi = mid
+        else:
+            lo, f_lo = mid, f_mid
+    return None
+
+
 def _solve_irr(cashflows: list[float]) -> Optional[float]:
-    """Solve IRR using numpy-financial, falling back to scipy newton then brentq."""
+    """Solve IRR using numpy-financial, falling back to scipy, then pure Python."""
     if not cashflows or all(cf >= 0 for cf in cashflows) or all(cf <= 0 for cf in cashflows):
         return None
 
@@ -85,7 +127,8 @@ def _solve_irr(cashflows: list[float]) -> Optional[float]:
     except Exception:
         pass
 
-    return None
+    # Final fallback: pure-Python solver (always available)
+    return _solve_irr_pure(cashflows, list(range(len(cashflows))))
 
 
 def _solve_irr_timed(cashflows: list[float], times: list[float]) -> Optional[float]:
@@ -132,7 +175,8 @@ def _solve_irr_timed(cashflows: list[float], times: list[float]) -> Optional[flo
     except Exception:
         pass
 
-    return None
+    # Final fallback: pure-Python solver (always available)
+    return _solve_irr_pure(cashflows, times)
 
 
 def _build_time_vector(hp: int, mid_year: bool) -> list[float]:

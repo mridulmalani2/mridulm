@@ -288,13 +288,29 @@ def build_debt_schedule(
         # cash here raises net debt so the return no longer double-counts them.
         period_total_repayment = sum(e.total_repayment for e in year_entries)
 
+        # Levered operating cash flow: NI + D&A + non-cash addbacks (financing-fee
+        # amortisation, PIK) − capex − ΔNWC − monitoring fee. Using NI (not unlevered
+        # FCFF) captures the interest tax shield, so cash / net debt are correct and
+        # the three-statement balance sheet closes.
+        total_pik_year = sum(e.pik_accrual for e in year_entries)
+        if proj_yr is not None:
+            levered_op_cash = (
+                proj_yr.net_income
+                + proj_yr.da
+                + proj_yr.financing_fee_amort
+                + total_pik_year
+                - proj_yr.total_capex
+                - proj_yr.delta_nwc
+                - state.fees.monitoring_fee_annual
+            )
+        else:
+            levered_op_cash = 0.0
+
         # Revolver dynamic draw/repay (P3-4): draw to cover a cash shortfall below the
         # min-cash floor, or repay from excess cash. Interest is charged on the opening
         # drawn balance; the net principal change flows through total_repayment so the
         # cash roll-forward below picks it up. No-op without a revolver tranche.
-        cash_after_service = (
-            cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment
-        )
+        cash_after_service = cash_balance + levered_op_cash - period_total_repayment
         for t_idx, tranche in enumerate(tranches):
             if tranche.tranche_type != "revolver":
                 continue
@@ -314,9 +330,7 @@ def build_debt_schedule(
             r_entry.total_repayment = new_repayment
             balances[t_idx] = r_entry.ending_balance
 
-        cash_post_service = (
-            cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment
-        )
+        cash_post_service = cash_balance + levered_op_cash - period_total_repayment
         raw_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
         dist_paid = max(0.0, min(raw_dist, max(0.0, cash_post_service)))
         cash_balance = max(0.0, cash_post_service - dist_paid)
