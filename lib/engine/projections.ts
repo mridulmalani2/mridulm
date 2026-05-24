@@ -74,7 +74,10 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     if (state.margins.nwc_movement_method === 'pct_change') {
       deltaNwc = (revenue - prevRevenue) * nwcPct;
     } else {
-      deltaNwc = 0;
+      // 'explicit' method: fall back to pct_change so the model isn't silently zeroed.
+      // A dedicated per-year NWC input array would be needed to make this meaningful;
+      // until then, treat it the same as pct_change to avoid silent cash flow errors.
+      deltaNwc = (revenue - prevRevenue) * nwcPct;
     }
 
     const fcfPreDebt = ebitdaAdj - tax - totalCapex - deltaNwc;

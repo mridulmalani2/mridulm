@@ -134,20 +134,19 @@ export function runRealityCheck(
     }
   }
 
-  // RULE 7 — NWC Deterioration
-  const entryNwcPct = state.margins.nwc_pct_revenue;
-  if (exitYr && state.revenue.base_revenue > 0) {
-    const entryNwc = state.revenue.base_revenue * entryNwcPct;
-    const exitNwc = exitRevenue * entryNwcPct;
-    if (exitNwc > entryNwc * 1.2 && entryNwc > 0) {
-      const nwcBuild = exitNwc - entryNwc;
-      flags.push({
-        flag_type: 'nwc_deterioration',
-        severity: 'warning',
-        description: `NWC grows from £${entryNwc.toFixed(1)}m to £${exitNwc.toFixed(1)}m — cash tied up in working capital.`,
-        quantified_impact: `£${nwcBuild.toFixed(1)}m cumulative NWC build`,
-      });
-    }
+  // RULE 7 — NWC Cash Drag
+  // Flag when cumulative NWC build consumes a material share of total FCF pre-debt.
+  // Comparing absolute NWC levels (old approach) always fired on growth deals because
+  // NWC scales proportionally with revenue — it measured growth, not deterioration.
+  const totalFcfPreDebt = projections.reduce((s, yr) => s + yr.fcf_pre_debt, 0);
+  const cumulativeNwcBuild = projections.reduce((s, yr) => s + yr.delta_nwc, 0);
+  if (totalFcfPreDebt > 0 && cumulativeNwcBuild > totalFcfPreDebt * 0.15) {
+    flags.push({
+      flag_type: 'nwc_deterioration',
+      severity: 'warning',
+      description: `Cumulative NWC build of £${cumulativeNwcBuild.toFixed(1)}m consumes ${((cumulativeNwcBuild / totalFcfPreDebt) * 100).toFixed(0)}% of total FCF pre-debt — significant working capital trap.`,
+      quantified_impact: `£${cumulativeNwcBuild.toFixed(1)}m cash consumed by NWC (${((cumulativeNwcBuild / totalFcfPreDebt) * 100).toFixed(0)}% of FCF)`,
+    });
   }
 
   // RULE 8 — D&A vs Capex Divergence
