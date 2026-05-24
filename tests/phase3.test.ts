@@ -116,6 +116,37 @@ describe('P3-2 convergence allows iteration-0 exit', () => {
   });
 });
 
+describe('P3-4 dynamic revolver draws and repays', () => {
+  function revolverDeal(): ModelState {
+    const s = canonicalDeals[0].build();
+    s.entry.min_cash_balance = 30;
+    s.debt_tranches = [
+      tranche({ name: 'Senior TLB', principal: 80, amortization_type: 'bullet' }),
+      tranche({ name: 'RCF', tranche_type: 'revolver', principal: 0, commitment: 50, commitment_fee: 0.005 }),
+    ];
+    return s;
+  }
+
+  it('draws on the revolver to fund a cash shortfall below the min-cash floor', () => {
+    const s = fullRecalc(revolverDeal());
+    const rcf = s.debt_schedule.tranche_schedules[1];
+    // Year-1 operating cash is below the £30m floor → revolver is drawn to cover it.
+    expect(rcf[0].ending_balance).toBeGreaterThan(10);
+    expect(s.debt_schedule.cash_balance_by_year[0]).toBeCloseTo(30, 0);
+  });
+
+  it('repays the revolver from excess cash in later years', () => {
+    const s = fullRecalc(revolverDeal());
+    const rcf = s.debt_schedule.tranche_schedules[1];
+    expect(rcf[rcf.length - 1].ending_balance).toBeLessThan(rcf[0].ending_balance);
+  });
+
+  it('balance sheet still closes with a drawing revolver', () => {
+    const s = fullRecalc(revolverDeal());
+    expect(s.balance_sheet.closes).toBe(true);
+  });
+});
+
 describe('P3-5 / P3-6 scenarios carry credit metrics and a value bridge', () => {
   it('every scenario reports DSCR, leverage, survival and a value-driver bridge', () => {
     const scenarios = generateScenarios(canonicalDeals[0].build());

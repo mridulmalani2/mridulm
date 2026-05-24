@@ -166,3 +166,28 @@ class TestFloatingRateSteps:
         sched = ds.tranche_schedules[0]
         assert abs(sched[0].effective_rate - 0.07) < 1e-9   # 0.03 + 0.04
         assert abs(sched[2].effective_rate - 0.10) < 1e-9   # 0.06 + 0.04 (year-3 step)
+
+
+class TestDynamicRevolver:
+    """P3-4 — revolver draws to fund a cash shortfall and repays from excess."""
+
+    def test_draws_under_shortfall_and_repays(self):
+        state = _base_state()
+        state.entry.min_cash_balance = 30.0
+        state.debt_tranches = [
+            DebtTranche(name="Senior TLB", tranche_type="senior", principal=80.0,
+                        interest_rate=0.07, rate_type="fixed", amortization_type="bullet"),
+            DebtTranche(name="RCF", tranche_type="revolver", principal=0.0, commitment=50.0,
+                        interest_rate=0.07, rate_type="fixed", amortization_type="bullet",
+                        commitment_fee=0.005),
+        ]
+        state.derive_entry_fields()
+        state.ensure_list_lengths()
+        proj = build_projections(state)
+        ds = build_debt_schedule(state, proj)
+        rcf = ds.tranche_schedules[1]
+        # Year-1 operating cash is below the £30m floor → revolver is drawn to cover it.
+        assert rcf[0].ending_balance > 10.0
+        assert ds.cash_balance_by_year[0] == pytest.approx(30.0, abs=0.5)
+        # Repaid from excess cash by the end of the hold.
+        assert rcf[-1].ending_balance < rcf[0].ending_balance

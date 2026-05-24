@@ -141,8 +141,13 @@ def build_debt_schedule(
                 entry.cash_interest = avg_bal * eff_rate if tranche.cash_interest else 0.0
                 entry.pik_accrual = 0.0
 
-            # Commitment fee
-            entry.commitment_fee_paid = beg_bal * tranche.commitment_fee
+            # Commitment fee — revolvers charge on undrawn capacity; other tranches
+            # keep the legacy running fee on the drawn balance.
+            if tranche.tranche_type == "revolver":
+                commitment = tranche.commitment if tranche.commitment else tranche.principal
+                entry.commitment_fee_paid = max(0.0, commitment - beg_bal) * tranche.commitment_fee
+            else:
+                entry.commitment_fee_paid = beg_bal * tranche.commitment_fee
 
             total_mandatory_amort += entry.scheduled_repayment
             total_cash_interest += entry.cash_interest
@@ -282,6 +287,33 @@ def build_debt_schedule(
         # Distributions are paid from available cash and cannot exceed it; reducing
         # cash here raises net debt so the return no longer double-counts them.
         period_total_repayment = sum(e.total_repayment for e in year_entries)
+
+        # Revolver dynamic draw/repay (P3-4): draw to cover a cash shortfall below the
+        # min-cash floor, or repay from excess cash. Interest is charged on the opening
+        # drawn balance; the net principal change flows through total_repayment so the
+        # cash roll-forward below picks it up. No-op without a revolver tranche.
+        cash_after_service = (
+            cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment
+        )
+        for t_idx, tranche in enumerate(tranches):
+            if tranche.tranche_type != "revolver":
+                continue
+            r_entry = year_entries[t_idx]
+            drawn = r_entry.ending_balance
+            commitment = tranche.commitment if tranche.commitment else tranche.principal
+            if cash_after_service < min_cash:
+                draw = min(min_cash - cash_after_service, max(0.0, commitment - drawn))
+                r_entry.ending_balance = drawn + draw
+                cash_after_service += draw
+            elif drawn > 0:
+                repay = min(cash_after_service - min_cash, drawn)
+                r_entry.ending_balance = drawn - repay
+                cash_after_service -= repay
+            new_repayment = r_entry.beginning_balance + r_entry.pik_accrual - r_entry.ending_balance
+            period_total_repayment += new_repayment - r_entry.total_repayment
+            r_entry.total_repayment = new_repayment
+            balances[t_idx] = r_entry.ending_balance
+
         cash_post_service = (
             cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment
         )

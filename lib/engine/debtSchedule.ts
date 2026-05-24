@@ -101,7 +101,7 @@ export function buildDebtSchedule(
       // amortised as a running cost on the outstanding balance (typically 0 for
       // term debt, non-zero only when explicitly set by user).
       const undrawnBal = tranche.tranche_type === 'revolver'
-        ? Math.max(0, tranche.principal - begBal)   // fee on undrawn capacity
+        ? Math.max(0, (tranche.commitment ?? tranche.principal) - begBal)   // fee on undrawn capacity
         : begBal;                                    // legacy: user-specified running fee on drawn
       const commitmentFeePaid = undrawnBal * tranche.commitment_fee;
 
@@ -188,6 +188,34 @@ export function buildDebtSchedule(
       balances[tIdx] = entry.ending_balance;
       trancheYears[tIdx].push(entry);
       periodTotalRepayment += entry.total_repayment;
+    }
+
+    // Revolver dynamic draw/repay (P3-4): after mandatory amortisation and term-loan
+    // sweep, draw to cover a cash shortfall below the min-cash floor, or repay from
+    // excess cash. Interest is charged on the opening drawn balance (this year's first
+    // pass); a draw raises the balance for next year. The net principal change flows
+    // through total_repayment (negative = net draw) so the cash roll-forward below
+    // picks it up automatically. No-op for deals without a revolver tranche.
+    const minCashFloor = state.entry.min_cash_balance || 0;
+    let cashAfterService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment;
+    for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
+      if (tranches[tIdx].tranche_type !== 'revolver') continue;
+      const rEntry = yearEntries[tIdx];
+      const drawn = rEntry.ending_balance; // revolver isn't amortised/swept → equals begBal
+      const commitment = tranches[tIdx].commitment ?? tranches[tIdx].principal;
+      if (cashAfterService < minCashFloor) {
+        const draw = Math.min(minCashFloor - cashAfterService, Math.max(0, commitment - drawn));
+        rEntry.ending_balance = drawn + draw;
+        cashAfterService += draw;
+      } else if (drawn > 0) {
+        const repay = Math.min(cashAfterService - minCashFloor, drawn);
+        rEntry.ending_balance = drawn - repay;
+        cashAfterService -= repay;
+      }
+      const newRepayment = rEntry.beginning_balance + rEntry.pik_accrual - rEntry.ending_balance;
+      periodTotalRepayment += newRepayment - rEntry.total_repayment;
+      rEntry.total_repayment = newRepayment;
+      balances[tIdx] = rEntry.ending_balance;
     }
 
     // Roll forward: post-service cash = beginning cash + FCF − cash interest − commitment fees − repayments.

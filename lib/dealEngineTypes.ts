@@ -16,6 +16,9 @@ export interface DebtTranche {
   pik_rate: number;
   cash_interest: boolean;
   commitment_fee: number;
+  /** Revolver facility size (£m). Drawn balance starts at `principal` (usually 0) and
+   *  can be drawn up to this commitment. Falls back to `principal` when omitted. */
+  commitment?: number;
   floor: number;
   cash_sweep_pct: number;
   /** Lower number = higher sweep priority. Tranches in the same tier receive pro-rata allocation. Defaults to array index when omitted. */

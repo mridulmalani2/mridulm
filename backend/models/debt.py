@@ -48,6 +48,11 @@ class DebtTranche(BaseModel):
     commitment_fee: float = Field(
         default=0.0, ge=0, le=0.1, description="% of undrawn (0 for term loans)"
     )
+    commitment: float = Field(
+        default=0.0,
+        ge=0,
+        description="Revolver facility size (£m); drawn balance starts at principal and draws up to this. 0 ⇒ use principal.",
+    )
     floor: float = Field(
         default=0.0, ge=0, le=1.0, description="Rate floor if floating"
     )
