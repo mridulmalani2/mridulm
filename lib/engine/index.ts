@@ -9,6 +9,7 @@ import { runRealityCheck } from './realityCheck';
 import { computeSourcesAndUses } from './sourcesUses';
 import { computeCreditAnalysis } from './creditAnalysis';
 import { computeEBITDABridge } from './ebitdaBridge';
+import { computeBalanceSheet } from './balanceSheet';
 import { computeFragility } from './fragility';
 import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 
@@ -16,7 +17,12 @@ import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 // PIK interest compounds onto the principal each period, so the interest/tax
 // feedback loop can take more cycles to stabilise than a plain cash-pay deal.
 const MAX_CONVERGENCE_ITER = 10;
-const CONVERGENCE_TOLERANCE = 0.01; // £m
+
+// Convergence tolerance scales with deal size: a flat £0.01m guard is ~1bp on a
+// £1bn deal (useless) and overly strict on a £10m deal. Floor at £0.01m.
+function convergenceToleranceFor(state: ModelState): number {
+  return Math.max(0.01, state.revenue.base_revenue * 0.0001);
+}
 
 export function fullRecalc(state: ModelState): ModelState {
   // Ensure new fields exist (backwards compatibility for older saved models)
@@ -52,6 +58,7 @@ export function fullRecalc(state: ModelState): ModelState {
 
   // ── Iterative convergence loop: projections → debt → update ──
   const hp = state.exit.holding_period;
+  const convergenceTolerance = convergenceToleranceFor(state);
   let proj = buildProjections(state);
   let ds = buildDebtSchedule(state, proj);
   let updatedProj: AnnualProjectionYear[] = proj;
@@ -81,7 +88,8 @@ export function fullRecalc(state: ModelState): ModelState {
     // Check convergence
     const currentTotalInterest = ds.total_cash_interest_by_year.reduce((a, b) => a + b, 0);
     convergenceDelta = Math.abs(currentTotalInterest - prevTotalInterest);
-    if (convergenceDelta < CONVERGENCE_TOLERANCE && iter > 0) break;
+    // Allow iteration 0 to exit early (e.g. an all-equity / already-converged deal).
+    if (convergenceDelta < convergenceTolerance) break;
     prevTotalInterest = currentTotalInterest;
 
     // Feed corrected projections back for next iteration
@@ -92,7 +100,7 @@ export function fullRecalc(state: ModelState): ModelState {
   // delta still exceeds tolerance the balance sheet is unbalanced.  Flag it so
   // the UI and Excel report can warn the user rather than silently showing
   // incorrect numbers.
-  const debtConvergenceFailed = convergenceDelta > CONVERGENCE_TOLERANCE;
+  const debtConvergenceFailed = convergenceDelta > convergenceTolerance;
 
   const ret = calculateReturns(state, updatedProj, ds);
   ret.convergence_iterations = iterations;
@@ -107,6 +115,10 @@ export function fullRecalc(state: ModelState): ModelState {
 
   // EBITDA bridge
   state.ebitda_bridge = computeEBITDABridge(state, updatedProj, addOnImpact);
+
+  // Balance sheet (three-statement close) — ds carries add-on debt here, and
+  // addOnImpact supplies the acquired-goodwill / fresh-equity offsets.
+  state.balance_sheet = computeBalanceSheet(state, updatedProj, ds, ret, addOnImpact);
 
   // Restore the real entry tranche list now that all augmented-schedule consumers
   // (returns, value drivers, reality check, credit analysis) have run. Synthetic

@@ -30,6 +30,7 @@ export function buildDebtSchedule(
     ecf_by_year: [],
     total_commitment_fees_by_year: [],
     cash_balance_by_year: [],
+    distributions_paid_by_year: [],
   };
 
   if (!tranches.length) return empty;
@@ -45,6 +46,8 @@ export function buildDebtSchedule(
   // between the floor and current balance constrains sweep each period.
   let cashBalance = 0;
   const cashBalanceByYear: number[] = [];
+  const distributionsPaidByYear: number[] = [];
+  const distributions = state.exit.interim_distributions || [];
 
   for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
     const yr = yrIdx + 1;
@@ -69,7 +72,9 @@ export function buildDebtSchedule(
 
       let effRate: number;
       if (tranche.rate_type === 'floating') {
-        effRate = Math.max(tranche.base_rate + tranche.spread, tranche.floor);
+        // Honour an optional forward base-rate path (rate cycle), else the flat base_rate.
+        const baseRateThisYear = tranche.base_rate_by_year?.[yrIdx] ?? tranche.base_rate;
+        effRate = Math.max(baseRateThisYear + tranche.spread, tranche.floor);
       } else {
         effRate = tranche.interest_rate;
       }
@@ -185,8 +190,15 @@ export function buildDebtSchedule(
       periodTotalRepayment += entry.total_repayment;
     }
 
-    // Roll forward: ending cash = beginning cash + FCF − cash interest − commitment fees − repayments.
-    cashBalance = Math.max(0, cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment);
+    // Roll forward: post-service cash = beginning cash + FCF − cash interest − commitment fees − repayments.
+    const cashPostService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment;
+    // Interim distributions (special dividends) are paid from available cash and
+    // cannot exceed it. Reducing cash here raises net debt and lowers exit equity,
+    // so distributions are no longer double-counted in returns.
+    const rawDist = yrIdx < distributions.length ? distributions[yrIdx] : 0;
+    const distPaid = Math.max(0, Math.min(rawDist, Math.max(0, cashPostService)));
+    cashBalance = Math.max(0, cashPostService - distPaid);
+    distributionsPaidByYear.push(distPaid);
     cashBalanceByYear.push(cashBalance);
   }
 
@@ -266,5 +278,6 @@ export function buildDebtSchedule(
     ecf_by_year: ecfByYear,
     total_commitment_fees_by_year: commitmentFeesByYear,
     cash_balance_by_year: cashBalanceByYear,
+    distributions_paid_by_year: distributionsPaidByYear,
   };
 }

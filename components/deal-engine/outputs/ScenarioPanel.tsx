@@ -52,6 +52,26 @@ const ScenarioPanel: React.FC = () => {
                   {irrDelta >= 0 ? '+' : ''}{(irrDelta * 10000).toFixed(0)}bps
                 </div>
               )}
+              {sc.survives_hold != null && (
+                <div
+                  className="text-[10px] mt-2 pt-2"
+                  style={{ borderTop: '1px solid rgba(17,17,17,0.06)', fontFamily: "'JetBrains Mono', monospace", color: sc.covenant_breach_year ? '#b91c1c' : sc.survives_hold ? '#15803d' : '#b45309' }}
+                >
+                  {sc.covenant_breach_year
+                    ? `⚠ Covenant breach Yr ${sc.covenant_breach_year}`
+                    : sc.survives_hold ? '✓ Survives, no breach' : '⚠ Negative ECF'}
+                </div>
+              )}
+              {(() => {
+                const valid = (sc.dscr_by_year ?? []).filter((d) => d < 50);
+                if (!valid.length) return null;
+                const minDscr = Math.min(...valid);
+                return (
+                  <div className="text-[10px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+                    min DSCR {minDscr.toFixed(2)}x
+                  </div>
+                );
+              })()}
             </div>
           );
         })}

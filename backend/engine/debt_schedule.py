@@ -90,6 +90,8 @@ def build_debt_schedule(
 
     cash_balance_by_year: list[float] = []
     interest_shortfall_by_year: list[float] = []
+    distributions_paid_by_year: list[float] = []
+    distributions = state.exit.interim_distributions or []
 
     for yr_idx in range(hp):
         yr = yr_idx + 1
@@ -112,9 +114,13 @@ def build_debt_schedule(
                 beginning_balance=beg_bal,
             )
 
-            # Effective rate
+            # Effective rate — honour an optional forward base-rate path (rate cycle).
             if tranche.rate_type == "floating":
-                eff_rate = max(tranche.base_rate + tranche.spread, tranche.floor)
+                if tranche.base_rate_by_year and yr_idx < len(tranche.base_rate_by_year):
+                    base_rate_this_year = tranche.base_rate_by_year[yr_idx]
+                else:
+                    base_rate_this_year = tranche.base_rate
+                eff_rate = max(base_rate_this_year + tranche.spread, tranche.floor)
             else:
                 eff_rate = tranche.interest_rate
             entry.effective_rate = eff_rate
@@ -272,12 +278,17 @@ def build_debt_schedule(
             balances[t_idx] = entry.ending_balance
             tranche_years[t_idx].append(entry)
 
-        # Cash balance roll-forward
+        # Cash balance roll-forward, net of interim distributions (special dividends).
+        # Distributions are paid from available cash and cannot exceed it; reducing
+        # cash here raises net debt so the return no longer double-counts them.
         period_total_repayment = sum(e.total_repayment for e in year_entries)
-        cash_balance = max(
-            0.0,
-            cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment,
+        cash_post_service = (
+            cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment
         )
+        raw_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
+        dist_paid = max(0.0, min(raw_dist, max(0.0, cash_post_service)))
+        cash_balance = max(0.0, cash_post_service - dist_paid)
+        distributions_paid_by_year.append(dist_paid)
         cash_balance_by_year.append(cash_balance)
 
     # Build aggregate metrics
@@ -374,4 +385,5 @@ def build_debt_schedule(
         total_interest_tax_shield_by_year=shield_by_year,
         interest_shortfall_by_year=interest_shortfall_by_year,
         cash_balance_by_year=cash_balance_by_year,
+        distributions_paid_by_year=distributions_paid_by_year,
     )

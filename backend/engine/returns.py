@@ -227,7 +227,11 @@ def calculate_returns(
     exit_equity = exit_equity_after_fees - mip_payout
 
     # ── Interim distributions (dividend recaps) ──
-    distributions = state.exit.interim_distributions[:hp] if state.exit.interim_distributions else [0.0] * hp
+    # Use distributions actually PAID (capped at available cash by the debt schedule):
+    # paying them reduced cash and raised exit net debt, so adding them to the return
+    # no longer double-counts.
+    paid = debt_schedule.distributions_paid_by_year or []
+    distributions = (paid[:hp] if paid else [0.0] * hp)
     while len(distributions) < hp:
         distributions.append(0.0)
     total_distributions = sum(distributions)

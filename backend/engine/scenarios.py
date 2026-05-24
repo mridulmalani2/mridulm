@@ -19,11 +19,15 @@ from backend.models.outputs import ScenarioSet, SensitivityTable
 from backend.models.state import ModelState
 from backend.engine.projections import build_projections, update_projections_with_debt
 from backend.engine.debt_schedule import build_debt_schedule
-from backend.engine.returns import calculate_returns
+from backend.engine.returns import calculate_returns, decompose_value_drivers
 
 
 _MARGIN_FLOOR = 0.01
 _MARGIN_CEIL = 0.95
+# Default covenant thresholds for scenario breach detection (Python has no
+# covenant config on ModelState; mirrors the TypeScript defaults).
+_DEFAULT_LEVERAGE_COV = 6.0
+_DEFAULT_DSCR_COV = 1.25
 
 
 def _clamp_margin(value: float) -> float:
@@ -90,7 +94,8 @@ def _run_full_model(state: ModelState) -> tuple:
     state.ensure_list_lengths()
 
     MAX_ITER = 5
-    TOLERANCE = 0.01  # £m
+    # Tolerance scales with deal size (flat £0.01m is ~1bp on a £1bn deal).
+    TOLERANCE = max(0.01, state.revenue.base_revenue * 0.0001)
 
     proj = build_projections(state)
     prev_total_interest = 0.0
@@ -123,7 +128,8 @@ def _run_full_model(state: ModelState) -> tuple:
         # Check convergence
         current_total_interest = sum(ds.total_cash_interest_by_year) if ds.total_cash_interest_by_year else 0.0
         convergence_delta = abs(current_total_interest - prev_total_interest)
-        if convergence_delta < TOLERANCE and iteration > 0:
+        # Allow iteration 0 to exit early (e.g. an all-equity / already-converged deal).
+        if convergence_delta < TOLERANCE:
             break
         prev_total_interest = current_total_interest
 
@@ -139,6 +145,32 @@ def _quick_irr_moic(state: ModelState) -> tuple[Optional[float], float, float]:
     return ret.irr, ret.moic, ret.exit_equity
 
 
+def _scenario_metrics(state: ModelState) -> dict:
+    """Run the full model and extract returns, per-year credit metrics,
+    covenant-breach timing, survival, and the value-driver bridge (P3-5 / P3-6)."""
+    ret, proj, ds = _run_full_model(state)
+    dscr = ds.dscr_by_year
+    lev = ds.leverage_ratio_by_year
+    breach = None
+    for i in range(len(lev)):
+        d = dscr[i] if i < len(dscr) else float("inf")
+        if lev[i] > _DEFAULT_LEVERAGE_COV or d < _DEFAULT_DSCR_COV:
+            breach = i + 1
+            break
+    # Python tracks an interest shortfall rather than ECF: no shortfall ⇒ survives.
+    survives = all(s <= 0 for s in (ds.interest_shortfall_by_year or []))
+    return {
+        "irr": ret.irr,
+        "moic": ret.moic,
+        "exit_equity": ret.exit_equity,
+        "dscr_by_year": dscr,
+        "leverage_by_year": lev,
+        "covenant_breach_year": breach,
+        "survives_hold": survives,
+        "value_drivers": decompose_value_drivers(state, proj, ds, ret),
+    }
+
+
 # ── Scenario Generation ──────────────────────────────────────────────────
 
 def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
@@ -152,17 +184,22 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     scenarios: list[ScenarioSet] = []
 
     # Base
-    irr_base, moic_base, eq_base = _quick_irr_moic(state)
+    base_m = _scenario_metrics(state)
     scenarios.append(ScenarioSet(
         name="base",
         growth_rates=base_growth,
         margin_by_year=base_margins,
         exit_multiple=base_exit_mult,
         leverage_ratio=state.entry.leverage_ratio,
-        irr=irr_base,
-        moic=moic_base,
-        exit_equity=eq_base,
+        irr=base_m["irr"],
+        moic=base_m["moic"],
+        exit_equity=base_m["exit_equity"],
         description="Base case using current assumptions.",
+        dscr_by_year=base_m["dscr_by_year"],
+        leverage_by_year=base_m["leverage_by_year"],
+        covenant_breach_year=base_m["covenant_breach_year"],
+        survives_hold=base_m["survives_hold"],
+        value_drivers=base_m["value_drivers"],
     ))
 
     # Bear: growth -200bps, exit multiple -1.5x, margin at 50% expansion, leverage -0.5x
@@ -184,17 +221,22 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     _resize_debt_to_target(bear, bear_debt)
     bear.derive_entry_fields()
     bear.ensure_list_lengths()
-    irr_bear, moic_bear, eq_bear = _quick_irr_moic(bear)
+    bear_m = _scenario_metrics(bear)
     scenarios.append(ScenarioSet(
         name="bear",
         growth_rates=bear.revenue.growth_rates,
         margin_by_year=bear.margins.margin_by_year,
         exit_multiple=bear.exit.exit_ebitda_multiple,
         leverage_ratio=bear.entry.leverage_ratio,
-        irr=irr_bear,
-        moic=moic_bear,
-        exit_equity=eq_bear,
+        irr=bear_m["irr"],
+        moic=bear_m["moic"],
+        exit_equity=bear_m["exit_equity"],
         description="Bear: -200bps growth, -1.5x exit multiple, 50% margin expansion.",
+        dscr_by_year=bear_m["dscr_by_year"],
+        leverage_by_year=bear_m["leverage_by_year"],
+        covenant_breach_year=bear_m["covenant_breach_year"],
+        survives_hold=bear_m["survives_hold"],
+        value_drivers=bear_m["value_drivers"],
     ))
 
     # Bull: growth +200bps, exit multiple +1.0x, margin ×1.3
@@ -208,17 +250,22 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     bull.margins.margin_by_year = []
     bull.ensure_list_lengths()
     bull.derive_entry_fields()
-    irr_bull, moic_bull, eq_bull = _quick_irr_moic(bull)
+    bull_m = _scenario_metrics(bull)
     scenarios.append(ScenarioSet(
         name="bull",
         growth_rates=bull.revenue.growth_rates,
         margin_by_year=bull.margins.margin_by_year,
         exit_multiple=bull.exit.exit_ebitda_multiple,
         leverage_ratio=bull.entry.leverage_ratio,
-        irr=irr_bull,
-        moic=moic_bull,
-        exit_equity=eq_bull,
+        irr=bull_m["irr"],
+        moic=bull_m["moic"],
+        exit_equity=bull_m["exit_equity"],
         description="Bull: +200bps growth, +1.0x exit multiple, 130% margin expansion.",
+        dscr_by_year=bull_m["dscr_by_year"],
+        leverage_by_year=bull_m["leverage_by_year"],
+        covenant_breach_year=bull_m["covenant_breach_year"],
+        survives_hold=bull_m["survives_hold"],
+        value_drivers=bull_m["value_drivers"],
     ))
 
     # Stress: 0% growth yr1-2, then base×0.5; exit multiple -1.0x; flat margin
@@ -236,17 +283,22 @@ def generate_scenarios(state: ModelState) -> list[ScenarioSet]:
     stress.margins.margin_by_year = []
     stress.ensure_list_lengths()
     stress.derive_entry_fields()
-    irr_stress, moic_stress, eq_stress = _quick_irr_moic(stress)
+    stress_m = _scenario_metrics(stress)
     scenarios.append(ScenarioSet(
         name="stress",
         growth_rates=stress.revenue.growth_rates,
         margin_by_year=stress.margins.margin_by_year,
         exit_multiple=stress.exit.exit_ebitda_multiple,
         leverage_ratio=stress.entry.leverage_ratio,
-        irr=irr_stress,
-        moic=moic_stress,
-        exit_equity=eq_stress,
+        irr=stress_m["irr"],
+        moic=stress_m["moic"],
+        exit_equity=stress_m["exit_equity"],
         description="Stress: 0% growth yr1-2, halved thereafter, -1.0x exit multiple, flat margin.",
+        dscr_by_year=stress_m["dscr_by_year"],
+        leverage_by_year=stress_m["leverage_by_year"],
+        covenant_breach_year=stress_m["covenant_breach_year"],
+        survives_hold=stress_m["survives_hold"],
+        value_drivers=stress_m["value_drivers"],
     ))
 
     return scenarios

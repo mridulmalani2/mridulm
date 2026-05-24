@@ -168,6 +168,13 @@ class ScenarioSet(BaseModel):
     moic: float = 0.0
     exit_equity: float = 0.0
     description: str = ""
+    # Per-scenario credit analysis (P3-5)
+    dscr_by_year: list[float] = Field(default_factory=list)
+    leverage_by_year: list[float] = Field(default_factory=list)
+    covenant_breach_year: Optional[int] = None
+    survives_hold: bool = True
+    # Per-scenario value-driver bridge (P3-6)
+    value_drivers: Optional["ValueDriverDecomposition"] = None
 
 
 # ── Sensitivity ───────────────────────────────────────────────────────────

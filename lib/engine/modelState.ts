@@ -196,6 +196,7 @@ export function createDefaultModelState(): ModelState {
       ecf_by_year: [],
       total_commitment_fees_by_year: [],
       cash_balance_by_year: [],
+      distributions_paid_by_year: [],
     },
     returns: {
       irr: null,
@@ -313,6 +314,11 @@ export function createDefaultModelState(): ModelState {
       integration_costs: 0,
       monitoring_fees: 0,
       exit_ebitda: 0,
+    },
+    balance_sheet: {
+      years: [],
+      closes: true,
+      max_abs_check: 0,
     },
     ai_overrides: {},
     ai_toggle_fields: [],

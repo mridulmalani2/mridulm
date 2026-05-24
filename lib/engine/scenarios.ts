@@ -1,11 +1,47 @@
 /** Scenario engine and sensitivity table generator. */
 
-import type { ModelState, ScenarioSet, SensitivityTable } from '../dealEngineTypes';
+import type { ModelState, ScenarioSet, SensitivityTable, ValueDriverDecomposition } from '../dealEngineTypes';
 import { deriveEntryFields, ensureListLengths } from './modelState';
 import { buildProjections, updateProjectionsWithDebt } from './projections';
 import { buildDebtSchedule } from './debtSchedule';
-import { calculateReturns } from './returns';
+import { calculateReturns, decomposeValueDrivers } from './returns';
 import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
+
+interface ScenarioMetrics {
+  irr: number | null;
+  moic: number;
+  exitEquity: number;
+  dscr_by_year: number[];
+  leverage_by_year: number[];
+  covenant_breach_year: number | null;
+  survives_hold: boolean;
+  value_drivers: ValueDriverDecomposition;
+}
+
+/** Run the full model for a scenario and extract returns, per-year credit metrics,
+ *  covenant-breach timing, survival, and the value-driver bridge. */
+function scenarioMetrics(state: ModelState): ScenarioMetrics {
+  const { returns: ret, projections, debtSchedule: ds } = runFullModel(state);
+  const cov = state.credit_covenants;
+  const levCov = (i: number) => cov?.leverage_covenant_by_year?.[i] ?? cov?.leverage_covenant ?? 6.0;
+  const dscrCov = (i: number) => cov?.dscr_covenant_by_year?.[i] ?? cov?.dscr_covenant ?? 1.25;
+  const dscr = ds.dscr_by_year;
+  const lev = ds.leverage_ratio_by_year;
+  let breach: number | null = null;
+  for (let i = 0; i < lev.length; i++) {
+    if (lev[i] > levCov(i) || dscr[i] < dscrCov(i)) { breach = i + 1; break; }
+  }
+  return {
+    irr: ret.irr,
+    moic: ret.moic,
+    exitEquity: ret.exit_equity,
+    dscr_by_year: dscr,
+    leverage_by_year: lev,
+    covenant_breach_year: breach,
+    survives_hold: ds.ecf_by_year.every((e) => e >= 0),
+    value_drivers: decomposeValueDrivers(state, projections, ds, ret),
+  };
+}
 
 function runFullModel(state: ModelState) {
   stripSyntheticAddOnTranches(state);
@@ -16,7 +52,7 @@ function runFullModel(state: ModelState) {
   const { originalTranches } = injectAddOns(state);
 
   const MAX_ITER = 10;
-  const TOLERANCE = 0.01;
+  const TOLERANCE = Math.max(0.01, state.revenue.base_revenue * 0.0001);
   const hp = state.exit.holding_period;
 
   let proj = buildProjections(state);
@@ -47,7 +83,7 @@ function runFullModel(state: ModelState) {
 
     const currentTotalInterest = ds.total_cash_interest_by_year.reduce((a, b) => a + b, 0);
     convergenceDelta = Math.abs(currentTotalInterest - prevTotalInterest);
-    if (convergenceDelta < TOLERANCE && iter > 0) break;
+    if (convergenceDelta < TOLERANCE) break;
     prevTotalInterest = currentTotalInterest;
     proj = updatedProj;
   }
@@ -98,17 +134,22 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   const scenarios: ScenarioSet[] = [];
 
   // Base
-  const { irr: irrBase, moic: moicBase, exitEquity: eqBase } = quickIrrMoic(state);
+  const baseM = scenarioMetrics(state);
   scenarios.push({
     name: 'base',
     growth_rates: baseGrowth,
     margin_by_year: [...state.margins.margin_by_year],
     exit_multiple: baseExitMult,
     leverage_ratio: state.entry.leverage_ratio,
-    irr: irrBase,
-    moic: moicBase,
-    exit_equity: eqBase,
+    irr: baseM.irr,
+    moic: baseM.moic,
+    exit_equity: baseM.exitEquity,
     description: 'Base case using current assumptions.',
+    dscr_by_year: baseM.dscr_by_year,
+    leverage_by_year: baseM.leverage_by_year,
+    covenant_breach_year: baseM.covenant_breach_year,
+    survives_hold: baseM.survives_hold,
+    value_drivers: baseM.value_drivers,
   });
 
   // Bear
@@ -131,17 +172,22 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   resizeJuniorToDebt(bear, bearDebt);
   ensureListLengths(bear);
   deriveEntryFields(bear);
-  const { irr: irrBear, moic: moicBear, exitEquity: eqBear } = quickIrrMoic(bear);
+  const bearM = scenarioMetrics(bear);
   scenarios.push({
     name: 'bear',
     growth_rates: bear.revenue.growth_rates,
     margin_by_year: bear.margins.margin_by_year,
     exit_multiple: bear.exit.exit_ebitda_multiple,
     leverage_ratio: bear.entry.leverage_ratio,
-    irr: irrBear,
-    moic: moicBear,
-    exit_equity: eqBear,
+    irr: bearM.irr,
+    moic: bearM.moic,
+    exit_equity: bearM.exitEquity,
     description: 'Bear: -200bps growth, -1.5x exit multiple, 50% margin expansion.',
+    dscr_by_year: bearM.dscr_by_year,
+    leverage_by_year: bearM.leverage_by_year,
+    covenant_breach_year: bearM.covenant_breach_year,
+    survives_hold: bearM.survives_hold,
+    value_drivers: bearM.value_drivers,
   });
 
   // Bull
@@ -152,17 +198,22 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   bull.margins.margin_by_year = [];
   ensureListLengths(bull);
   deriveEntryFields(bull);
-  const { irr: irrBull, moic: moicBull, exitEquity: eqBull } = quickIrrMoic(bull);
+  const bullM = scenarioMetrics(bull);
   scenarios.push({
     name: 'bull',
     growth_rates: bull.revenue.growth_rates,
     margin_by_year: bull.margins.margin_by_year,
     exit_multiple: bull.exit.exit_ebitda_multiple,
     leverage_ratio: bull.entry.leverage_ratio,
-    irr: irrBull,
-    moic: moicBull,
-    exit_equity: eqBull,
+    irr: bullM.irr,
+    moic: bullM.moic,
+    exit_equity: bullM.exitEquity,
     description: 'Bull: +200bps growth, +1.0x exit multiple, 130% margin expansion.',
+    dscr_by_year: bullM.dscr_by_year,
+    leverage_by_year: bullM.leverage_by_year,
+    covenant_breach_year: bullM.covenant_breach_year,
+    survives_hold: bullM.survives_hold,
+    value_drivers: bullM.value_drivers,
   });
 
   // Stress
@@ -181,17 +232,22 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
   stress.margins.margin_by_year = [];
   ensureListLengths(stress);
   deriveEntryFields(stress);
-  const { irr: irrStress, moic: moicStress, exitEquity: eqStress } = quickIrrMoic(stress);
+  const stressM = scenarioMetrics(stress);
   scenarios.push({
     name: 'stress',
     growth_rates: stress.revenue.growth_rates,
     margin_by_year: stress.margins.margin_by_year,
     exit_multiple: stress.exit.exit_ebitda_multiple,
     leverage_ratio: stress.entry.leverage_ratio,
-    irr: irrStress,
-    moic: moicStress,
-    exit_equity: eqStress,
+    irr: stressM.irr,
+    moic: stressM.moic,
+    exit_equity: stressM.exitEquity,
     description: 'Stress: 0% growth yr1-2, halved thereafter, -1.0x exit multiple, flat margin.',
+    dscr_by_year: stressM.dscr_by_year,
+    leverage_by_year: stressM.leverage_by_year,
+    covenant_breach_year: stressM.covenant_breach_year,
+    survives_hold: stressM.survives_hold,
+    value_drivers: stressM.value_drivers,
   });
 
   return scenarios;

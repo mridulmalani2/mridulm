@@ -73,6 +73,14 @@ const ReturnsSummary: React.FC = () => {
         <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
           {showUnlevered ? 'Unlevered' : showGross ? 'Gross' : 'Equity'} IRR
           {degraded ? ' ⚠ UNCONVERGED' : ret.irr_convergence_failed && ' (non-convergent)'}
+          {ms.exit.mid_year_convention && (
+            <span
+              title="Mid-year convention: a timing adjustment is applied to the IRR cash-flow vector. Underlying FCF is generated on an annual (year-end) basis."
+              style={{ cursor: 'help', textDecoration: 'underline dotted', marginLeft: 4 }}
+            >
+              · mid-yr
+            </span>
+          )}
         </div>
       </div>
 

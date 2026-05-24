@@ -7,6 +7,7 @@ import InputPanel from '../components/deal-engine/inputs/InputPanel';
 import ReturnsSummary from '../components/deal-engine/outputs/ReturnsSummary';
 import ValueBridge from '../components/deal-engine/outputs/ValueBridge';
 import DebtScheduleTable from '../components/deal-engine/outputs/DebtScheduleTable';
+import BalanceSheetTable from '../components/deal-engine/outputs/BalanceSheetTable';
 import SensitivityHeatmap from '../components/deal-engine/outputs/SensitivityHeatmap';
 import ScenarioPanel from '../components/deal-engine/outputs/ScenarioPanel';
 import ExitRealityCheck from '../components/deal-engine/outputs/ExitRealityCheck';
@@ -509,7 +510,7 @@ const InitializeForm: React.FC = () => {
   );
 };
 
-type OutputTab = 'returns' | 'su' | 'debt' | 'credit' | 'fragility' | 'sensitivity' | 'scenarios' | 'reality';
+type OutputTab = 'returns' | 'su' | 'debt' | 'balancesheet' | 'credit' | 'fragility' | 'sensitivity' | 'scenarios' | 'reality';
 
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
@@ -550,6 +551,7 @@ const DealEngine: React.FC = () => {
     { id: 'returns', label: 'Returns' },
     { id: 'su', label: 'S&U' },
     { id: 'debt', label: 'Debt' },
+    { id: 'balancesheet', label: 'Balance Sheet' },
     { id: 'credit', label: 'Credit' },
     { id: 'fragility', label: 'Fragility' },
     { id: 'sensitivity', label: 'Sensitivity' },
@@ -690,6 +692,7 @@ const DealEngine: React.FC = () => {
               )}
               {activeTab === 'su' && <SourcesUsesTable />}
               {activeTab === 'debt' && <DebtScheduleTable />}
+              {activeTab === 'balancesheet' && <BalanceSheetTable />}
               {activeTab === 'credit' && <CreditPanel />}
               {activeTab === 'fragility' && <FragilityPanel />}
               {activeTab === 'sensitivity' && <SensitivityHeatmap />}

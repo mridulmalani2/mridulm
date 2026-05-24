@@ -115,3 +115,54 @@ class TestExplicitNWC:
             expected = (yr.revenue - prev) * state.margins.nwc_pct_revenue
             assert abs(yr.delta_nwc - expected) < 1e-6
             prev = yr.revenue
+
+
+class TestDistributionsFromCash:
+    """Distributions are paid from cash (capped) and reduce the cash balance."""
+
+    def test_distribution_paid_and_reduces_cash(self):
+        base = _base_state()
+        proj_b = build_projections(base)
+        ds_b = build_debt_schedule(base, proj_b)
+
+        state = _base_state()
+        state.exit.interim_distributions = [0.0, 5.0, 0.0, 0.0, 0.0]
+        state.ensure_list_lengths()
+        proj = build_projections(state)
+        ds = build_debt_schedule(state, proj)
+
+        assert abs(ds.distributions_paid_by_year[1] - 5.0) < 1e-6  # cash was available
+        # Year-2 cash is lower than the no-distribution case by the distribution.
+        assert ds.cash_balance_by_year[1] < ds_b.cash_balance_by_year[1] - 4.0
+
+    def test_distribution_capped_at_available_cash(self):
+        state = _base_state()
+        # Year-1 cash cannot support a 1000 distribution — it must be capped.
+        state.exit.interim_distributions = [1000.0, 0.0, 0.0, 0.0, 0.0]
+        state.ensure_list_lengths()
+        proj = build_projections(state)
+        ds = build_debt_schedule(state, proj)
+        assert ds.distributions_paid_by_year[0] < 1000.0
+        assert ds.cash_balance_by_year[0] >= 0.0
+
+
+class TestFloatingRateSteps:
+    """P3-3 — floating tranches honour a forward base-rate path."""
+
+    def test_effective_rate_tracks_path(self):
+        state = _base_state()
+        state.debt_tranches = [
+            DebtTranche(
+                name="Floating TLB", tranche_type="senior", principal=80.0,
+                rate_type="floating", base_rate=0.03, spread=0.04, floor=0.0,
+                amortization_type="bullet",
+                base_rate_by_year=[0.03, 0.03, 0.06, 0.06, 0.06],
+            )
+        ]
+        state.derive_entry_fields()
+        state.ensure_list_lengths()
+        proj = build_projections(state)
+        ds = build_debt_schedule(state, proj)
+        sched = ds.tranche_schedules[0]
+        assert abs(sched[0].effective_rate - 0.07) < 1e-9   # 0.03 + 0.04
+        assert abs(sched[2].effective_rate - 0.10) < 1e-9   # 0.06 + 0.04 (year-3 step)

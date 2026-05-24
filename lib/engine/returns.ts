@@ -191,7 +191,10 @@ export function calculateReturns(
   // In most PE deal docs the hurdle is based on Total True Return, not just
   // the exit proceeds — missing distributions here would fail to trigger the
   // management catch-up after a large mid-hold dividend recap.
-  const rawDist = state.exit.interim_distributions || [];
+  // Use distributions actually PAID (capped at available cash by the debt schedule),
+  // not the raw user input. Paying them reduced the cash balance — hence exit net
+  // debt is already higher — so adding them to the return no longer double-counts.
+  const rawDist = debtSchedule.distributions_paid_by_year || [];
   const distributions: number[] = [];
   for (let i = 0; i < hp; i++) {
     distributions.push(i < rawDist.length ? rawDist[i] : 0);

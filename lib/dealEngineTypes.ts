@@ -7,6 +7,9 @@ export interface DebtTranche {
   interest_rate: number;
   rate_type: 'fixed' | 'floating';
   base_rate: number;
+  /** Optional forward base-rate path (e.g. SOFR/EURIBOR) for floating tranches.
+   *  Falls back to the scalar base_rate when absent. Index = hold year (0-based). */
+  base_rate_by_year?: number[];
   spread: number;
   amortization_type: 'bullet' | 'straight_line' | 'cash_sweep' | 'PIK';
   amortization_schedule: number[];
@@ -148,7 +151,8 @@ export interface DebtScheduleResult {
   total_interest_tax_shield_by_year: number[];
   ecf_by_year: number[];                     // Excess Cash Flow = FCF - mandatory amort - cash interest - commitment fees
   total_commitment_fees_by_year: number[];  // Sum of all commitment fees paid across tranches each year
-  cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service
+  cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service (net of distributions)
+  distributions_paid_by_year: number[];      // Interim distributions actually paid (capped at available cash)
 }
 
 export interface Returns {
@@ -238,6 +242,13 @@ export interface ScenarioSet {
   moic: number;
   exit_equity: number;
   description: string;
+  // Per-scenario credit analysis (P3-5) — answers "does it survive / breach in this case?"
+  dscr_by_year?: number[];
+  leverage_by_year?: number[];
+  covenant_breach_year?: number | null;   // first breach year (1-indexed), null if none
+  survives_hold?: boolean;                 // ECF ≥ 0 in every year
+  // Per-scenario value-driver bridge (P3-6) — explains the IRR/MOIC delta vs base.
+  value_drivers?: ValueDriverDecomposition;
 }
 
 export interface SensitivityTable {
@@ -312,6 +323,7 @@ export interface ModelState {
   sources_and_uses: SourcesAndUses;
   credit_analysis: CreditAnalysis;
   ebitda_bridge: EBITDABridge;
+  balance_sheet: BalanceSheet;
   fragility: FragilityAnalysis;
   scenarios: ScenarioSet[];
   sensitivity_tables: SensitivityTable[];
@@ -465,6 +477,35 @@ export interface AddOnAcquisition {
   synergy_revenue: number;
   synergy_cost: number;          // cost synergies (positive = savings)
   integration_cost: number;      // one-time integration cost
+}
+
+// ── Balance Sheet (three-statement close) ─────────────────────────────────
+
+export interface BalanceSheetYear {
+  year: number;
+  // Assets
+  cash: number;
+  net_working_capital: number;       // single net NWC line (A/R + inventory − A/P); DSO/DIO/DPO split is a later phase
+  net_ppe: number;                   // entry PP&E + cumulative capex − cumulative D&A
+  deferred_financing_costs: number;  // capitalised financing fees, amortised over the hold
+  goodwill: number;                  // purchase-accounting residual fixed at entry
+  total_assets: number;
+  // Liabilities
+  total_debt: number;                // gross debt (incl. any add-on / PIK accretion)
+  deferred_tax_liability: number;
+  total_liabilities: number;
+  // Equity
+  shareholders_equity: number;       // entry equity + cumulative net income − distributions − financing cash costs
+  total_liabilities_and_equity: number;
+  // Integrity check
+  balance_check: number;             // total_assets − total_liabilities_and_equity (≈ 0 when the model closes)
+  is_balanced: boolean;
+}
+
+export interface BalanceSheet {
+  years: BalanceSheetYear[];
+  closes: boolean;          // every year within tolerance
+  max_abs_check: number;    // largest |balance_check| across the hold
 }
 
 // ── EBITDA Bridge ────────────────────────────────────────────────────────
