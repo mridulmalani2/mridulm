@@ -63,20 +63,22 @@ export function buildDebtSchedule(
         effRate = tranche.interest_rate;
       }
 
-      let cashInterest: number;
-      let pikAccrual: number;
-      if (tranche.amortization_type === 'PIK') {
-        cashInterest = 0;
-        pikAccrual = begBal * tranche.pik_rate;
-      } else {
-        cashInterest = tranche.cash_interest ? begBal * effRate : 0;
-        pikAccrual = 0;
-      }
+      const pikAccrual = tranche.amortization_type === 'PIK' ? begBal * tranche.pik_rate : 0;
 
       const sched = tranche.amortization_schedule;
       const scheduledRepayment = yrIdx < sched.length
         ? Math.min(sched[yrIdx], begBal + pikAccrual)
         : 0;
+
+      // Standard LBO convention: interest accrues on average balance (beginning +
+      // post-mandatory-amort) / 2, reflecting that principal is repaid throughout the year.
+      let cashInterest: number;
+      if (tranche.amortization_type === 'PIK') {
+        cashInterest = 0;
+      } else {
+        const avgBal = (begBal + Math.max(0, begBal - scheduledRepayment)) / 2;
+        cashInterest = tranche.cash_interest ? avgBal * effRate : 0;
+      }
 
       // Commitment fee: for revolvers charge on the UNDRAWN portion;
       // for all other tranches commitment_fee represents an OID / upfront fee
