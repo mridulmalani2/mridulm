@@ -116,6 +116,48 @@ const InputPanel: React.FC = () => {
     }
   };
 
+  // ── Credit covenants & working capital (A3) ──
+  const cov = ms.credit_covenants;
+  const cashTrapOn = cov.distribution_block_leverage != null || cov.distribution_block_dscr != null;
+  const springingOn = cov.springing_dscr_covenant != null || cov.springing_utilization_threshold != null;
+  const daysNwcOn = ms.margins.nwc_dso != null || ms.margins.nwc_dio != null || ms.margins.nwc_dpo != null;
+
+  const toggleCashTrap = () => {
+    const next = { ...cov };
+    if (cashTrapOn) {
+      delete next.distribution_block_leverage;
+      delete next.distribution_block_dscr;
+    } else {
+      next.distribution_block_leverage = cov.leverage_covenant;
+      next.distribution_block_dscr = cov.dscr_covenant;
+    }
+    updateField('credit_covenants', next);
+  };
+  const toggleSpringing = () => {
+    const next = { ...cov };
+    if (springingOn) {
+      delete next.springing_dscr_covenant;
+      delete next.springing_utilization_threshold;
+    } else {
+      next.springing_dscr_covenant = Math.round((cov.dscr_covenant + 0.1) * 100) / 100;
+      next.springing_utilization_threshold = 0.35;
+    }
+    updateField('credit_covenants', next);
+  };
+  const toggleDaysNwc = () => {
+    const next = { ...ms.margins };
+    if (daysNwcOn) {
+      delete next.nwc_dso;
+      delete next.nwc_dio;
+      delete next.nwc_dpo;
+    } else {
+      next.nwc_dso = 45;
+      next.nwc_dio = 60;
+      next.nwc_dpo = 45;
+    }
+    updateField('margins', next);
+  };
+
   const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[ms.currency ?? 'GBP'] ?? '£';
   const entryMultWarn = ms.entry.entry_ebitda_multiple > 15 ? 'High entry — flag for IC' : undefined;
   const levWarn = ms.entry.leverage_ratio > 7 ? 'Covenant breach risk' : undefined;
@@ -263,6 +305,30 @@ const InputPanel: React.FC = () => {
         <InputField label="D&A % Revenue" path="margins.da_pct_revenue" value={ms.margins.da_pct_revenue} suffix="%" step={0.005} />
         <InputField label="Maint. Capex % Rev" path="margins.capex_pct_revenue" value={ms.margins.capex_pct_revenue} suffix="%" step={0.005} />
         <InputField label="NWC % Revenue" path="margins.nwc_pct_revenue" value={ms.margins.nwc_pct_revenue} suffix="%" step={0.01} />
+
+        {/* Days-based working capital (P4-9) — overrides the % peg when on */}
+        <div className="mb-2.5 mt-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Days-Based NWC (DSO/DIO/DPO)
+            </label>
+            <button
+              onClick={toggleDaysNwc}
+              className="relative w-8 h-4 rounded-full transition-colors"
+              style={{ background: daysNwcOn ? '#111111' : 'rgba(17,17,17,0.15)' }}
+              title="Model NWC from first principles (A/R, inventory, A/P). Overrides the NWC % peg above."
+            >
+              <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform" style={{ left: daysNwcOn ? 16 : 2 }} />
+            </button>
+          </div>
+          {daysNwcOn && (
+            <div className="mt-2">
+              <InputField label="DSO (days sales outstanding)" path="margins.nwc_dso" value={ms.margins.nwc_dso ?? 45} suffix="days" step={1} />
+              <InputField label="DIO (days inventory)" path="margins.nwc_dio" value={ms.margins.nwc_dio ?? 60} suffix="days" step={1} />
+              <InputField label="DPO (days payable)" path="margins.nwc_dpo" value={ms.margins.nwc_dpo ?? 45} suffix="days" step={1} />
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* Costs & Fees */}
@@ -463,6 +529,67 @@ const InputPanel: React.FC = () => {
             <InputField label="Deal Allocation %" path="fund_assumptions.deal_allocation_pct" value={fa.deal_allocation_pct} suffix="%" step={0.01} />
           </>
         )}
+      </Section>
+
+      {/* Credit Covenants (P2-4 scalars, P4-8 springing, P4-10 recovery, P4-13 cash trap) */}
+      <Section title="Credit Covenants" defaultOpen={false}>
+        <InputField label="Leverage Covenant (max)" path="credit_covenants.leverage_covenant" value={cov.leverage_covenant} suffix="x" step={0.25} />
+        <InputField label="DSCR Covenant (min)" path="credit_covenants.dscr_covenant" value={cov.dscr_covenant} suffix="x" step={0.05} />
+        <InputField label="FCCR Covenant (min)" path="credit_covenants.fccr_covenant" value={cov.fccr_covenant} suffix="x" step={0.05} />
+
+        {/* Cash trap / restricted payments (P4-13) */}
+        <div className="mb-2.5 mt-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Cash Trap (block distributions)
+            </label>
+            <button
+              onClick={toggleCashTrap}
+              className="relative w-8 h-4 rounded-full transition-colors"
+              style={{ background: cashTrapOn ? '#111111' : 'rgba(17,17,17,0.15)' }}
+              title="Block interim distributions when leverage exceeds / DSCR falls below the trigger."
+            >
+              <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform" style={{ left: cashTrapOn ? 16 : 2 }} />
+            </button>
+          </div>
+          {cashTrapOn && (
+            <div className="mt-2">
+              <InputField label="Block if Leverage >" path="credit_covenants.distribution_block_leverage" value={cov.distribution_block_leverage ?? cov.leverage_covenant} suffix="x" step={0.25} />
+              <InputField label="Block if DSCR <" path="credit_covenants.distribution_block_dscr" value={cov.distribution_block_dscr ?? cov.dscr_covenant} suffix="x" step={0.05} />
+            </div>
+          )}
+        </div>
+
+        {/* Springing DSCR covenant (P4-8) */}
+        <div className="mb-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Springing DSCR (revolver-drawn)
+            </label>
+            <button
+              onClick={toggleSpringing}
+              className="relative w-8 h-4 rounded-full transition-colors"
+              style={{ background: springingOn ? '#111111' : 'rgba(17,17,17,0.15)' }}
+              title="A tighter DSCR test that applies only when revolver utilisation exceeds the threshold."
+            >
+              <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform" style={{ left: springingOn ? 16 : 2 }} />
+            </button>
+          </div>
+          {springingOn && (
+            <div className="mt-2">
+              <InputField label="Springing DSCR (min)" path="credit_covenants.springing_dscr_covenant" value={cov.springing_dscr_covenant ?? cov.dscr_covenant} suffix="x" step={0.05} />
+              <InputField label="Revolver Util. Trigger" path="credit_covenants.springing_utilization_threshold" value={cov.springing_utilization_threshold ?? 0.35} suffix="%" step={0.05} />
+            </div>
+          )}
+        </div>
+
+        {/* Recovery haircuts (P4-10) — defaults used when blank */}
+        <label className="text-[10px] tracking-wider block mb-1" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+          Recovery Haircuts (distressed)
+        </label>
+        <InputField label="EBITDA Haircut" path="credit_covenants.recovery_ebitda_haircut" value={cov.recovery_ebitda_haircut ?? 0.40} suffix="%" step={0.05} />
+        <InputField label="Multiple Haircut" path="credit_covenants.recovery_multiple_haircut" value={cov.recovery_multiple_haircut ?? 0.50} suffix="%" step={0.05} />
+        <InputField label="Distressed Cost %" path="credit_covenants.recovery_distressed_cost_pct" value={cov.recovery_distressed_cost_pct ?? 0.10} suffix="%" step={0.05} />
       </Section>
     </div>
   );

@@ -8,6 +8,7 @@ const pct = (v: number) => (v * 100).toFixed(1) + '%';
 const CreditPanel: React.FC = () => {
   const ca = useDealEngineStore((s) => s.modelState?.credit_analysis);
   const cov = useDealEngineStore((s) => s.modelState?.credit_covenants);
+  const ds = useDealEngineStore((s) => s.modelState?.debt_schedule);
   const currency = useDealEngineStore((s) => s.modelState?.currency || 'GBP');
   // When the debt/interest loop didn't converge, credit metrics are computed on an
   // unconverged schedule — degrade them visually rather than presenting as reliable.
@@ -22,6 +23,12 @@ const CreditPanel: React.FC = () => {
   const fccrCov = cov?.fccr_covenant ?? 1.10;
 
   const hasInsolvencyRisk = ca.insolvency_warning_by_year?.some(w => w);
+
+  // A3: cash-trap (distribution block) + springing-DSCR covenant surfacing.
+  const distBlocked = ds?.distribution_blocked_by_year ?? [];
+  const springBreach = ca.springing_breach_by_year ?? [];
+  const showDistBlocked = cov?.distribution_block_leverage != null || cov?.distribution_block_dscr != null || distBlocked.some(Boolean);
+  const showSpringing = cov?.springing_dscr_covenant != null || springBreach.some(Boolean);
 
   const headerStyle = {
     fontFamily: "'JetBrains Mono', monospace",
@@ -197,6 +204,32 @@ const CreditPanel: React.FC = () => {
                 <td key={m.year} style={cellStyle}>{pct(m.debt_paydown_pct)}</td>
               ))}
             </tr>
+            {/* Springing DSCR covenant (P4-8) — only in drawn years */}
+            {showSpringing && (
+              <tr>
+                <td style={{ ...labelCell, fontWeight: 600 }} title="Tighter DSCR test that springs when revolver utilisation exceeds the trigger.">
+                  Springing DSCR{cov?.springing_dscr_covenant != null ? ` ≥${cov.springing_dscr_covenant.toFixed(2)}x` : ''}
+                </td>
+                {ca.metrics_by_year.map((m, i) => (
+                  <td key={m.year} style={{ ...cellStyle, color: springBreach[i] ? '#b91c1c' : 'rgba(17,17,17,0.35)', fontWeight: springBreach[i] ? 700 : 400 }}>
+                    {springBreach[i] ? 'BREACH' : '—'}
+                  </td>
+                ))}
+              </tr>
+            )}
+            {/* Cash trap / restricted payments (P4-13) */}
+            {showDistBlocked && (
+              <tr style={{ background: '#F9F9F7' }}>
+                <td style={{ ...labelCell, fontWeight: 600 }} title="Interim distributions blocked when the leverage / DSCR trigger is hit.">
+                  Dist. Blocked
+                </td>
+                {ca.metrics_by_year.map((m, i) => (
+                  <td key={m.year} style={{ ...cellStyle, color: distBlocked[i] ? '#b91c1c' : 'rgba(17,17,17,0.35)', fontWeight: distBlocked[i] ? 700 : 400 }}>
+                    {distBlocked[i] ? 'BLOCKED' : '—'}
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -222,9 +255,15 @@ const CreditPanel: React.FC = () => {
         </div>
 
         <div>
-          <div className="text-[10px] font-medium tracking-wider uppercase mb-2" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
-            Recovery (50% EV Stress)
+          <div className="text-[10px] font-medium tracking-wider uppercase mb-1" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+            Recovery Waterfall
           </div>
+          {(ca.recovery_default_year != null || ca.recovery_stress_ev != null) && (
+            <div className="text-[9px] mb-2" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {ca.recovery_default_year != null ? `Yr-of-default: Yr ${ca.recovery_default_year}` : ''}
+              {ca.recovery_stress_ev != null ? ` · distressed EV ${sym}${fmt(ca.recovery_stress_ev)}` : ''}
+            </div>
+          )}
           <div className="space-y-1">
             {ca.recovery_waterfall.map((r) => (
               <div key={r.tranche} className="flex justify-between" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>

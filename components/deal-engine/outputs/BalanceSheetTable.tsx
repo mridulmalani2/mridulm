@@ -9,6 +9,8 @@ const BalanceSheetTable: React.FC = () => {
   const bs = ms.balance_sheet;
   const sym = csym(ms.currency);
   const years = bs.years;
+  const m = ms.margins;
+  const daysNwcOn = m.nwc_dso != null || m.nwc_dio != null || m.nwc_dpo != null;
 
   const num = (v: number) => (v < 0 ? `(${Math.abs(v).toFixed(1)})` : v.toFixed(1));
 
@@ -68,6 +70,13 @@ const BalanceSheetTable: React.FC = () => {
             <SectionRow label="Assets" />
             <Row label="Cash" pick={(y) => y.cash} />
             <Row label="Net Working Capital" pick={(y) => y.net_working_capital} alt />
+            {daysNwcOn && (
+              <tr>
+                <td className="py-0.5 px-2 text-[9px]" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }} colSpan={years.length + 1}>
+                  days-based · DSO {m.nwc_dso ?? 0} / DIO {m.nwc_dio ?? 0} / DPO {m.nwc_dpo ?? 0}
+                </td>
+              </tr>
+            )}
             <Row label="Net PP&E" pick={(y) => y.net_ppe} />
             <Row label="Deferred Fin. Costs" pick={(y) => y.deferred_financing_costs} alt />
             <Row label="Goodwill" pick={(y) => y.goodwill} />
