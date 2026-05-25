@@ -308,6 +308,8 @@ class CreditAnalysis(BaseModel):
     refinancing_risk: bool = False
     refinancing_risk_detail: str = ""
     recovery_waterfall: list[RecoveryTranche] = Field(default_factory=list)
+    recovery_default_year: Optional[int] = None   # year-of-default basis (P4-10)
+    recovery_stress_ev: Optional[float] = None
     credit_rating_estimate: str = ""
 
 

@@ -13,6 +13,7 @@ from backend.engine.projections import build_projections
 from backend.engine.debt_schedule import build_debt_schedule
 from backend.engine.balance_sheet import compute_balance_sheet
 from backend.engine.fund_returns import compute_fund_returns
+from backend.engine.reality_check import compute_credit_analysis
 
 
 def _base_state() -> ModelState:
@@ -291,3 +292,48 @@ class TestRefinancing:
         bs = compute_balance_sheet(with_prem, proj_b, ds_b, ret_b)
         assert bs.closes
         assert bs.max_abs_check < 0.01
+
+
+class TestRecoveryYearOfDefault:
+    """P4-10 — recovery on the peak-leverage (year-of-default) distressed EV (Python mirror)."""
+
+    def test_reports_basis_and_recovers(self):
+        s = _base_state()
+        ret, proj, ds = _run_full_model(s)
+        ca = compute_credit_analysis(s, proj, ds)
+        assert ca.recovery_default_year is not None
+        assert 1 <= ca.recovery_default_year <= s.exit.holding_period
+        assert ca.recovery_stress_ev > 0
+        senior = next(r for r in ca.recovery_waterfall if r.tranche == "Senior TLB")
+        assert 0 < senior.recovery_pct <= 1
+
+    def test_deeper_haircut_lowers_recovery(self):
+        mild = _base_state()
+        mild.credit_covenants.recovery_ebitda_haircut = 0.2
+        mild.credit_covenants.recovery_multiple_haircut = 0.3
+        mild.credit_covenants.recovery_distressed_cost_pct = 0.05
+        severe = _base_state()
+        severe.credit_covenants.recovery_ebitda_haircut = 0.6
+        severe.credit_covenants.recovery_multiple_haircut = 0.6
+        severe.credit_covenants.recovery_distressed_cost_pct = 0.15
+        ret_a, proj_a, ds_a = _run_full_model(mild)
+        ret_b, proj_b, ds_b = _run_full_model(severe)
+        ca_a = compute_credit_analysis(mild, proj_a, ds_a)
+        ca_b = compute_credit_analysis(severe, proj_b, ds_b)
+        assert ca_b.recovery_stress_ev < ca_a.recovery_stress_ev
+
+    def test_senior_paid_before_junior(self):
+        from backend.models.debt import DebtTranche
+        s = _base_state()
+        s.debt_tranches = [
+            DebtTranche(name="Mezz", tranche_type="mezzanine", principal=40.0,
+                        interest_rate=0.10, rate_type="fixed", amortization_type="bullet"),
+            DebtTranche(name="Senior", tranche_type="senior", principal=60.0,
+                        interest_rate=0.07, rate_type="fixed", amortization_type="bullet"),
+        ]
+        s.derive_entry_fields()
+        s.ensure_list_lengths()
+        ret, proj, ds = _run_full_model(s)
+        ca = compute_credit_analysis(s, proj, ds)
+        names = [r.tranche for r in ca.recovery_waterfall]
+        assert names.index("Senior") < names.index("Mezz")

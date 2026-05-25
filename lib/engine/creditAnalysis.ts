@@ -48,6 +48,22 @@ export function computeCreditAnalysis(
   const leverageHeadroomByYear: number[] = [];
   const insolvencyWarningByYear: boolean[] = [];
   const ecfByYear: number[] = [];
+  const springingBreachByYear: boolean[] = [];
+
+  // Springing covenant (P4-8): a DSCR test that only bites when revolver utilisation
+  // exceeds the threshold. Identify revolver tranches once for the per-year check.
+  const revolverIdx = state.debt_tranches
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => t.tranche_type === 'revolver');
+  const springingActive = (i: number): boolean => {
+    if (cov.springing_dscr_covenant == null || cov.springing_utilization_threshold == null) return false;
+    for (const { t, i: tIdx } of revolverIdx) {
+      const drawn = debtSchedule.tranche_schedules[tIdx]?.[i]?.ending_balance ?? 0;
+      const commitment = t.commitment ?? t.principal;
+      if (commitment > 0 && drawn / commitment > cov.springing_utilization_threshold) return true;
+    }
+    return false;
+  };
 
   for (let i = 0; i < hp; i++) {
     const yr = projections[i];
@@ -112,7 +128,15 @@ export function computeCreditAnalysis(
       ecf,
     });
 
-    dscrHeadroomByYear.push(Math.min(dscr, 99) - effDscrCov(i));
+    // Springing DSCR test (P4-8): when active, the binding covenant for the year is the
+    // tighter of the base and springing levels; headroom is measured against that.
+    const isSpringing = springingActive(i);
+    const effDscr = isSpringing && cov.springing_dscr_covenant != null
+      ? Math.max(effDscrCov(i), cov.springing_dscr_covenant)
+      : effDscrCov(i);
+    const dscrCapped = Math.min(dscr, 99);
+    dscrHeadroomByYear.push(dscrCapped - effDscr);
+    springingBreachByYear.push(isSpringing && dscrCapped < (cov.springing_dscr_covenant ?? 0));
     fccrHeadroomByYear.push(Math.min(fccr, 99) - effFccrCov(i));
     leverageHeadroomByYear.push(Math.max(0, effLevCov(i) - leverage));
     insolvencyWarningByYear.push(insolvencyWarning);
@@ -144,15 +168,47 @@ export function computeCreditAnalysis(
     }
   }
 
-  // Recovery waterfall (simplified: 50% EV haircut scenario)
-  const stressEV = state.entry.enterprise_value * 0.5;
+  // Recovery waterfall (P4-10): distressed EV at the YEAR OF DEFAULT — the peak-leverage
+  // hold year, the most likely default point — not a static entry-EV × 50%. EV =
+  // (year EBITDA × (1 − EBITDA haircut)) × (entry multiple × (1 − multiple haircut)) less
+  // distressed sale costs. Recovered against that year's tranche balances, senior first.
+  const ebitdaHaircut = cov.recovery_ebitda_haircut ?? 0.4;
+  const multipleHaircut = cov.recovery_multiple_haircut ?? 0.5;
+  const distressedCostPct = cov.recovery_distressed_cost_pct ?? 0.10;
+
+  // Default year = peak leverage over the hold (fallback to last modelled year).
+  let defaultYrIdx = 0;
+  let peakLev = -Infinity;
+  for (let i = 0; i < metricsByYear.length; i++) {
+    const lev = metricsByYear[i].leverage;
+    if (lev > peakLev) { peakLev = lev; defaultYrIdx = i; }
+  }
+  const defaultProj = projections[defaultYrIdx];
+  const defaultEbitda = defaultProj ? defaultProj.ebitda_adj : 0;
+  const distressedEv = defaultEbitda * (1 - ebitdaHaircut)
+    * (state.entry.entry_ebitda_multiple * (1 - multipleHaircut));
+  const stressEV = Math.max(0, distressedEv * (1 - distressedCostPct));
+
+  // Order tranches by seniority for the waterfall (senior/unitranche/revolver → mezz → PIK/junior).
+  const seniorityRank = (t: string): number => {
+    if (SENIOR_TRANCHE_TYPES.has(t)) return 0;
+    if (t === 'mezzanine') return 1;
+    return 2; // pik_note / anything junior
+  };
+  const orderedTrancheIdx = state.debt_tranches
+    .map((t, i) => ({ i, rank: seniorityRank(t.tranche_type) }))
+    .sort((a, b) => a.rank - b.rank)
+    .map((x) => x.i);
+
   let remainingValue = stressEV;
-  const recoveryWaterfall = state.debt_tranches.map((t) => {
-    const recovery = Math.min(remainingValue, t.principal);
-    remainingValue = Math.max(0, remainingValue - t.principal);
+  const recoveryWaterfall = orderedTrancheIdx.map((tIdx) => {
+    const t = state.debt_tranches[tIdx];
+    const bal = debtSchedule.tranche_schedules[tIdx]?.[defaultYrIdx]?.ending_balance ?? t.principal;
+    const recovery = Math.min(remainingValue, bal);
+    remainingValue = Math.max(0, remainingValue - bal);
     return {
       tranche: t.name,
-      recovery_pct: t.principal > 0 ? recovery / t.principal : 0,
+      recovery_pct: bal > 0 ? recovery / bal : 0,
     };
   });
 
@@ -182,6 +238,9 @@ export function computeCreditAnalysis(
     refinancing_risk: refinancingRisk,
     refinancing_risk_detail: refinancingDetail,
     recovery_waterfall: recoveryWaterfall,
+    recovery_default_year: defaultYrIdx + 1,
+    recovery_stress_ev: stressEV,
+    springing_breach_by_year: springingBreachByYear,
     leverage_assessment: leverageAssessment,
   };
 }

@@ -520,6 +520,13 @@ export interface CreditAnalysis {
   refinancing_risk: boolean;
   refinancing_risk_detail: string;
   recovery_waterfall: { tranche: string; recovery_pct: number }[];
+  /** Year-of-default recovery basis (P4-10): the hold year used (peak leverage) and the
+   *  distressed EV recovered against. */
+  recovery_default_year?: number;
+  recovery_stress_ev?: number;
+  /** Springing DSCR covenant (P4-8): true in any year the test is active (revolver
+   *  utilisation > threshold) AND breached. */
+  springing_breach_by_year?: boolean[];
   /** Indicative leverage-tier characterisation (entry leverage only). NOT a credit rating —
    *  does not account for coverage, industry, business quality, or jurisdiction. */
   leverage_assessment: string;
@@ -540,6 +547,14 @@ export interface CreditCovenants {
   // blocked in any year the trigger is hit. Absent ⇒ distributions never blocked.
   distribution_block_leverage?: number;   // block when leverage > this
   distribution_block_dscr?: number;       // block when DSCR < this
+  // Springing covenant (P4-8): a DSCR test that only applies when revolver utilisation
+  // exceeds the threshold. Absent ⇒ no springing test.
+  springing_dscr_covenant?: number;
+  springing_utilization_threshold?: number;  // e.g. 0.35 = drawn > 35% of commitment
+  // Recovery haircuts (P4-10). Defaults: 40% EBITDA, 50% multiple, 10% distressed costs.
+  recovery_ebitda_haircut?: number;
+  recovery_multiple_haircut?: number;
+  recovery_distressed_cost_pct?: number;
 }
 
 // ── Revenue Segments ─────────────────────────────────────────────────────

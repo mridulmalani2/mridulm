@@ -569,61 +569,68 @@ def compute_credit_analysis(
             debt_paydown_pct=paydown_pct,
         ))
 
-    # ── Stress tests ──
+    # ── Exit references (used by refinancing-capacity logic below) ──
     exit_yr = projections.years[-1] if projections.years else None
     exit_ebitda = exit_yr.ebitda_adj if exit_yr else 0.0
-    exit_debt = (
-        debt_schedule.total_debt_by_year[-1]
-        if debt_schedule.total_debt_by_year
-        else 0.0
+    exit_debt = debt_schedule.total_debt_by_year[-1] if debt_schedule.total_debt_by_year else 0.0
+
+    # ── Recovery waterfall (P4-10): distressed EV at the YEAR OF DEFAULT ──
+    # Mirrors lib/engine/creditAnalysis.ts: the recovery basis is the peak-leverage hold
+    # year (the most likely default point), not a static exit/entry EV. EV = (year EBITDA
+    # × (1 − EBITDA haircut)) × (entry multiple × (1 − multiple haircut)) less distressed
+    # sale costs. Recovered against that year's tranche balances, senior first.
+    cov = getattr(state, "credit_covenants", None)
+    ebitda_haircut = cov.recovery_ebitda_haircut if cov and cov.recovery_ebitda_haircut is not None else 0.4
+    multiple_haircut = cov.recovery_multiple_haircut if cov and cov.recovery_multiple_haircut is not None else 0.5
+    distressed_cost_pct = cov.recovery_distressed_cost_pct if cov and cov.recovery_distressed_cost_pct is not None else 0.10
+
+    # Default year = peak leverage over the hold (fallback to last modelled year).
+    default_yr_idx = 0
+    peak_lev = float("-inf")
+    for i, m in enumerate(metrics):
+        if m.leverage > peak_lev:
+            peak_lev = m.leverage
+            default_yr_idx = i
+    default_proj = projections.years[default_yr_idx] if default_yr_idx < len(projections.years) else None
+    default_ebitda = default_proj.ebitda_adj if default_proj else 0.0
+    distressed_ev = (
+        default_ebitda * (1 - ebitda_haircut)
+        * (state.entry.entry_ebitda_multiple * (1 - multiple_haircut))
     )
+    stress_ev = max(0.0, distressed_ev * (1 - distressed_cost_pct))
 
-    # Stress exit multiples per upgrademodel.md
-    stress_exit_multiple = 6.0
-    stress_cases = [
-        ("20% EBITDA Stress", exit_ebitda * 0.80),
-        ("30% EBITDA Stress", exit_ebitda * 0.70),
-    ]
+    # Seniority order for the waterfall (senior/unitranche/revolver → mezz → PIK/junior).
+    from backend.engine.debt_schedule import _is_senior_tranche
 
-    # ── Recovery waterfall: tranche-by-tranche (senior → junior → equity) ──
+    def _seniority_rank(t) -> int:
+        if _is_senior_tranche(t):
+            return 0
+        ttype = (t.tranche_type or "").lower()
+        if "mezz" in ttype:
+            return 1
+        return 2
+    ordered_idx = sorted(range(len(state.debt_tranches)), key=lambda i: _seniority_rank(state.debt_tranches[i]))
+
     recovery_waterfall: list[RecoveryTranche] = []
+    remaining_ev = stress_ev
+    for t_idx in ordered_idx:
+        tranche = state.debt_tranches[t_idx]
+        tranche_balance = 0.0
+        if debt_schedule.tranche_schedules and t_idx < len(debt_schedule.tranche_schedules):
+            t_sched = debt_schedule.tranche_schedules[t_idx]
+            if t_sched and default_yr_idx < len(t_sched):
+                tranche_balance = t_sched[default_yr_idx].ending_balance
+        if tranche_balance > 0:
+            recovery_abs = min(remaining_ev, tranche_balance)
+            recovery_waterfall.append(RecoveryTranche(
+                tranche=tranche.name,
+                recovery_pct=recovery_abs / tranche_balance,
+            ))
+            remaining_ev = max(0.0, remaining_ev - recovery_abs)
 
-    for stress_label, stress_ebitda in stress_cases:
-        stress_ev = stress_ebitda * stress_exit_multiple
-        remaining_ev = stress_ev
-
-        for t_idx, tranche in enumerate(state.debt_tranches):
-            # Exit balance for this tranche
-            tranche_balance = 0.0
-            if (
-                debt_schedule.tranche_schedules
-                and t_idx < len(debt_schedule.tranche_schedules)
-            ):
-                t_sched = debt_schedule.tranche_schedules[t_idx]
-                if t_sched:
-                    tranche_balance = t_sched[-1].ending_balance
-
-            if tranche_balance > 0:
-                recovery_abs = min(remaining_ev, tranche_balance)
-                recovery_pct = recovery_abs / tranche_balance if tranche_balance > 0 else 0.0
-                recovery_waterfall.append(RecoveryTranche(
-                    tranche=f"{tranche.name} ({stress_label})",
-                    recovery_pct=recovery_pct,
-                ))
-                remaining_ev = max(0.0, remaining_ev - recovery_abs)
-
-        # Equity residual — use the canonical `initial_equity` alias rather
-        # than the misleading `equity_check` name (FINDING 7). Both fields
-        # point at the same value (kept in sync by `derive_entry_fields`),
-        # but `initial_equity` reads as the dollar amount it actually is.
-        initial_equity = state.entry.initial_equity
-        equity_recovery_pct = (
-            min(1.0, remaining_ev / initial_equity) if initial_equity > 0 else 0.0
-        )
-        recovery_waterfall.append(RecoveryTranche(
-            tranche=f"Equity ({stress_label})",
-            recovery_pct=equity_recovery_pct,
-        ))
+    initial_equity = state.entry.initial_equity
+    equity_recovery_pct = min(1.0, remaining_ev / initial_equity) if initial_equity > 0 else 0.0
+    recovery_waterfall.append(RecoveryTranche(tranche="Equity", recovery_pct=equity_recovery_pct))
 
     # ── Covenant headroom (3.5x leverage covenant as standard proxy) ──
     covenant_leverage = 3.5
@@ -680,6 +687,8 @@ def compute_credit_analysis(
         refinancing_risk=refinancing_risk,
         refinancing_risk_detail=refinancing_detail,
         recovery_waterfall=recovery_waterfall,
+        recovery_default_year=default_yr_idx + 1,
+        recovery_stress_ev=stress_ev,
         credit_rating_estimate="",
     )
 

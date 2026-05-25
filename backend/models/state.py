@@ -214,6 +214,13 @@ class CreditCovenants(BaseModel):
     # Cash trap / restricted-payment block (P4-13). None ⇒ distributions never blocked.
     distribution_block_leverage: Optional[float] = Field(default=None, description="Block distributions when leverage > this")
     distribution_block_dscr: Optional[float] = Field(default=None, description="Block distributions when DSCR < this")
+    # Springing covenant (P4-8) — TS engine only; kept here for model parity.
+    springing_dscr_covenant: Optional[float] = Field(default=None)
+    springing_utilization_threshold: Optional[float] = Field(default=None)
+    # Recovery haircuts (P4-10). None ⇒ defaults (40% EBITDA, 50% multiple, 10% costs).
+    recovery_ebitda_haircut: Optional[float] = Field(default=None)
+    recovery_multiple_haircut: Optional[float] = Field(default=None)
+    recovery_distressed_cost_pct: Optional[float] = Field(default=None)
 
 
 # ── Root ModelState ───────────────────────────────────────────────────────
