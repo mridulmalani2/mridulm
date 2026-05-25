@@ -101,13 +101,9 @@ export function ensureListLengths(state: ModelState): void {
       const annual = tranche.principal / hp;
       tranche.amortization_schedule = Array(hp).fill(annual);
     }
-    if (
-      tranche.amortization_type === 'bullet' &&
-      tranche.amortization_schedule.reduce((a, b) => a + b, 0) === 0 &&
-      tranche.principal > 0
-    ) {
-      tranche.amortization_schedule = [...Array(hp - 1).fill(0), tranche.principal];
-    }
+    // Bullets carry their balance to exit (repaid from sale proceeds), so the
+    // schedule stays all-zeros — the principal is captured in exit net debt, not
+    // amortised from operating cash in the final modelled year.
   }
 }
 
@@ -196,6 +192,7 @@ export function createDefaultModelState(): ModelState {
       ecf_by_year: [],
       total_commitment_fees_by_year: [],
       cash_balance_by_year: [],
+      distributions_paid_by_year: [],
     },
     returns: {
       irr: null,
@@ -286,8 +283,8 @@ export function createDefaultModelState(): ModelState {
     },
     credit_covenants: {
       leverage_covenant: 6.0,
-      dscr_covenant: 1.15,
-      fccr_covenant: 1.10,
+      dscr_covenant: 1.25,
+      fccr_covenant: 1.15,
     },
     credit_analysis: {
       metrics_by_year: [],
@@ -302,7 +299,7 @@ export function createDefaultModelState(): ModelState {
       refinancing_risk: false,
       refinancing_risk_detail: '',
       recovery_waterfall: [],
-      credit_rating_estimate: '',
+      leverage_assessment: '',
     },
     ebitda_bridge: {
       entry_ebitda: 0,
@@ -313,6 +310,11 @@ export function createDefaultModelState(): ModelState {
       integration_costs: 0,
       monitoring_fees: 0,
       exit_ebitda: 0,
+    },
+    balance_sheet: {
+      years: [],
+      closes: true,
+      max_abs_check: 0,
     },
     ai_overrides: {},
     ai_toggle_fields: [],

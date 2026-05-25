@@ -157,10 +157,16 @@ def build_projections(state: ModelState) -> AnnualProjection:
         total_capex = m_capex + g_capex
 
         # NWC
-        if state.margins.nwc_movement_method == "pct_change":
-            delta_nwc = (revenue - prev_revenue) * nwc_pct
+        if state.margins.nwc_movement_method == "explicit":
+            explicit = state.margins.nwc_explicit_by_year
+            # Use supplied per-year movements; fall back to pct_change when absent so
+            # an explicit method without data doesn't silently zero out NWC.
+            if explicit:
+                delta_nwc = explicit[t] if t < len(explicit) else 0.0
+            else:
+                delta_nwc = (revenue - prev_revenue) * nwc_pct
         else:
-            delta_nwc = 0.0  # explicit method — populated externally
+            delta_nwc = (revenue - prev_revenue) * nwc_pct
 
         # FCF (unlevered, FINDINGS 4 & 6) — base on NOPAT, deduct monitoring fee
         fcf_pre_debt = nopat + da - total_capex - delta_nwc - monitoring_fee

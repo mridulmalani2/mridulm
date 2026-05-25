@@ -11,6 +11,7 @@ from .debt import DebtSchedule, DebtTranche
 from .outputs import (
     AddOnAcquisition,
     AnnualProjection,
+    BalanceSheet,
     ChatMessage,
     CreditAnalysis,
     EBITDABridge,
@@ -78,6 +79,10 @@ class MarginAssumptions(BaseModel):
     growth_capex: list[float] = Field(default_factory=list)
     nwc_pct_revenue: float = Field(default=0.10, ge=0, le=0.50)
     nwc_movement_method: Literal["pct_change", "explicit"] = "pct_change"
+    nwc_explicit_by_year: list[float] = Field(
+        default_factory=list,
+        description="Per-year NWC movements (£m) used when nwc_movement_method == 'explicit'. Falls back to pct_change when empty.",
+    )
 
 
 class TaxAssumptions(BaseModel):
@@ -194,6 +199,7 @@ class ModelState(BaseModel):
     credit_analysis: CreditAnalysis = Field(default_factory=CreditAnalysis)
     fragility_analysis: FragilityAnalysis = Field(default_factory=FragilityAnalysis)
     ebitda_bridge: EBITDABridge = Field(default_factory=EBITDABridge)
+    balance_sheet: BalanceSheet = Field(default_factory=BalanceSheet)
     scenarios: list[ScenarioSet] = Field(default_factory=list)
     sensitivity_tables: list[SensitivityTable] = Field(default_factory=list)
     exit_reality_check: ExitRealityCheck = Field(default_factory=ExitRealityCheck)
@@ -349,13 +355,9 @@ class ModelState(BaseModel):
             ):
                 annual = tranche.principal / hp
                 tranche.amortization_schedule = [annual] * hp
-            # Bullet: all principal in final year
-            if (
-                tranche.amortization_type == "bullet"
-                and sum(tranche.amortization_schedule) == 0
-                and tranche.principal > 0
-            ):
-                tranche.amortization_schedule = [0.0] * (hp - 1) + [tranche.principal]
+            # Bullets carry their balance to exit (repaid from sale proceeds): the
+            # schedule stays all-zeros so the principal is captured in exit net debt,
+            # not amortised from operating cash in the final modelled year.
 
     def _build_margin_trajectory(self, hp: int) -> list[float]:
         base = self.margins.base_ebitda_margin

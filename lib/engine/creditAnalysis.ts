@@ -8,10 +8,16 @@ import type {
   DebtScheduleResult,
 } from '../dealEngineTypes';
 
-// Default covenant thresholds (used when no overrides are set on the model)
+// Default covenant thresholds (used when no overrides are set on the model).
+// DSCR/FCCR raised to reflect typical bank-arranged LBO terms — 1.15x DSCR was
+// too aggressive and understated covenant tightness across the whole model.
 const DEFAULT_LEVERAGE_COV = 6.0;
-const DEFAULT_DSCR_COV = 1.15;
-const DEFAULT_FCCR_COV = 1.10;
+const DEFAULT_DSCR_COV = 1.25;
+const DEFAULT_FCCR_COV = 1.15;
+
+// First-lien / senior tranche types for the senior-leverage metric. Mirrors the
+// Python backend `_is_senior_tranche` classification (revolver is pari-passu senior).
+const SENIOR_TRANCHE_TYPES = new Set(['senior', 'unitranche', 'revolver']);
 
 export function computeCreditAnalysis(
   state: ModelState,
@@ -28,15 +34,18 @@ export function computeCreditAnalysis(
     dscr_covenant: DEFAULT_DSCR_COV,
     fccr_covenant: DEFAULT_FCCR_COV,
   };
-  const leverageCov = cov.leverage_covenant;
-  const dscrCov = cov.dscr_covenant;
-  const fccrCov = cov.fccr_covenant;
+  // Resolve the effective covenant for a given year, honouring an optional
+  // step-down schedule (real credit agreements tighten covenants over the hold).
+  const effLevCov = (i: number) => cov.leverage_covenant_by_year?.[i] ?? cov.leverage_covenant;
+  const effDscrCov = (i: number) => cov.dscr_covenant_by_year?.[i] ?? cov.dscr_covenant;
+  const effFccrCov = (i: number) => cov.fccr_covenant_by_year?.[i] ?? cov.fccr_covenant;
 
   const metricsByYear: CreditMetricsYear[] = [];
   let cumulativePaydown = 0;
 
   const dscrHeadroomByYear: number[] = [];
   const fccrHeadroomByYear: number[] = [];
+  const leverageHeadroomByYear: number[] = [];
   const insolvencyWarningByYear: boolean[] = [];
   const ecfByYear: number[] = [];
 
@@ -57,8 +66,10 @@ export function computeCreditAnalysis(
     // Cumulative paydown tracks ALL repayments (mandatory + sweep) for balance-sheet accuracy
     cumulativePaydown += totalRepayment;
 
-    // Fixed Charge Coverage Ratio: (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Amort)
-    const numeratorFCCR = yr.ebitda_adj - yr.total_capex - yr.tax;
+    // Fixed Charge Coverage Ratio: (EBITDA - Maintenance Capex - Tax) / (Cash Interest + Mandatory Amort).
+    // Credit agreements define FCCR on maintenance capex only — growth capex is
+    // discretionary and excluded. total_capex remains in FCF (cash is cash).
+    const numeratorFCCR = yr.ebitda_adj - yr.maintenance_capex - yr.tax;
     // 9999 = "no debt service" sentinel; capped at 99 in output for display.
     const fccr = mandatoryDebtService > 0 ? numeratorFCCR / mandatoryDebtService : 9999;
 
@@ -72,9 +83,13 @@ export function computeCreditAnalysis(
     // Leverage: Net Debt / EBITDA; 9999 sentinel when EBITDA ≤ 0 (distressed).
     const leverage = yr.ebitda_adj > 0 ? totalDebt / yr.ebitda_adj : 9999;
 
-    const seniorDebt = debtSchedule.tranche_schedules.length > 0
-      ? debtSchedule.tranche_schedules[0][i]?.ending_balance || 0
-      : 0;
+    // Senior leverage = sum of ALL first-lien/senior tranche balances (filter by
+    // type, not array position). Using position [0] mis-reported senior leverage
+    // when a revolver — often listed first and undrawn at entry — sat in slot 0.
+    const seniorDebt = state.debt_tranches.reduce((sum, tranche, tIdx) => {
+      if (!SENIOR_TRANCHE_TYPES.has(tranche.tranche_type)) return sum;
+      return sum + (debtSchedule.tranche_schedules[tIdx]?.[i]?.ending_balance ?? 0);
+    }, 0);
     const seniorLeverage = yr.ebitda_adj > 0 ? seniorDebt / yr.ebitda_adj : 9999;
 
     // Excess Cash Flow = FCF pre-debt minus all mandatory obligations.
@@ -97,8 +112,9 @@ export function computeCreditAnalysis(
       ecf,
     });
 
-    dscrHeadroomByYear.push(Math.min(dscr, 99) - dscrCov);
-    fccrHeadroomByYear.push(Math.min(fccr, 99) - fccrCov);
+    dscrHeadroomByYear.push(Math.min(dscr, 99) - effDscrCov(i));
+    fccrHeadroomByYear.push(Math.min(fccr, 99) - effFccrCov(i));
+    leverageHeadroomByYear.push(Math.max(0, effLevCov(i) - leverage));
     insolvencyWarningByYear.push(insolvencyWarning);
     ecfByYear.push(ecf);
   }
@@ -107,9 +123,6 @@ export function computeCreditAnalysis(
   const maxDebt4x = entryEbitda * 4;
   const maxDebt5x = entryEbitda * 5;
   const maxDebt6x = entryEbitda * 6;
-
-  // Covenant headroom (leverage): headroom = covenant_leverage − actual leverage
-  const covenantHeadroom = metricsByYear.map((m) => Math.max(0, leverageCov - m.leverage));
 
   // Refinancing risk: flag if any bullet maturity > 50% of total debt
   let refinancingRisk = false;
@@ -135,22 +148,25 @@ export function computeCreditAnalysis(
     };
   });
 
-  // Credit rating estimate (simplified heuristic)
+  // Indicative leverage-tier characterisation (entry leverage only). Deliberately
+  // NOT a credit-rating letter grade: a model-generated "BB+" implies precision the
+  // methodology cannot support (no coverage, industry, business-quality or
+  // jurisdiction inputs). Surfaced with a disclaimer in the UI.
   const entryLeverage = entryDebt > 0 && entryEbitda > 0 ? entryDebt / entryEbitda : 0;
-  let rating = 'BB';
-  if (entryLeverage <= 3) rating = 'BBB';
-  else if (entryLeverage <= 4) rating = 'BB+';
-  else if (entryLeverage <= 5) rating = 'BB';
-  else if (entryLeverage <= 6) rating = 'BB-';
-  else if (entryLeverage <= 7) rating = 'B+';
-  else rating = 'B';
+  let leverageAssessment: string;
+  if (entryLeverage <= 0) leverageAssessment = 'Unlevered';
+  else if (entryLeverage <= 3) leverageAssessment = 'Conservative';
+  else if (entryLeverage <= 4) leverageAssessment = 'Moderate';
+  else if (entryLeverage <= 5) leverageAssessment = 'Leveraged';
+  else if (entryLeverage <= 6) leverageAssessment = 'Highly Leveraged';
+  else leverageAssessment = 'Aggressive';
 
   return {
     metrics_by_year: metricsByYear,
     max_debt_capacity_at_4x: maxDebt4x,
     max_debt_capacity_at_5x: maxDebt5x,
     max_debt_capacity_at_6x: maxDebt6x,
-    covenant_headroom_by_year: covenantHeadroom,
+    covenant_headroom_by_year: leverageHeadroomByYear,
     dscr_headroom_by_year: dscrHeadroomByYear,
     fccr_headroom_by_year: fccrHeadroomByYear,
     insolvency_warning_by_year: insolvencyWarningByYear,
@@ -158,6 +174,6 @@ export function computeCreditAnalysis(
     refinancing_risk: refinancingRisk,
     refinancing_risk_detail: refinancingDetail,
     recovery_waterfall: recoveryWaterfall,
-    credit_rating_estimate: rating,
+    leverage_assessment: leverageAssessment,
   };
 }

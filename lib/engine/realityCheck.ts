@@ -9,6 +9,7 @@ import type {
   ExitRealityCheck,
 } from '../dealEngineTypes';
 import { solveIrr } from './returns';
+import { csym } from './utils';
 
 const SECTOR_MEDIANS: Record<string, number> = {
   Technology: 16.0,
@@ -141,11 +142,12 @@ export function runRealityCheck(
   const totalFcfPreDebt = projections.reduce((s, yr) => s + yr.fcf_pre_debt, 0);
   const cumulativeNwcBuild = projections.reduce((s, yr) => s + yr.delta_nwc, 0);
   if (totalFcfPreDebt > 0 && cumulativeNwcBuild > totalFcfPreDebt * 0.15) {
+    const cy = csym(state.currency);
     flags.push({
       flag_type: 'nwc_deterioration',
       severity: 'warning',
-      description: `Cumulative NWC build of £${cumulativeNwcBuild.toFixed(1)}m consumes ${((cumulativeNwcBuild / totalFcfPreDebt) * 100).toFixed(0)}% of total FCF pre-debt — significant working capital trap.`,
-      quantified_impact: `£${cumulativeNwcBuild.toFixed(1)}m cash consumed by NWC (${((cumulativeNwcBuild / totalFcfPreDebt) * 100).toFixed(0)}% of FCF)`,
+      description: `Cumulative NWC build of ${cy}${cumulativeNwcBuild.toFixed(1)}m consumes ${((cumulativeNwcBuild / totalFcfPreDebt) * 100).toFixed(0)}% of total FCF pre-debt — significant working capital trap.`,
+      quantified_impact: `${cy}${cumulativeNwcBuild.toFixed(1)}m cash consumed by NWC (${((cumulativeNwcBuild / totalFcfPreDebt) * 100).toFixed(0)}% of FCF)`,
     });
   }
 
@@ -178,6 +180,21 @@ export function runRealityCheck(
         }
       }
     }
+  }
+
+  // RULE 10 — Explicit NWC method without supporting data
+  // Guards the silent fallback: a model set to 'explicit' NWC but missing per-year
+  // movements quietly reverts to pct_change, changing returns without notice.
+  if (
+    state.margins.nwc_movement_method === 'explicit' &&
+    !(state.margins.nwc_explicit_by_year && state.margins.nwc_explicit_by_year.length > 0)
+  ) {
+    flags.push({
+      flag_type: 'nwc_explicit_missing_data',
+      severity: 'warning',
+      description: 'NWC method is set to "explicit" but no per-year NWC movements were supplied — the model fell back to the %-of-revenue-change method. Enter explicit NWC movements or switch the method to avoid an unintended cash-flow assumption.',
+      quantified_impact: 'Explicit NWC selected, data missing — using pct_change fallback',
+    });
   }
 
   // Verdict — require all three dimensions to be non-aggressive for "conservative".

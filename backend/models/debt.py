@@ -25,6 +25,10 @@ class DebtTranche(BaseModel):
     base_rate: float = Field(
         default=0.0, ge=0, le=1.0, description="SOFR/EURIBOR if floating; 0 if fixed"
     )
+    base_rate_by_year: list[float] = Field(
+        default_factory=list,
+        description="Optional forward base-rate path for floating tranches; falls back to base_rate when empty.",
+    )
     spread: float = Field(
         default=0.0, ge=0, le=1.0, description="Spread if floating; full rate if fixed"
     )
@@ -43,6 +47,11 @@ class DebtTranche(BaseModel):
     )
     commitment_fee: float = Field(
         default=0.0, ge=0, le=0.1, description="% of undrawn (0 for term loans)"
+    )
+    commitment: float = Field(
+        default=0.0,
+        ge=0,
+        description="Revolver facility size (£m); drawn balance starts at principal and draws up to this. 0 ⇒ use principal.",
     )
     floor: float = Field(
         default=0.0, ge=0, le=1.0, description="Rate floor if floating"
@@ -129,3 +138,7 @@ class DebtSchedule(BaseModel):
     total_interest_tax_shield_by_year: list[float] = Field(default_factory=list)
     interest_shortfall_by_year: list[float] = Field(default_factory=list)
     cash_balance_by_year: list[float] = Field(default_factory=list)
+    distributions_paid_by_year: list[float] = Field(
+        default_factory=list,
+        description="Interim distributions actually paid (capped at available cash).",
+    )

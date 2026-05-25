@@ -30,11 +30,15 @@ export function buildDebtSchedule(
     ecf_by_year: [],
     total_commitment_fees_by_year: [],
     cash_balance_by_year: [],
+    distributions_paid_by_year: [],
   };
 
   if (!tranches.length) return empty;
 
-  const balances = tranches.map((t) => t.principal);
+  // Tranches drawn at entry start at full principal; tranches with a later
+  // draw_year_index (e.g. add-on acquisition debt) start at zero and are drawn
+  // at the beginning of their draw year inside the loop below.
+  const balances = tranches.map((t) => ((t.draw_year_index ?? 0) <= 0 ? t.principal : 0));
   const trancheYears: DebtScheduleYear[][] = tranches.map(() => []);
 
   // Cash balance roll-forward: tracks actual cash on the balance sheet each year.
@@ -42,6 +46,8 @@ export function buildDebtSchedule(
   // between the floor and current balance constrains sweep each period.
   let cashBalance = 0;
   const cashBalanceByYear: number[] = [];
+  const distributionsPaidByYear: number[] = [];
+  const distributions = state.exit.interim_distributions || [];
 
   for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
     const yr = yrIdx + 1;
@@ -56,11 +62,19 @@ export function buildDebtSchedule(
     // First pass: interest and mandatory amortization
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       const tranche = tranches[tIdx];
+
+      // Draw mid-hold debt (add-on acquisition financing) at the start of its draw year.
+      const drawYear = tranche.draw_year_index ?? 0;
+      if (drawYear > 0 && drawYear === yrIdx) {
+        balances[tIdx] = tranche.principal;
+      }
       const begBal = balances[tIdx];
 
       let effRate: number;
       if (tranche.rate_type === 'floating') {
-        effRate = Math.max(tranche.base_rate + tranche.spread, tranche.floor);
+        // Honour an optional forward base-rate path (rate cycle), else the flat base_rate.
+        const baseRateThisYear = tranche.base_rate_by_year?.[yrIdx] ?? tranche.base_rate;
+        effRate = Math.max(baseRateThisYear + tranche.spread, tranche.floor);
       } else {
         effRate = tranche.interest_rate;
       }
@@ -87,7 +101,7 @@ export function buildDebtSchedule(
       // amortised as a running cost on the outstanding balance (typically 0 for
       // term debt, non-zero only when explicitly set by user).
       const undrawnBal = tranche.tranche_type === 'revolver'
-        ? Math.max(0, tranche.principal - begBal)   // fee on undrawn capacity
+        ? Math.max(0, (tranche.commitment ?? tranche.principal) - begBal)   // fee on undrawn capacity
         : begBal;                                    // legacy: user-specified running fee on drawn
       const commitmentFeePaid = undrawnBal * tranche.commitment_fee;
 
@@ -176,8 +190,43 @@ export function buildDebtSchedule(
       periodTotalRepayment += entry.total_repayment;
     }
 
-    // Roll forward: ending cash = beginning cash + FCF − cash interest − commitment fees − repayments.
-    cashBalance = Math.max(0, cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment);
+    // Revolver dynamic draw/repay (P3-4): after mandatory amortisation and term-loan
+    // sweep, draw to cover a cash shortfall below the min-cash floor, or repay from
+    // excess cash. Interest is charged on the opening drawn balance (this year's first
+    // pass); a draw raises the balance for next year. The net principal change flows
+    // through total_repayment (negative = net draw) so the cash roll-forward below
+    // picks it up automatically. No-op for deals without a revolver tranche.
+    const minCashFloor = state.entry.min_cash_balance || 0;
+    let cashAfterService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment;
+    for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
+      if (tranches[tIdx].tranche_type !== 'revolver') continue;
+      const rEntry = yearEntries[tIdx];
+      const drawn = rEntry.ending_balance; // revolver isn't amortised/swept → equals begBal
+      const commitment = tranches[tIdx].commitment ?? tranches[tIdx].principal;
+      if (cashAfterService < minCashFloor) {
+        const draw = Math.min(minCashFloor - cashAfterService, Math.max(0, commitment - drawn));
+        rEntry.ending_balance = drawn + draw;
+        cashAfterService += draw;
+      } else if (drawn > 0) {
+        const repay = Math.min(cashAfterService - minCashFloor, drawn);
+        rEntry.ending_balance = drawn - repay;
+        cashAfterService -= repay;
+      }
+      const newRepayment = rEntry.beginning_balance + rEntry.pik_accrual - rEntry.ending_balance;
+      periodTotalRepayment += newRepayment - rEntry.total_repayment;
+      rEntry.total_repayment = newRepayment;
+      balances[tIdx] = rEntry.ending_balance;
+    }
+
+    // Roll forward: post-service cash = beginning cash + FCF − cash interest − commitment fees − repayments.
+    const cashPostService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment;
+    // Interim distributions (special dividends) are paid from available cash and
+    // cannot exceed it. Reducing cash here raises net debt and lowers exit equity,
+    // so distributions are no longer double-counted in returns.
+    const rawDist = yrIdx < distributions.length ? distributions[yrIdx] : 0;
+    const distPaid = Math.max(0, Math.min(rawDist, Math.max(0, cashPostService)));
+    cashBalance = Math.max(0, cashPostService - distPaid);
+    distributionsPaidByYear.push(distPaid);
     cashBalanceByYear.push(cashBalance);
   }
 
@@ -257,5 +306,6 @@ export function buildDebtSchedule(
     ecf_by_year: ecfByYear,
     total_commitment_fees_by_year: commitmentFeesByYear,
     cash_balance_by_year: cashBalanceByYear,
+    distributions_paid_by_year: distributionsPaidByYear,
   };
 }

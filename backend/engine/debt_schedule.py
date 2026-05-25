@@ -90,6 +90,8 @@ def build_debt_schedule(
 
     cash_balance_by_year: list[float] = []
     interest_shortfall_by_year: list[float] = []
+    distributions_paid_by_year: list[float] = []
+    distributions = state.exit.interim_distributions or []
 
     for yr_idx in range(hp):
         yr = yr_idx + 1
@@ -112,9 +114,13 @@ def build_debt_schedule(
                 beginning_balance=beg_bal,
             )
 
-            # Effective rate
+            # Effective rate — honour an optional forward base-rate path (rate cycle).
             if tranche.rate_type == "floating":
-                eff_rate = max(tranche.base_rate + tranche.spread, tranche.floor)
+                if tranche.base_rate_by_year and yr_idx < len(tranche.base_rate_by_year):
+                    base_rate_this_year = tranche.base_rate_by_year[yr_idx]
+                else:
+                    base_rate_this_year = tranche.base_rate
+                eff_rate = max(base_rate_this_year + tranche.spread, tranche.floor)
             else:
                 eff_rate = tranche.interest_rate
             entry.effective_rate = eff_rate
@@ -135,8 +141,13 @@ def build_debt_schedule(
                 entry.cash_interest = avg_bal * eff_rate if tranche.cash_interest else 0.0
                 entry.pik_accrual = 0.0
 
-            # Commitment fee
-            entry.commitment_fee_paid = beg_bal * tranche.commitment_fee
+            # Commitment fee — revolvers charge on undrawn capacity; other tranches
+            # keep the legacy running fee on the drawn balance.
+            if tranche.tranche_type == "revolver":
+                commitment = tranche.commitment if tranche.commitment else tranche.principal
+                entry.commitment_fee_paid = max(0.0, commitment - beg_bal) * tranche.commitment_fee
+            else:
+                entry.commitment_fee_paid = beg_bal * tranche.commitment_fee
 
             total_mandatory_amort += entry.scheduled_repayment
             total_cash_interest += entry.cash_interest
@@ -272,12 +283,58 @@ def build_debt_schedule(
             balances[t_idx] = entry.ending_balance
             tranche_years[t_idx].append(entry)
 
-        # Cash balance roll-forward
+        # Cash balance roll-forward, net of interim distributions (special dividends).
+        # Distributions are paid from available cash and cannot exceed it; reducing
+        # cash here raises net debt so the return no longer double-counts them.
         period_total_repayment = sum(e.total_repayment for e in year_entries)
-        cash_balance = max(
-            0.0,
-            cash_balance + fcf_pre_debt - total_cash_interest - period_total_repayment,
-        )
+
+        # Levered operating cash flow: NI + D&A + non-cash addbacks (financing-fee
+        # amortisation, PIK) − capex − ΔNWC − monitoring fee. Using NI (not unlevered
+        # FCFF) captures the interest tax shield, so cash / net debt are correct and
+        # the three-statement balance sheet closes.
+        total_pik_year = sum(e.pik_accrual for e in year_entries)
+        if proj_yr is not None:
+            levered_op_cash = (
+                proj_yr.net_income
+                + proj_yr.da
+                + proj_yr.financing_fee_amort
+                + total_pik_year
+                - proj_yr.total_capex
+                - proj_yr.delta_nwc
+                - state.fees.monitoring_fee_annual
+            )
+        else:
+            levered_op_cash = 0.0
+
+        # Revolver dynamic draw/repay (P3-4): draw to cover a cash shortfall below the
+        # min-cash floor, or repay from excess cash. Interest is charged on the opening
+        # drawn balance; the net principal change flows through total_repayment so the
+        # cash roll-forward below picks it up. No-op without a revolver tranche.
+        cash_after_service = cash_balance + levered_op_cash - period_total_repayment
+        for t_idx, tranche in enumerate(tranches):
+            if tranche.tranche_type != "revolver":
+                continue
+            r_entry = year_entries[t_idx]
+            drawn = r_entry.ending_balance
+            commitment = tranche.commitment if tranche.commitment else tranche.principal
+            if cash_after_service < min_cash:
+                draw = min(min_cash - cash_after_service, max(0.0, commitment - drawn))
+                r_entry.ending_balance = drawn + draw
+                cash_after_service += draw
+            elif drawn > 0:
+                repay = min(cash_after_service - min_cash, drawn)
+                r_entry.ending_balance = drawn - repay
+                cash_after_service -= repay
+            new_repayment = r_entry.beginning_balance + r_entry.pik_accrual - r_entry.ending_balance
+            period_total_repayment += new_repayment - r_entry.total_repayment
+            r_entry.total_repayment = new_repayment
+            balances[t_idx] = r_entry.ending_balance
+
+        cash_post_service = cash_balance + levered_op_cash - period_total_repayment
+        raw_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
+        dist_paid = max(0.0, min(raw_dist, max(0.0, cash_post_service)))
+        cash_balance = max(0.0, cash_post_service - dist_paid)
+        distributions_paid_by_year.append(dist_paid)
         cash_balance_by_year.append(cash_balance)
 
     # Build aggregate metrics
@@ -340,12 +397,13 @@ def build_debt_schedule(
         dscr_by_year.append(
             float("inf") if debt_service <= 0 else fcf_pre / debt_service
         )
-        # FCCR: (EBITDA - Capex - Tax) / (Cash Interest + Mandatory Amort)
-        # Distinct from DSCR — measures ability to cover fixed charges from
-        # cash earnings before interest and debt service, per lender convention.
-        total_capex = proj_yr.total_capex if proj_yr else 0.0
+        # FCCR: (EBITDA - Maintenance Capex - Tax) / (Cash Interest + Mandatory Amort).
+        # Credit agreements define FCCR on maintenance capex only — growth capex is
+        # discretionary and excluded. Distinct from DSCR; measures ability to cover
+        # fixed charges from cash earnings before interest and debt service.
+        maintenance_capex = proj_yr.maintenance_capex if proj_yr else 0.0
         tax = proj_yr.tax if proj_yr else 0.0
-        fccr_numerator = ebitda_adj - total_capex - tax
+        fccr_numerator = ebitda_adj - maintenance_capex - tax
         fccr_by_year.append(
             float("inf") if debt_service <= 0 else fccr_numerator / debt_service
         )
@@ -373,4 +431,5 @@ def build_debt_schedule(
         total_interest_tax_shield_by_year=shield_by_year,
         interest_shortfall_by_year=interest_shortfall_by_year,
         cash_balance_by_year=cash_balance_by_year,
+        distributions_paid_by_year=distributions_paid_by_year,
     )

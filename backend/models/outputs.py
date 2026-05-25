@@ -168,6 +168,13 @@ class ScenarioSet(BaseModel):
     moic: float = 0.0
     exit_equity: float = 0.0
     description: str = ""
+    # Per-scenario credit analysis (P3-5)
+    dscr_by_year: list[float] = Field(default_factory=list)
+    leverage_by_year: list[float] = Field(default_factory=list)
+    covenant_breach_year: Optional[int] = None
+    survives_hold: bool = True
+    # Per-scenario value-driver bridge (P3-6)
+    value_drivers: Optional["ValueDriverDecomposition"] = None
 
 
 # ── Sensitivity ───────────────────────────────────────────────────────────
@@ -293,6 +300,35 @@ class EBITDABridge(BaseModel):
     integration_costs: float = 0.0
     monitoring_fees: float = 0.0
     exit_ebitda: float = 0.0
+
+
+# ── Balance Sheet (three-statement close) ─────────────────────────────────
+
+class BalanceSheetYear(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    year: int = 0
+    cash: float = 0.0
+    net_working_capital: float = 0.0
+    net_ppe: float = 0.0
+    deferred_financing_costs: float = 0.0
+    goodwill: float = 0.0
+    total_assets: float = 0.0
+    total_debt: float = 0.0
+    deferred_tax_liability: float = 0.0
+    total_liabilities: float = 0.0
+    shareholders_equity: float = 0.0
+    total_liabilities_and_equity: float = 0.0
+    balance_check: float = 0.0
+    is_balanced: bool = True
+
+
+class BalanceSheet(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    years: list[BalanceSheetYear] = Field(default_factory=list)
+    closes: bool = True
+    max_abs_check: float = 0.0
 
 
 # ── Revenue Segments ─────────────────────────────────────────────────────

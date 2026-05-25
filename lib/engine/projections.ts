@@ -71,12 +71,14 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     const totalCapex = mCapex + gCapex;
 
     let deltaNwc: number;
-    if (state.margins.nwc_movement_method === 'pct_change') {
-      deltaNwc = (revenue - prevRevenue) * nwcPct;
+    if (state.margins.nwc_movement_method === 'explicit') {
+      // Use the per-year explicit NWC movements when supplied; otherwise fall back to
+      // pct_change (the reality check surfaces a warning so the fallback isn't silent).
+      const explicit = state.margins.nwc_explicit_by_year;
+      deltaNwc = explicit && explicit.length > 0
+        ? (explicit[t] ?? 0)
+        : (revenue - prevRevenue) * nwcPct;
     } else {
-      // 'explicit' method: fall back to pct_change so the model isn't silently zeroed.
-      // A dedicated per-year NWC input array would be needed to make this meaningful;
-      // until then, treat it the same as pct_change to avoid silent cash flow errors.
       deltaNwc = (revenue - prevRevenue) * nwcPct;
     }
 

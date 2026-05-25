@@ -1,12 +1,9 @@
 /** Number, currency, percentage formatters. */
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  INR: '₹', EUR: '€', USD: '$', GBP: '£', JPY: '¥',
-};
+import { csym } from './engine/utils';
 
 export function fmtCurrency(v: number, currency = 'GBP'): string {
-  const sym = CURRENCY_SYMBOLS[currency] || '£';
-  return `${sym}${Math.abs(v).toFixed(1)}m`;
+  return `${csym(currency)}${Math.abs(v).toFixed(1)}m`;
 }
 
 export function fmtPct(v: number | null | undefined): string {
