@@ -85,6 +85,37 @@ const InputPanel: React.FC = () => {
     updateField('exit.partial_exits', next.length ? next : undefined);
   };
 
+  // ── Per-tranche advanced inputs (A2: PIK toggle, refinancing, OID) ──
+  const togglePikElection = (i: number) => {
+    const t = ms.debt_tranches[i];
+    if (t.pik_toggle) {
+      updateField(`debt_tranches.${i}.pik_toggle`, false);
+    } else {
+      // Default every year to PIK (true) — preserves always-PIK behaviour until edited.
+      const arr = Array.from({ length: ms.exit.holding_period }, (_, k) => t.pik_election_by_year?.[k] ?? true);
+      updateField(`debt_tranches.${i}`, { ...t, pik_toggle: true, pik_election_by_year: arr });
+    }
+  };
+  const setPikElectionYear = (i: number, yr: number, pik: boolean) => {
+    const t = ms.debt_tranches[i];
+    const arr = Array.from({ length: ms.exit.holding_period }, (_, k) => (k === yr ? pik : (t.pik_election_by_year?.[k] ?? true)));
+    updateField(`debt_tranches.${i}.pik_election_by_year`, arr);
+  };
+  const toggleRefi = (i: number) => {
+    const t = ms.debt_tranches[i];
+    if (t.refinancing) {
+      updateField(`debt_tranches.${i}.refinancing`, undefined);
+    } else {
+      updateField(`debt_tranches.${i}.refinancing`, {
+        year: Math.max(1, Math.min(ms.exit.holding_period, Math.ceil(ms.exit.holding_period / 2))),
+        new_spread: t.rate_type === 'fixed' ? t.interest_rate : t.spread,
+        new_floor: t.floor,
+        prepayment_premium: 0.01,
+        extend_maturity_by: 0,
+      });
+    }
+  };
+
   const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[ms.currency ?? 'GBP'] ?? '£';
   const entryMultWarn = ms.entry.entry_ebitda_multiple > 15 ? 'High entry — flag for IC' : undefined;
   const levWarn = ms.entry.leverage_ratio > 7 ? 'Covenant breach risk' : undefined;
@@ -126,6 +157,77 @@ const InputPanel: React.FC = () => {
             <InputField label="Rate Type" path={`debt_tranches.${i}.rate_type`} value={t.rate_type} type="select" options={[{ value: 'fixed', label: 'Fixed' }, { value: 'floating', label: 'Floating' }]} />
             <InputField label="Interest Rate" path={`debt_tranches.${i}.interest_rate`} value={t.interest_rate} suffix="%" step={0.005} />
             <InputField label="Amortization" path={`debt_tranches.${i}.amortization_type`} value={t.amortization_type} type="select" options={AMORT_TYPES} />
+
+            {/* OID (P4-14) */}
+            <InputField label="OID %" path={`debt_tranches.${i}.oid_pct`} value={t.oid_pct ?? 0} suffix="%" step={0.005} />
+            {(t.oid_pct ?? 0) > 0 && (
+              <InputField label="OID Maturity" path={`debt_tranches.${i}.debt_maturity_years`} value={t.debt_maturity_years ?? ms.exit.holding_period} suffix="yrs" />
+            )}
+
+            {/* PIK election (P4-4) — only meaningful for a PIK-amortising tranche */}
+            {t.amortization_type === 'PIK' && (
+              <div className="mb-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+                    PIK Election (per yr)
+                  </label>
+                  <button
+                    onClick={() => togglePikElection(i)}
+                    className="relative w-8 h-4 rounded-full transition-colors"
+                    style={{ background: t.pik_toggle ? '#111111' : 'rgba(17,17,17,0.15)' }}
+                    title="Elect PIK or cash-pay per year. Off = always PIK."
+                  >
+                    <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform" style={{ left: t.pik_toggle ? 16 : 2 }} />
+                  </button>
+                </div>
+                {t.pik_toggle && (
+                  <div className="flex gap-1 flex-wrap">
+                    {Array.from({ length: ms.exit.holding_period }, (_, yr) => {
+                      const pik = t.pik_election_by_year?.[yr] ?? true;
+                      return (
+                        <button
+                          key={yr}
+                          onClick={() => setPikElectionYear(i, yr, !pik)}
+                          className="px-1.5 py-0.5 text-[9px] transition-colors"
+                          style={{ fontFamily: "'JetBrains Mono', monospace", color: pik ? '#b45309' : '#15803d', border: `1px solid ${pik ? 'rgba(180,83,9,0.4)' : 'rgba(21,128,61,0.4)'}` }}
+                          title={`Year ${yr + 1}: ${pik ? 'PIK (accrue)' : 'Cash pay'} — click to flip`}
+                        >
+                          {yr + 1}:{pik ? 'PIK' : 'Cash'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Refinancing (P4-3) */}
+            <div className="mb-1">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  Refinance Tranche
+                </label>
+                <button
+                  onClick={() => toggleRefi(i)}
+                  className="relative w-8 h-4 rounded-full transition-colors"
+                  style={{ background: t.refinancing ? '#111111' : 'rgba(17,17,17,0.15)' }}
+                  title="Reprice the tranche from the refi year, charge a prepayment premium, optionally extend maturity."
+                >
+                  <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform" style={{ left: t.refinancing ? 16 : 2 }} />
+                </button>
+              </div>
+              {t.refinancing && (
+                <>
+                  <InputField label="Refi Year" path={`debt_tranches.${i}.refinancing.year`} value={t.refinancing.year} suffix="yr" />
+                  <InputField label={t.rate_type === 'fixed' ? 'New All-in Rate' : 'New Spread'} path={`debt_tranches.${i}.refinancing.new_spread`} value={t.refinancing.new_spread} suffix="%" step={0.005} />
+                  {t.rate_type === 'floating' && (
+                    <InputField label="New Floor" path={`debt_tranches.${i}.refinancing.new_floor`} value={t.refinancing.new_floor} suffix="%" step={0.005} />
+                  )}
+                  <InputField label="Prepayment Premium" path={`debt_tranches.${i}.refinancing.prepayment_premium`} value={t.refinancing.prepayment_premium} suffix="%" step={0.005} />
+                  <InputField label="Extend Maturity" path={`debt_tranches.${i}.refinancing.extend_maturity_by`} value={t.refinancing.extend_maturity_by} suffix="yrs" />
+                </>
+              )}
+            </div>
           </div>
         ))}
         <div className="mb-3">
