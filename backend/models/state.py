@@ -17,6 +17,7 @@ from .outputs import (
     EBITDABridge,
     ExitRealityCheck,
     FragilityAnalysis,
+    FundReturns,
     Returns,
     RevenueSegment,
     ScenarioSet,
@@ -36,6 +37,15 @@ class FeeStructure(BaseModel):
     transaction_costs: float = Field(default=0.0, ge=0, description="Absolute £m")
 
 
+class MIPRatchetTier(BaseModel):
+    """A single ratchet tier (P4-1)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    moic_threshold: float = Field(default=2.0, ge=0, description="Pre-MIP MOIC at/above which this tier applies")
+    irr_threshold: Optional[float] = Field(default=None, description="Optional dual hurdle on pre-MIP equity IRR")
+    pool_pct: float = Field(default=0.15, ge=0, le=0.50, description="Pool % of pre-MIP exit equity at this tier")
+
+
 class ManagementIncentive(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -43,6 +53,11 @@ class ManagementIncentive(BaseModel):
     hurdle_moic: float = Field(default=2.0, ge=1.0, le=10.0, description="MOIC threshold")
     vesting_years: int = Field(default=4, ge=0, le=10)
     sweet_equity_pct: float = Field(default=0.0, ge=0, le=0.20, description="% co-invest")
+    ratchet_tiers: list[MIPRatchetTier] = Field(
+        default_factory=list,
+        description="Optional ratchet. When non-empty, the highest cleared tier's pool_pct "
+                    "overrides the single-hurdle behaviour; absent ⇒ unchanged.",
+    )
 
 
 class RevenueAssumptions(BaseModel):
@@ -133,6 +148,16 @@ class EntryAssumptions(BaseModel):
         return v
 
 
+class PartialExitEvent(BaseModel):
+    """Interim partial realisation / IPO selldown (P4-5)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    year: int = Field(default=1, ge=1, description="1-indexed hold year (< holding_period)")
+    pct_sold: float = Field(default=0.0, ge=0, le=1.0, description="Fraction of the CURRENT remaining stake sold")
+    exit_multiple: float = Field(default=10.0, ge=0, description="EV/EBITDA applied at this event")
+    exit_fee_pct: float = Field(default=0.0, ge=0, le=0.10, description="Advisory fee on this tranche's gross proceeds")
+
+
 class ExitAssumptions(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -151,11 +176,29 @@ class ExitAssumptions(BaseModel):
         default=None,
         description="Direct exit EV input (£m). If set, overrides exit_ebitda × exit_multiple.",
     )
+    partial_exits: list[PartialExitEvent] = Field(
+        default_factory=list,
+        description="Optional interim partial realisations (IPO float / secondary selldown). "
+                    "Empty ⇒ a single full exit (unchanged).",
+    )
     exit_ebitda: float = Field(default=0.0, description="Derived from projection")
     exit_ev: float = Field(default=0.0, description="exit_ebitda x exit_multiple")
     exit_net_debt: float = Field(default=0.0)
     exit_equity: float = Field(default=0.0)
     mip_payout: float = Field(default=0.0)
+
+
+class FundAssumptions(BaseModel):
+    """Fund-level (LP-facing) economics overlay (P4-2)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    management_fee_pct: float = Field(default=0.0, ge=0, le=0.05, description="% of basis per annum")
+    management_fee_basis: Literal["committed", "invested"] = "invested"
+    carry_rate: float = Field(default=0.20, ge=0, le=0.50)
+    preferred_return: float = Field(default=0.08, ge=0, le=0.50)
+    carry_waterfall: Literal["american", "european"] = "european"
+    fund_size: float = Field(default=0.0, ge=0, description="Total LP commitments (£m)")
+    deal_allocation_pct: float = Field(default=1.0, ge=0, le=1.0, description="This deal's share of the fund")
 
 
 # ── Root ModelState ───────────────────────────────────────────────────────
@@ -183,6 +226,9 @@ class ModelState(BaseModel):
     fees: FeeStructure = Field(default_factory=FeeStructure)
     mip: ManagementIncentive = Field(default_factory=ManagementIncentive)
     exit: ExitAssumptions = Field(default_factory=ExitAssumptions)
+    fund_assumptions: Optional[FundAssumptions] = Field(
+        default=None, description="Optional fund-level economics; when set, fund_returns is computed (P4-2)."
+    )
 
     # Revenue segments and add-on acquisitions
     revenue_segments: list[RevenueSegment] = Field(default_factory=list)
@@ -192,6 +238,7 @@ class ModelState(BaseModel):
     projections: AnnualProjection = Field(default_factory=AnnualProjection)
     debt_schedule: DebtSchedule = Field(default_factory=DebtSchedule)
     returns: Returns = Field(default_factory=Returns)
+    fund_returns: Optional[FundReturns] = Field(default=None, description="LP-facing overlay (P4-2)")
     value_drivers: ValueDriverDecomposition = Field(
         default_factory=ValueDriverDecomposition
     )

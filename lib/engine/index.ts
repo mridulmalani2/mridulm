@@ -12,6 +12,7 @@ import { computeEBITDABridge } from './ebitdaBridge';
 import { computeBalanceSheet } from './balanceSheet';
 import { computeFragility } from './fragility';
 import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
+import { computeFundReturns } from './fundReturns';
 
 // Increase iterations to give PIK-heavy structures enough room to converge.
 // PIK interest compounds onto the principal each period, so the interest/tax
@@ -131,6 +132,8 @@ export function fullRecalc(state: ModelState): ModelState {
   state.projections = { years: updatedProj };
   state.debt_schedule = ds;
   state.returns = ret;
+  // Fund-level (LP-facing) overlay — only when fund_assumptions is configured (P4-2).
+  state.fund_returns = computeFundReturns(state, ret);
   state.value_drivers = vd;
   state.exit_reality_check = rc;
 

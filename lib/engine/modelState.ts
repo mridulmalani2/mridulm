@@ -214,6 +214,7 @@ export function createDefaultModelState(): ModelState {
       total_distributions: 0,
       dpi_by_year: [],
       rvpi_by_year: [],
+      equity_cashflows: [],
       convergence_iterations: 1,
       convergence_delta: 0,
     },

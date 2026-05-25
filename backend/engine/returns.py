@@ -208,6 +208,24 @@ def _solve_irr_auto(cashflows: list[float], times: list[float] | None) -> Option
     return _solve_irr(cashflows)
 
 
+# ── MIP ratchet resolution (P4-1) ──────────────────────────────────────────
+
+def _resolve_mip_pool(mip, pre_mip_moic: float, pre_mip_irr: Optional[float]) -> tuple[float, bool]:
+    """Resolve (pool_pct, cleared). A non-empty ratchet schedule selects the highest
+    tier whose MOIC (and optional IRR dual-hurdle) is cleared; else single-hurdle."""
+    tiers = getattr(mip, "ratchet_tiers", None) or []
+    if tiers:
+        best = None
+        for t in tiers:
+            moic_ok = pre_mip_moic >= t.moic_threshold
+            irr_ok = t.irr_threshold is None or (pre_mip_irr is not None and pre_mip_irr >= t.irr_threshold)
+            if moic_ok and irr_ok and (best is None or t.moic_threshold > best.moic_threshold):
+                best = t
+        return (best.pool_pct, True) if best is not None else (0.0, False)
+    cleared = pre_mip_moic >= mip.hurdle_moic
+    return (mip.mip_pool_pct if cleared else 0.0, cleared)
+
+
 # ── Returns Calculation ───────────────────────────────────────────────────
 
 def calculate_returns(
@@ -254,31 +272,68 @@ def calculate_returns(
     exit_net_debt = max(0.0, exit_gross_debt - retained_cash)
     exit_fee = state.fees.exit_fee_pct * exit_ev
 
-    # Equity value after exit fee, before MIP. Note: gross MOIC must be
-    # computed from the fee-clean exit equity per the audit (FINDING 2).
+    # Full-stake (100%) equity values. Hurdle tested on the pre-fee MOIC per the
+    # audit convention (FINDING 2).
     exit_equity_pre_fees = exit_ev - exit_net_debt
-    exit_equity_after_fees = exit_equity_pre_fees - exit_fee
+    exit_equity_after_fees = exit_equity_pre_fees - exit_fee  # 100% stake, pre-MIP
 
-    # MIP hurdle is checked on the gross (pre-fee) equity multiple per
-    # standard waterfall convention.
-    gross_moic_pre_fees = exit_equity_pre_fees / entry_equity if entry_equity > 0 else 0.0
-
-    if gross_moic_pre_fees >= state.mip.hurdle_moic:
-        mip_payout = state.mip.mip_pool_pct * exit_equity_after_fees
-    else:
-        mip_payout = 0.0
-
-    exit_equity = exit_equity_after_fees - mip_payout
-
-    # ── Interim distributions (dividend recaps) ──
-    # Use distributions actually PAID (capped at available cash by the debt schedule):
-    # paying them reduced cash and raised exit net debt, so adding them to the return
-    # no longer double-counts.
+    # ── Interim distributions (dividend recaps), paid & capped at available cash ──
     paid = debt_schedule.distributions_paid_by_year or []
-    distributions = (paid[:hp] if paid else [0.0] * hp)
+    distributions = (list(paid[:hp]) if paid else [0.0] * hp)
     while len(distributions) < hp:
         distributions.append(0.0)
     total_distributions = sum(distributions)
+
+    # ── Partial exits / IPO selldown (P4-5) ──
+    # Mirrors lib/engine/returns.ts: each event realises pct_sold of the current
+    # remaining stake at that year's implied equity value, booked at the event year;
+    # the residual carried to final exit shrinks. Interim partials are pre-promote.
+    partial_proceeds = [0.0] * hp         # net of event fee (equity IRR)
+    partial_proceeds_gross = [0.0] * hp   # pre fee (levered/gross IRR)
+    remaining_stake = 1.0
+    events = sorted(
+        [e for e in (state.exit.partial_exits or []) if 1 <= e.year < hp and e.pct_sold > 0],
+        key=lambda e: e.year,
+    )
+    for ev in events:
+        yi = ev.year - 1
+        proj_yr = projections.years[yi] if yi < len(projections.years) else None
+        if proj_yr is None:
+            continue
+        ev_net_debt = debt_schedule.net_debt_by_year[yi] if yi < len(debt_schedule.net_debt_by_year) else 0.0
+        ev_equity_value = max(0.0, ev.exit_multiple * proj_yr.ebitda_adj - ev_net_debt)
+        sold = min(1.0, max(0.0, ev.pct_sold))
+        gross = sold * remaining_stake * ev_equity_value
+        partial_proceeds_gross[yi] += gross
+        partial_proceeds[yi] += gross * (1.0 - max(0.0, ev.exit_fee_pct))
+        remaining_stake *= (1.0 - sold)
+    total_partial_proceeds = sum(partial_proceeds)
+
+    # ── MIP (ratchet + optional dual hurdle, P4-1) ──
+    pre_mip_moic = exit_equity_pre_fees / entry_equity if entry_equity > 0 else 0.0
+    needs_pre_mip_irr = any(
+        getattr(t, "irr_threshold", None) is not None
+        for t in (getattr(state.mip, "ratchet_tiers", None) or [])
+    )
+    pre_mip_irr: Optional[float] = None
+    if needs_pre_mip_irr:
+        pre_mip_residual = remaining_stake * exit_equity_after_fees
+        pre_mip_cfs = [-entry_equity]
+        for i in range(hp):
+            cf = distributions[i] + partial_proceeds[i]
+            if i == hp - 1:
+                cf += pre_mip_residual
+            pre_mip_cfs.append(cf)
+        pre_mip_irr = _solve_irr_auto(pre_mip_cfs, times)
+
+    pool_pct, _cleared = _resolve_mip_pool(state.mip, pre_mip_moic, pre_mip_irr)
+    mip_payout_full = pool_pct * exit_equity_after_fees
+    # Promote crystallises on the residual stake held to final exit.
+    mip_payout = remaining_stake * mip_payout_full
+    residual_post_mip = remaining_stake * (exit_equity_after_fees - mip_payout_full)
+
+    # exit_equity = total realised sponsor equity (residual at exit + interim partials)
+    exit_equity = residual_post_mip + total_partial_proceeds
 
     # MOIC (net) includes all distributions
     moic = (exit_equity + total_distributions) / entry_equity if entry_equity > 0 else 0.0
@@ -312,26 +367,24 @@ def calculate_returns(
             else:
                 rvpi_by_year.append(0.0)
 
-    # ── Equity IRR (post-fees, post-MIP, with distributions) ──
+    # ── Equity IRR (post-fees, post-MIP; distributions + partial proceeds at their years) ──
     equity_cfs: list[float] = [-entry_equity]
     for yr_idx in range(hp):
-        dist = distributions[yr_idx]
+        cf = distributions[yr_idx] + partial_proceeds[yr_idx]
         if yr_idx == hp - 1:
-            equity_cfs.append(exit_equity + dist)
-        else:
-            equity_cfs.append(dist)
+            cf += residual_post_mip
+        equity_cfs.append(cf)
     irr = _solve_irr_auto(equity_cfs, times)
 
-    # ── Levered pre-fee IRR (equity IRR before entry/exit fees and MIP) ──
+    # ── Levered pre-fee IRR (residual stake at exit + pre-fee partial proceeds) ──
     entry_equity_levered = state.entry.enterprise_value - state.entry.total_debt_raised
     exit_equity_levered = exit_ev - exit_net_debt  # no exit fee, no MIP
     levered_cfs = [-entry_equity_levered]
     for yr_idx in range(hp):
-        dist = distributions[yr_idx]
+        cf = distributions[yr_idx] + partial_proceeds_gross[yr_idx]
         if yr_idx == hp - 1:
-            levered_cfs.append(exit_equity_levered + dist)
-        else:
-            levered_cfs.append(dist)
+            cf += remaining_stake * exit_equity_levered
+        levered_cfs.append(cf)
     irr_levered = _solve_irr_auto(levered_cfs, times) if entry_equity_levered > 0 else None
 
     # ── Gross IRR (pre-fee, pre-carry — the canonical "gross" return) ──
@@ -339,11 +392,10 @@ def calculate_returns(
     # entry_equity, exit fee not in exit value, MIP not netted).
     gross_cfs = [-entry_equity]
     for yr_idx in range(hp):
-        dist = distributions[yr_idx]
+        cf = distributions[yr_idx] + partial_proceeds_gross[yr_idx]
         if yr_idx == hp - 1:
-            gross_cfs.append(exit_equity_pre_fees + dist)
-        else:
-            gross_cfs.append(dist)
+            cf += remaining_stake * exit_equity_pre_fees
+        gross_cfs.append(cf)
     irr_gross = _solve_irr_auto(gross_cfs, times) if entry_equity > 0 else None
 
     # ── Unlevered IRR (FINDING 5: no exit fee subtraction) ──
@@ -388,6 +440,7 @@ def calculate_returns(
         total_distributions=total_distributions,
         dpi_by_year=dpi_by_year,
         rvpi_by_year=rvpi_by_year,
+        equity_cashflows=equity_cfs,
     )
 
 

@@ -73,8 +73,32 @@ class Returns(BaseModel):
     total_distributions: float = Field(default=0.0, description="Sum of interim distributions")
     dpi_by_year: list[float] = Field(default_factory=list, description="Cumulative DPI per year")
     rvpi_by_year: list[float] = Field(default_factory=list, description="Residual value to paid-in per year")
+    equity_cashflows: list[float] = Field(
+        default_factory=list,
+        description="Realised sponsor equity stream [t0..hp]: −entry, interim distributions + "
+                    "partial-exit proceeds, post-MIP residual at exit. Single source for the "
+                    "equity IRR and the fund-level overlay (P4-2).",
+    )
     convergence_iterations: int = Field(default=1, description="Debt/interest convergence iterations used")
     convergence_delta: float = Field(default=0.0, description="Final interest delta (£m) at convergence")
+
+
+# ── Fund-Level Returns (P4-2) ─────────────────────────────────────────────
+
+class FundReturns(BaseModel):
+    """LP-facing net returns after management fees and carried interest."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    net_irr: Optional[float] = None
+    net_moic: float = 0.0
+    gross_irr: Optional[float] = None
+    gross_moic: float = 0.0
+    gross_to_net_spread: Optional[float] = None
+    management_fees_total: float = 0.0
+    carried_interest: float = 0.0
+    preferred_return_shortfall: float = 0.0
+    lp_paid_in: float = 0.0
+    lp_distributions: float = 0.0
 
 
 # ── Value Driver Decomposition ────────────────────────────────────────────

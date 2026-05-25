@@ -37,11 +37,23 @@ export interface FeeStructure {
   transaction_costs: number;
 }
 
+export interface MIPRatchetTier {
+  /** Total-return MOIC (pre-MIP) at or above which this tier's pool applies. */
+  moic_threshold: number;
+  /** Optional dual hurdle — pre-MIP equity IRR must also clear this to unlock the tier. */
+  irr_threshold?: number;
+  /** Management pool % of pre-MIP exit equity granted at this tier. */
+  pool_pct: number;
+}
+
 export interface ManagementIncentive {
   mip_pool_pct: number;
   hurdle_moic: number;
   vesting_years: number;
   sweet_equity_pct: number;
+  /** Optional ratchet schedule. When present (non-empty), the highest cleared tier's
+   *  pool_pct overrides the single-hurdle mip_pool_pct / hurdle_moic. Absent ⇒ unchanged. */
+  ratchet_tiers?: MIPRatchetTier[];
 }
 
 export interface RevenueAssumptions {
@@ -85,6 +97,17 @@ export interface EntryAssumptions {
   min_cash_balance: number;
 }
 
+export interface PartialExitEvent {
+  /** 1-indexed hold year of the partial realisation (must be < holding_period). */
+  year: number;
+  /** Fraction (0–1) of the sponsor's CURRENT remaining stake sold at this event. */
+  pct_sold: number;
+  /** EV/EBITDA applied to that year's EBITDA to value the stake. */
+  exit_multiple: number;
+  /** Advisory fee (% of the realised gross proceeds) on this tranche. */
+  exit_fee_pct: number;
+}
+
 export interface ExitAssumptions {
   holding_period: number;
   exit_ebitda_multiple: number;
@@ -93,6 +116,10 @@ export interface ExitAssumptions {
   mid_year_convention: boolean;
   interim_distributions: number[];
   exit_ev_override: number | null;
+  /** Optional interim partial realisations (IPO float / secondary selldown). When present,
+   *  each event books a proceeds inflow at its year and reduces the residual stake sold at
+   *  final exit. Absent/empty ⇒ a single full exit (unchanged). */
+  partial_exits?: PartialExitEvent[];
   exit_ebitda: number;
   exit_ev: number;
   exit_net_debt: number;
@@ -178,6 +205,10 @@ export interface Returns {
   total_distributions: number;
   dpi_by_year: number[];
   rvpi_by_year: number[];
+  /** Realised sponsor equity cashflow stream [t0..hp]: −entry at t0, distributions +
+   *  partial-exit proceeds during the hold, post-MIP residual at exit. Single source of
+   *  truth for the equity IRR and the fund-level overlay (P4-2). */
+  equity_cashflows: number[];
   convergence_iterations: number;
   convergence_delta: number;
 }
@@ -210,6 +241,31 @@ export interface ValueDriverDecomposition {
   financial_engineering_pct: number; // multiple + debt + fees as % of total
   primary_driver: string;
   insights: string[];
+}
+
+// ── Fund-Level Returns (P4-2) ─────────────────────────────────────────────
+
+export interface FundAssumptions {
+  management_fee_pct: number;             // % of basis per annum
+  management_fee_basis: 'committed' | 'invested';
+  carry_rate: number;                     // GP carry, e.g. 0.20
+  preferred_return: number;               // LP hurdle, e.g. 0.08
+  carry_waterfall: 'american' | 'european';
+  fund_size: number;                      // total LP commitments (deal currency, £m)
+  deal_allocation_pct: number;            // this deal's share of the fund (0–1)
+}
+
+export interface FundReturns {
+  net_irr: number | null;                 // LP IRR after mgmt fees + carry
+  net_moic: number;                       // LP value / LP paid-in
+  gross_irr: number | null;               // deal equity IRR (pre fund-level fees/carry)
+  gross_moic: number;
+  gross_to_net_spread: number | null;     // gross_irr − net_irr (pp)
+  management_fees_total: number;          // cumulative mgmt fee borne by this deal
+  carried_interest: number;               // GP carry taken
+  preferred_return_shortfall: number;     // pref owed but unmet (0 when cleared)
+  lp_paid_in: number;                     // invested capital + mgmt fees
+  lp_distributions: number;               // total cash returned to LPs (post-carry)
 }
 
 // ── Fragility Analysis ──────────────────────────────────────────────────
@@ -315,6 +371,8 @@ export interface ModelState {
   mip: ManagementIncentive;
   exit: ExitAssumptions;
   credit_covenants: CreditCovenants;
+  /** Optional fund-level (LP-facing) economics. When present, fullRecalc computes fund_returns. */
+  fund_assumptions?: FundAssumptions;
   // New: segments and add-ons
   revenue_segments: RevenueSegment[];
   add_on_acquisitions: AddOnAcquisition[];
@@ -322,6 +380,7 @@ export interface ModelState {
   projections: { years: AnnualProjectionYear[] };
   debt_schedule: DebtScheduleResult;
   returns: Returns;
+  fund_returns?: FundReturns;   // computed only when fund_assumptions is set (P4-2)
   value_drivers: ValueDriverDecomposition;
   sources_and_uses: SourcesAndUses;
   credit_analysis: CreditAnalysis;
