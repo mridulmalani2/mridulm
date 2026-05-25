@@ -1,6 +1,7 @@
 /** Annual projection engine — P&L, capex, NWC, FCF build. */
 
 import type { ModelState, AnnualProjectionYear, MarginAssumptions } from '../dealEngineTypes';
+import { oidAmortByYear } from './oid';
 
 /**
  * Net working capital balance for a given revenue and EBITDA margin (P4-9).
@@ -34,6 +35,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const totalDebt = state.entry.total_debt_raised;
   const financingFees = state.fees.financing_fee_pct * totalDebt;
   const finFeeAmort = hp > 0 ? financingFees / hp : 0;
+  const oidAmort = oidAmortByYear(state); // non-cash, tax-deductible OID amort (P4-14)
 
   let prevRevenue = baseRevenue;
   const years: AnnualProjectionYear[] = [];
@@ -68,7 +70,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       }
     }
 
-    const ebt = ebit - interestEstimate - finFeeAmort;
+    const ebt = ebit - interestEstimate - finFeeAmort - (oidAmort[t] ?? 0);
 
     let tax: number;
     let nolUsage = 0;
@@ -150,6 +152,7 @@ export function updateProjectionsWithDebt(
   let nolRemaining = state.tax.nol_carryforward;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const finFeeAmort = hp > 0 ? financingFees / hp : 0;
+  const oidAmort = oidAmortByYear(state); // P4-14
 
   for (let i = 0; i < projections.length; i++) {
     const yr = projections[i];
@@ -158,7 +161,7 @@ export function updateProjectionsWithDebt(
     const totalInterestExpense = actualCashInterest + actualPik;
 
     yr.interest_expense = totalInterestExpense;
-    yr.ebt = yr.ebit - totalInterestExpense - finFeeAmort;
+    yr.ebt = yr.ebit - totalInterestExpense - finFeeAmort - (oidAmort[i] ?? 0);
 
     if (yr.ebt > 0) {
       const nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, yr.ebt) : 0;

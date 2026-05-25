@@ -8,6 +8,7 @@ import type {
   ValueDriverDecomposition,
   ValueDriverRanking,
 } from '../dealEngineTypes';
+import { oidTotal } from './oid';
 
 // ── MIP ratchet resolution (P4-1) ──────────────────────────────────────────
 // Resolve the management pool % and whether the hurdle is cleared. When a ratchet
@@ -197,8 +198,9 @@ export function calculateReturns(
 
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
+  const oid = oidTotal(state); // upfront OID funded by equity at close (P4-14)
   const entryEquity =
-    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees + oid - state.entry.total_debt_raised;
 
   if (entryEquity <= 0) {
     return {
@@ -353,7 +355,7 @@ export function calculateReturns(
   // Entry equity excludes the entry advisory fee (treated as target-borne); exit
   // equity excludes the exit fee. Transaction costs and financing fees remain in
   // the cost base as they are unavoidable deal costs borne by the sponsor.
-  const entryEquityGross = state.entry.enterprise_value + state.fees.transaction_costs + financingFees
+  const entryEquityGross = state.entry.enterprise_value + state.fees.transaction_costs + financingFees + oid
     - state.entry.total_debt_raised;
   const exitEquityGross = exitEv - exitNetDebt; // no exit fee
   const grossCfs: number[] = [-entryEquityGross];
@@ -462,7 +464,8 @@ export function decomposeValueDrivers(
   const vdEntryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const exitFee = state.fees.exit_fee_pct * exitEv;
   const monitoringTermination = monitoringTerminationPayment(state); // P4-11 exit cost
-  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout + monitoringTermination;
+  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee
+    + returns.mip_payout + monitoringTermination + oidTotal(state); // OID upfront cost (P4-14)
 
   // Bridge decomposes exit_equity − entry_equity only. Distributions are LP cash flows,
   // not value creation — they are already captured via delta_debt (lower exit cash reduces net debt).

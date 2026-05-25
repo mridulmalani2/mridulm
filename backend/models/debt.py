@@ -87,6 +87,14 @@ class DebtTranche(BaseModel):
         default=None,
         description="Optional refinancing (P4-3): reprices and books a prepayment premium from its year. None ⇒ unchanged.",
     )
+    oid_pct: float = Field(
+        default=0.0, ge=0, le=0.20,
+        description="Original Issue Discount as a fraction of par (P4-14); funded by equity at close, amortised over debt_maturity_years.",
+    )
+    debt_maturity_years: int = Field(
+        default=0, ge=0, le=30,
+        description="Maturity over which OID amortises; 0 ⇒ holding period.",
+    )
     financing_fee_amort_years: int = Field(
         default=0,
         ge=0,

@@ -1,6 +1,7 @@
 /** State helpers: derive entry fields, ensure list lengths, margin trajectory. */
 
 import type { ModelState } from '../dealEngineTypes';
+import { oidTotal } from './oid';
 
 export function deriveEntryFields(state: ModelState): void {
   const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
@@ -23,7 +24,7 @@ export function deriveEntryFields(state: ModelState): void {
   const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   state.entry.equity_check =
-    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees + oidTotal(state) - state.entry.total_debt_raised;
   // Clear the flag after use so subsequent recalcs default to forward-solve
   state._lastEditedEntryField = null;
 }

@@ -30,7 +30,7 @@ import logging
 from backend.models.debt import DebtSchedule, DebtScheduleYear, DebtTranche
 from backend.models.outputs import AnnualProjection
 from backend.models.state import ModelState
-from backend.engine.projections import _monitoring_fee_for_year
+from backend.engine.projections import _monitoring_fee_for_year, _oid_amort_by_year
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,7 @@ def build_debt_schedule(
     distributions_paid_by_year: list[float] = []
     distribution_blocked_by_year: list[bool] = []
     refinancing_premium_by_year: list[float] = []
+    oid_amort_by_year = _oid_amort_by_year(state)  # non-cash; added back in the levered cash flow (P4-14)
     distributions = state.exit.interim_distributions or []
     cov = getattr(state, "credit_covenants", None)
     has_dist_block = cov is not None and (
@@ -332,6 +333,7 @@ def build_debt_schedule(
                 proj_yr.net_income
                 + proj_yr.da
                 + proj_yr.financing_fee_amort
+                + oid_amort_by_year[yr_idx]  # non-cash OID amort added back (P4-14)
                 + total_pik_year
                 - proj_yr.total_capex
                 - proj_yr.delta_nwc

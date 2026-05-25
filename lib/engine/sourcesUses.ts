@@ -1,12 +1,14 @@
 /** Sources & Uses computation — the starting table of every LBO model. */
 
 import type { ModelState, SourcesAndUses } from '../dealEngineTypes';
+import { oidTotal } from './oid';
 
 export function computeSourcesAndUses(state: ModelState): SourcesAndUses {
   const ev = state.entry.enterprise_value;
   const entryFee = state.fees.entry_fee_pct * ev;
   const totalTxnFees = entryFee + state.fees.transaction_costs;
-  const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
+  // OID is an upfront debt financing cost (P4-14) — shown alongside financing fees.
+  const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised + oidTotal(state);
   const cashToBs = 0; // no excess cash modeled currently
 
   const totalUses = ev + totalTxnFees + financingFees + cashToBs;

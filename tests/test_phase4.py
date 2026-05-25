@@ -418,3 +418,50 @@ class TestMonitoringFeeTermination:
         b, _, _ = _run_full_model(with_term)
         assert b.exit_equity < a.exit_equity
         assert b.moic < a.moic
+
+
+class TestOID:
+    """P4-14 — Original Issue Discount funded at close, amortised over the maturity."""
+
+    def _oid_state(self, oid_pct=0.02, maturity=0) -> ModelState:
+        s = _base_state()
+        s.debt_tranches[0].oid_pct = oid_pct
+        if maturity:
+            s.debt_tranches[0].debt_maturity_years = maturity
+        s.derive_entry_fields()
+        s.ensure_list_lengths()
+        return s
+
+    def test_totals_and_schedule(self):
+        from backend.engine.projections import _oid_total, _oid_amort_by_year
+        s = self._oid_state(0.02)
+        assert _oid_total(s) == pytest.approx(1.6, abs=1e-6)  # 2% × 80
+        assert all(abs(a - 0.32) < 1e-6 for a in _oid_amort_by_year(s))  # 1.6 / 5y
+
+    def test_raises_entry_equity_and_closes(self):
+        base = _base_state()
+        base_ret, _, _ = _run_full_model(base)
+        s = self._oid_state(0.02)
+        ret, proj, ds = _run_full_model(s)
+        ds = build_debt_schedule(s, proj)
+        assert ret.entry_equity - base_ret.entry_equity == pytest.approx(1.6, abs=1e-2)
+        assert ret.moic < base_ret.moic
+        bs = compute_balance_sheet(s, proj, ds, ret)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01
+
+    def test_amortises_into_ebt(self):
+        base = _base_state()
+        base_proj = build_projections(base)
+        s = self._oid_state(0.02)
+        proj = build_projections(s)
+        assert base_proj.years[0].ebt - proj.years[0].ebt == pytest.approx(0.32, abs=1e-3)
+
+    def test_maturity_beyond_hold_closes(self):
+        s = self._oid_state(0.02, maturity=8)
+        from backend.engine.projections import _oid_amort_by_year
+        assert all(abs(a - 0.2) < 1e-6 for a in _oid_amort_by_year(s))  # 1.6 / 8y
+        ret, proj, ds = _run_full_model(s)
+        ds = build_debt_schedule(s, proj)
+        bs = compute_balance_sheet(s, proj, ds, ret)
+        assert bs.closes

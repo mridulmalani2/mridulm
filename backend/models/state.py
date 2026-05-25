@@ -327,10 +327,12 @@ class ModelState(BaseModel):
         convention (entry advisory fee is target-borne, not sponsor-borne).
         """
         financing_fees = self.fees.financing_fee_pct * total_debt_raised
+        oid = sum((t.oid_pct or 0.0) * t.principal for t in self.debt_tranches)  # P4-14
         return (
             enterprise_value
             + self.fees.transaction_costs
             + financing_fees
+            + oid
             - total_debt_raised
         )
 
@@ -345,7 +347,8 @@ class ModelState(BaseModel):
         from .outputs import DebtSource, SourcesAndUses
 
         entry_advisory_fee = self.fees.entry_fee_pct * self.entry.enterprise_value
-        financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised
+        oid = sum((t.oid_pct or 0.0) * t.principal for t in self.debt_tranches)  # P4-14
+        financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised + oid
         total_transaction_fees = entry_advisory_fee + self.fees.transaction_costs
 
         total_uses = (

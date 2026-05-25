@@ -42,6 +42,11 @@ export interface DebtTranche {
   /** Optional refinancing event (P4-3): reprices the tranche and books a prepayment premium
    *  from its year onward. Absent ⇒ no refinancing (unchanged). */
   refinancing?: RefinancingEvent;
+  /** Original Issue Discount as a fraction of par (P4-14). Funded by extra equity at close,
+   *  amortised as non-cash tax-deductible interest over debt_maturity_years. Absent ⇒ none. */
+  oid_pct?: number;
+  /** Maturity (years) over which OID amortises; falls back to the holding period. */
+  debt_maturity_years?: number;
   /** 0-indexed hold year in which the tranche is drawn. Omitted/0 = drawn at entry. Used for add-on acquisition debt funded mid-hold. */
   draw_year_index?: number;
   /** Internal flag: tranche synthesised from add-on acquisition debt. Stripped/rebuilt on every recalc — never persisted or user-editable. */
