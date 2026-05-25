@@ -1,6 +1,25 @@
 /** Annual projection engine — P&L, capex, NWC, FCF build. */
 
-import type { ModelState, AnnualProjectionYear } from '../dealEngineTypes';
+import type { ModelState, AnnualProjectionYear, MarginAssumptions } from '../dealEngineTypes';
+
+/**
+ * Net working capital balance for a given revenue and EBITDA margin (P4-9).
+ * Days-based when any of DSO/DIO/DPO is set: A/R on revenue, Inventory and A/P on the
+ * cost base (revenue × (1 − EBITDA margin)) as a COGS proxy — the model has no separate
+ * COGS line. Otherwise the simple revenue × nwc_pct_revenue peg. The pct path is
+ * unchanged, so existing deals are identical.
+ */
+export function nwcBalance(revenue: number, ebitdaMargin: number, m: MarginAssumptions): number {
+  const usesDays = m.nwc_dso != null || m.nwc_dio != null || m.nwc_dpo != null;
+  if (usesDays) {
+    const cogs = revenue * (1 - ebitdaMargin);
+    const ar = revenue * (m.nwc_dso ?? 0) / 365;
+    const inv = cogs * (m.nwc_dio ?? 0) / 365;
+    const ap = cogs * (m.nwc_dpo ?? 0) / 365;
+    return ar + inv - ap;
+  }
+  return revenue * m.nwc_pct_revenue;
+}
 
 export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const hp = state.exit.holding_period;
@@ -8,7 +27,6 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const monitoringFee = state.fees.monitoring_fee_annual;
   const daPct = state.margins.da_pct_revenue;
   const capexPct = state.margins.capex_pct_revenue;
-  const nwcPct = state.margins.nwc_pct_revenue;
   const taxRate = state.tax.tax_rate;
   const minTaxRate = state.tax.minimum_tax_rate;
   let nolRemaining = state.tax.nol_carryforward;
@@ -70,16 +88,15 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     const gCapex = state.margins.growth_capex[t] || 0;
     const totalCapex = mCapex + gCapex;
 
+    // ΔNWC: explicit per-year override wins; otherwise the change in the NWC balance
+    // (days-based when DSO/DIO/DPO set, else the revenue peg — identical to before).
     let deltaNwc: number;
-    if (state.margins.nwc_movement_method === 'explicit') {
-      // Use the per-year explicit NWC movements when supplied; otherwise fall back to
-      // pct_change (the reality check surfaces a warning so the fallback isn't silent).
-      const explicit = state.margins.nwc_explicit_by_year;
-      deltaNwc = explicit && explicit.length > 0
-        ? (explicit[t] ?? 0)
-        : (revenue - prevRevenue) * nwcPct;
+    const explicit = state.margins.nwc_explicit_by_year;
+    if (state.margins.nwc_movement_method === 'explicit' && explicit && explicit.length > 0) {
+      deltaNwc = explicit[t] ?? 0;
     } else {
-      deltaNwc = (revenue - prevRevenue) * nwcPct;
+      const prevMargin = t === 0 ? state.margins.base_ebitda_margin : state.margins.margin_by_year[t - 1];
+      deltaNwc = nwcBalance(revenue, margin, state.margins) - nwcBalance(prevRevenue, prevMargin, state.margins);
     }
 
     const fcfPreDebt = ebitdaAdj - tax - totalCapex - deltaNwc;

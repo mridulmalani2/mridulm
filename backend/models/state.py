@@ -98,6 +98,11 @@ class MarginAssumptions(BaseModel):
         default_factory=list,
         description="Per-year NWC movements (£m) used when nwc_movement_method == 'explicit'. Falls back to pct_change when empty.",
     )
+    # Days-based NWC (P4-9). When any is set, NWC = A/R + Inventory − A/P from first
+    # principles (A/R on revenue; Inventory/A/P on the cost base). None ⇒ nwc_pct_revenue.
+    nwc_dso: Optional[float] = Field(default=None, description="Days sales outstanding")
+    nwc_dio: Optional[float] = Field(default=None, description="Days inventory outstanding")
+    nwc_dpo: Optional[float] = Field(default=None, description="Days payable outstanding")
 
 
 class TaxAssumptions(BaseModel):

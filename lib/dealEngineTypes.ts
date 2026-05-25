@@ -95,6 +95,12 @@ export interface MarginAssumptions {
   nwc_movement_method: 'pct_change' | 'explicit';
   /** Per-year NWC movements (£m) used when nwc_movement_method === 'explicit'. Falls back to pct_change when absent. */
   nwc_explicit_by_year?: number[];
+  /** Days-based NWC (P4-9): when any is set, NWC = A/R + Inventory − A/P from first
+   *  principles (A/R on revenue; Inventory/A/P on the cost base = revenue × (1 − EBITDA
+   *  margin), since the model has no separate COGS line). Absent ⇒ nwc_pct_revenue. */
+  nwc_dso?: number;   // days sales outstanding
+  nwc_dio?: number;   // days inventory outstanding
+  nwc_dpo?: number;   // days payable outstanding
 }
 
 export interface TaxAssumptions {

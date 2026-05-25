@@ -56,6 +56,20 @@ def _financing_fee_amort_per_year(state: ModelState) -> float:
     return financing_fees / avg_term if avg_term > 0 else 0.0
 
 
+def _nwc_balance(revenue: float, ebitda_margin: float, m) -> float:
+    """NWC balance (P4-9): days-based when any of DSO/DIO/DPO is set, else the revenue peg.
+    Inventory/A-P use the cost base (revenue × (1 − EBITDA margin)) as a COGS proxy, since
+    the model has no separate COGS line. The peg path is unchanged."""
+    uses_days = m.nwc_dso is not None or m.nwc_dio is not None or m.nwc_dpo is not None
+    if uses_days:
+        cogs = revenue * (1.0 - ebitda_margin)
+        ar = revenue * (m.nwc_dso or 0.0) / 365.0
+        inv = cogs * (m.nwc_dio or 0.0) / 365.0
+        ap = cogs * (m.nwc_dpo or 0.0) / 365.0
+        return ar + inv - ap
+    return revenue * m.nwc_pct_revenue
+
+
 def build_projections(state: ModelState) -> AnnualProjection:
     """Build full annual projections from model state.
 
@@ -70,7 +84,6 @@ def build_projections(state: ModelState) -> AnnualProjection:
     monitoring_fee = state.fees.monitoring_fee_annual
     da_pct = state.margins.da_pct_revenue
     capex_pct = state.margins.capex_pct_revenue
-    nwc_pct = state.margins.nwc_pct_revenue
     tax_rate = state.tax.tax_rate
     min_tax_rate = state.tax.minimum_tax_rate
 
@@ -156,17 +169,14 @@ def build_projections(state: ModelState) -> AnnualProjection:
         g_capex = state.margins.growth_capex[t] if state.margins.growth_capex else 0.0
         total_capex = m_capex + g_capex
 
-        # NWC
-        if state.margins.nwc_movement_method == "explicit":
-            explicit = state.margins.nwc_explicit_by_year
-            # Use supplied per-year movements; fall back to pct_change when absent so
-            # an explicit method without data doesn't silently zero out NWC.
-            if explicit:
-                delta_nwc = explicit[t] if t < len(explicit) else 0.0
-            else:
-                delta_nwc = (revenue - prev_revenue) * nwc_pct
+        # NWC: explicit per-year override wins; otherwise the change in the NWC balance
+        # (days-based when DSO/DIO/DPO set, else the revenue peg — unchanged).
+        explicit = state.margins.nwc_explicit_by_year
+        if state.margins.nwc_movement_method == "explicit" and explicit:
+            delta_nwc = explicit[t] if t < len(explicit) else 0.0
         else:
-            delta_nwc = (revenue - prev_revenue) * nwc_pct
+            prev_margin = state.margins.base_ebitda_margin if t == 0 else state.margins.margin_by_year[t - 1]
+            delta_nwc = _nwc_balance(revenue, margin, state.margins) - _nwc_balance(prev_revenue, prev_margin, state.margins)
 
         # FCF (unlevered, FINDINGS 4 & 6) — base on NOPAT, deduct monitoring fee
         fcf_pre_debt = nopat + da - total_capex - delta_nwc - monitoring_fee

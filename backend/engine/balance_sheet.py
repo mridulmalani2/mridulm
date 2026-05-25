@@ -36,10 +36,14 @@ def compute_balance_sheet(
     monitoring = state.fees.monitoring_fee_annual
 
     # ── Opening balances (t = 0) ──
+    from backend.engine.projections import _nwc_balance
+
     entry_equity = returns.entry_equity
     opening_debt = state.entry.total_debt_raised
     opening_cash = 0.0
-    opening_nwc = state.revenue.base_revenue * state.margins.nwc_pct_revenue
+    # Entry NWC under the active method (days-based or revenue peg); cumulative ΔNWC
+    # telescopes onto this opening level (P4-9).
+    opening_nwc = _nwc_balance(state.revenue.base_revenue, state.margins.base_ebitda_margin, state.margins)
     opening_ppe = 0.0
     opening_def_fin = financing_fees
     # Goodwill closes the opening balance sheet (purchase-accounting residual).

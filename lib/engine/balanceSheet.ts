@@ -22,6 +22,7 @@ import type {
   BalanceSheetYear,
 } from '../dealEngineTypes';
 import type { AddOnImpact } from './addOns';
+import { nwcBalance } from './projections';
 
 const CLOSE_TOLERANCE = 0.01; // £m — joint-consistency tolerance
 
@@ -43,9 +44,9 @@ export function computeBalanceSheet(
   const entryEquity = returns.entry_equity;            // sponsor capital contributed
   const openingDebt = state.entry.total_debt_raised;   // gross debt at close
   const openingCash = 0;                               // engine cash roll-forward starts at zero
-  // NWC scales with revenue: pegging entry NWC to base revenue makes the running
-  // balance equal revenue × nwc_pct each year (the cumulative ΔNWC telescopes).
-  const openingNwc = state.revenue.base_revenue * state.margins.nwc_pct_revenue;
+  // Entry NWC under the active method (days-based or revenue peg). The cumulative ΔNWC
+  // telescopes onto this opening level (P4-9); matches the projection's NWC definition.
+  const openingNwc = nwcBalance(state.revenue.base_revenue, state.margins.base_ebitda_margin, state.margins);
   const openingPpe = 0;                                // net PP&E builds from capex − D&A over the hold
   const openingDefFin = financingFees;                 // capitalised, amortised over the hold
   // Goodwill is the residual that closes the opening balance sheet (purchase accounting).

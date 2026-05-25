@@ -349,3 +349,34 @@ class TestCapexPresentation:
         proj = build_projections(s)
         for yr in proj.years:
             assert yr.operating_fcf_pre_growth_capex == pytest.approx(yr.fcf_pre_debt + yr.growth_capex, abs=1e-6)
+
+
+class TestDsoDioDpo:
+    """P4-9 — days-based working capital."""
+
+    def test_nwc_balance_days_vs_peg(self):
+        from backend.engine.projections import _nwc_balance
+        peg = _base_state().margins
+        peg.nwc_pct_revenue = 0.1
+        assert _nwc_balance(100.0, 0.2, peg) == pytest.approx(10.0, abs=1e-6)
+        days = _base_state().margins
+        days.nwc_dso, days.nwc_dio, days.nwc_dpo = 73.0, 73.0, 36.5
+        # rev=100, cogs=80: 20 + 16 − 8 = 28
+        assert _nwc_balance(100.0, 0.2, days) == pytest.approx(28.0, abs=1e-6)
+
+    def test_extending_dpo_lowers_nwc(self):
+        from backend.engine.projections import _nwc_balance
+        tight = _base_state().margins
+        tight.nwc_dso, tight.nwc_dio, tight.nwc_dpo = 60.0, 60.0, 30.0
+        extended = _base_state().margins
+        extended.nwc_dso, extended.nwc_dio, extended.nwc_dpo = 60.0, 60.0, 90.0
+        assert _nwc_balance(100.0, 0.2, extended) < _nwc_balance(100.0, 0.2, tight)
+
+    def test_days_based_closes(self):
+        s = _base_state()
+        s.margins.nwc_dso, s.margins.nwc_dio, s.margins.nwc_dpo = 90.0, 75.0, 45.0
+        ret, proj, _ = _run_full_model(s)
+        ds = build_debt_schedule(s, proj)
+        bs = compute_balance_sheet(s, proj, ds, ret)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01
