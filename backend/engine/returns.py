@@ -226,6 +226,18 @@ def _resolve_mip_pool(mip, pre_mip_moic: float, pre_mip_irr: Optional[float]) ->
     return (mip.mip_pool_pct if cleared else 0.0, cleared)
 
 
+def _monitoring_termination_payment(state: ModelState) -> float:
+    """NPV of remaining contractual monitoring fees accelerated at exit (P4-11).
+    0 unless both a monitoring fee and a termination horizon are set."""
+    fee = state.fees.monitoring_fee_annual
+    n = state.fees.monitoring_fee_termination_years
+    if fee <= 0 or n <= 0:
+        return 0.0
+    r = state.fees.monitoring_fee_discount_rate
+    annuity_pv = (1 - (1 + r) ** (-n)) / r if r > 0 else float(n)
+    return fee * annuity_pv
+
+
 # ── Returns Calculation ───────────────────────────────────────────────────
 
 def calculate_returns(
@@ -272,10 +284,14 @@ def calculate_returns(
     exit_net_debt = max(0.0, exit_gross_debt - retained_cash)
     exit_fee = state.fees.exit_fee_pct * exit_ev
 
+    # Monitoring-fee termination payment (P4-11) — a sponsor-level exit cost, netted from
+    # the equity (net) path only (like the exit fee); excluded from levered/gross IRR.
+    monitoring_termination = _monitoring_termination_payment(state)
+
     # Full-stake (100%) equity values. Hurdle tested on the pre-fee MOIC per the
     # audit convention (FINDING 2).
     exit_equity_pre_fees = exit_ev - exit_net_debt
-    exit_equity_after_fees = exit_equity_pre_fees - exit_fee  # 100% stake, pre-MIP
+    exit_equity_after_fees = exit_equity_pre_fees - exit_fee - monitoring_termination  # 100% stake, pre-MIP
 
     # ── Interim distributions (dividend recaps), paid & capped at available cash ──
     paid = debt_schedule.distributions_paid_by_year or []
@@ -510,6 +526,7 @@ def decompose_value_drivers(
         + financing_fees
         + exit_fee
         + returns.mip_payout
+        + _monitoring_termination_payment(state)  # P4-11 exit cost
     )
 
     # Total equity value gain (value creation only, excludes interim distributions)

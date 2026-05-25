@@ -35,6 +35,10 @@ class FeeStructure(BaseModel):
     monitoring_fee_annual: float = Field(default=0.0, ge=0, description="£m per year")
     financing_fee_pct: float = Field(default=0.02, ge=0, le=0.10, description="% of total debt")
     transaction_costs: float = Field(default=0.0, ge=0, description="Absolute £m")
+    # Monitoring-fee termination at exit (P4-11): drop the fee in the exit year and, if
+    # termination_years > 0, accelerate the NPV of the remaining years into an exit cost.
+    monitoring_fee_termination_years: int = Field(default=0, ge=0, le=20)
+    monitoring_fee_discount_rate: float = Field(default=0.10, ge=0, le=0.50)
 
 
 class MIPRatchetTier(BaseModel):

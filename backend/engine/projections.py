@@ -56,6 +56,13 @@ def _financing_fee_amort_per_year(state: ModelState) -> float:
     return financing_fees / avg_term if avg_term > 0 else 0.0
 
 
+def _monitoring_fee_for_year(state: ModelState, yr_idx: int) -> float:
+    """Monitoring fee for a hold year — zero in the exit year (P4-11): the monitoring
+    agreement terminates on sale. Used consistently across projections, the cash
+    roll-forward and the balance-sheet equity charge so the model still closes."""
+    return 0.0 if yr_idx == state.exit.holding_period - 1 else state.fees.monitoring_fee_annual
+
+
 def _nwc_balance(revenue: float, ebitda_margin: float, m) -> float:
     """NWC balance (P4-9): days-based when any of DSO/DIO/DPO is set, else the revenue peg.
     Inventory/A-P use the cost base (revenue × (1 − EBITDA margin)) as a COGS proxy, since
@@ -179,7 +186,9 @@ def build_projections(state: ModelState) -> AnnualProjection:
             delta_nwc = _nwc_balance(revenue, margin, state.margins) - _nwc_balance(prev_revenue, prev_margin, state.margins)
 
         # FCF (unlevered, FINDINGS 4 & 6) — base on NOPAT, deduct monitoring fee
-        fcf_pre_debt = nopat + da - total_capex - delta_nwc - monitoring_fee
+        # (zero in the exit year — P4-11).
+        mon_fee = _monitoring_fee_for_year(state, t)
+        fcf_pre_debt = nopat + da - total_capex - delta_nwc - mon_fee
         # Operating FCF before growth investment (P4-6) = total FCF pre-debt + growth capex.
         operating_fcf_pre_growth = fcf_pre_debt + g_capex
 
@@ -280,8 +289,10 @@ def update_projections_with_debt(
         else:
             yr.nopat = yr.ebit  # no current tax — losses fully shield EBIT
 
-        # ── Unlevered FCF (FCFF) — NOPAT + D&A − Capex − ΔNWC − monitoring (FINDINGS 4 & 6) ──
-        yr.fcf_pre_debt = yr.nopat + yr.da - yr.total_capex - yr.delta_nwc - monitoring_fee
+        # ── Unlevered FCF (FCFF) — NOPAT + D&A − Capex − ΔNWC − monitoring (FINDINGS 4 & 6;
+        # monitoring zero in the exit year — P4-11) ──
+        mon_fee = _monitoring_fee_for_year(state, i)
+        yr.fcf_pre_debt = yr.nopat + yr.da - yr.total_capex - yr.delta_nwc - mon_fee
         yr.operating_fcf_pre_growth_capex = yr.fcf_pre_debt + yr.growth_capex  # P4-6
 
         # ── FCFE proper formulation (FINDING 5) ──
@@ -292,7 +303,7 @@ def update_projections_with_debt(
         yr.new_borrowings = new_borrowing
         yr.debt_repayment = actual_repayment
         yr.fcf_to_equity = (
-            yr.net_income + yr.da - yr.total_capex - yr.delta_nwc + net_borrowing - monitoring_fee
+            yr.net_income + yr.da - yr.total_capex - yr.delta_nwc + net_borrowing - mon_fee
         )
 
         # Cash balance roll-forward (post-debt-service residual; pre-distribution)

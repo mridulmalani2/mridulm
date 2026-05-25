@@ -380,3 +380,41 @@ class TestDsoDioDpo:
         bs = compute_balance_sheet(s, proj, ds, ret)
         assert bs.closes
         assert bs.max_abs_check < 0.01
+
+
+class TestMonitoringFeeTermination:
+    """P4-11 — monitoring fee dropped in the exit year + NPV termination payment."""
+
+    def _monitoring_state(self) -> ModelState:
+        s = _base_state()
+        s.fees.monitoring_fee_annual = 2.0
+        return s
+
+    def test_termination_payment_npv(self):
+        from backend.engine.returns import _monitoring_termination_payment
+        s = self._monitoring_state()
+        s.fees.monitoring_fee_termination_years = 3
+        s.fees.monitoring_fee_discount_rate = 0.10
+        assert _monitoring_termination_payment(s) == pytest.approx(4.9737, abs=1e-3)
+
+    def test_no_fee_no_payment(self):
+        from backend.engine.returns import _monitoring_termination_payment
+        assert _monitoring_termination_payment(_base_state()) == 0.0
+
+    def test_exit_year_fee_dropped_and_closes(self):
+        s = self._monitoring_state()
+        ret, proj, _ = _run_full_model(s)
+        ds = build_debt_schedule(s, proj)
+        bs = compute_balance_sheet(s, proj, ds, ret)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01
+
+    def test_termination_lowers_returns(self):
+        no_term = self._monitoring_state()
+        no_term.fees.monitoring_fee_termination_years = 0
+        with_term = self._monitoring_state()
+        with_term.fees.monitoring_fee_termination_years = 5
+        a, _, _ = _run_full_model(no_term)
+        b, _, _ = _run_full_model(with_term)
+        assert b.exit_equity < a.exit_equity
+        assert b.moic < a.moic

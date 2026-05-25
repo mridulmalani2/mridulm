@@ -30,6 +30,7 @@ import logging
 from backend.models.debt import DebtSchedule, DebtScheduleYear, DebtTranche
 from backend.models.outputs import AnnualProjection
 from backend.models.state import ModelState
+from backend.engine.projections import _monitoring_fee_for_year
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +325,9 @@ def build_debt_schedule(
         # the three-statement balance sheet closes.
         total_pik_year = sum(e.pik_accrual for e in year_entries)
         if proj_yr is not None:
+            # Monitoring fee zero in the exit year (P4-11) — must match projections /
+            # balance sheet so the cash roll-forward and close stay consistent.
+            mon_fee = _monitoring_fee_for_year(state, yr_idx)
             levered_op_cash = (
                 proj_yr.net_income
                 + proj_yr.da
@@ -331,7 +335,7 @@ def build_debt_schedule(
                 + total_pik_year
                 - proj_yr.total_capex
                 - proj_yr.delta_nwc
-                - state.fees.monitoring_fee_annual
+                - mon_fee
             )
         else:
             levered_op_cash = 0.0

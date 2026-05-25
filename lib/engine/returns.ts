@@ -170,6 +170,20 @@ function solveIrrAuto(cashflows: number[], times: number[] | null): number | nul
 }
 
 
+/**
+ * Monitoring-fee termination payment at exit (P4-11): the NPV of the remaining
+ * contractual monitoring fees, accelerated into a one-time exit cost. 0 unless both a
+ * monitoring fee and a termination horizon are set.
+ */
+export function monitoringTerminationPayment(state: ModelState): number {
+  const fee = state.fees.monitoring_fee_annual;
+  const n = state.fees.monitoring_fee_termination_years ?? 0;
+  if (fee <= 0 || n <= 0) return 0;
+  const r = state.fees.monitoring_fee_discount_rate ?? 0.10;
+  const annuityPv = r > 0 ? (1 - Math.pow(1 + r, -n)) / r : n;
+  return fee * annuityPv;
+}
+
 // ── Returns Calculation ─────────────────────────────────────────────────
 
 export function calculateReturns(
@@ -254,9 +268,13 @@ export function calculateReturns(
   }
   const totalPartialProceeds = partialProceedsByYear.reduce((s, p) => s + p, 0);
 
+  // Monitoring-fee termination payment (P4-11) — a sponsor-level exit cost, netted from
+  // the equity (net) path only (like the exit fee); excluded from levered/gross IRR.
+  const monitoringTermination = monitoringTerminationPayment(state);
+
   // Full-stake (100%) exit equity before MIP. The hurdle is tested on the full-exit
   // MOIC (distributions excluded) — backward-compatible with the single-exit path.
-  const exitEquityPreMipFull = exitEv - exitNetDebt - exitFee;
+  const exitEquityPreMipFull = exitEv - exitNetDebt - exitFee - monitoringTermination;
   const preMipMoic = entryEquity > 0 ? exitEquityPreMipFull / entryEquity : 0;
 
   // Pre-MIP equity IRR for the optional dual hurdle (independent of MIP — no circularity).
@@ -443,7 +461,8 @@ export function decomposeValueDrivers(
   const vdFinancingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const vdEntryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const exitFee = state.fees.exit_fee_pct * exitEv;
-  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout;
+  const monitoringTermination = monitoringTerminationPayment(state); // P4-11 exit cost
+  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout + monitoringTermination;
 
   // Bridge decomposes exit_equity − entry_equity only. Distributions are LP cash flows,
   // not value creation — they are already captured via delta_debt (lower exit cash reduces net debt).

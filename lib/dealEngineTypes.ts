@@ -54,6 +54,12 @@ export interface FeeStructure {
   monitoring_fee_annual: number;
   financing_fee_pct: number;
   transaction_costs: number;
+  /** Monitoring-fee termination at exit (P4-11). The annual fee is dropped in the exit
+   *  year (the agreement terminates on sale); if termination_years > 0, the NPV of that
+   *  many remaining contractual years is accelerated into a one-time exit cost,
+   *  discounted at monitoring_fee_discount_rate (default 10%). */
+  monitoring_fee_termination_years?: number;
+  monitoring_fee_discount_rate?: number;
 }
 
 export interface MIPRatchetTier {

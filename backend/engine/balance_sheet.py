@@ -31,9 +31,10 @@ def compute_balance_sheet(
     debt_schedule: DebtSchedule,
     returns: Returns,
 ) -> BalanceSheet:
+    from backend.engine.projections import _monitoring_fee_for_year
+
     hp = state.exit.holding_period
     financing_fees = state.fees.financing_fee_pct * state.entry.total_debt_raised
-    monitoring = state.fees.monitoring_fee_annual
 
     # ── Opening balances (t = 0) ──
     from backend.engine.projections import _nwc_balance
@@ -80,7 +81,7 @@ def compute_balance_sheet(
         cum_capex_less_da += yr.total_capex - yr.da
         cum_fin_amort += yr.financing_fee_amort
         cum_dist += dist_paid[i] if i < len(dist_paid) else 0.0
-        cum_monitoring += monitoring
+        cum_monitoring += _monitoring_fee_for_year(state, i)  # zero in exit year (P4-11)
         cum_refi_premium += refi_premium[i] if i < len(refi_premium) else 0.0
 
         cash = cash_by_year[i] if i < len(cash_by_year) else 0.0

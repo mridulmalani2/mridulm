@@ -47,7 +47,10 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     const margin = state.margins.margin_by_year[t];
 
     const ebitda = revenue * margin;
-    const ebitdaAdj = ebitda - monitoringFee;
+    // Monitoring-fee termination at exit (P4-11): the agreement terminates on sale, so
+    // no monitoring fee in the final hold year.
+    const monFeeThisYr = t === hp - 1 ? 0 : monitoringFee;
+    const ebitdaAdj = ebitda - monFeeThisYr;
     const da = revenue * daPct;
     const ebit = ebitdaAdj - da;
 
