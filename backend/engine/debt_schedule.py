@@ -91,7 +91,12 @@ def build_debt_schedule(
     cash_balance_by_year: list[float] = []
     interest_shortfall_by_year: list[float] = []
     distributions_paid_by_year: list[float] = []
+    distribution_blocked_by_year: list[bool] = []
     distributions = state.exit.interim_distributions or []
+    cov = getattr(state, "credit_covenants", None)
+    has_dist_block = cov is not None and (
+        cov.distribution_block_leverage is not None or cov.distribution_block_dscr is not None
+    )
 
     for yr_idx in range(hp):
         yr = yr_idx + 1
@@ -130,15 +135,28 @@ def build_debt_schedule(
             scheduled_repayment_request = sched[yr_idx] if yr_idx < len(sched) else 0.0
             entry.scheduled_repayment = max(0.0, min(scheduled_repayment_request, beg_bal))
 
+            # PIK-toggle (P4-4): a PIK tranche elects PIK or cash each year. Default
+            # (no toggle / missing election) = always-PIK, unchanged. When cash is
+            # elected the note pays cash at its coupon (pik_rate, falling back to
+            # eff_rate) and does not accrete that year.
+            pik_instrument = tranche.amortization_type == "PIK"
+            if pik_instrument and tranche.pik_toggle and yr_idx < len(tranche.pik_election_by_year):
+                elect_pik = tranche.pik_election_by_year[yr_idx]
+            else:
+                elect_pik = pik_instrument
+
             # Interest / PIK on average balance — beginning vs post-mandatory
             # (FINDING 2). PIK accrues on beginning balance per standard
             # convention (compounds full year).
-            if tranche.amortization_type == "PIK":
+            if pik_instrument and elect_pik:
                 entry.cash_interest = 0.0
                 entry.pik_accrual = beg_bal * tranche.pik_rate
             else:
                 avg_bal = (beg_bal + max(0.0, beg_bal - entry.scheduled_repayment)) / 2.0
-                entry.cash_interest = avg_bal * eff_rate if tranche.cash_interest else 0.0
+                # A PIK tranche electing cash pays at its note coupon (pik_rate); else eff_rate.
+                cash_rate = (tranche.pik_rate or eff_rate) if pik_instrument else eff_rate
+                pays_cash = pik_instrument or tranche.cash_interest
+                entry.cash_interest = avg_bal * cash_rate if pays_cash else 0.0
                 entry.pik_accrual = 0.0
 
             # Commitment fee — revolvers charge on undrawn capacity; other tranches
@@ -331,10 +349,26 @@ def build_debt_schedule(
             balances[t_idx] = r_entry.ending_balance
 
         cash_post_service = cash_balance + levered_op_cash - period_total_repayment
-        raw_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
+        requested_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
+        # Cash trap / restricted-payment block (P4-13): block the distribution when this
+        # year's leverage or DSCR breaches the trigger (same metric definitions as the
+        # aggregate credit metrics below, so the block aligns with the covenant breach).
+        dist_blocked = False
+        if has_dist_block and requested_dist > 0:
+            ending_debt = sum(balances)
+            ebitda_adj_yr = proj_yr.ebitda_adj if proj_yr is not None else 0.0
+            debt_service_yr = total_cash_interest + total_mandatory_amort
+            levr = ending_debt / ebitda_adj_yr if ebitda_adj_yr > 0 else float("inf")
+            dscr_yr = fcf_pre_debt / debt_service_yr if debt_service_yr > 0 else float("inf")
+            if cov.distribution_block_leverage is not None and levr > cov.distribution_block_leverage:
+                dist_blocked = True
+            if cov.distribution_block_dscr is not None and dscr_yr < cov.distribution_block_dscr:
+                dist_blocked = True
+        raw_dist = 0.0 if dist_blocked else requested_dist
         dist_paid = max(0.0, min(raw_dist, max(0.0, cash_post_service)))
         cash_balance = max(0.0, cash_post_service - dist_paid)
         distributions_paid_by_year.append(dist_paid)
+        distribution_blocked_by_year.append(dist_blocked)
         cash_balance_by_year.append(cash_balance)
 
     # Build aggregate metrics
@@ -432,4 +466,5 @@ def build_debt_schedule(
         interest_shortfall_by_year=interest_shortfall_by_year,
         cash_balance_by_year=cash_balance_by_year,
         distributions_paid_by_year=distributions_paid_by_year,
+        distribution_blocked_by_year=distribution_blocked_by_year,
     )

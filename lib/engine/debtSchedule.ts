@@ -31,6 +31,7 @@ export function buildDebtSchedule(
     total_commitment_fees_by_year: [],
     cash_balance_by_year: [],
     distributions_paid_by_year: [],
+    distribution_blocked_by_year: [],
   };
 
   if (!tranches.length) return empty;
@@ -47,7 +48,10 @@ export function buildDebtSchedule(
   let cashBalance = 0;
   const cashBalanceByYear: number[] = [];
   const distributionsPaidByYear: number[] = [];
+  const distributionBlockedByYear: boolean[] = [];
   const distributions = state.exit.interim_distributions || [];
+  const cov = state.credit_covenants;
+  const hasDistBlock = !!cov && (cov.distribution_block_leverage != null || cov.distribution_block_dscr != null);
 
   for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
     const yr = yrIdx + 1;
@@ -79,7 +83,15 @@ export function buildDebtSchedule(
         effRate = tranche.interest_rate;
       }
 
-      const pikAccrual = tranche.amortization_type === 'PIK' ? begBal * tranche.pik_rate : 0;
+      // PIK-toggle (P4-4): a PIK tranche elects PIK or cash pay each year. Default (no
+      // toggle, or missing election) = always-PIK, unchanged. When cash is elected the
+      // note pays cash interest at its coupon (pik_rate, falling back to effRate) and
+      // does not accrete that year.
+      const pikInstrument = tranche.amortization_type === 'PIK';
+      const electPik = pikInstrument
+        && (!tranche.pik_toggle || (tranche.pik_election_by_year?.[yrIdx] ?? true));
+
+      const pikAccrual = electPik ? begBal * tranche.pik_rate : 0;
 
       const sched = tranche.amortization_schedule;
       const scheduledRepayment = yrIdx < sched.length
@@ -89,11 +101,13 @@ export function buildDebtSchedule(
       // Standard LBO convention: interest accrues on average balance (beginning +
       // post-mandatory-amort) / 2, reflecting that principal is repaid throughout the year.
       let cashInterest: number;
-      if (tranche.amortization_type === 'PIK') {
+      if (pikInstrument && electPik) {
         cashInterest = 0;
       } else {
         const avgBal = (begBal + Math.max(0, begBal - scheduledRepayment)) / 2;
-        cashInterest = tranche.cash_interest ? avgBal * effRate : 0;
+        // A PIK tranche electing cash pays at its note coupon (pik_rate); otherwise effRate.
+        const cashRate = pikInstrument ? (tranche.pik_rate || effRate) : effRate;
+        cashInterest = (pikInstrument || tranche.cash_interest) ? avgBal * cashRate : 0;
       }
 
       // Commitment fee: for revolvers charge on the UNDRAWN portion;
@@ -223,10 +237,25 @@ export function buildDebtSchedule(
     // Interim distributions (special dividends) are paid from available cash and
     // cannot exceed it. Reducing cash here raises net debt and lowers exit equity,
     // so distributions are no longer double-counted in returns.
-    const rawDist = yrIdx < distributions.length ? distributions[yrIdx] : 0;
+    const requestedDist = yrIdx < distributions.length ? distributions[yrIdx] : 0;
+    // Cash trap / restricted-payment block (P4-13): block the distribution when this
+    // year's leverage or DSCR breaches the configured trigger (same metric definitions
+    // as the credit analysis, so the block aligns with the displayed covenant breach).
+    let distBlocked = false;
+    if (hasDistBlock && requestedDist > 0) {
+      const endingDebt = balances.reduce((s, b) => s + b, 0);
+      const ebitdaAdj = projYr ? projYr.ebitda_adj : 0;
+      const debtService = totalCashInterest + totalCommitmentFees + totalMandatoryAmort;
+      const levr = ebitdaAdj > 0 ? endingDebt / ebitdaAdj : Infinity;
+      const dscr = debtService > 0 ? fcfPreDebt / debtService : Infinity;
+      if (cov!.distribution_block_leverage != null && levr > cov!.distribution_block_leverage) distBlocked = true;
+      if (cov!.distribution_block_dscr != null && dscr < cov!.distribution_block_dscr) distBlocked = true;
+    }
+    const rawDist = distBlocked ? 0 : requestedDist;
     const distPaid = Math.max(0, Math.min(rawDist, Math.max(0, cashPostService)));
     cashBalance = Math.max(0, cashPostService - distPaid);
     distributionsPaidByYear.push(distPaid);
+    distributionBlockedByYear.push(distBlocked);
     cashBalanceByYear.push(cashBalance);
   }
 
@@ -307,5 +336,6 @@ export function buildDebtSchedule(
     total_commitment_fees_by_year: commitmentFeesByYear,
     cash_balance_by_year: cashBalanceByYear,
     distributions_paid_by_year: distributionsPaidByYear,
+    distribution_blocked_by_year: distributionBlockedByYear,
   };
 }

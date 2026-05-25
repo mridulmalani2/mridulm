@@ -23,6 +23,12 @@ export interface DebtTranche {
   cash_sweep_pct: number;
   /** Lower number = higher sweep priority. Tranches in the same tier receive pro-rata allocation. Defaults to array index when omitted. */
   sweep_priority?: number;
+  /** PIK-toggle (P4-4): when true on a PIK tranche, the issuer elects PIK or cash pay each
+   *  period via pik_election_by_year. Absent/false ⇒ always-PIK (unchanged). */
+  pik_toggle?: boolean;
+  /** Per-year PIK election for a pik_toggle tranche: true = accrue PIK, false = pay cash.
+   *  Missing entries default to PIK (preserves always-PIK behaviour). */
+  pik_election_by_year?: boolean[];
   /** 0-indexed hold year in which the tranche is drawn. Omitted/0 = drawn at entry. Used for add-on acquisition debt funded mid-hold. */
   draw_year_index?: number;
   /** Internal flag: tranche synthesised from add-on acquisition debt. Stripped/rebuilt on every recalc — never persisted or user-editable. */
@@ -183,6 +189,7 @@ export interface DebtScheduleResult {
   total_commitment_fees_by_year: number[];  // Sum of all commitment fees paid across tranches each year
   cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service (net of distributions)
   distributions_paid_by_year: number[];      // Interim distributions actually paid (capped at available cash)
+  distribution_blocked_by_year: boolean[];   // True when a cash-trap / restricted-payment covenant blocked the year's distribution (P4-13)
 }
 
 export interface Returns {
@@ -515,6 +522,10 @@ export interface CreditCovenants {
   leverage_covenant_by_year?: number[];
   dscr_covenant_by_year?: number[];
   fccr_covenant_by_year?: number[];
+  // Cash trap / restricted-payment block (P4-13). When set, interim distributions are
+  // blocked in any year the trigger is hit. Absent ⇒ distributions never blocked.
+  distribution_block_leverage?: number;   // block when leverage > this
+  distribution_block_dscr?: number;       // block when DSCR < this
 }
 
 // ── Revenue Segments ─────────────────────────────────────────────────────

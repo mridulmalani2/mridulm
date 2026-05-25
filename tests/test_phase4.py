@@ -9,6 +9,7 @@ import pytest
 from backend.models.state import ModelState, MIPRatchetTier, PartialExitEvent, FundAssumptions
 from backend.models.debt import DebtTranche
 from backend.engine.scenarios import _run_full_model
+from backend.engine.projections import build_projections
 from backend.engine.debt_schedule import build_debt_schedule
 from backend.engine.balance_sheet import compute_balance_sheet
 from backend.engine.fund_returns import compute_fund_returns
@@ -169,3 +170,82 @@ class TestPhase4BalanceSheetCloses:
         bs = compute_balance_sheet(s, proj, ds, ret)
         assert bs.closes
         assert bs.max_abs_check < 0.01
+
+
+def _pik_state() -> ModelState:
+    s = _base_state()
+    s.debt_tranches = [
+        DebtTranche(name="Senior TLB", tranche_type="senior", principal=70.0,
+                    interest_rate=0.07, rate_type="fixed", amortization_type="bullet"),
+        DebtTranche(name="PIK", tranche_type="pik_note", principal=30.0,
+                    interest_rate=0.12, pik_rate=0.12, rate_type="fixed",
+                    amortization_type="PIK", cash_interest=False),
+    ]
+    s.derive_entry_fields()
+    s.ensure_list_lengths()
+    return s
+
+
+class TestPikToggle:
+    """P4-4 — per-year PIK vs cash election on a PIK tranche."""
+
+    def test_always_pik_accretes(self):
+        s = _pik_state()
+        proj = build_projections(s)
+        ds = build_debt_schedule(s, proj)
+        pik = ds.tranche_schedules[1]
+        assert pik[0].pik_accrual > 0
+        assert pik[0].cash_interest == 0.0
+        assert pik[-1].ending_balance > 30.0
+
+    def test_cash_election_pays_cash_no_accretion(self):
+        s = _pik_state()
+        s.debt_tranches[1].pik_toggle = True
+        s.debt_tranches[1].pik_election_by_year = [False] * 5
+        proj = build_projections(s)
+        ds = build_debt_schedule(s, proj)
+        pik = ds.tranche_schedules[1]
+        for y in pik:
+            assert y.pik_accrual == 0.0
+            assert y.cash_interest > 0
+        assert pik[-1].ending_balance == pytest.approx(30.0, abs=1e-6)
+
+    def test_mixed_election(self):
+        s = _pik_state()
+        s.debt_tranches[1].pik_toggle = True
+        s.debt_tranches[1].pik_election_by_year = [True, True, False, False, False]
+        proj = build_projections(s)
+        ds = build_debt_schedule(s, proj)
+        pik = ds.tranche_schedules[1]
+        assert pik[0].pik_accrual > 0 and pik[0].cash_interest == 0.0
+        assert pik[2].pik_accrual == 0.0 and pik[2].cash_interest > 0
+
+
+class TestCashTrap:
+    """P4-13 — cash-trap / restricted-payment block on interim distributions."""
+
+    def _dist_state(self, block_leverage: float) -> ModelState:
+        s = _base_state()
+        s.exit.interim_distributions = [0.0, 3.0, 0.0, 0.0, 0.0]
+        s.credit_covenants.distribution_block_leverage = block_leverage
+        s.ensure_list_lengths()
+        return s
+
+    def test_blocks_when_leverage_breaches(self):
+        s = self._dist_state(3.0)
+        proj = build_projections(s)
+        ds = build_debt_schedule(s, proj)
+        assert ds.distributions_paid_by_year[1] == 0.0
+        assert ds.distribution_blocked_by_year[1] is True
+
+    def test_pays_when_not_breached(self):
+        s = self._dist_state(10.0)
+        proj = build_projections(s)
+        ds = build_debt_schedule(s, proj)
+        assert ds.distributions_paid_by_year[1] > 0
+        assert ds.distribution_blocked_by_year[1] is False
+
+    def test_block_retains_cash(self):
+        blocked = build_debt_schedule(self._dist_state(3.0), build_projections(self._dist_state(3.0)))
+        paid = build_debt_schedule(self._dist_state(10.0), build_projections(self._dist_state(10.0)))
+        assert blocked.cash_balance_by_year[1] > paid.cash_balance_by_year[1]

@@ -193,6 +193,7 @@ export function createDefaultModelState(): ModelState {
       total_commitment_fees_by_year: [],
       cash_balance_by_year: [],
       distributions_paid_by_year: [],
+      distribution_blocked_by_year: [],
     },
     returns: {
       irr: null,

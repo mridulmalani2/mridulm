@@ -64,6 +64,14 @@ class DebtTranche(BaseModel):
         ge=0,
         description="Sweep ordering — lower values get swept first (0 = most senior). Pro-rata when equal.",
     )
+    pik_toggle: bool = Field(
+        default=False,
+        description="PIK-toggle (P4-4): when True on a PIK tranche, the issuer elects PIK or cash each year.",
+    )
+    pik_election_by_year: list[bool] = Field(
+        default_factory=list,
+        description="Per-year PIK election for a pik_toggle tranche: True = accrue PIK, False = pay cash. Missing ⇒ PIK.",
+    )
     financing_fee_amort_years: int = Field(
         default=0,
         ge=0,
@@ -141,4 +149,8 @@ class DebtSchedule(BaseModel):
     distributions_paid_by_year: list[float] = Field(
         default_factory=list,
         description="Interim distributions actually paid (capped at available cash).",
+    )
+    distribution_blocked_by_year: list[bool] = Field(
+        default_factory=list,
+        description="True when a cash-trap / restricted-payment covenant blocked the year's distribution (P4-13).",
     )

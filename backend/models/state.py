@@ -201,6 +201,21 @@ class FundAssumptions(BaseModel):
     deal_allocation_pct: float = Field(default=1.0, ge=0, le=1.0, description="This deal's share of the fund")
 
 
+class CreditCovenants(BaseModel):
+    """Covenant configuration (mirrors lib/dealEngineTypes.ts CreditCovenants)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    leverage_covenant: float = Field(default=6.0, ge=0, description="Max net leverage (fallback scalar)")
+    dscr_covenant: float = Field(default=1.25, ge=0, description="Min DSCR (fallback scalar)")
+    fccr_covenant: float = Field(default=1.15, ge=0, description="Min FCCR (fallback scalar)")
+    leverage_covenant_by_year: list[float] = Field(default_factory=list)
+    dscr_covenant_by_year: list[float] = Field(default_factory=list)
+    fccr_covenant_by_year: list[float] = Field(default_factory=list)
+    # Cash trap / restricted-payment block (P4-13). None ⇒ distributions never blocked.
+    distribution_block_leverage: Optional[float] = Field(default=None, description="Block distributions when leverage > this")
+    distribution_block_dscr: Optional[float] = Field(default=None, description="Block distributions when DSCR < this")
+
+
 # ── Root ModelState ───────────────────────────────────────────────────────
 
 class ModelState(BaseModel):
@@ -229,6 +244,7 @@ class ModelState(BaseModel):
     fund_assumptions: Optional[FundAssumptions] = Field(
         default=None, description="Optional fund-level economics; when set, fund_returns is computed (P4-2)."
     )
+    credit_covenants: CreditCovenants = Field(default_factory=CreditCovenants)
 
     # Revenue segments and add-on acquisitions
     revenue_segments: list[RevenueSegment] = Field(default_factory=list)
