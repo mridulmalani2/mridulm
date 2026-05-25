@@ -1,0 +1,147 @@
+{
+  "simple-bullet": {
+    "irr": 0.1488,
+    "moic": 2.0013,
+    "entry_equity": 125.6,
+    "exit_equity": 251.363,
+    "exit_net_debt": 15.541,
+    "net_debt_by_year": [
+      70.41,
+      59.2,
+      46.347,
+      31.791,
+      15.541
+    ],
+    "dscr_by_year": [
+      2.713,
+      3.002,
+      3.295,
+      3.599,
+      3.902
+    ],
+    "leverage_by_year": [
+      3.594,
+      3.267,
+      2.976,
+      2.743,
+      2.532
+    ],
+    "bs_closes": true
+  },
+  "pik": {
+    "irr": 0.1594,
+    "moic": 2.0953,
+    "entry_equity": 106,
+    "exit_equity": 222.1,
+    "exit_net_debt": 49.969,
+    "net_debt_by_year": [
+      92.565,
+      83.834,
+      73.822,
+      62.516,
+      49.969
+    ],
+    "dscr_by_year": [
+      3.252,
+      3.605,
+      3.965,
+      4.34,
+      4.717
+    ],
+    "leverage_by_year": [
+      4.654,
+      4.396,
+      4.172,
+      4.018,
+      3.888
+    ],
+    "bs_closes": true
+  },
+  "cash-sweep": {
+    "irr": 0.1623,
+    "moic": 2.1217,
+    "entry_equity": 115.8,
+    "exit_equity": 245.692,
+    "exit_net_debt": 22.214,
+    "net_debt_by_year": [
+      80.925,
+      69.753,
+      56.352,
+      40.546,
+      22.214
+    ],
+    "dscr_by_year": [
+      2.44,
+      2.972,
+      3.745,
+      5.007,
+      7.459
+    ],
+    "leverage_by_year": [
+      3.635,
+      2.849,
+      2.097,
+      1.39,
+      0.703
+    ],
+    "bs_closes": true
+  },
+  "revolver-first": {
+    "irr": 0.1488,
+    "moic": 2.0013,
+    "entry_equity": 125.6,
+    "exit_equity": 251.363,
+    "exit_net_debt": 15.541,
+    "net_debt_by_year": [
+      70.41,
+      59.2,
+      46.347,
+      31.791,
+      15.541
+    ],
+    "dscr_by_year": [
+      2.713,
+      3.002,
+      3.295,
+      3.599,
+      3.902
+    ],
+    "leverage_by_year": [
+      3.594,
+      3.267,
+      2.976,
+      2.743,
+      2.532
+    ],
+    "bs_closes": true
+  },
+  "addon": {
+    "irr": 0.4315,
+    "moic": 6.0116,
+    "entry_equity": 115.8,
+    "exit_equity": 696.138,
+    "exit_net_debt": 54.289,
+    "net_debt_by_year": [
+      80.925,
+      151.828,
+      132.486,
+      100.728,
+      54.289
+    ],
+    "dscr_by_year": [
+      2.44,
+      1.808,
+      2.82,
+      4.424,
+      7.586
+    ],
+    "leverage_by_year": [
+      3.635,
+      4.279,
+      2.596,
+      1.468,
+      0.961
+    ],
+    "bs_closes": true
+  }
+}
