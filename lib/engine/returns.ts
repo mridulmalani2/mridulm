@@ -8,6 +8,32 @@ import type {
   ValueDriverDecomposition,
   ValueDriverRanking,
 } from '../dealEngineTypes';
+import { oidTotal } from './oid';
+
+// ── MIP ratchet resolution (P4-1) ──────────────────────────────────────────
+// Resolve the management pool % and whether the hurdle is cleared. When a ratchet
+// schedule is present, the highest tier whose MOIC (and optional IRR dual-hurdle)
+// is cleared wins; otherwise the single-hurdle behaviour is unchanged.
+function resolveMipPool(
+  mip: ModelState['mip'],
+  preMipMoic: number,
+  preMipIrr: number | null,
+): { poolPct: number; cleared: boolean } {
+  const tiers = mip.ratchet_tiers;
+  if (tiers && tiers.length) {
+    let best: { moic_threshold: number; pool_pct: number } | null = null;
+    for (const t of tiers) {
+      const moicOk = preMipMoic >= t.moic_threshold;
+      const irrOk = t.irr_threshold == null || (preMipIrr != null && preMipIrr >= t.irr_threshold);
+      if (moicOk && irrOk && (!best || t.moic_threshold > best.moic_threshold)) {
+        best = { moic_threshold: t.moic_threshold, pool_pct: t.pool_pct };
+      }
+    }
+    return best ? { poolPct: best.pool_pct, cleared: true } : { poolPct: 0, cleared: false };
+  }
+  const cleared = preMipMoic >= mip.hurdle_moic;
+  return { poolPct: cleared ? mip.mip_pool_pct : 0, cleared };
+}
 
 // ── IRR Solver ──────────────────────────────────────────────────────────
 
@@ -145,6 +171,20 @@ function solveIrrAuto(cashflows: number[], times: number[] | null): number | nul
 }
 
 
+/**
+ * Monitoring-fee termination payment at exit (P4-11): the NPV of the remaining
+ * contractual monitoring fees, accelerated into a one-time exit cost. 0 unless both a
+ * monitoring fee and a termination horizon are set.
+ */
+export function monitoringTerminationPayment(state: ModelState): number {
+  const fee = state.fees.monitoring_fee_annual;
+  const n = state.fees.monitoring_fee_termination_years ?? 0;
+  if (fee <= 0 || n <= 0) return 0;
+  const r = state.fees.monitoring_fee_discount_rate ?? 0.10;
+  const annuityPv = r > 0 ? (1 - Math.pow(1 + r, -n)) / r : n;
+  return fee * annuityPv;
+}
+
 // ── Returns Calculation ─────────────────────────────────────────────────
 
 export function calculateReturns(
@@ -158,8 +198,9 @@ export function calculateReturns(
 
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
+  const oid = oidTotal(state); // upfront OID funded by equity at close (P4-14)
   const entryEquity =
-    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees - state.entry.total_debt_raised;
+    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees + oid - state.entry.total_debt_raised;
 
   if (entryEquity <= 0) {
     return {
@@ -169,6 +210,7 @@ export function calculateReturns(
       entry_equity: entryEquity,
       exit_equity: 0, exit_ev: 0, exit_net_debt: 0, mip_payout: 0,
       total_distributions: 0, dpi_by_year: [], rvpi_by_year: [],
+      equity_cashflows: [],
       convergence_iterations: 1, convergence_delta: 0,
     };
   }
@@ -201,19 +243,66 @@ export function calculateReturns(
   }
   const totalDistributions = distributions.reduce((s, d) => s + d, 0);
 
-  const exitEquityPreMip = exitEv - exitNetDebt - exitFee;
+  // ── Partial exits / IPO selldown (P4-5) ──
+  // Each event realises pct_sold of the sponsor's CURRENT remaining stake at that
+  // year's implied equity value (event multiple × EBITDA − net debt), net of an
+  // event advisory fee, booked at the event year. The residual stake carried to
+  // final exit shrinks accordingly. Interim partial realisations are pre-promote
+  // (the MIP crystallises on the residual stake at final exit). With no events the
+  // path is identical to a single full exit (remainingStake = 1, no proceeds).
+  const partialProceedsByYear = new Array(hp).fill(0);        // net of event fee (equity IRR)
+  const partialProceedsGrossByYear = new Array(hp).fill(0);   // pre fee (levered/gross IRR)
+  let remainingStake = 1;
+  const partialEvents = (state.exit.partial_exits ?? [])
+    .filter((e) => e.year >= 1 && e.year < hp && e.pct_sold > 0)
+    .sort((a, b) => a.year - b.year);
+  for (const ev of partialEvents) {
+    const yi = ev.year - 1;
+    const projYr = yi < projections.length ? projections[yi] : null;
+    if (!projYr) continue;
+    const evNetDebt = yi < debtSchedule.net_debt_by_year.length ? debtSchedule.net_debt_by_year[yi] : 0;
+    const evEquityValue = Math.max(0, ev.exit_multiple * projYr.ebitda_adj - evNetDebt);
+    const sold = Math.min(1, Math.max(0, ev.pct_sold));
+    const gross = sold * remainingStake * evEquityValue;
+    partialProceedsGrossByYear[yi] += gross;
+    partialProceedsByYear[yi] += gross * (1 - Math.max(0, ev.exit_fee_pct));
+    remainingStake *= (1 - sold);
+  }
+  const totalPartialProceeds = partialProceedsByYear.reduce((s, p) => s + p, 0);
 
-  // MIP hurdle check: gross pre-fee MOIC = exit equity (pre-MIP, pre-exit-fee) / entry equity.
-  // Interim distributions are excluded from the hurdle — matching Python backend convention.
-  const totalReturnMoic = entryEquity > 0
-    ? exitEquityPreMip / entryEquity
-    : 0;
+  // Monitoring-fee termination payment (P4-11) — a sponsor-level exit cost, netted from
+  // the equity (net) path only (like the exit fee); excluded from levered/gross IRR.
+  const monitoringTermination = monitoringTerminationPayment(state);
 
-  const mipPayout = totalReturnMoic >= state.mip.hurdle_moic
-    ? state.mip.mip_pool_pct * exitEquityPreMip
-    : 0;
+  // Full-stake (100%) exit equity before MIP. The hurdle is tested on the full-exit
+  // MOIC (distributions excluded) — backward-compatible with the single-exit path.
+  const exitEquityPreMipFull = exitEv - exitNetDebt - exitFee - monitoringTermination;
+  const preMipMoic = entryEquity > 0 ? exitEquityPreMipFull / entryEquity : 0;
 
-  const exitEquity = exitEquityPreMip - mipPayout;
+  // Pre-MIP equity IRR for the optional dual hurdle (independent of MIP — no circularity).
+  // Only needed when a ratchet schedule with an IRR threshold is present.
+  const needsPreMipIrr = (state.mip.ratchet_tiers ?? []).some((t) => t.irr_threshold != null);
+  let preMipIrr: number | null = null;
+  if (needsPreMipIrr) {
+    const preMipResidual = remainingStake * exitEquityPreMipFull;
+    const preMipCfs: number[] = [-entryEquity];
+    for (let i = 0; i < hp; i++) {
+      let cf = distributions[i] + partialProceedsByYear[i];
+      if (i === hp - 1) cf += preMipResidual;
+      preMipCfs.push(cf);
+    }
+    preMipIrr = solveIrrAuto(preMipCfs, times);
+  }
+
+  const { poolPct } = resolveMipPool(state.mip, preMipMoic, preMipIrr);
+  const mipPayoutFull = poolPct * exitEquityPreMipFull;
+  // Promote crystallises on the residual stake held to final exit.
+  const mipPayout = remainingStake * mipPayoutFull;
+  const residualPostMip = remainingStake * (exitEquityPreMipFull - mipPayoutFull);
+
+  // exit_equity = total realised sponsor equity (residual at exit + interim partials),
+  // so MOIC = (exit_equity + distributions) / entry_equity holds in every case.
+  const exitEquity = residualPostMip + totalPartialProceeds;
 
   // MOIC includes all distributions
   const moic = entryEquity > 0 ? (exitEquity + totalDistributions) / entryEquity : 0;
@@ -241,27 +330,24 @@ export function calculateReturns(
     }
   }
 
-  // ── Equity IRR (with distributions) ──
+  // ── Equity IRR (with distributions + partial-exit proceeds) ──
+  // Partial proceeds land at their event year; the post-MIP residual lands at exit.
   const equityCfs: number[] = [-entryEquity];
   for (let i = 0; i < hp; i++) {
-    if (i === hp - 1) {
-      equityCfs.push(exitEquity + distributions[i]);
-    } else {
-      equityCfs.push(distributions[i]);
-    }
+    let cf = distributions[i] + partialProceedsByYear[i];
+    if (i === hp - 1) cf += residualPostMip;
+    equityCfs.push(cf);
   }
   const irr = solveIrrAuto(equityCfs, times);
 
-  // Levered pre-fee IRR
+  // Levered pre-fee IRR (residual stake at exit + pre-fee partial proceeds at their years)
   const entryEquityLevered = state.entry.enterprise_value - state.entry.total_debt_raised;
   const exitEquityLevered = exitEv - exitNetDebt;
   const leveredCfs: number[] = [-entryEquityLevered];
   for (let i = 0; i < hp; i++) {
-    if (i === hp - 1) {
-      leveredCfs.push(exitEquityLevered + distributions[i]);
-    } else {
-      leveredCfs.push(distributions[i]);
-    }
+    let cf = distributions[i] + partialProceedsGrossByYear[i];
+    if (i === hp - 1) cf += remainingStake * exitEquityLevered;
+    leveredCfs.push(cf);
   }
   const irrLevered = entryEquityLevered > 0 ? solveIrrAuto(leveredCfs, times) : null;
 
@@ -269,16 +355,14 @@ export function calculateReturns(
   // Entry equity excludes the entry advisory fee (treated as target-borne); exit
   // equity excludes the exit fee. Transaction costs and financing fees remain in
   // the cost base as they are unavoidable deal costs borne by the sponsor.
-  const entryEquityGross = state.entry.enterprise_value + state.fees.transaction_costs + financingFees
+  const entryEquityGross = state.entry.enterprise_value + state.fees.transaction_costs + financingFees + oid
     - state.entry.total_debt_raised;
   const exitEquityGross = exitEv - exitNetDebt; // no exit fee
   const grossCfs: number[] = [-entryEquityGross];
   for (let i = 0; i < hp; i++) {
-    if (i === hp - 1) {
-      grossCfs.push(exitEquityGross + distributions[i]);
-    } else {
-      grossCfs.push(distributions[i]);
-    }
+    let cf = distributions[i] + partialProceedsGrossByYear[i];
+    if (i === hp - 1) cf += remainingStake * exitEquityGross;
+    grossCfs.push(cf);
   }
   const irrGross = entryEquityGross > 0 ? solveIrrAuto(grossCfs, times) : null;
 
@@ -332,6 +416,7 @@ export function calculateReturns(
     total_distributions: totalDistributions,
     dpi_by_year: dpiByYear,
     rvpi_by_year: rvpiByYear,
+    equity_cashflows: equityCfs,
     convergence_iterations: 1,
     convergence_delta: 0,
   };
@@ -378,7 +463,9 @@ export function decomposeValueDrivers(
   const vdFinancingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const vdEntryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const exitFee = state.fees.exit_fee_pct * exitEv;
-  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee + returns.mip_payout;
+  const monitoringTermination = monitoringTerminationPayment(state); // P4-11 exit cost
+  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee
+    + returns.mip_payout + monitoringTermination + oidTotal(state); // OID upfront cost (P4-14)
 
   // Bridge decomposes exit_equity − entry_equity only. Distributions are LP cash flows,
   // not value creation — they are already captured via delta_debt (lower exit cash reduces net debt).

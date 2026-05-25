@@ -31,17 +31,24 @@ def compute_balance_sheet(
     debt_schedule: DebtSchedule,
     returns: Returns,
 ) -> BalanceSheet:
+    from backend.engine.projections import _monitoring_fee_for_year, _oid_total, _oid_amort_by_year
+
     hp = state.exit.holding_period
     financing_fees = state.fees.financing_fee_pct * state.entry.total_debt_raised
-    monitoring = state.fees.monitoring_fee_annual
+    oid_total = _oid_total(state)          # P4-14: capitalised alongside financing fees
+    oid_amort = _oid_amort_by_year(state)
 
     # ── Opening balances (t = 0) ──
+    from backend.engine.projections import _nwc_balance
+
     entry_equity = returns.entry_equity
     opening_debt = state.entry.total_debt_raised
     opening_cash = 0.0
-    opening_nwc = state.revenue.base_revenue * state.margins.nwc_pct_revenue
+    # Entry NWC under the active method (days-based or revenue peg); cumulative ΔNWC
+    # telescopes onto this opening level (P4-9).
+    opening_nwc = _nwc_balance(state.revenue.base_revenue, state.margins.base_ebitda_margin, state.margins)
     opening_ppe = 0.0
-    opening_def_fin = financing_fees
+    opening_def_fin = financing_fees + oid_total
     # Goodwill closes the opening balance sheet (purchase-accounting residual).
     opening_goodwill = (
         (opening_debt + entry_equity)
@@ -58,9 +65,12 @@ def compute_balance_sheet(
     cum_dnwc = 0.0
     cum_capex_less_da = 0.0
     cum_fin_amort = 0.0
+    cum_refi_premium = 0.0
+    cum_oid_amort = 0.0
     max_abs = 0.0
 
     dist_paid = debt_schedule.distributions_paid_by_year or []
+    refi_premium = debt_schedule.refinancing_premium_by_year or []
     cash_by_year = debt_schedule.cash_balance_by_year or []
     debt_by_year = debt_schedule.total_debt_by_year or []
 
@@ -74,12 +84,14 @@ def compute_balance_sheet(
         cum_capex_less_da += yr.total_capex - yr.da
         cum_fin_amort += yr.financing_fee_amort
         cum_dist += dist_paid[i] if i < len(dist_paid) else 0.0
-        cum_monitoring += monitoring
+        cum_monitoring += _monitoring_fee_for_year(state, i)  # zero in exit year (P4-11)
+        cum_refi_premium += refi_premium[i] if i < len(refi_premium) else 0.0
+        cum_oid_amort += oid_amort[i] if i < len(oid_amort) else 0.0
 
         cash = cash_by_year[i] if i < len(cash_by_year) else 0.0
         net_working_capital = opening_nwc + cum_dnwc
         net_ppe = opening_ppe + cum_capex_less_da
-        deferred_financing_costs = max(0.0, opening_def_fin - cum_fin_amort)
+        deferred_financing_costs = max(0.0, opening_def_fin - cum_fin_amort - cum_oid_amort)
         goodwill = opening_goodwill
         total_assets = cash + net_working_capital + net_ppe + deferred_financing_costs + goodwill
 
@@ -90,7 +102,7 @@ def compute_balance_sheet(
         # Equity = contributed + retained earnings − distributions − monitoring fees.
         # Monitoring is a sponsor-level cash cost not routed through the P&L, so it is
         # charged to equity to keep the statements consistent.
-        shareholders_equity = entry_equity + cum_ni - cum_dist - cum_monitoring
+        shareholders_equity = entry_equity + cum_ni - cum_dist - cum_monitoring - cum_refi_premium
         total_liabilities_and_equity = total_liabilities + shareholders_equity
 
         check = total_assets - total_liabilities_and_equity

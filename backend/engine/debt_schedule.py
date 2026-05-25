@@ -30,6 +30,7 @@ import logging
 from backend.models.debt import DebtSchedule, DebtScheduleYear, DebtTranche
 from backend.models.outputs import AnnualProjection
 from backend.models.state import ModelState
+from backend.engine.projections import _monitoring_fee_for_year, _oid_amort_by_year
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,14 @@ def build_debt_schedule(
     cash_balance_by_year: list[float] = []
     interest_shortfall_by_year: list[float] = []
     distributions_paid_by_year: list[float] = []
+    distribution_blocked_by_year: list[bool] = []
+    refinancing_premium_by_year: list[float] = []
+    oid_amort_by_year = _oid_amort_by_year(state)  # non-cash; added back in the levered cash flow (P4-14)
     distributions = state.exit.interim_distributions or []
+    cov = getattr(state, "credit_covenants", None)
+    has_dist_block = cov is not None and (
+        cov.distribution_block_leverage is not None or cov.distribution_block_dscr is not None
+    )
 
     for yr_idx in range(hp):
         yr = yr_idx + 1
@@ -104,6 +112,7 @@ def build_debt_schedule(
         # First pass: compute interest and mandatory amortization
         total_mandatory_amort = 0.0
         total_cash_interest = 0.0
+        refi_premium_this_year = 0.0
         year_entries: list[DebtScheduleYear] = []
 
         for t_idx, tranche in enumerate(tranches):
@@ -114,15 +123,25 @@ def build_debt_schedule(
                 beginning_balance=beg_bal,
             )
 
+            # Refinancing (P4-3): once the refi year is reached the tranche reprices and
+            # a one-time prepayment/call premium is charged on the outstanding balance.
+            refi = tranche.refinancing
+            refi_active = refi is not None and yr_idx >= refi.year - 1
+            if refi is not None and yr_idx == refi.year - 1:
+                refi_premium_this_year += max(0.0, refi.prepayment_premium) * beg_bal
+
             # Effective rate — honour an optional forward base-rate path (rate cycle).
             if tranche.rate_type == "floating":
                 if tranche.base_rate_by_year and yr_idx < len(tranche.base_rate_by_year):
                     base_rate_this_year = tranche.base_rate_by_year[yr_idx]
                 else:
                     base_rate_this_year = tranche.base_rate
-                eff_rate = max(base_rate_this_year + tranche.spread, tranche.floor)
+                spread = refi.new_spread if refi_active else tranche.spread
+                floor = refi.new_floor if refi_active else tranche.floor
+                eff_rate = max(base_rate_this_year + spread, floor)
             else:
-                eff_rate = tranche.interest_rate
+                # Fixed: a refinancing resets the all-in rate to new_spread.
+                eff_rate = refi.new_spread if refi_active else tranche.interest_rate
             entry.effective_rate = eff_rate
 
             # Mandatory scheduled repayment first (so we can compute average bal)
@@ -130,15 +149,28 @@ def build_debt_schedule(
             scheduled_repayment_request = sched[yr_idx] if yr_idx < len(sched) else 0.0
             entry.scheduled_repayment = max(0.0, min(scheduled_repayment_request, beg_bal))
 
+            # PIK-toggle (P4-4): a PIK tranche elects PIK or cash each year. Default
+            # (no toggle / missing election) = always-PIK, unchanged. When cash is
+            # elected the note pays cash at its coupon (pik_rate, falling back to
+            # eff_rate) and does not accrete that year.
+            pik_instrument = tranche.amortization_type == "PIK"
+            if pik_instrument and tranche.pik_toggle and yr_idx < len(tranche.pik_election_by_year):
+                elect_pik = tranche.pik_election_by_year[yr_idx]
+            else:
+                elect_pik = pik_instrument
+
             # Interest / PIK on average balance — beginning vs post-mandatory
             # (FINDING 2). PIK accrues on beginning balance per standard
             # convention (compounds full year).
-            if tranche.amortization_type == "PIK":
+            if pik_instrument and elect_pik:
                 entry.cash_interest = 0.0
                 entry.pik_accrual = beg_bal * tranche.pik_rate
             else:
                 avg_bal = (beg_bal + max(0.0, beg_bal - entry.scheduled_repayment)) / 2.0
-                entry.cash_interest = avg_bal * eff_rate if tranche.cash_interest else 0.0
+                # A PIK tranche electing cash pays at its note coupon (pik_rate); else eff_rate.
+                cash_rate = (tranche.pik_rate or eff_rate) if pik_instrument else eff_rate
+                pays_cash = pik_instrument or tranche.cash_interest
+                entry.cash_interest = avg_bal * cash_rate if pays_cash else 0.0
                 entry.pik_accrual = 0.0
 
             # Commitment fee — revolvers charge on undrawn capacity; other tranches
@@ -294,14 +326,18 @@ def build_debt_schedule(
         # the three-statement balance sheet closes.
         total_pik_year = sum(e.pik_accrual for e in year_entries)
         if proj_yr is not None:
+            # Monitoring fee zero in the exit year (P4-11) — must match projections /
+            # balance sheet so the cash roll-forward and close stay consistent.
+            mon_fee = _monitoring_fee_for_year(state, yr_idx)
             levered_op_cash = (
                 proj_yr.net_income
                 + proj_yr.da
                 + proj_yr.financing_fee_amort
+                + oid_amort_by_year[yr_idx]  # non-cash OID amort added back (P4-14)
                 + total_pik_year
                 - proj_yr.total_capex
                 - proj_yr.delta_nwc
-                - state.fees.monitoring_fee_annual
+                - mon_fee
             )
         else:
             levered_op_cash = 0.0
@@ -310,7 +346,7 @@ def build_debt_schedule(
         # min-cash floor, or repay from excess cash. Interest is charged on the opening
         # drawn balance; the net principal change flows through total_repayment so the
         # cash roll-forward below picks it up. No-op without a revolver tranche.
-        cash_after_service = cash_balance + levered_op_cash - period_total_repayment
+        cash_after_service = cash_balance + levered_op_cash - period_total_repayment - refi_premium_this_year
         for t_idx, tranche in enumerate(tranches):
             if tranche.tranche_type != "revolver":
                 continue
@@ -330,11 +366,28 @@ def build_debt_schedule(
             r_entry.total_repayment = new_repayment
             balances[t_idx] = r_entry.ending_balance
 
-        cash_post_service = cash_balance + levered_op_cash - period_total_repayment
-        raw_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
+        cash_post_service = cash_balance + levered_op_cash - period_total_repayment - refi_premium_this_year
+        refinancing_premium_by_year.append(refi_premium_this_year)
+        requested_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
+        # Cash trap / restricted-payment block (P4-13): block the distribution when this
+        # year's leverage or DSCR breaches the trigger (same metric definitions as the
+        # aggregate credit metrics below, so the block aligns with the covenant breach).
+        dist_blocked = False
+        if has_dist_block and requested_dist > 0:
+            ending_debt = sum(balances)
+            ebitda_adj_yr = proj_yr.ebitda_adj if proj_yr is not None else 0.0
+            debt_service_yr = total_cash_interest + total_mandatory_amort
+            levr = ending_debt / ebitda_adj_yr if ebitda_adj_yr > 0 else float("inf")
+            dscr_yr = fcf_pre_debt / debt_service_yr if debt_service_yr > 0 else float("inf")
+            if cov.distribution_block_leverage is not None and levr > cov.distribution_block_leverage:
+                dist_blocked = True
+            if cov.distribution_block_dscr is not None and dscr_yr < cov.distribution_block_dscr:
+                dist_blocked = True
+        raw_dist = 0.0 if dist_blocked else requested_dist
         dist_paid = max(0.0, min(raw_dist, max(0.0, cash_post_service)))
         cash_balance = max(0.0, cash_post_service - dist_paid)
         distributions_paid_by_year.append(dist_paid)
+        distribution_blocked_by_year.append(dist_blocked)
         cash_balance_by_year.append(cash_balance)
 
     # Build aggregate metrics
@@ -432,4 +485,6 @@ def build_debt_schedule(
         interest_shortfall_by_year=interest_shortfall_by_year,
         cash_balance_by_year=cash_balance_by_year,
         distributions_paid_by_year=distributions_paid_by_year,
+        distribution_blocked_by_year=distribution_blocked_by_year,
+        refinancing_premium_by_year=refinancing_premium_by_year,
     )

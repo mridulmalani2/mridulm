@@ -56,6 +56,48 @@ def _financing_fee_amort_per_year(state: ModelState) -> float:
     return financing_fees / avg_term if avg_term > 0 else 0.0
 
 
+def _oid_total(state: ModelState) -> float:
+    """Total OID across tranches (par × oid_pct) — funded by equity at close (P4-14)."""
+    return sum((t.oid_pct or 0.0) * t.principal for t in state.debt_tranches)
+
+
+def _oid_amort_by_year(state: ModelState) -> list[float]:
+    """Per-hold-year OID amortisation, straight-line over each tranche's maturity
+    (debt_maturity_years, else the holding period), summed across tranches (P4-14)."""
+    hp = state.exit.holding_period
+    out = [0.0] * hp
+    for t in state.debt_tranches:
+        oid = (t.oid_pct or 0.0) * t.principal
+        if oid <= 0:
+            continue
+        maturity = t.debt_maturity_years if t.debt_maturity_years and t.debt_maturity_years > 0 else hp
+        per_year = oid / maturity
+        for i in range(min(hp, maturity)):
+            out[i] += per_year
+    return out
+
+
+def _monitoring_fee_for_year(state: ModelState, yr_idx: int) -> float:
+    """Monitoring fee for a hold year — zero in the exit year (P4-11): the monitoring
+    agreement terminates on sale. Used consistently across projections, the cash
+    roll-forward and the balance-sheet equity charge so the model still closes."""
+    return 0.0 if yr_idx == state.exit.holding_period - 1 else state.fees.monitoring_fee_annual
+
+
+def _nwc_balance(revenue: float, ebitda_margin: float, m) -> float:
+    """NWC balance (P4-9): days-based when any of DSO/DIO/DPO is set, else the revenue peg.
+    Inventory/A-P use the cost base (revenue × (1 − EBITDA margin)) as a COGS proxy, since
+    the model has no separate COGS line. The peg path is unchanged."""
+    uses_days = m.nwc_dso is not None or m.nwc_dio is not None or m.nwc_dpo is not None
+    if uses_days:
+        cogs = revenue * (1.0 - ebitda_margin)
+        ar = revenue * (m.nwc_dso or 0.0) / 365.0
+        inv = cogs * (m.nwc_dio or 0.0) / 365.0
+        ap = cogs * (m.nwc_dpo or 0.0) / 365.0
+        return ar + inv - ap
+    return revenue * m.nwc_pct_revenue
+
+
 def build_projections(state: ModelState) -> AnnualProjection:
     """Build full annual projections from model state.
 
@@ -70,11 +112,11 @@ def build_projections(state: ModelState) -> AnnualProjection:
     monitoring_fee = state.fees.monitoring_fee_annual
     da_pct = state.margins.da_pct_revenue
     capex_pct = state.margins.capex_pct_revenue
-    nwc_pct = state.margins.nwc_pct_revenue
     tax_rate = state.tax.tax_rate
     min_tax_rate = state.tax.minimum_tax_rate
 
     fin_fee_amort = _financing_fee_amort_per_year(state)
+    oid_amort = _oid_amort_by_year(state)  # P4-14
 
     # Seed per-tranche balance approximation for the first pass — straight-line
     # decay over their amortization schedule when given, else opening principal
@@ -126,7 +168,7 @@ def build_projections(state: ModelState) -> AnnualProjection:
                     cash_interest_estimate += beg_bal * eff_rate
 
         total_interest_expense = cash_interest_estimate + pik_estimate
-        ebt = ebit - total_interest_expense - fin_fee_amort
+        ebt = ebit - total_interest_expense - fin_fee_amort - oid_amort[t]
 
         # ── Tax with NOL applied to TAXABLE INCOME (FINDING 2) ──
         if ebt > 0:
@@ -156,20 +198,21 @@ def build_projections(state: ModelState) -> AnnualProjection:
         g_capex = state.margins.growth_capex[t] if state.margins.growth_capex else 0.0
         total_capex = m_capex + g_capex
 
-        # NWC
-        if state.margins.nwc_movement_method == "explicit":
-            explicit = state.margins.nwc_explicit_by_year
-            # Use supplied per-year movements; fall back to pct_change when absent so
-            # an explicit method without data doesn't silently zero out NWC.
-            if explicit:
-                delta_nwc = explicit[t] if t < len(explicit) else 0.0
-            else:
-                delta_nwc = (revenue - prev_revenue) * nwc_pct
+        # NWC: explicit per-year override wins; otherwise the change in the NWC balance
+        # (days-based when DSO/DIO/DPO set, else the revenue peg — unchanged).
+        explicit = state.margins.nwc_explicit_by_year
+        if state.margins.nwc_movement_method == "explicit" and explicit:
+            delta_nwc = explicit[t] if t < len(explicit) else 0.0
         else:
-            delta_nwc = (revenue - prev_revenue) * nwc_pct
+            prev_margin = state.margins.base_ebitda_margin if t == 0 else state.margins.margin_by_year[t - 1]
+            delta_nwc = _nwc_balance(revenue, margin, state.margins) - _nwc_balance(prev_revenue, prev_margin, state.margins)
 
         # FCF (unlevered, FINDINGS 4 & 6) — base on NOPAT, deduct monitoring fee
-        fcf_pre_debt = nopat + da - total_capex - delta_nwc - monitoring_fee
+        # (zero in the exit year — P4-11).
+        mon_fee = _monitoring_fee_for_year(state, t)
+        fcf_pre_debt = nopat + da - total_capex - delta_nwc - mon_fee
+        # Operating FCF before growth investment (P4-6) = total FCF pre-debt + growth capex.
+        operating_fcf_pre_growth = fcf_pre_debt + g_capex
 
         cash_balance = prev_cash_balance  # placeholder — second pass writes the true balance
         prev_cash_balance = cash_balance
@@ -196,6 +239,7 @@ def build_projections(state: ModelState) -> AnnualProjection:
             growth_capex=g_capex,
             total_capex=total_capex,
             delta_nwc=delta_nwc,
+            operating_fcf_pre_growth_capex=operating_fcf_pre_growth,
             fcf_pre_debt=fcf_pre_debt,
             fcf_to_equity=0.0,  # filled after debt schedule
             cash_balance=cash_balance,
@@ -226,6 +270,7 @@ def update_projections_with_debt(
     min_tax_rate = state.tax.minimum_tax_rate
     monitoring_fee = state.fees.monitoring_fee_annual
     fin_fee_amort = _financing_fee_amort_per_year(state)
+    oid_amort = _oid_amort_by_year(state)  # P4-14
 
     nol_remaining = state.tax.nol_carryforward
 
@@ -241,7 +286,7 @@ def update_projections_with_debt(
 
         yr.interest_expense = total_interest_expense
         yr.financing_fee_amort = fin_fee_amort
-        yr.ebt = yr.ebit - total_interest_expense - fin_fee_amort
+        yr.ebt = yr.ebit - total_interest_expense - fin_fee_amort - oid_amort[i]
 
         # ── Tax: NOL reduces taxable income, then apply rate (FINDING 2) ──
         if yr.ebt > 0:
@@ -267,8 +312,11 @@ def update_projections_with_debt(
         else:
             yr.nopat = yr.ebit  # no current tax — losses fully shield EBIT
 
-        # ── Unlevered FCF (FCFF) — NOPAT + D&A − Capex − ΔNWC − monitoring (FINDINGS 4 & 6) ──
-        yr.fcf_pre_debt = yr.nopat + yr.da - yr.total_capex - yr.delta_nwc - monitoring_fee
+        # ── Unlevered FCF (FCFF) — NOPAT + D&A − Capex − ΔNWC − monitoring (FINDINGS 4 & 6;
+        # monitoring zero in the exit year — P4-11) ──
+        mon_fee = _monitoring_fee_for_year(state, i)
+        yr.fcf_pre_debt = yr.nopat + yr.da - yr.total_capex - yr.delta_nwc - mon_fee
+        yr.operating_fcf_pre_growth_capex = yr.fcf_pre_debt + yr.growth_capex  # P4-6
 
         # ── FCFE proper formulation (FINDING 5) ──
         # FCFE = NI + D&A − Capex − ΔNWC + Net Borrowing − monitoring fee
@@ -278,7 +326,7 @@ def update_projections_with_debt(
         yr.new_borrowings = new_borrowing
         yr.debt_repayment = actual_repayment
         yr.fcf_to_equity = (
-            yr.net_income + yr.da - yr.total_capex - yr.delta_nwc + net_borrowing - monitoring_fee
+            yr.net_income + yr.da - yr.total_capex - yr.delta_nwc + net_borrowing - mon_fee
         )
 
         # Cash balance roll-forward (post-debt-service residual; pre-distribution)

@@ -1,5 +1,15 @@
 /** TypeScript types mirroring the backend Pydantic models. */
 
+/** Refinancing of a single tranche at a given hold year (P4-3): reprice the rate,
+ *  pay a one-time call/prepayment premium, and extend the maturity. */
+export interface RefinancingEvent {
+  year: number;                 // 1-indexed hold year the refinancing takes effect
+  new_spread: number;           // floating: new spread over base; fixed: new all-in rate
+  new_floor: number;            // floating rate floor after refi (ignored for fixed)
+  prepayment_premium: number;   // one-time cash cost as % of the refinanced balance (e.g. 0.02 = 102%)
+  extend_maturity_by: number;   // years added to the tranche maturity (clears the maturity wall)
+}
+
 export interface DebtTranche {
   name: string;
   tranche_type: 'senior' | 'mezzanine' | 'unitranche' | 'revolver' | 'pik_note';
@@ -23,6 +33,20 @@ export interface DebtTranche {
   cash_sweep_pct: number;
   /** Lower number = higher sweep priority. Tranches in the same tier receive pro-rata allocation. Defaults to array index when omitted. */
   sweep_priority?: number;
+  /** PIK-toggle (P4-4): when true on a PIK tranche, the issuer elects PIK or cash pay each
+   *  period via pik_election_by_year. Absent/false ⇒ always-PIK (unchanged). */
+  pik_toggle?: boolean;
+  /** Per-year PIK election for a pik_toggle tranche: true = accrue PIK, false = pay cash.
+   *  Missing entries default to PIK (preserves always-PIK behaviour). */
+  pik_election_by_year?: boolean[];
+  /** Optional refinancing event (P4-3): reprices the tranche and books a prepayment premium
+   *  from its year onward. Absent ⇒ no refinancing (unchanged). */
+  refinancing?: RefinancingEvent;
+  /** Original Issue Discount as a fraction of par (P4-14). Funded by extra equity at close,
+   *  amortised as non-cash tax-deductible interest over debt_maturity_years. Absent ⇒ none. */
+  oid_pct?: number;
+  /** Maturity (years) over which OID amortises; falls back to the holding period. */
+  debt_maturity_years?: number;
   /** 0-indexed hold year in which the tranche is drawn. Omitted/0 = drawn at entry. Used for add-on acquisition debt funded mid-hold. */
   draw_year_index?: number;
   /** Internal flag: tranche synthesised from add-on acquisition debt. Stripped/rebuilt on every recalc — never persisted or user-editable. */
@@ -35,6 +59,21 @@ export interface FeeStructure {
   monitoring_fee_annual: number;
   financing_fee_pct: number;
   transaction_costs: number;
+  /** Monitoring-fee termination at exit (P4-11). The annual fee is dropped in the exit
+   *  year (the agreement terminates on sale); if termination_years > 0, the NPV of that
+   *  many remaining contractual years is accelerated into a one-time exit cost,
+   *  discounted at monitoring_fee_discount_rate (default 10%). */
+  monitoring_fee_termination_years?: number;
+  monitoring_fee_discount_rate?: number;
+}
+
+export interface MIPRatchetTier {
+  /** Total-return MOIC (pre-MIP) at or above which this tier's pool applies. */
+  moic_threshold: number;
+  /** Optional dual hurdle — pre-MIP equity IRR must also clear this to unlock the tier. */
+  irr_threshold?: number;
+  /** Management pool % of pre-MIP exit equity granted at this tier. */
+  pool_pct: number;
 }
 
 export interface ManagementIncentive {
@@ -42,6 +81,9 @@ export interface ManagementIncentive {
   hurdle_moic: number;
   vesting_years: number;
   sweet_equity_pct: number;
+  /** Optional ratchet schedule. When present (non-empty), the highest cleared tier's
+   *  pool_pct overrides the single-hurdle mip_pool_pct / hurdle_moic. Absent ⇒ unchanged. */
+  ratchet_tiers?: MIPRatchetTier[];
 }
 
 export interface RevenueAssumptions {
@@ -64,6 +106,12 @@ export interface MarginAssumptions {
   nwc_movement_method: 'pct_change' | 'explicit';
   /** Per-year NWC movements (£m) used when nwc_movement_method === 'explicit'. Falls back to pct_change when absent. */
   nwc_explicit_by_year?: number[];
+  /** Days-based NWC (P4-9): when any is set, NWC = A/R + Inventory − A/P from first
+   *  principles (A/R on revenue; Inventory/A/P on the cost base = revenue × (1 − EBITDA
+   *  margin), since the model has no separate COGS line). Absent ⇒ nwc_pct_revenue. */
+  nwc_dso?: number;   // days sales outstanding
+  nwc_dio?: number;   // days inventory outstanding
+  nwc_dpo?: number;   // days payable outstanding
 }
 
 export interface TaxAssumptions {
@@ -85,6 +133,17 @@ export interface EntryAssumptions {
   min_cash_balance: number;
 }
 
+export interface PartialExitEvent {
+  /** 1-indexed hold year of the partial realisation (must be < holding_period). */
+  year: number;
+  /** Fraction (0–1) of the sponsor's CURRENT remaining stake sold at this event. */
+  pct_sold: number;
+  /** EV/EBITDA applied to that year's EBITDA to value the stake. */
+  exit_multiple: number;
+  /** Advisory fee (% of the realised gross proceeds) on this tranche. */
+  exit_fee_pct: number;
+}
+
 export interface ExitAssumptions {
   holding_period: number;
   exit_ebitda_multiple: number;
@@ -93,6 +152,10 @@ export interface ExitAssumptions {
   mid_year_convention: boolean;
   interim_distributions: number[];
   exit_ev_override: number | null;
+  /** Optional interim partial realisations (IPO float / secondary selldown). When present,
+   *  each event books a proceeds inflow at its year and reduces the residual stake sold at
+   *  final exit. Absent/empty ⇒ a single full exit (unchanged). */
+  partial_exits?: PartialExitEvent[];
   exit_ebitda: number;
   exit_ev: number;
   exit_net_debt: number;
@@ -122,6 +185,10 @@ export interface AnnualProjectionYear {
   growth_capex: number;
   total_capex: number;
   delta_nwc: number;
+  /** Operating FCF before growth investment (P4-6): EBITDA − tax − maintenance capex − ΔNWC.
+   *  Equals fcf_pre_debt + growth_capex. Surfaces the PE FCF bridge
+   *  (EBITDA → less maint capex → operating FCF → less growth capex → total FCF pre-debt). */
+  operating_fcf_pre_growth_capex: number;
   fcf_pre_debt: number;
   fcf_to_equity: number;
 }
@@ -156,6 +223,8 @@ export interface DebtScheduleResult {
   total_commitment_fees_by_year: number[];  // Sum of all commitment fees paid across tranches each year
   cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service (net of distributions)
   distributions_paid_by_year: number[];      // Interim distributions actually paid (capped at available cash)
+  distribution_blocked_by_year: boolean[];   // True when a cash-trap / restricted-payment covenant blocked the year's distribution (P4-13)
+  refinancing_premium_by_year: number[];     // One-time refinancing call/prepayment premium paid in cash each year (P4-3)
 }
 
 export interface Returns {
@@ -178,6 +247,10 @@ export interface Returns {
   total_distributions: number;
   dpi_by_year: number[];
   rvpi_by_year: number[];
+  /** Realised sponsor equity cashflow stream [t0..hp]: −entry at t0, distributions +
+   *  partial-exit proceeds during the hold, post-MIP residual at exit. Single source of
+   *  truth for the equity IRR and the fund-level overlay (P4-2). */
+  equity_cashflows: number[];
   convergence_iterations: number;
   convergence_delta: number;
 }
@@ -210,6 +283,31 @@ export interface ValueDriverDecomposition {
   financial_engineering_pct: number; // multiple + debt + fees as % of total
   primary_driver: string;
   insights: string[];
+}
+
+// ── Fund-Level Returns (P4-2) ─────────────────────────────────────────────
+
+export interface FundAssumptions {
+  management_fee_pct: number;             // % of basis per annum
+  management_fee_basis: 'committed' | 'invested';
+  carry_rate: number;                     // GP carry, e.g. 0.20
+  preferred_return: number;               // LP hurdle, e.g. 0.08
+  carry_waterfall: 'american' | 'european';
+  fund_size: number;                      // total LP commitments (deal currency, £m)
+  deal_allocation_pct: number;            // this deal's share of the fund (0–1)
+}
+
+export interface FundReturns {
+  net_irr: number | null;                 // LP IRR after mgmt fees + carry
+  net_moic: number;                       // LP value / LP paid-in
+  gross_irr: number | null;               // deal equity IRR (pre fund-level fees/carry)
+  gross_moic: number;
+  gross_to_net_spread: number | null;     // gross_irr − net_irr (pp)
+  management_fees_total: number;          // cumulative mgmt fee borne by this deal
+  carried_interest: number;               // GP carry taken
+  preferred_return_shortfall: number;     // pref owed but unmet (0 when cleared)
+  lp_paid_in: number;                     // invested capital + mgmt fees
+  lp_distributions: number;               // total cash returned to LPs (post-carry)
 }
 
 // ── Fragility Analysis ──────────────────────────────────────────────────
@@ -315,6 +413,8 @@ export interface ModelState {
   mip: ManagementIncentive;
   exit: ExitAssumptions;
   credit_covenants: CreditCovenants;
+  /** Optional fund-level (LP-facing) economics. When present, fullRecalc computes fund_returns. */
+  fund_assumptions?: FundAssumptions;
   // New: segments and add-ons
   revenue_segments: RevenueSegment[];
   add_on_acquisitions: AddOnAcquisition[];
@@ -322,6 +422,7 @@ export interface ModelState {
   projections: { years: AnnualProjectionYear[] };
   debt_schedule: DebtScheduleResult;
   returns: Returns;
+  fund_returns?: FundReturns;   // computed only when fund_assumptions is set (P4-2)
   value_drivers: ValueDriverDecomposition;
   sources_and_uses: SourcesAndUses;
   credit_analysis: CreditAnalysis;
@@ -440,6 +541,13 @@ export interface CreditAnalysis {
   refinancing_risk: boolean;
   refinancing_risk_detail: string;
   recovery_waterfall: { tranche: string; recovery_pct: number }[];
+  /** Year-of-default recovery basis (P4-10): the hold year used (peak leverage) and the
+   *  distressed EV recovered against. */
+  recovery_default_year?: number;
+  recovery_stress_ev?: number;
+  /** Springing DSCR covenant (P4-8): true in any year the test is active (revolver
+   *  utilisation > threshold) AND breached. */
+  springing_breach_by_year?: boolean[];
   /** Indicative leverage-tier characterisation (entry leverage only). NOT a credit rating —
    *  does not account for coverage, industry, business quality, or jurisdiction. */
   leverage_assessment: string;
@@ -456,6 +564,18 @@ export interface CreditCovenants {
   leverage_covenant_by_year?: number[];
   dscr_covenant_by_year?: number[];
   fccr_covenant_by_year?: number[];
+  // Cash trap / restricted-payment block (P4-13). When set, interim distributions are
+  // blocked in any year the trigger is hit. Absent ⇒ distributions never blocked.
+  distribution_block_leverage?: number;   // block when leverage > this
+  distribution_block_dscr?: number;       // block when DSCR < this
+  // Springing covenant (P4-8): a DSCR test that only applies when revolver utilisation
+  // exceeds the threshold. Absent ⇒ no springing test.
+  springing_dscr_covenant?: number;
+  springing_utilization_threshold?: number;  // e.g. 0.35 = drawn > 35% of commitment
+  // Recovery haircuts (P4-10). Defaults: 40% EBITDA, 50% multiple, 10% distressed costs.
+  recovery_ebitda_haircut?: number;
+  recovery_multiple_haircut?: number;
+  recovery_distressed_cost_pct?: number;
 }
 
 // ── Revenue Segments ─────────────────────────────────────────────────────
@@ -480,6 +600,9 @@ export interface AddOnAcquisition {
   synergy_revenue: number;
   synergy_cost: number;          // cost synergies (positive = savings)
   integration_cost: number;      // one-time integration cost
+  /** Synergy ramp (P4-12): years over which revenue/cost synergies phase in linearly.
+   *  Absent ⇒ full synergy from the year after acquisition (unchanged). */
+  synergy_ramp_years?: number;
 }
 
 // ── Balance Sheet (three-statement close) ─────────────────────────────────

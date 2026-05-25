@@ -56,11 +56,18 @@ export function computeAddOnImpact(state: ModelState): AddOnImpact {
         ? state.revenue.growth_rates.slice(yrIdx, i).reduce((acc, g) => acc * (1 + g), 1)
         : 1;
 
-      revenueByYear[i] += addon.revenue * addOnGrowth + (yearsOwned > 0 ? addon.synergy_revenue : 0);
-      ebitdaByYear[i] += addon.revenue * addOnGrowth * addon.ebitda_margin + (yearsOwned > 0 ? addon.synergy_cost : 0);
-      if (yearsOwned > 0) {
-        synergyRevByYear[i] += addon.synergy_revenue;
-        costSynByYear[i] += addon.synergy_cost;
+      // Synergy ramp (P4-12): phase synergies in linearly over synergy_ramp_years. Absent ⇒
+      // full synergy from the year after acquisition (yearsOwned > 0), the prior behaviour.
+      const ramp = addon.synergy_ramp_years;
+      const synergyFraction = ramp && ramp > 0
+        ? Math.min(1, yearsOwned / ramp)
+        : (yearsOwned > 0 ? 1 : 0);
+
+      revenueByYear[i] += addon.revenue * addOnGrowth + addon.synergy_revenue * synergyFraction;
+      ebitdaByYear[i] += addon.revenue * addOnGrowth * addon.ebitda_margin + addon.synergy_cost * synergyFraction;
+      if (synergyFraction > 0) {
+        synergyRevByYear[i] += addon.synergy_revenue * synergyFraction;
+        costSynByYear[i] += addon.synergy_cost * synergyFraction;
       }
     }
   }

@@ -22,6 +22,8 @@ import type {
   BalanceSheetYear,
 } from '../dealEngineTypes';
 import type { AddOnImpact } from './addOns';
+import { nwcBalance } from './projections';
+import { oidTotal, oidAmortByYear } from './oid';
 
 const CLOSE_TOLERANCE = 0.01; // £m — joint-consistency tolerance
 
@@ -43,11 +45,14 @@ export function computeBalanceSheet(
   const entryEquity = returns.entry_equity;            // sponsor capital contributed
   const openingDebt = state.entry.total_debt_raised;   // gross debt at close
   const openingCash = 0;                               // engine cash roll-forward starts at zero
-  // NWC scales with revenue: pegging entry NWC to base revenue makes the running
-  // balance equal revenue × nwc_pct each year (the cumulative ΔNWC telescopes).
-  const openingNwc = state.revenue.base_revenue * state.margins.nwc_pct_revenue;
+  // Entry NWC under the active method (days-based or revenue peg). The cumulative ΔNWC
+  // telescopes onto this opening level (P4-9); matches the projection's NWC definition.
+  const openingNwc = nwcBalance(state.revenue.base_revenue, state.margins.base_ebitda_margin, state.margins);
   const openingPpe = 0;                                // net PP&E builds from capex − D&A over the hold
-  const openingDefFin = financingFees;                 // capitalised, amortised over the hold
+  // Capitalised financing costs = upfront bank fees + OID (P4-14); both amortise over the hold.
+  const oidTot = oidTotal(state);
+  const oidAmort = oidAmortByYear(state);
+  const openingDefFin = financingFees + oidTot;
   // Goodwill is the residual that closes the opening balance sheet (purchase accounting).
   const openingGoodwill =
     (openingDebt + entryEquity) - openingCash - openingNwc - openingPpe - openingDefFin;
@@ -57,6 +62,8 @@ export function computeBalanceSheet(
   let cumNetIncome = 0;
   let cumDistributions = 0;
   let cumCommitmentFees = 0;
+  let cumRefinancingPremium = 0;
+  let cumOidAmort = 0;
   let cumDeltaNwc = 0;
   let cumCapexLessDa = 0;
   // Bolt-on consideration is booked as acquired goodwill, funded by the add-on debt
@@ -75,6 +82,8 @@ export function computeBalanceSheet(
     cumCapexLessDa += yr.total_capex - yr.da;
     cumDistributions += debtSchedule.distributions_paid_by_year[i] ?? 0;
     cumCommitmentFees += debtSchedule.total_commitment_fees_by_year[i] ?? 0;
+    cumRefinancingPremium += debtSchedule.refinancing_premium_by_year?.[i] ?? 0;
+    cumOidAmort += oidAmort[i] ?? 0;
     const addOnDebt = addOnDebtByYear[i] ?? 0;
     const addOnEquity = addOnEquityByYear[i] ?? 0;
     cumAcquisitionCost += addOnDebt + addOnEquity;
@@ -83,7 +92,7 @@ export function computeBalanceSheet(
     const cash = debtSchedule.cash_balance_by_year[i] ?? 0;
     const netWorkingCapital = openingNwc + cumDeltaNwc;
     const netPpe = openingPpe + cumCapexLessDa;
-    const deferredFinancingCosts = Math.max(0, openingDefFin - finFeeAmortPerYear * (i + 1));
+    const deferredFinancingCosts = Math.max(0, openingDefFin - finFeeAmortPerYear * (i + 1) - cumOidAmort);
     const goodwill = openingGoodwill + cumAcquisitionCost;
     const totalAssets = cash + netWorkingCapital + netPpe + deferredFinancingCosts + goodwill;
 
@@ -96,7 +105,7 @@ export function computeBalanceSheet(
     // through the P&L; charging them to equity keeps the statements consistent (zero
     // for typical term debt).
     const shareholdersEquity =
-      entryEquity + cumAddOnEquity + cumNetIncome - cumDistributions - cumCommitmentFees;
+      entryEquity + cumAddOnEquity + cumNetIncome - cumDistributions - cumCommitmentFees - cumRefinancingPremium;
     const totalLiabilitiesAndEquity = totalLiabilities + shareholdersEquity;
 
     const balanceCheck = totalAssets - totalLiabilitiesAndEquity;

@@ -1,6 +1,26 @@
 /** Annual projection engine — P&L, capex, NWC, FCF build. */
 
-import type { ModelState, AnnualProjectionYear } from '../dealEngineTypes';
+import type { ModelState, AnnualProjectionYear, MarginAssumptions } from '../dealEngineTypes';
+import { oidAmortByYear } from './oid';
+
+/**
+ * Net working capital balance for a given revenue and EBITDA margin (P4-9).
+ * Days-based when any of DSO/DIO/DPO is set: A/R on revenue, Inventory and A/P on the
+ * cost base (revenue × (1 − EBITDA margin)) as a COGS proxy — the model has no separate
+ * COGS line. Otherwise the simple revenue × nwc_pct_revenue peg. The pct path is
+ * unchanged, so existing deals are identical.
+ */
+export function nwcBalance(revenue: number, ebitdaMargin: number, m: MarginAssumptions): number {
+  const usesDays = m.nwc_dso != null || m.nwc_dio != null || m.nwc_dpo != null;
+  if (usesDays) {
+    const cogs = revenue * (1 - ebitdaMargin);
+    const ar = revenue * (m.nwc_dso ?? 0) / 365;
+    const inv = cogs * (m.nwc_dio ?? 0) / 365;
+    const ap = cogs * (m.nwc_dpo ?? 0) / 365;
+    return ar + inv - ap;
+  }
+  return revenue * m.nwc_pct_revenue;
+}
 
 export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const hp = state.exit.holding_period;
@@ -8,7 +28,6 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const monitoringFee = state.fees.monitoring_fee_annual;
   const daPct = state.margins.da_pct_revenue;
   const capexPct = state.margins.capex_pct_revenue;
-  const nwcPct = state.margins.nwc_pct_revenue;
   const taxRate = state.tax.tax_rate;
   const minTaxRate = state.tax.minimum_tax_rate;
   let nolRemaining = state.tax.nol_carryforward;
@@ -16,6 +35,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const totalDebt = state.entry.total_debt_raised;
   const financingFees = state.fees.financing_fee_pct * totalDebt;
   const finFeeAmort = hp > 0 ? financingFees / hp : 0;
+  const oidAmort = oidAmortByYear(state); // non-cash, tax-deductible OID amort (P4-14)
 
   let prevRevenue = baseRevenue;
   const years: AnnualProjectionYear[] = [];
@@ -29,7 +49,10 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     const margin = state.margins.margin_by_year[t];
 
     const ebitda = revenue * margin;
-    const ebitdaAdj = ebitda - monitoringFee;
+    // Monitoring-fee termination at exit (P4-11): the agreement terminates on sale, so
+    // no monitoring fee in the final hold year.
+    const monFeeThisYr = t === hp - 1 ? 0 : monitoringFee;
+    const ebitdaAdj = ebitda - monFeeThisYr;
     const da = revenue * daPct;
     const ebit = ebitdaAdj - da;
 
@@ -47,7 +70,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       }
     }
 
-    const ebt = ebit - interestEstimate - finFeeAmort;
+    const ebt = ebit - interestEstimate - finFeeAmort - (oidAmort[t] ?? 0);
 
     let tax: number;
     let nolUsage = 0;
@@ -70,19 +93,20 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     const gCapex = state.margins.growth_capex[t] || 0;
     const totalCapex = mCapex + gCapex;
 
+    // ΔNWC: explicit per-year override wins; otherwise the change in the NWC balance
+    // (days-based when DSO/DIO/DPO set, else the revenue peg — identical to before).
     let deltaNwc: number;
-    if (state.margins.nwc_movement_method === 'explicit') {
-      // Use the per-year explicit NWC movements when supplied; otherwise fall back to
-      // pct_change (the reality check surfaces a warning so the fallback isn't silent).
-      const explicit = state.margins.nwc_explicit_by_year;
-      deltaNwc = explicit && explicit.length > 0
-        ? (explicit[t] ?? 0)
-        : (revenue - prevRevenue) * nwcPct;
+    const explicit = state.margins.nwc_explicit_by_year;
+    if (state.margins.nwc_movement_method === 'explicit' && explicit && explicit.length > 0) {
+      deltaNwc = explicit[t] ?? 0;
     } else {
-      deltaNwc = (revenue - prevRevenue) * nwcPct;
+      const prevMargin = t === 0 ? state.margins.base_ebitda_margin : state.margins.margin_by_year[t - 1];
+      deltaNwc = nwcBalance(revenue, margin, state.margins) - nwcBalance(prevRevenue, prevMargin, state.margins);
     }
 
     const fcfPreDebt = ebitdaAdj - tax - totalCapex - deltaNwc;
+    // Operating FCF before growth investment (P4-6) = total FCF pre-debt + growth capex.
+    const operatingFcfPreGrowth = fcfPreDebt + gCapex;
 
     years.push({
       year: t + 1,
@@ -106,6 +130,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       growth_capex: gCapex,
       total_capex: totalCapex,
       delta_nwc: deltaNwc,
+      operating_fcf_pre_growth_capex: operatingFcfPreGrowth,
       fcf_pre_debt: fcfPreDebt,
       fcf_to_equity: 0,
     });
@@ -127,6 +152,7 @@ export function updateProjectionsWithDebt(
   let nolRemaining = state.tax.nol_carryforward;
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const finFeeAmort = hp > 0 ? financingFees / hp : 0;
+  const oidAmort = oidAmortByYear(state); // P4-14
 
   for (let i = 0; i < projections.length; i++) {
     const yr = projections[i];
@@ -135,7 +161,7 @@ export function updateProjectionsWithDebt(
     const totalInterestExpense = actualCashInterest + actualPik;
 
     yr.interest_expense = totalInterestExpense;
-    yr.ebt = yr.ebit - totalInterestExpense - finFeeAmort;
+    yr.ebt = yr.ebit - totalInterestExpense - finFeeAmort - (oidAmort[i] ?? 0);
 
     if (yr.ebt > 0) {
       const nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, yr.ebt) : 0;
@@ -152,6 +178,7 @@ export function updateProjectionsWithDebt(
 
     yr.net_income = yr.ebt - yr.tax;
     yr.fcf_pre_debt = yr.ebitda_adj - yr.tax - yr.total_capex - yr.delta_nwc;
+    yr.operating_fcf_pre_growth_capex = yr.fcf_pre_debt + yr.growth_capex;
 
     const actualRepayment = i < totalRepaymentByYear.length ? totalRepaymentByYear[i] : 0;
     yr.fcf_to_equity = yr.fcf_pre_debt - actualCashInterest - actualRepayment;

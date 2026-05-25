@@ -17,6 +17,7 @@ from .outputs import (
     EBITDABridge,
     ExitRealityCheck,
     FragilityAnalysis,
+    FundReturns,
     Returns,
     RevenueSegment,
     ScenarioSet,
@@ -34,6 +35,19 @@ class FeeStructure(BaseModel):
     monitoring_fee_annual: float = Field(default=0.0, ge=0, description="£m per year")
     financing_fee_pct: float = Field(default=0.02, ge=0, le=0.10, description="% of total debt")
     transaction_costs: float = Field(default=0.0, ge=0, description="Absolute £m")
+    # Monitoring-fee termination at exit (P4-11): drop the fee in the exit year and, if
+    # termination_years > 0, accelerate the NPV of the remaining years into an exit cost.
+    monitoring_fee_termination_years: int = Field(default=0, ge=0, le=20)
+    monitoring_fee_discount_rate: float = Field(default=0.10, ge=0, le=0.50)
+
+
+class MIPRatchetTier(BaseModel):
+    """A single ratchet tier (P4-1)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    moic_threshold: float = Field(default=2.0, ge=0, description="Pre-MIP MOIC at/above which this tier applies")
+    irr_threshold: Optional[float] = Field(default=None, description="Optional dual hurdle on pre-MIP equity IRR")
+    pool_pct: float = Field(default=0.15, ge=0, le=0.50, description="Pool % of pre-MIP exit equity at this tier")
 
 
 class ManagementIncentive(BaseModel):
@@ -43,6 +57,11 @@ class ManagementIncentive(BaseModel):
     hurdle_moic: float = Field(default=2.0, ge=1.0, le=10.0, description="MOIC threshold")
     vesting_years: int = Field(default=4, ge=0, le=10)
     sweet_equity_pct: float = Field(default=0.0, ge=0, le=0.20, description="% co-invest")
+    ratchet_tiers: list[MIPRatchetTier] = Field(
+        default_factory=list,
+        description="Optional ratchet. When non-empty, the highest cleared tier's pool_pct "
+                    "overrides the single-hurdle behaviour; absent ⇒ unchanged.",
+    )
 
 
 class RevenueAssumptions(BaseModel):
@@ -83,6 +102,11 @@ class MarginAssumptions(BaseModel):
         default_factory=list,
         description="Per-year NWC movements (£m) used when nwc_movement_method == 'explicit'. Falls back to pct_change when empty.",
     )
+    # Days-based NWC (P4-9). When any is set, NWC = A/R + Inventory − A/P from first
+    # principles (A/R on revenue; Inventory/A/P on the cost base). None ⇒ nwc_pct_revenue.
+    nwc_dso: Optional[float] = Field(default=None, description="Days sales outstanding")
+    nwc_dio: Optional[float] = Field(default=None, description="Days inventory outstanding")
+    nwc_dpo: Optional[float] = Field(default=None, description="Days payable outstanding")
 
 
 class TaxAssumptions(BaseModel):
@@ -133,6 +157,16 @@ class EntryAssumptions(BaseModel):
         return v
 
 
+class PartialExitEvent(BaseModel):
+    """Interim partial realisation / IPO selldown (P4-5)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    year: int = Field(default=1, ge=1, description="1-indexed hold year (< holding_period)")
+    pct_sold: float = Field(default=0.0, ge=0, le=1.0, description="Fraction of the CURRENT remaining stake sold")
+    exit_multiple: float = Field(default=10.0, ge=0, description="EV/EBITDA applied at this event")
+    exit_fee_pct: float = Field(default=0.0, ge=0, le=0.10, description="Advisory fee on this tranche's gross proceeds")
+
+
 class ExitAssumptions(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -151,11 +185,51 @@ class ExitAssumptions(BaseModel):
         default=None,
         description="Direct exit EV input (£m). If set, overrides exit_ebitda × exit_multiple.",
     )
+    partial_exits: list[PartialExitEvent] = Field(
+        default_factory=list,
+        description="Optional interim partial realisations (IPO float / secondary selldown). "
+                    "Empty ⇒ a single full exit (unchanged).",
+    )
     exit_ebitda: float = Field(default=0.0, description="Derived from projection")
     exit_ev: float = Field(default=0.0, description="exit_ebitda x exit_multiple")
     exit_net_debt: float = Field(default=0.0)
     exit_equity: float = Field(default=0.0)
     mip_payout: float = Field(default=0.0)
+
+
+class FundAssumptions(BaseModel):
+    """Fund-level (LP-facing) economics overlay (P4-2)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    management_fee_pct: float = Field(default=0.0, ge=0, le=0.05, description="% of basis per annum")
+    management_fee_basis: Literal["committed", "invested"] = "invested"
+    carry_rate: float = Field(default=0.20, ge=0, le=0.50)
+    preferred_return: float = Field(default=0.08, ge=0, le=0.50)
+    carry_waterfall: Literal["american", "european"] = "european"
+    fund_size: float = Field(default=0.0, ge=0, description="Total LP commitments (£m)")
+    deal_allocation_pct: float = Field(default=1.0, ge=0, le=1.0, description="This deal's share of the fund")
+
+
+class CreditCovenants(BaseModel):
+    """Covenant configuration (mirrors lib/dealEngineTypes.ts CreditCovenants)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    leverage_covenant: float = Field(default=6.0, ge=0, description="Max net leverage (fallback scalar)")
+    dscr_covenant: float = Field(default=1.25, ge=0, description="Min DSCR (fallback scalar)")
+    fccr_covenant: float = Field(default=1.15, ge=0, description="Min FCCR (fallback scalar)")
+    leverage_covenant_by_year: list[float] = Field(default_factory=list)
+    dscr_covenant_by_year: list[float] = Field(default_factory=list)
+    fccr_covenant_by_year: list[float] = Field(default_factory=list)
+    # Cash trap / restricted-payment block (P4-13). None ⇒ distributions never blocked.
+    distribution_block_leverage: Optional[float] = Field(default=None, description="Block distributions when leverage > this")
+    distribution_block_dscr: Optional[float] = Field(default=None, description="Block distributions when DSCR < this")
+    # Springing covenant (P4-8) — TS engine only; kept here for model parity.
+    springing_dscr_covenant: Optional[float] = Field(default=None)
+    springing_utilization_threshold: Optional[float] = Field(default=None)
+    # Recovery haircuts (P4-10). None ⇒ defaults (40% EBITDA, 50% multiple, 10% costs).
+    recovery_ebitda_haircut: Optional[float] = Field(default=None)
+    recovery_multiple_haircut: Optional[float] = Field(default=None)
+    recovery_distressed_cost_pct: Optional[float] = Field(default=None)
 
 
 # ── Root ModelState ───────────────────────────────────────────────────────
@@ -183,6 +257,10 @@ class ModelState(BaseModel):
     fees: FeeStructure = Field(default_factory=FeeStructure)
     mip: ManagementIncentive = Field(default_factory=ManagementIncentive)
     exit: ExitAssumptions = Field(default_factory=ExitAssumptions)
+    fund_assumptions: Optional[FundAssumptions] = Field(
+        default=None, description="Optional fund-level economics; when set, fund_returns is computed (P4-2)."
+    )
+    credit_covenants: CreditCovenants = Field(default_factory=CreditCovenants)
 
     # Revenue segments and add-on acquisitions
     revenue_segments: list[RevenueSegment] = Field(default_factory=list)
@@ -192,6 +270,7 @@ class ModelState(BaseModel):
     projections: AnnualProjection = Field(default_factory=AnnualProjection)
     debt_schedule: DebtSchedule = Field(default_factory=DebtSchedule)
     returns: Returns = Field(default_factory=Returns)
+    fund_returns: Optional[FundReturns] = Field(default=None, description="LP-facing overlay (P4-2)")
     value_drivers: ValueDriverDecomposition = Field(
         default_factory=ValueDriverDecomposition
     )
@@ -248,10 +327,12 @@ class ModelState(BaseModel):
         convention (entry advisory fee is target-borne, not sponsor-borne).
         """
         financing_fees = self.fees.financing_fee_pct * total_debt_raised
+        oid = sum((t.oid_pct or 0.0) * t.principal for t in self.debt_tranches)  # P4-14
         return (
             enterprise_value
             + self.fees.transaction_costs
             + financing_fees
+            + oid
             - total_debt_raised
         )
 
@@ -266,7 +347,8 @@ class ModelState(BaseModel):
         from .outputs import DebtSource, SourcesAndUses
 
         entry_advisory_fee = self.fees.entry_fee_pct * self.entry.enterprise_value
-        financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised
+        oid = sum((t.oid_pct or 0.0) * t.principal for t in self.debt_tranches)  # P4-14
+        financing_fees = self.fees.financing_fee_pct * self.entry.total_debt_raised + oid
         total_transaction_fees = entry_advisory_fee + self.fees.transaction_costs
 
         total_uses = (
