@@ -168,6 +168,10 @@ export interface AnnualProjectionYear {
   growth_capex: number;
   total_capex: number;
   delta_nwc: number;
+  /** Operating FCF before growth investment (P4-6): EBITDA − tax − maintenance capex − ΔNWC.
+   *  Equals fcf_pre_debt + growth_capex. Surfaces the PE FCF bridge
+   *  (EBITDA → less maint capex → operating FCF → less growth capex → total FCF pre-debt). */
+  operating_fcf_pre_growth_capex: number;
   fcf_pre_debt: number;
   fcf_to_equity: number;
 }
@@ -579,6 +583,9 @@ export interface AddOnAcquisition {
   synergy_revenue: number;
   synergy_cost: number;          // cost synergies (positive = savings)
   integration_cost: number;      // one-time integration cost
+  /** Synergy ramp (P4-12): years over which revenue/cost synergies phase in linearly.
+   *  Absent ⇒ full synergy from the year after acquisition (unchanged). */
+  synergy_ramp_years?: number;
 }
 
 // ── Balance Sheet (three-statement close) ─────────────────────────────────

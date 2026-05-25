@@ -170,6 +170,8 @@ def build_projections(state: ModelState) -> AnnualProjection:
 
         # FCF (unlevered, FINDINGS 4 & 6) — base on NOPAT, deduct monitoring fee
         fcf_pre_debt = nopat + da - total_capex - delta_nwc - monitoring_fee
+        # Operating FCF before growth investment (P4-6) = total FCF pre-debt + growth capex.
+        operating_fcf_pre_growth = fcf_pre_debt + g_capex
 
         cash_balance = prev_cash_balance  # placeholder — second pass writes the true balance
         prev_cash_balance = cash_balance
@@ -196,6 +198,7 @@ def build_projections(state: ModelState) -> AnnualProjection:
             growth_capex=g_capex,
             total_capex=total_capex,
             delta_nwc=delta_nwc,
+            operating_fcf_pre_growth_capex=operating_fcf_pre_growth,
             fcf_pre_debt=fcf_pre_debt,
             fcf_to_equity=0.0,  # filled after debt schedule
             cash_balance=cash_balance,
@@ -269,6 +272,7 @@ def update_projections_with_debt(
 
         # ── Unlevered FCF (FCFF) — NOPAT + D&A − Capex − ΔNWC − monitoring (FINDINGS 4 & 6) ──
         yr.fcf_pre_debt = yr.nopat + yr.da - yr.total_capex - yr.delta_nwc - monitoring_fee
+        yr.operating_fcf_pre_growth_capex = yr.fcf_pre_debt + yr.growth_capex  # P4-6
 
         # ── FCFE proper formulation (FINDING 5) ──
         # FCFE = NI + D&A − Capex − ΔNWC + Net Borrowing − monitoring fee

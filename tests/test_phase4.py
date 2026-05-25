@@ -337,3 +337,15 @@ class TestRecoveryYearOfDefault:
         ca = compute_credit_analysis(s, proj, ds)
         names = [r.tranche for r in ca.recovery_waterfall]
         assert names.index("Senior") < names.index("Mezz")
+
+
+class TestCapexPresentation:
+    """P4-6 — operating FCF (pre-growth) = total FCF pre-debt + growth capex."""
+
+    def test_operating_fcf_identity(self):
+        s = _base_state()
+        s.margins.growth_capex = [2.0, 2.0, 3.0, 3.0, 4.0]
+        s.ensure_list_lengths()
+        proj = build_projections(s)
+        for yr in proj.years:
+            assert yr.operating_fcf_pre_growth_capex == pytest.approx(yr.fcf_pre_debt + yr.growth_capex, abs=1e-6)

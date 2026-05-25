@@ -35,6 +35,7 @@ class AnnualProjectionYear(BaseModel):
     growth_capex: float = 0.0
     total_capex: float = 0.0
     delta_nwc: float = 0.0
+    operating_fcf_pre_growth_capex: float = 0.0  # P4-6: fcf_pre_debt + growth capex
     fcf_pre_debt: float = 0.0
     fcf_to_equity: float = 0.0
     cash_balance: float = 0.0
@@ -383,6 +384,7 @@ class AddOnAcquisition(BaseModel):
     synergy_revenue: float = 0.0
     synergy_cost: float = 0.0
     integration_cost: float = 0.0
+    synergy_ramp_years: int = Field(default=0, ge=0, le=10, description="Years to phase synergies in linearly (P4-12); 0 = full from year after acquisition.")
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────

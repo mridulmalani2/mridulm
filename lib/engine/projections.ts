@@ -83,6 +83,8 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
     }
 
     const fcfPreDebt = ebitdaAdj - tax - totalCapex - deltaNwc;
+    // Operating FCF before growth investment (P4-6) = total FCF pre-debt + growth capex.
+    const operatingFcfPreGrowth = fcfPreDebt + gCapex;
 
     years.push({
       year: t + 1,
@@ -106,6 +108,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       growth_capex: gCapex,
       total_capex: totalCapex,
       delta_nwc: deltaNwc,
+      operating_fcf_pre_growth_capex: operatingFcfPreGrowth,
       fcf_pre_debt: fcfPreDebt,
       fcf_to_equity: 0,
     });
@@ -152,6 +155,7 @@ export function updateProjectionsWithDebt(
 
     yr.net_income = yr.ebt - yr.tax;
     yr.fcf_pre_debt = yr.ebitda_adj - yr.tax - yr.total_capex - yr.delta_nwc;
+    yr.operating_fcf_pre_growth_capex = yr.fcf_pre_debt + yr.growth_capex;
 
     const actualRepayment = i < totalRepaymentByYear.length ? totalRepaymentByYear[i] : 0;
     yr.fcf_to_equity = yr.fcf_pre_debt - actualCashInterest - actualRepayment;
