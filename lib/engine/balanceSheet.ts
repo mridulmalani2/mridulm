@@ -57,6 +57,7 @@ export function computeBalanceSheet(
   let cumNetIncome = 0;
   let cumDistributions = 0;
   let cumCommitmentFees = 0;
+  let cumRefinancingPremium = 0;
   let cumDeltaNwc = 0;
   let cumCapexLessDa = 0;
   // Bolt-on consideration is booked as acquired goodwill, funded by the add-on debt
@@ -75,6 +76,7 @@ export function computeBalanceSheet(
     cumCapexLessDa += yr.total_capex - yr.da;
     cumDistributions += debtSchedule.distributions_paid_by_year[i] ?? 0;
     cumCommitmentFees += debtSchedule.total_commitment_fees_by_year[i] ?? 0;
+    cumRefinancingPremium += debtSchedule.refinancing_premium_by_year?.[i] ?? 0;
     const addOnDebt = addOnDebtByYear[i] ?? 0;
     const addOnEquity = addOnEquityByYear[i] ?? 0;
     cumAcquisitionCost += addOnDebt + addOnEquity;
@@ -96,7 +98,7 @@ export function computeBalanceSheet(
     // through the P&L; charging them to equity keeps the statements consistent (zero
     // for typical term debt).
     const shareholdersEquity =
-      entryEquity + cumAddOnEquity + cumNetIncome - cumDistributions - cumCommitmentFees;
+      entryEquity + cumAddOnEquity + cumNetIncome - cumDistributions - cumCommitmentFees - cumRefinancingPremium;
     const totalLiabilitiesAndEquity = totalLiabilities + shareholdersEquity;
 
     const balanceCheck = totalAssets - totalLiabilitiesAndEquity;

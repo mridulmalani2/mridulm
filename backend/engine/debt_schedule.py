@@ -92,6 +92,7 @@ def build_debt_schedule(
     interest_shortfall_by_year: list[float] = []
     distributions_paid_by_year: list[float] = []
     distribution_blocked_by_year: list[bool] = []
+    refinancing_premium_by_year: list[float] = []
     distributions = state.exit.interim_distributions or []
     cov = getattr(state, "credit_covenants", None)
     has_dist_block = cov is not None and (
@@ -109,6 +110,7 @@ def build_debt_schedule(
         # First pass: compute interest and mandatory amortization
         total_mandatory_amort = 0.0
         total_cash_interest = 0.0
+        refi_premium_this_year = 0.0
         year_entries: list[DebtScheduleYear] = []
 
         for t_idx, tranche in enumerate(tranches):
@@ -119,15 +121,25 @@ def build_debt_schedule(
                 beginning_balance=beg_bal,
             )
 
+            # Refinancing (P4-3): once the refi year is reached the tranche reprices and
+            # a one-time prepayment/call premium is charged on the outstanding balance.
+            refi = tranche.refinancing
+            refi_active = refi is not None and yr_idx >= refi.year - 1
+            if refi is not None and yr_idx == refi.year - 1:
+                refi_premium_this_year += max(0.0, refi.prepayment_premium) * beg_bal
+
             # Effective rate — honour an optional forward base-rate path (rate cycle).
             if tranche.rate_type == "floating":
                 if tranche.base_rate_by_year and yr_idx < len(tranche.base_rate_by_year):
                     base_rate_this_year = tranche.base_rate_by_year[yr_idx]
                 else:
                     base_rate_this_year = tranche.base_rate
-                eff_rate = max(base_rate_this_year + tranche.spread, tranche.floor)
+                spread = refi.new_spread if refi_active else tranche.spread
+                floor = refi.new_floor if refi_active else tranche.floor
+                eff_rate = max(base_rate_this_year + spread, floor)
             else:
-                eff_rate = tranche.interest_rate
+                # Fixed: a refinancing resets the all-in rate to new_spread.
+                eff_rate = refi.new_spread if refi_active else tranche.interest_rate
             entry.effective_rate = eff_rate
 
             # Mandatory scheduled repayment first (so we can compute average bal)
@@ -328,7 +340,7 @@ def build_debt_schedule(
         # min-cash floor, or repay from excess cash. Interest is charged on the opening
         # drawn balance; the net principal change flows through total_repayment so the
         # cash roll-forward below picks it up. No-op without a revolver tranche.
-        cash_after_service = cash_balance + levered_op_cash - period_total_repayment
+        cash_after_service = cash_balance + levered_op_cash - period_total_repayment - refi_premium_this_year
         for t_idx, tranche in enumerate(tranches):
             if tranche.tranche_type != "revolver":
                 continue
@@ -348,7 +360,8 @@ def build_debt_schedule(
             r_entry.total_repayment = new_repayment
             balances[t_idx] = r_entry.ending_balance
 
-        cash_post_service = cash_balance + levered_op_cash - period_total_repayment
+        cash_post_service = cash_balance + levered_op_cash - period_total_repayment - refi_premium_this_year
+        refinancing_premium_by_year.append(refi_premium_this_year)
         requested_dist = distributions[yr_idx] if yr_idx < len(distributions) else 0.0
         # Cash trap / restricted-payment block (P4-13): block the distribution when this
         # year's leverage or DSCR breaches the trigger (same metric definitions as the
@@ -467,4 +480,5 @@ def build_debt_schedule(
         cash_balance_by_year=cash_balance_by_year,
         distributions_paid_by_year=distributions_paid_by_year,
         distribution_blocked_by_year=distribution_blocked_by_year,
+        refinancing_premium_by_year=refinancing_premium_by_year,
     )

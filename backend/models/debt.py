@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class RefinancingEvent(BaseModel):
+    """Tranche refinancing at a given hold year (P4-3)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    year: int = Field(default=1, ge=1, description="1-indexed hold year the refinancing takes effect")
+    new_spread: float = Field(default=0.0, ge=0, le=1.0, description="Floating: new spread; fixed: new all-in rate")
+    new_floor: float = Field(default=0.0, ge=0, le=1.0, description="Floating rate floor after refi")
+    prepayment_premium: float = Field(default=0.0, ge=0, le=0.20, description="One-time cash cost as % of refinanced balance")
+    extend_maturity_by: int = Field(default=0, ge=0, le=20, description="Years added to the tranche maturity")
 
 
 class DebtTranche(BaseModel):
@@ -71,6 +82,10 @@ class DebtTranche(BaseModel):
     pik_election_by_year: list[bool] = Field(
         default_factory=list,
         description="Per-year PIK election for a pik_toggle tranche: True = accrue PIK, False = pay cash. Missing ⇒ PIK.",
+    )
+    refinancing: Optional[RefinancingEvent] = Field(
+        default=None,
+        description="Optional refinancing (P4-3): reprices and books a prepayment premium from its year. None ⇒ unchanged.",
     )
     financing_fee_amort_years: int = Field(
         default=0,
@@ -153,4 +168,8 @@ class DebtSchedule(BaseModel):
     distribution_blocked_by_year: list[bool] = Field(
         default_factory=list,
         description="True when a cash-trap / restricted-payment covenant blocked the year's distribution (P4-13).",
+    )
+    refinancing_premium_by_year: list[float] = Field(
+        default_factory=list,
+        description="One-time refinancing call/prepayment premium paid in cash each year (P4-3).",
     )

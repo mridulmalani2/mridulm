@@ -58,9 +58,11 @@ def compute_balance_sheet(
     cum_dnwc = 0.0
     cum_capex_less_da = 0.0
     cum_fin_amort = 0.0
+    cum_refi_premium = 0.0
     max_abs = 0.0
 
     dist_paid = debt_schedule.distributions_paid_by_year or []
+    refi_premium = debt_schedule.refinancing_premium_by_year or []
     cash_by_year = debt_schedule.cash_balance_by_year or []
     debt_by_year = debt_schedule.total_debt_by_year or []
 
@@ -75,6 +77,7 @@ def compute_balance_sheet(
         cum_fin_amort += yr.financing_fee_amort
         cum_dist += dist_paid[i] if i < len(dist_paid) else 0.0
         cum_monitoring += monitoring
+        cum_refi_premium += refi_premium[i] if i < len(refi_premium) else 0.0
 
         cash = cash_by_year[i] if i < len(cash_by_year) else 0.0
         net_working_capital = opening_nwc + cum_dnwc
@@ -90,7 +93,7 @@ def compute_balance_sheet(
         # Equity = contributed + retained earnings − distributions − monitoring fees.
         # Monitoring is a sponsor-level cash cost not routed through the P&L, so it is
         # charged to equity to keep the statements consistent.
-        shareholders_equity = entry_equity + cum_ni - cum_dist - cum_monitoring
+        shareholders_equity = entry_equity + cum_ni - cum_dist - cum_monitoring - cum_refi_premium
         total_liabilities_and_equity = total_liabilities + shareholders_equity
 
         check = total_assets - total_liabilities_and_equity

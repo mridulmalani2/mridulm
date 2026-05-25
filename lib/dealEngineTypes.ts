@@ -1,5 +1,15 @@
 /** TypeScript types mirroring the backend Pydantic models. */
 
+/** Refinancing of a single tranche at a given hold year (P4-3): reprice the rate,
+ *  pay a one-time call/prepayment premium, and extend the maturity. */
+export interface RefinancingEvent {
+  year: number;                 // 1-indexed hold year the refinancing takes effect
+  new_spread: number;           // floating: new spread over base; fixed: new all-in rate
+  new_floor: number;            // floating rate floor after refi (ignored for fixed)
+  prepayment_premium: number;   // one-time cash cost as % of the refinanced balance (e.g. 0.02 = 102%)
+  extend_maturity_by: number;   // years added to the tranche maturity (clears the maturity wall)
+}
+
 export interface DebtTranche {
   name: string;
   tranche_type: 'senior' | 'mezzanine' | 'unitranche' | 'revolver' | 'pik_note';
@@ -29,6 +39,9 @@ export interface DebtTranche {
   /** Per-year PIK election for a pik_toggle tranche: true = accrue PIK, false = pay cash.
    *  Missing entries default to PIK (preserves always-PIK behaviour). */
   pik_election_by_year?: boolean[];
+  /** Optional refinancing event (P4-3): reprices the tranche and books a prepayment premium
+   *  from its year onward. Absent ⇒ no refinancing (unchanged). */
+  refinancing?: RefinancingEvent;
   /** 0-indexed hold year in which the tranche is drawn. Omitted/0 = drawn at entry. Used for add-on acquisition debt funded mid-hold. */
   draw_year_index?: number;
   /** Internal flag: tranche synthesised from add-on acquisition debt. Stripped/rebuilt on every recalc — never persisted or user-editable. */
@@ -190,6 +203,7 @@ export interface DebtScheduleResult {
   cash_balance_by_year: number[];            // Accumulated cash on balance sheet after each year's debt service (net of distributions)
   distributions_paid_by_year: number[];      // Interim distributions actually paid (capped at available cash)
   distribution_blocked_by_year: boolean[];   // True when a cash-trap / restricted-payment covenant blocked the year's distribution (P4-13)
+  refinancing_premium_by_year: number[];     // One-time refinancing call/prepayment premium paid in cash each year (P4-3)
 }
 
 export interface Returns {

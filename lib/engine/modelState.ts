@@ -194,6 +194,7 @@ export function createDefaultModelState(): ModelState {
       cash_balance_by_year: [],
       distributions_paid_by_year: [],
       distribution_blocked_by_year: [],
+      refinancing_premium_by_year: [],
     },
     returns: {
       irr: null,

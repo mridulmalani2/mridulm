@@ -32,6 +32,7 @@ export function buildDebtSchedule(
     cash_balance_by_year: [],
     distributions_paid_by_year: [],
     distribution_blocked_by_year: [],
+    refinancing_premium_by_year: [],
   };
 
   if (!tranches.length) return empty;
@@ -49,6 +50,7 @@ export function buildDebtSchedule(
   const cashBalanceByYear: number[] = [];
   const distributionsPaidByYear: number[] = [];
   const distributionBlockedByYear: boolean[] = [];
+  const refinancingPremiumByYear: number[] = [];
   const distributions = state.exit.interim_distributions || [];
   const cov = state.credit_covenants;
   const hasDistBlock = !!cov && (cov.distribution_block_leverage != null || cov.distribution_block_dscr != null);
@@ -61,6 +63,7 @@ export function buildDebtSchedule(
     let totalMandatoryAmort = 0;
     let totalCashInterest = 0;
     let totalCommitmentFees = 0;
+    let refiPremiumThisYear = 0;
     const yearEntries: DebtScheduleYear[] = [];
 
     // First pass: interest and mandatory amortization
@@ -74,13 +77,24 @@ export function buildDebtSchedule(
       }
       const begBal = balances[tIdx];
 
+      // Refinancing (P4-3): once the refi year is reached, the tranche reprices and a
+      // one-time prepayment/call premium is charged on the outstanding balance.
+      const refi = tranche.refinancing;
+      const refiActive = refi != null && yrIdx >= refi.year - 1;
+      if (refi != null && yrIdx === refi.year - 1) {
+        refiPremiumThisYear += Math.max(0, refi.prepayment_premium) * begBal;
+      }
+
       let effRate: number;
       if (tranche.rate_type === 'floating') {
         // Honour an optional forward base-rate path (rate cycle), else the flat base_rate.
         const baseRateThisYear = tranche.base_rate_by_year?.[yrIdx] ?? tranche.base_rate;
-        effRate = Math.max(baseRateThisYear + tranche.spread, tranche.floor);
+        const spread = refiActive ? refi!.new_spread : tranche.spread;
+        const floor = refiActive ? refi!.new_floor : tranche.floor;
+        effRate = Math.max(baseRateThisYear + spread, floor);
       } else {
-        effRate = tranche.interest_rate;
+        // Fixed: a refinancing resets the all-in rate to new_spread.
+        effRate = refiActive ? refi!.new_spread : tranche.interest_rate;
       }
 
       // PIK-toggle (P4-4): a PIK tranche elects PIK or cash pay each year. Default (no
@@ -211,7 +225,7 @@ export function buildDebtSchedule(
     // through total_repayment (negative = net draw) so the cash roll-forward below
     // picks it up automatically. No-op for deals without a revolver tranche.
     const minCashFloor = state.entry.min_cash_balance || 0;
-    let cashAfterService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment;
+    let cashAfterService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment - refiPremiumThisYear;
     for (let tIdx = 0; tIdx < tranches.length; tIdx++) {
       if (tranches[tIdx].tranche_type !== 'revolver') continue;
       const rEntry = yearEntries[tIdx];
@@ -232,8 +246,10 @@ export function buildDebtSchedule(
       balances[tIdx] = rEntry.ending_balance;
     }
 
-    // Roll forward: post-service cash = beginning cash + FCF − cash interest − commitment fees − repayments.
-    const cashPostService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment;
+    // Roll forward: post-service cash = beginning cash + FCF − cash interest − commitment
+    // fees − repayments − any refinancing premium (a one-time financing cash cost).
+    const cashPostService = cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - periodTotalRepayment - refiPremiumThisYear;
+    refinancingPremiumByYear.push(refiPremiumThisYear);
     // Interim distributions (special dividends) are paid from available cash and
     // cannot exceed it. Reducing cash here raises net debt and lowers exit equity,
     // so distributions are no longer double-counted in returns.
@@ -337,5 +353,6 @@ export function buildDebtSchedule(
     cash_balance_by_year: cashBalanceByYear,
     distributions_paid_by_year: distributionsPaidByYear,
     distribution_blocked_by_year: distributionBlockedByYear,
+    refinancing_premium_by_year: refinancingPremiumByYear,
   };
 }

@@ -7,7 +7,7 @@ the engine is unchanged (held by tests/test_engine_parity.py)."""
 import pytest
 
 from backend.models.state import ModelState, MIPRatchetTier, PartialExitEvent, FundAssumptions
-from backend.models.debt import DebtTranche
+from backend.models.debt import DebtTranche, RefinancingEvent
 from backend.engine.scenarios import _run_full_model
 from backend.engine.projections import build_projections
 from backend.engine.debt_schedule import build_debt_schedule
@@ -249,3 +249,45 @@ class TestCashTrap:
         blocked = build_debt_schedule(self._dist_state(3.0), build_projections(self._dist_state(3.0)))
         paid = build_debt_schedule(self._dist_state(10.0), build_projections(self._dist_state(10.0)))
         assert blocked.cash_balance_by_year[1] > paid.cash_balance_by_year[1]
+
+
+class TestRefinancing:
+    """P4-3 — repricing + prepayment premium + maturity extension."""
+
+    def _fixed_bullet(self) -> ModelState:
+        s = _base_state()
+        s.debt_tranches = [
+            DebtTranche(name="Senior TLB", tranche_type="senior", principal=80.0,
+                        interest_rate=0.07, rate_type="fixed", amortization_type="bullet")
+        ]
+        s.derive_entry_fields()
+        s.ensure_list_lengths()
+        return s
+
+    def test_repricing_resets_fixed_rate(self):
+        s = self._fixed_bullet()
+        s.debt_tranches[0].refinancing = RefinancingEvent(year=3, new_spread=0.05, new_floor=0.0,
+                                                          prepayment_premium=0.0, extend_maturity_by=0)
+        proj = build_projections(s)
+        ds = build_debt_schedule(s, proj)
+        sched = ds.tranche_schedules[0]
+        assert sched[0].effective_rate == pytest.approx(0.07, abs=1e-6)
+        assert sched[2].effective_rate == pytest.approx(0.05, abs=1e-6)
+        assert sched[2].cash_interest < sched[0].cash_interest
+
+    def test_prepayment_premium_drains_cash_and_closes(self):
+        no_prem = self._fixed_bullet()
+        no_prem.debt_tranches[0].refinancing = RefinancingEvent(year=3, new_spread=0.07, new_floor=0.0,
+                                                               prepayment_premium=0.0, extend_maturity_by=0)
+        with_prem = self._fixed_bullet()
+        with_prem.debt_tranches[0].refinancing = RefinancingEvent(year=3, new_spread=0.07, new_floor=0.0,
+                                                                 prepayment_premium=0.02, extend_maturity_by=0)
+        ret_a, proj_a, _ = _run_full_model(no_prem)
+        ds_a = build_debt_schedule(no_prem, proj_a)
+        ret_b, proj_b, _ = _run_full_model(with_prem)
+        ds_b = build_debt_schedule(with_prem, proj_b)
+        assert 1.4 < ds_b.refinancing_premium_by_year[2] < 1.8  # ~2% of ~£80m
+        assert ds_b.cash_balance_by_year[2] < ds_a.cash_balance_by_year[2]
+        bs = compute_balance_sheet(with_prem, proj_b, ds_b, ret_b)
+        assert bs.closes
+        assert bs.max_abs_check < 0.01

@@ -130,8 +130,16 @@ export function computeCreditAnalysis(
   for (const tranche of state.debt_tranches) {
     if (tranche.amortization_type === 'bullet' && tranche.principal > 0 && entryDebt > 0) {
       if (tranche.principal / entryDebt > 0.5) {
-        refinancingRisk = true;
-        refinancingDetail = `${tranche.name} (${((tranche.principal / entryDebt) * 100).toFixed(0)}% of total debt) matures at exit — refinancing required.`;
+        // A modelled refinancing (P4-3) that terms the maturity out beyond the hold
+        // clears the wall; otherwise the bullet still requires refinancing at exit.
+        const refi = tranche.refinancing;
+        const termedOutBeyondHold = refi != null && (refi.year + refi.extend_maturity_by) > hp;
+        if (termedOutBeyondHold) {
+          refinancingDetail = `${tranche.name} refinanced in year ${refi!.year} (maturity extended beyond the hold).`;
+        } else {
+          refinancingRisk = true;
+          refinancingDetail = `${tranche.name} (${((tranche.principal / entryDebt) * 100).toFixed(0)}% of total debt) matures at exit — refinancing required.`;
+        }
       }
     }
   }
