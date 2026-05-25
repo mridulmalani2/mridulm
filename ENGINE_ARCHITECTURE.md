@@ -48,7 +48,7 @@ The two engines are **not** byte-identical by design. Parity tests assert
 | Unlevered FCF | `EBITDA − tax − capex − ΔNWC` | NOPAT-based (`NOPAT + D&A − capex − ΔNWC − monitoring`) | Different FCF formulations; reconciled only by the shared kernel (P5-3) |
 | Monitoring fee | flows through `ebitda_adj` → P&L → equity | kept out of `ebitda_adj`; charged to equity separately | pre-existing convention |
 | Cash roll-forward | EBITDA-based FCF (tax effect only) | NI-based; non-cash items (fin-fee, OID, PIK) added back explicitly | follows each engine's FCF base |
-| Add-on acquisitions | fully modelled (`lib/engine/addOns.ts`) | **not modelled** (model exists, no engine) | tech debt — Python has no add-on engine |
+| Add-on acquisitions | fully modelled (`lib/engine/addOns.ts`) | fully modelled (`backend/engine/add_ons.py`) | at parity since D — revenue/debt injection, synergy ramp, equity outflow in returns, BS goodwill/equity offsets |
 | Credit analysis | `lib/engine/creditAnalysis.ts` (covenant headroom, springing) | `backend/engine/reality_check.py` (no DSCR headroom; springing TS-only) | structurally different modules |
 | `full_recalc` orchestrator | `lib/engine/index.ts` | none — tests assemble the pipeline manually | tech debt |
 

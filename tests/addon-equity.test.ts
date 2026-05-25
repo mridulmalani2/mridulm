@@ -60,4 +60,13 @@ describe('D — add-on equity outflow in returns', () => {
   it('no add-ons: add_on_equity_invested is 0 (unchanged path)', () => {
     expect(fullRecalc(canonicalDeals[0].build()).returns.add_on_equity_invested).toBe(0);
   });
+
+  it('three-statement balance sheet still closes across all add-on funding types', () => {
+    for (const [funding, debt_pct] of [['debt', 1], ['equity', 0], ['mixed', 0.5]] as const) {
+      const s = canonicalDeals[0].build();
+      s.add_on_acquisitions = [addon(funding, debt_pct)];
+      const bs = fullRecalc(s).balance_sheet;
+      expect(bs.closes, `${funding}-funded add-on BS did not close (max ${bs.max_abs_check})`).toBe(true);
+    }
+  });
 });

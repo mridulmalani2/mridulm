@@ -20,6 +20,7 @@ from backend.models.state import ModelState
 from backend.engine.projections import build_projections, update_projections_with_debt
 from backend.engine.debt_schedule import build_debt_schedule
 from backend.engine.returns import calculate_returns, decompose_value_drivers
+from backend.engine.add_ons import inject_add_ons, strip_synthetic_add_on_tranches
 
 
 _MARGIN_FLOOR = 0.01
@@ -90,8 +91,14 @@ def _resize_debt_to_target(state: ModelState, target_total_debt: float) -> None:
 
 def _run_full_model(state: ModelState) -> tuple:
     """Run full model pipeline with iterative convergence and return (returns, projections, debt_schedule)."""
+    # Add-on acquisitions (D): strip stale synthetic tranches so entry fields are
+    # derived on real entry debt, then inject bolt-on revenue + synthetic acquisition
+    # debt so projections, the debt schedule and returns all reflect them. The original
+    # (non-synthetic) tranche list is restored before returning.
+    strip_synthetic_add_on_tranches(state)
     state.derive_entry_fields()
     state.ensure_list_lengths()
+    _, _original_tranches = inject_add_ons(state)
 
     MAX_ITER = 5
     # Tolerance scales with deal size (flat £0.01m is ~1bp on a £1bn deal).
@@ -136,6 +143,8 @@ def _run_full_model(state: ModelState) -> tuple:
     ret = calculate_returns(state, proj, ds)
     ret.convergence_iterations = iterations
     ret.convergence_delta = convergence_delta
+    # Restore the real entry tranche list — synthetic add-on debt lives only in `ds`.
+    state.debt_tranches = _original_tranches
     return ret, proj, ds
 
 
