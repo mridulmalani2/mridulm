@@ -12,6 +12,20 @@ const TRAJECTORIES = ['linear', 'front_loaded', 'back_loaded', 'step'].map((t) =
 const EXIT_METHODS = ['strategic', 'secondary_buyout', 'ipo', 'recapitalization'].map((m) => ({ value: m, label: m.replace('_', ' ') }));
 const AMORT_TYPES = ['bullet', 'straight_line', 'cash_sweep', 'PIK'].map((a) => ({ value: a, label: a.replace('_', ' ') }));
 const TRANCHE_TYPES = ['senior', 'mezzanine', 'unitranche', 'revolver', 'pik_note'].map((t) => ({ value: t, label: t.replace('_', ' ') }));
+const FEE_BASIS = [{ value: 'committed', label: 'committed' }, { value: 'invested', label: 'invested' }];
+const WATERFALL = [{ value: 'european', label: 'european' }, { value: 'american', label: 'american' }];
+
+// Sensible institutional defaults applied when fund-level economics are enabled.
+// Deal-level IRR/MOIC are unaffected — this only drives the net LP overlay (P4-2).
+const DEFAULT_FUND_ASSUMPTIONS = {
+  management_fee_pct: 0.02,
+  management_fee_basis: 'invested' as const,
+  carry_rate: 0.20,
+  preferred_return: 0.08,
+  carry_waterfall: 'european' as const,
+  fund_size: 1000,
+  deal_allocation_pct: 0.1,
+};
 
 interface SectionProps {
   title: string;
@@ -45,6 +59,31 @@ const InputPanel: React.FC = () => {
   const [showDistributions, setShowDistributions] = useState(false);
 
   if (!ms) return null;
+
+  const fa = ms.fund_assumptions;
+  const ratchetTiers = ms.mip.ratchet_tiers ?? [];
+  const partialExits = ms.exit.partial_exits ?? [];
+
+  const toggleFund = () => {
+    updateField('fund_assumptions', fa ? undefined : { ...DEFAULT_FUND_ASSUMPTIONS });
+  };
+  const addRatchetTier = () => {
+    const last = ratchetTiers[ratchetTiers.length - 1];
+    const moic = last ? Math.round((last.moic_threshold + 0.5) * 100) / 100 : 2.0;
+    updateField('mip.ratchet_tiers', [...ratchetTiers, { moic_threshold: moic, pool_pct: ms.mip.mip_pool_pct || 0.1 }]);
+  };
+  const removeRatchetTier = (i: number) => {
+    const next = ratchetTiers.filter((_, idx) => idx !== i);
+    updateField('mip.ratchet_tiers', next.length ? next : undefined);
+  };
+  const addPartialExit = () => {
+    const yr = Math.max(1, Math.min(ms.exit.holding_period - 1, partialExits.length ? partialExits[partialExits.length - 1].year + 1 : Math.ceil(ms.exit.holding_period / 2)));
+    updateField('exit.partial_exits', [...partialExits, { year: yr, pct_sold: 0.2, exit_multiple: ms.exit.exit_ebitda_multiple, exit_fee_pct: ms.fees.exit_fee_pct }]);
+  };
+  const removePartialExit = (i: number) => {
+    const next = partialExits.filter((_, idx) => idx !== i);
+    updateField('exit.partial_exits', next.length ? next : undefined);
+  };
 
   const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[ms.currency ?? 'GBP'] ?? '£';
   const entryMultWarn = ms.entry.entry_ebitda_multiple > 15 ? 'High entry — flag for IC' : undefined;
@@ -129,6 +168,12 @@ const InputPanel: React.FC = () => {
         <InputField label="Entry Fee %" path="fees.entry_fee_pct" value={ms.fees.entry_fee_pct} suffix="%" step={0.005} />
         <InputField label="Exit Fee %" path="fees.exit_fee_pct" value={ms.fees.exit_fee_pct} suffix="%" step={0.005} />
         <InputField label="Monitoring Fee" path="fees.monitoring_fee_annual" value={ms.fees.monitoring_fee_annual} suffix={`${csym}m/yr`} />
+        {ms.fees.monitoring_fee_annual > 0 && (
+          <>
+            <InputField label="Monitoring Term. Years" path="fees.monitoring_fee_termination_years" value={ms.fees.monitoring_fee_termination_years ?? 0} suffix="yrs" />
+            <InputField label="Monitoring Disc. Rate" path="fees.monitoring_fee_discount_rate" value={ms.fees.monitoring_fee_discount_rate ?? 0.10} suffix="%" step={0.01} />
+          </>
+        )}
         <InputField label="Financing Fee %" path="fees.financing_fee_pct" value={ms.fees.financing_fee_pct} suffix="%" step={0.005} />
         <InputField label="Transaction Costs" path="fees.transaction_costs" value={ms.fees.transaction_costs} suffix={`${csym}m`} />
         <InputField label="Tax Rate" path="tax.tax_rate" value={ms.tax.tax_rate} suffix="%" step={0.01} />
@@ -215,6 +260,36 @@ const InputPanel: React.FC = () => {
           </div>
         )}
         <InputField label="Exit EV Override" path="exit.exit_ev_override" value={ms.exit.exit_ev_override ?? 0} suffix={`${csym}m`} />
+
+        {/* Partial Exits / IPO selldown (P4-5) */}
+        <div className="mb-2 mt-1">
+          <label className="text-[10px] tracking-wider block mb-1" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+            Partial Exits / Selldown
+          </label>
+          {partialExits.map((e, i) => (
+            <div key={i} className="mb-3 p-3 relative" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+              <button
+                onClick={() => removePartialExit(i)}
+                className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center text-xs transition-colors hover:bg-[rgba(17,17,17,0.08)]"
+                style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(17,17,17,0.12)' }}
+                title="Remove partial exit"
+              >
+                ×
+              </button>
+              <InputField label="Year" path={`exit.partial_exits.${i}.year`} value={e.year} suffix="yr" />
+              <InputField label="% of Stake Sold" path={`exit.partial_exits.${i}.pct_sold`} value={e.pct_sold} suffix="%" step={0.05} />
+              <InputField label="Exit Multiple" path={`exit.partial_exits.${i}.exit_multiple`} value={e.exit_multiple} suffix="x" step={0.5} />
+              <InputField label="Exit Fee %" path={`exit.partial_exits.${i}.exit_fee_pct`} value={e.exit_fee_pct} suffix="%" step={0.005} />
+            </div>
+          ))}
+          <button
+            onClick={addPartialExit}
+            className="text-[10px] tracking-wider px-2 py-1 transition-colors hover:bg-[rgba(17,17,17,0.04)]"
+            style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", border: '1px dashed rgba(17,17,17,0.15)' }}
+          >
+            + Add Partial Exit
+          </button>
+        </div>
       </Section>
 
       {/* MIP */}
@@ -223,6 +298,69 @@ const InputPanel: React.FC = () => {
         <InputField label="Hurdle MOIC" path="mip.hurdle_moic" value={ms.mip.hurdle_moic} suffix="x" step={0.1} />
         <InputField label="Vesting Years" path="mip.vesting_years" value={ms.mip.vesting_years} suffix="yrs" />
         <InputField label="Sweet Equity %" path="mip.sweet_equity_pct" value={ms.mip.sweet_equity_pct} suffix="%" step={0.01} />
+
+        {/* Ratchet tiers (P4-1) — when present, the highest cleared tier overrides the single hurdle above */}
+        <div className="mb-2 mt-1">
+          <label className="text-[10px] tracking-wider block mb-1" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+            Ratchet Tiers
+          </label>
+          {ratchetTiers.length > 0 && (
+            <p className="text-[9px] mb-2" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Highest cleared MOIC tier overrides the single hurdle above.
+            </p>
+          )}
+          {ratchetTiers.map((t, i) => (
+            <div key={i} className="mb-3 p-3 relative" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)' }}>
+              <button
+                onClick={() => removeRatchetTier(i)}
+                className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center text-xs transition-colors hover:bg-[rgba(17,17,17,0.08)]"
+                style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", border: '1px solid rgba(17,17,17,0.12)' }}
+                title="Remove tier"
+              >
+                ×
+              </button>
+              <InputField label={`Tier ${i + 1} MOIC Hurdle`} path={`mip.ratchet_tiers.${i}.moic_threshold`} value={t.moic_threshold} suffix="x" step={0.1} />
+              <InputField label="Pool %" path={`mip.ratchet_tiers.${i}.pool_pct`} value={t.pool_pct} suffix="%" step={0.01} />
+            </div>
+          ))}
+          <button
+            onClick={addRatchetTier}
+            className="text-[10px] tracking-wider px-2 py-1 transition-colors hover:bg-[rgba(17,17,17,0.04)]"
+            style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace", border: '1px dashed rgba(17,17,17,0.15)' }}
+          >
+            + Add Ratchet Tier
+          </button>
+        </div>
+      </Section>
+
+      {/* Fund Economics (P4-2) — optional LP-level overlay */}
+      <Section title="Fund Economics" defaultOpen={false}>
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+              Model Fund-Level LP Returns
+            </label>
+            <button
+              onClick={toggleFund}
+              className="relative w-8 h-4 rounded-full transition-colors"
+              style={{ background: fa ? '#111111' : 'rgba(17,17,17,0.15)' }}
+              title="Adds a net LP returns overlay (mgmt fee + carry over preferred). Deal-level IRR/MOIC are unaffected."
+            >
+              <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform" style={{ left: fa ? 16 : 2 }} />
+            </button>
+          </div>
+        </div>
+        {fa && (
+          <>
+            <InputField label="Mgmt Fee % p.a." path="fund_assumptions.management_fee_pct" value={fa.management_fee_pct} suffix="%" step={0.005} />
+            <InputField label="Fee Basis" path="fund_assumptions.management_fee_basis" value={fa.management_fee_basis} type="select" options={FEE_BASIS} />
+            <InputField label="Carry Rate" path="fund_assumptions.carry_rate" value={fa.carry_rate} suffix="%" step={0.01} />
+            <InputField label="Preferred Return" path="fund_assumptions.preferred_return" value={fa.preferred_return} suffix="%" step={0.01} />
+            <InputField label="Waterfall" path="fund_assumptions.carry_waterfall" value={fa.carry_waterfall} type="select" options={WATERFALL} />
+            <InputField label="Fund Size" path="fund_assumptions.fund_size" value={fa.fund_size} suffix={`${csym}m`} />
+            <InputField label="Deal Allocation %" path="fund_assumptions.deal_allocation_pct" value={fa.deal_allocation_pct} suffix="%" step={0.01} />
+          </>
+        )}
       </Section>
     </div>
   );
