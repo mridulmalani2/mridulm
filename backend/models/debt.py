@@ -107,6 +107,16 @@ class DebtTranche(BaseModel):
         le=30,
         description="Stated loan term in years; 0 = falls back to holding period.",
     )
+    draw_year_index: int = Field(
+        default=0,
+        ge=0,
+        le=30,
+        description="0-indexed hold year the tranche is drawn (0 = at entry). Used for add-on acquisition debt funded mid-hold (D).",
+    )
+    synthetic_addon: bool = Field(
+        default=False,
+        description="Internal: tranche synthesised from add-on acquisition debt. Stripped/rebuilt every recalc — never persisted or user-editable (D).",
+    )
 
     @field_validator("interest_rate")
     @classmethod

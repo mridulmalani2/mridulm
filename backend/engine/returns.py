@@ -33,6 +33,7 @@ from backend.models.outputs import (
     ValueDriverDecomposition,
 )
 from backend.models.state import ModelState
+from backend.engine.add_ons import compute_add_on_impact
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +251,14 @@ def calculate_returns(
     mid_year = state.exit.mid_year_convention
     times = _build_time_vector(hp, mid_year) if mid_year else None
 
+    # Add-on acquisition funding (D): the sponsor-equity portion of an equity/mixed
+    # bolt-on is a follow-on outflow at the acquisition year. Debt-funded bolt-ons
+    # contribute 0 equity (their cost flows through the synthetic debt tranche).
+    _add_on = compute_add_on_impact(state)
+    add_on_equity = _add_on.equity_deployed_by_year
+    add_on_purchase = [add_on_equity[i] + _add_on.debt_added_by_year[i] for i in range(hp)]
+    total_add_on_equity = sum(add_on_equity)
+
     # Sponsor entry equity (FINDING 1) — uses the single-source helper to
     # ensure every caller (this module, scenarios, reality_check) agrees.
     entry_equity = state.sponsor_entry_equity_for(
@@ -351,8 +360,10 @@ def calculate_returns(
     # exit_equity = total realised sponsor equity (residual at exit + interim partials)
     exit_equity = residual_post_mip + total_partial_proceeds
 
-    # MOIC (net) includes all distributions
-    moic = (exit_equity + total_distributions) / entry_equity if entry_equity > 0 else 0.0
+    # MOIC (net) includes all distributions, over total invested capital
+    # (entry equity + follow-on add-on equity).
+    invested_base = entry_equity + total_add_on_equity
+    moic = (exit_equity + total_distributions) / invested_base if invested_base > 0 else 0.0
 
     # DPI by year (cumulative distributions / entry equity)
     dpi_by_year: list[float] = []
@@ -386,7 +397,7 @@ def calculate_returns(
     # ── Equity IRR (post-fees, post-MIP; distributions + partial proceeds at their years) ──
     equity_cfs: list[float] = [-entry_equity]
     for yr_idx in range(hp):
-        cf = distributions[yr_idx] + partial_proceeds[yr_idx]
+        cf = distributions[yr_idx] + partial_proceeds[yr_idx] - add_on_equity[yr_idx]
         if yr_idx == hp - 1:
             cf += residual_post_mip
         equity_cfs.append(cf)
@@ -397,7 +408,7 @@ def calculate_returns(
     exit_equity_levered = exit_ev - exit_net_debt  # no exit fee, no MIP
     levered_cfs = [-entry_equity_levered]
     for yr_idx in range(hp):
-        cf = distributions[yr_idx] + partial_proceeds_gross[yr_idx]
+        cf = distributions[yr_idx] + partial_proceeds_gross[yr_idx] - add_on_equity[yr_idx]
         if yr_idx == hp - 1:
             cf += remaining_stake * exit_equity_levered
         levered_cfs.append(cf)
@@ -408,7 +419,7 @@ def calculate_returns(
     # entry_equity, exit fee not in exit value, MIP not netted).
     gross_cfs = [-entry_equity]
     for yr_idx in range(hp):
-        cf = distributions[yr_idx] + partial_proceeds_gross[yr_idx]
+        cf = distributions[yr_idx] + partial_proceeds_gross[yr_idx] - add_on_equity[yr_idx]
         if yr_idx == hp - 1:
             cf += remaining_stake * exit_equity_pre_fees
         gross_cfs.append(cf)
@@ -417,11 +428,15 @@ def calculate_returns(
     # ── Unlevered IRR (FINDING 5: no exit fee subtraction) ──
     entry_cost_unlev = state.entry.enterprise_value + state.fees.transaction_costs
     unlev_cfs: list[float] = [-entry_cost_unlev]
-    for yr in projections.years[:-1]:
-        unlev_cfs.append(yr.fcf_pre_debt)
+    # Add-on bolt-ons are an enterprise-level acquisition cost (full purchase price) in
+    # their acquisition year — subtract so the unlevered return isn't a free asset (D).
+    for i, yr in enumerate(projections.years[:-1]):
+        unlev_cfs.append(yr.fcf_pre_debt - (add_on_purchase[i] if i < len(add_on_purchase) else 0.0))
     if projections.years:
+        last_idx = len(projections.years) - 1
         last_yr = projections.years[-1]
-        unlev_cfs.append(last_yr.fcf_pre_debt + exit_ev)  # no exit fee
+        last_purchase = add_on_purchase[last_idx] if last_idx < len(add_on_purchase) else 0.0
+        unlev_cfs.append(last_yr.fcf_pre_debt + exit_ev - last_purchase)  # no exit fee
     irr_unlevered = _solve_irr_auto(unlev_cfs, times)
 
     # Payback years
@@ -457,6 +472,7 @@ def calculate_returns(
         dpi_by_year=dpi_by_year,
         rvpi_by_year=rvpi_by_year,
         equity_cashflows=equity_cfs,
+        add_on_equity_invested=total_add_on_equity,
     )
 
 

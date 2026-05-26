@@ -9,6 +9,7 @@ import type {
   ValueDriverRanking,
 } from '../dealEngineTypes';
 import { oidTotal } from './oid';
+import { computeAddOnImpact } from './addOns';
 
 // ── MIP ratchet resolution (P4-1) ──────────────────────────────────────────
 // Resolve the management pool % and whether the hurdle is cleared. When a ratchet
@@ -196,6 +197,15 @@ export function calculateReturns(
   const midYear = state.exit.mid_year_convention ?? false;
   const times = buildTimeVector(hp, midYear);
 
+  // Add-on acquisition funding (P4-12 / D): the sponsor-equity portion of an
+  // equity- or mixed-funded bolt-on is a follow-on capital outflow at the
+  // acquisition year. Debt-funded bolt-ons contribute 0 equity (their cost flows
+  // through the synthetic debt tranche), so debt-only deals are unchanged.
+  const addOnFunding = computeAddOnImpact(state);
+  const addOnEquityByYear = addOnFunding.equity_deployed_by_year;            // [0..hp-1]
+  const addOnPurchaseByYear = addOnEquityByYear.map((e, i) => e + (addOnFunding.debt_added_by_year[i] ?? 0));
+  const totalAddOnEquity = addOnEquityByYear.reduce((a, b) => a + b, 0);
+
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const oid = oidTotal(state); // upfront OID funded by equity at close (P4-14)
@@ -211,6 +221,7 @@ export function calculateReturns(
       exit_equity: 0, exit_ev: 0, exit_net_debt: 0, mip_payout: 0,
       total_distributions: 0, dpi_by_year: [], rvpi_by_year: [],
       equity_cashflows: [],
+      add_on_equity_invested: 0,
       convergence_iterations: 1, convergence_delta: 0,
     };
   }
@@ -301,11 +312,14 @@ export function calculateReturns(
   const residualPostMip = remainingStake * (exitEquityPreMipFull - mipPayoutFull);
 
   // exit_equity = total realised sponsor equity (residual at exit + interim partials),
-  // so MOIC = (exit_equity + distributions) / entry_equity holds in every case.
+  // so MOIC = (exit_equity + distributions) / invested holds in every case.
   const exitEquity = residualPostMip + totalPartialProceeds;
 
-  // MOIC includes all distributions
-  const moic = entryEquity > 0 ? (exitEquity + totalDistributions) / entryEquity : 0;
+  // Total invested capital = entry equity + follow-on add-on equity (multi-round MOIC).
+  const investedBase = entryEquity + totalAddOnEquity;
+
+  // MOIC includes all distributions, over total invested (entry + add-on equity).
+  const moic = investedBase > 0 ? (exitEquity + totalDistributions) / investedBase : 0;
 
   // DPI by year (cumulative distributions / entry equity)
   const dpiByYear: number[] = [];
@@ -334,7 +348,7 @@ export function calculateReturns(
   // Partial proceeds land at their event year; the post-MIP residual lands at exit.
   const equityCfs: number[] = [-entryEquity];
   for (let i = 0; i < hp; i++) {
-    let cf = distributions[i] + partialProceedsByYear[i];
+    let cf = distributions[i] + partialProceedsByYear[i] - (addOnEquityByYear[i] ?? 0);
     if (i === hp - 1) cf += residualPostMip;
     equityCfs.push(cf);
   }
@@ -345,7 +359,7 @@ export function calculateReturns(
   const exitEquityLevered = exitEv - exitNetDebt;
   const leveredCfs: number[] = [-entryEquityLevered];
   for (let i = 0; i < hp; i++) {
-    let cf = distributions[i] + partialProceedsGrossByYear[i];
+    let cf = distributions[i] + partialProceedsGrossByYear[i] - (addOnEquityByYear[i] ?? 0);
     if (i === hp - 1) cf += remainingStake * exitEquityLevered;
     leveredCfs.push(cf);
   }
@@ -360,7 +374,7 @@ export function calculateReturns(
   const exitEquityGross = exitEv - exitNetDebt; // no exit fee
   const grossCfs: number[] = [-entryEquityGross];
   for (let i = 0; i < hp; i++) {
-    let cf = distributions[i] + partialProceedsGrossByYear[i];
+    let cf = distributions[i] + partialProceedsGrossByYear[i] - (addOnEquityByYear[i] ?? 0);
     if (i === hp - 1) cf += remainingStake * exitEquityGross;
     grossCfs.push(cf);
   }
@@ -370,12 +384,14 @@ export function calculateReturns(
   const entryCostUnlev = state.entry.enterprise_value + state.fees.transaction_costs;
   const unlevCfs: number[] = [-entryCostUnlev];
   for (let i = 0; i < projections.length - 1; i++) {
-    unlevCfs.push(projections[i].fcf_pre_debt);
+    // Add-on bolt-ons are an enterprise-level acquisition cost (full purchase price)
+    // in their acquisition year — subtract so the unlevered return isn't a free asset.
+    unlevCfs.push(projections[i].fcf_pre_debt - (addOnPurchaseByYear[i] ?? 0));
   }
   if (projections.length) {
     const lastYr = projections[projections.length - 1];
     // Unlevered IRR measures asset/enterprise performance — sponsor-level exit fee excluded.
-    unlevCfs.push(lastYr.fcf_pre_debt + exitEv);
+    unlevCfs.push(lastYr.fcf_pre_debt + exitEv - (addOnPurchaseByYear[projections.length - 1] ?? 0));
   }
   const irrUnlevered = solveIrrAuto(unlevCfs, times);
 
@@ -417,6 +433,7 @@ export function calculateReturns(
     dpi_by_year: dpiByYear,
     rvpi_by_year: rvpiByYear,
     equity_cashflows: equityCfs,
+    add_on_equity_invested: totalAddOnEquity,
     convergence_iterations: 1,
     convergence_delta: 0,
   };

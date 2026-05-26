@@ -251,6 +251,10 @@ export interface Returns {
    *  partial-exit proceeds during the hold, post-MIP residual at exit. Single source of
    *  truth for the equity IRR and the fund-level overlay (P4-2). */
   equity_cashflows: number[];
+  /** Total follow-on sponsor equity deployed into add-on acquisitions over the hold
+   *  (equity/mixed-funded bolt-ons). Part of the invested base for MOIC; booked as
+   *  an outflow at each acquisition year in the IRR streams (D). 0 with no add-ons. */
+  add_on_equity_invested: number;
   convergence_iterations: number;
   convergence_delta: number;
 }

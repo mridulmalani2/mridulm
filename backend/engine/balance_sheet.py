@@ -38,6 +38,12 @@ def compute_balance_sheet(
     oid_total = _oid_total(state)          # P4-14: capitalised alongside financing fees
     oid_amort = _oid_amort_by_year(state)
 
+    # Bolt-on consideration is booked as acquired goodwill, funded by add-on debt
+    # (already in the debt schedule) and fresh sponsor equity — both sides move
+    # together so the statement keeps closing for add-on deals (D).
+    from backend.engine.add_ons import compute_add_on_impact
+    _add_on = compute_add_on_impact(state)
+
     # ── Opening balances (t = 0) ──
     from backend.engine.projections import _nwc_balance
 
@@ -67,6 +73,8 @@ def compute_balance_sheet(
     cum_fin_amort = 0.0
     cum_refi_premium = 0.0
     cum_oid_amort = 0.0
+    cum_acquisition_cost = 0.0  # acquired goodwill (debt + equity portions of bolt-ons)
+    cum_add_on_equity = 0.0     # fresh sponsor equity injected into bolt-ons
     max_abs = 0.0
 
     dist_paid = debt_schedule.distributions_paid_by_year or []
@@ -87,12 +95,16 @@ def compute_balance_sheet(
         cum_monitoring += _monitoring_fee_for_year(state, i)  # zero in exit year (P4-11)
         cum_refi_premium += refi_premium[i] if i < len(refi_premium) else 0.0
         cum_oid_amort += oid_amort[i] if i < len(oid_amort) else 0.0
+        add_on_debt = _add_on.debt_added_by_year[i] if i < len(_add_on.debt_added_by_year) else 0.0
+        add_on_equity = _add_on.equity_deployed_by_year[i] if i < len(_add_on.equity_deployed_by_year) else 0.0
+        cum_acquisition_cost += add_on_debt + add_on_equity
+        cum_add_on_equity += add_on_equity
 
         cash = cash_by_year[i] if i < len(cash_by_year) else 0.0
         net_working_capital = opening_nwc + cum_dnwc
         net_ppe = opening_ppe + cum_capex_less_da
         deferred_financing_costs = max(0.0, opening_def_fin - cum_fin_amort - cum_oid_amort)
-        goodwill = opening_goodwill
+        goodwill = opening_goodwill + cum_acquisition_cost
         total_assets = cash + net_working_capital + net_ppe + deferred_financing_costs + goodwill
 
         total_debt = debt_by_year[i] if i < len(debt_by_year) else 0.0
@@ -102,7 +114,7 @@ def compute_balance_sheet(
         # Equity = contributed + retained earnings − distributions − monitoring fees.
         # Monitoring is a sponsor-level cash cost not routed through the P&L, so it is
         # charged to equity to keep the statements consistent.
-        shareholders_equity = entry_equity + cum_ni - cum_dist - cum_monitoring - cum_refi_premium
+        shareholders_equity = entry_equity + cum_add_on_equity + cum_ni - cum_dist - cum_monitoring - cum_refi_premium
         total_liabilities_and_equity = total_liabilities + shareholders_equity
 
         check = total_assets - total_liabilities_and_equity

@@ -81,9 +81,13 @@ def build_debt_schedule(
             len(projections.years), hp,
         )
 
-    # Per-tranche schedule storage
+    # Per-tranche schedule storage. Tranches drawn at entry start at full principal;
+    # tranches with a later draw_year_index (e.g. add-on acquisition debt) start at
+    # zero and are drawn at the beginning of their draw year inside the loop below (D).
     tranche_years: list[list[DebtScheduleYear]] = [[] for _ in tranches]
-    balances: list[float] = [t.principal for t in tranches]
+    balances: list[float] = [
+        (t.principal if (getattr(t, "draw_year_index", 0) or 0) <= 0 else 0.0) for t in tranches
+    ]
 
     # Roll-forward cash balance for shortfall and net-debt tracking
     cash_balance = 0.0
@@ -116,6 +120,10 @@ def build_debt_schedule(
         year_entries: list[DebtScheduleYear] = []
 
         for t_idx, tranche in enumerate(tranches):
+            # Draw mid-hold debt (add-on acquisition financing) at the start of its draw year (D).
+            draw_year = getattr(tranche, "draw_year_index", 0) or 0
+            if draw_year > 0 and draw_year == yr_idx:
+                balances[t_idx] = tranche.principal
             beg_bal = balances[t_idx]
             entry = DebtScheduleYear(
                 year=yr,

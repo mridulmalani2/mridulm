@@ -80,6 +80,12 @@ class Returns(BaseModel):
                     "partial-exit proceeds, post-MIP residual at exit. Single source for the "
                     "equity IRR and the fund-level overlay (P4-2).",
     )
+    add_on_equity_invested: float = Field(
+        default=0.0,
+        description="Total follow-on sponsor equity deployed into equity/mixed-funded add-on "
+                    "acquisitions; part of the MOIC invested base and booked as an outflow at each "
+                    "acquisition year in the IRR streams (D). 0 with no add-ons.",
+    )
     convergence_iterations: int = Field(default=1, description="Debt/interest convergence iterations used")
     convergence_delta: float = Field(default=0.0, description="Final interest delta (£m) at convergence")
 
