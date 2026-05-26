@@ -11,6 +11,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side, numbers
 from openpyxl.utils import get_column_letter
 
 from backend.models.state import ModelState
+from backend.engine.projections import _oid_amort_by_year, _oid_total
 
 # ── Design System ────────────────────────────────────────────────────────
 
@@ -721,6 +722,17 @@ def _build_cash_flow_debt_sheet(wb: Workbook, state: ModelState, ccy: str, hp: i
         row = _write_data_row(ws, row, "Cumulative Paydown", [m.cumulative_debt_paydown for m in ca.metrics_by_year], FMT_CCY, alt=True)
         row = _write_data_row(ws, row, "Paydown (% Entry)", [m.debt_paydown_pct for m in ca.metrics_by_year], FMT_PCT)
 
+    # ── Phase-4 financing items (shown only when configured) ──
+    refi_prem = ds.refinancing_premium_by_year or []
+    if any(v > 0 for v in refi_prem):
+        row = _write_data_row(ws, row, "Refinancing Premium (one-time)", [(-v if v > 0 else 0.0) for v in refi_prem], FMT_CCY)
+    cf_oid_amort = _oid_amort_by_year(state)
+    if any(v > 0 for v in cf_oid_amort):
+        row = _write_data_row(ws, row, "OID Amortisation (non-cash)", cf_oid_amort, FMT_CCY, alt=True)
+    dist_blocked = ds.distribution_blocked_by_year or []
+    if any(dist_blocked):
+        row = _write_data_row(ws, row, "Distribution Blocked (cash trap)", ["BLOCKED" if b else "-" for b in dist_blocked], FMT_CCY)
+
     _set_print(ws)
 
 
@@ -783,11 +795,31 @@ def _build_returns_sheet(wb: Workbook, state: ModelState, ccy: str, hp: int):
     add_ret("Exit EV", ret.exit_ev, FMT_CCY)
     add_ret("Exit Net Debt", ret.exit_net_debt, FMT_CCY, True)
     add_ret("MIP Payout", ret.mip_payout, FMT_CCY)
+    oid_upfront = _oid_total(state)
+    if oid_upfront > 0:
+        add_ret("OID (funded by equity at close)", oid_upfront, FMT_CCY, True)
     # Convergence metadata (audit transparency)
     if ret.convergence_iterations > 1:
         add_ret("Convergence Iterations", ret.convergence_iterations, FMT_INT, True)
         add_ret("Convergence Delta (£m)", ret.convergence_delta, "0.0000")
     row += 2
+
+    # ── Fund-Level Returns (LP, net of fees & carry) — P4-2 ──
+    fr = state.fund_returns
+    fa = state.fund_assumptions
+    if fr and fa:
+        row = _write_section_header(ws, row, f"FUND-LEVEL RETURNS (LP) — {fa.carry_waterfall.upper()}, {fa.management_fee_basis.upper()} BASIS", 3)
+        add_ret("Net IRR (LP, post fees & carry)", fr.net_irr, FMT_PCT)
+        add_ret("Net MOIC (LP)", fr.net_moic, FMT_MULT, True)
+        add_ret("Gross IRR (Deal)", fr.gross_irr, FMT_PCT)
+        add_ret("Gross MOIC (Deal)", fr.gross_moic, FMT_MULT, True)
+        add_ret("Gross-to-Net Spread", fr.gross_to_net_spread, FMT_PCT)
+        add_ret("Management Fees (cumulative)", fr.management_fees_total, FMT_CCY, True)
+        add_ret("Carried Interest", fr.carried_interest, FMT_CCY)
+        add_ret("Preferred Return Shortfall", fr.preferred_return_shortfall, FMT_CCY, True)
+        add_ret("LP Paid-In Capital", fr.lp_paid_in, FMT_CCY)
+        add_ret("LP Distributions", fr.lp_distributions, FMT_CCY, True)
+        row += 2
 
     # Value bridge
     vd = state.value_drivers
@@ -853,6 +885,38 @@ def _build_returns_sheet(wb: Workbook, state: ModelState, ccy: str, hp: int):
                 ws.cell(row=row, column=1).fill = LIGHT_FILL
                 ws.cell(row=row, column=2).fill = LIGHT_FILL
             row += 1
+
+    # ── Realised equity cashflows + partial exits (P4-5) ──
+    eq_cfs = ret.equity_cashflows or []
+    partial_exits = [e for e in (state.exit.partial_exits or []) if e.pct_sold > 0]
+    has_interim = any(abs(c) > 1e-9 for i, c in enumerate(eq_cfs) if 0 < i < len(eq_cfs) - 1)
+    if eq_cfs and (partial_exits or has_interim):
+        row += 1
+        row = _write_section_header(ws, row, "REALISED EQUITY CASHFLOWS", 2)
+        for i, cf in enumerate(eq_cfs):
+            label = "Entry (t0)" if i == 0 else ("Exit" if i == len(eq_cfs) - 1 else f"Year {i}")
+            ws.cell(row=row, column=1, value=label).font = F_BODY
+            ws.cell(row=row, column=1).border = THIN_BOTTOM
+            vc = ws.cell(row=row, column=2, value=cf)
+            vc.number_format = FMT_CCY
+            vc.font = F_RED if cf < 0 else F_GREEN
+            vc.alignment = Alignment(horizontal="right")
+            vc.border = THIN_BOTTOM
+            row += 1
+        if partial_exits:
+            row += 1
+            row = _write_section_header(ws, row, "PARTIAL EXITS / SELLDOWN", 4)
+            for j, hdr in enumerate(["Year", "% of Stake", "Exit Multiple", "Fee %"]):
+                ws.cell(row=row, column=j + 1, value=hdr).font = F_HEADER
+            _style_header_row(ws, row, 1, 4)
+            row += 1
+            for e in partial_exits:
+                ws.cell(row=row, column=1, value=f"Year {e.year}").font = F_BODY
+                ws.cell(row=row, column=1).border = THIN_BOTTOM
+                c2 = ws.cell(row=row, column=2, value=e.pct_sold); c2.number_format = FMT_PCT; c2.font = F_BODY; c2.border = THIN_BOTTOM; c2.alignment = Alignment(horizontal="right")
+                c3 = ws.cell(row=row, column=3, value=e.exit_multiple); c3.number_format = FMT_MULT; c3.font = F_BODY; c3.border = THIN_BOTTOM; c3.alignment = Alignment(horizontal="right")
+                c4 = ws.cell(row=row, column=4, value=e.exit_fee_pct); c4.number_format = FMT_PCT; c4.font = F_BODY; c4.border = THIN_BOTTOM; c4.alignment = Alignment(horizontal="right")
+                row += 1
 
     # ── IRR cross-check audit ──
     row += 1
@@ -1244,7 +1308,17 @@ def _build_risk_sheet(wb: Workbook, state: ModelState, ccy: str, hp: int):
         row += 1
 
         if ca.recovery_waterfall:
-            row = _write_section_header(ws, row, "RECOVERY WATERFALL (50% EV Stress)", 2)
+            row = _write_section_header(ws, row, "RECOVERY WATERFALL (Year-of-Default Distressed EV)", 2)
+            if ca.recovery_default_year is not None or ca.recovery_stress_ev is not None:
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+                parts = []
+                if ca.recovery_default_year is not None:
+                    parts.append(f"Year of default: Yr {ca.recovery_default_year}")
+                if ca.recovery_stress_ev is not None:
+                    parts.append(f"Distressed EV: {ccy}{ca.recovery_stress_ev:.1f}m")
+                ws.cell(row=row, column=1, value="   ·   ".join(parts)).font = F_BODY
+                ws.cell(row=row, column=1).border = THIN_BOTTOM
+                row += 1
             ws.cell(row=row, column=1, value="Tranche")
             ws.cell(row=row, column=2, value="Recovery %")
             _style_header_row(ws, row, 1, 2)

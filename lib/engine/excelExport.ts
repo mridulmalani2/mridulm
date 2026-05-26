@@ -5,6 +5,7 @@ import type {
   AnnualProjectionYear,
 } from '../dealEngineTypes';
 import { solveIrr } from './returns';
+import { oidAmortByYear, oidTotal } from './oid';
 
 let ExcelJS: typeof import('exceljs') | null = null;
 
@@ -1369,6 +1370,23 @@ function buildCashFlowDebtSheet(
     ws.getCell(row - 1, hp + 2 - 1).font = { ...F_BODY, size: 8 };
   }
 
+  // ── Phase-4 financing items (shown only when configured) ────────────────
+  // Refinancing premium (P4-3) — one-time cash cost in the refi year.
+  const refiPrem = ds.refinancing_premium_by_year ?? [];
+  if (refiPrem.some(v => v > 0)) {
+    row = writeDataRow(ws, row, 'Refinancing Premium (one-time)', refiPrem.map(v => (v > 0 ? -v : 0)), FMT_CCY);
+  }
+  // OID amortisation (P4-14) — non-cash, tax-deductible.
+  const cfOidAmort = oidAmortByYear(state);
+  if (cfOidAmort.some(v => v > 0)) {
+    row = writeDataRow(ws, row, 'OID Amortisation (non-cash)', cfOidAmort, FMT_CCY, { alt: true });
+  }
+  // Cash-trap / restricted-payment block flags (P4-13).
+  const cfDistBlocked = ds.distribution_blocked_by_year ?? [];
+  if (cfDistBlocked.some(Boolean)) {
+    row = writeDataRow(ws, row, 'Distribution Blocked (cash trap)', cfDistBlocked.map(b => (b ? 'BLOCKED' : '-')), FMT_CCY);
+  }
+
   freezeAndPrint(ws, 3, 1);
 }
 
@@ -1446,6 +1464,11 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
   addRet('Exit Enterprise Value', ret.exit_ev, FMT_CCY, false, 'exitEv');
   addRet('Exit Net Debt', ret.exit_net_debt, FMT_CCY, true, 'exitDebt');
   addRet('MIP Payout', ret.mip_payout, FMT_CCY, false, 'mip');
+  // OID funded by extra equity at close (P4-14) — shown when any tranche carries OID.
+  const oidUpfront = oidTotal(state);
+  if (oidUpfront > 0) {
+    addRet('OID (funded by equity at close)', oidUpfront, FMT_CCY, true);
+  }
   // Convergence metadata (audit transparency)
   if ((ret.convergence_iterations ?? 1) > 1 || ret.debt_convergence_failed) {
     addRet('Convergence Iterations', ret.convergence_iterations, '0');
@@ -1462,6 +1485,24 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
     }
   }
   row += 2;
+
+  // ── Fund-Level Returns (LP, net of fees & carry) — P4-2 ─────────────────
+  const fr = state.fund_returns;
+  const fa = state.fund_assumptions;
+  if (fr && fa) {
+    row = writeSectionHeader(ws, row, `FUND-LEVEL RETURNS (LP) — ${fa.carry_waterfall.toUpperCase()}, ${fa.management_fee_basis.toUpperCase()} BASIS`, 3);
+    addRet('Net IRR (LP, post fees & carry)', fr.net_irr, FMT_PCT);
+    addRet('Net MOIC (LP)', fr.net_moic, FMT_MULT, true);
+    addRet('Gross IRR (Deal)', fr.gross_irr, FMT_PCT);
+    addRet('Gross MOIC (Deal)', fr.gross_moic, FMT_MULT, true);
+    addRet('Gross-to-Net Spread', fr.gross_to_net_spread, FMT_PCT);
+    addRet('Management Fees (cumulative)', fr.management_fees_total, FMT_CCY, true);
+    addRet('Carried Interest', fr.carried_interest, FMT_CCY);
+    addRet('Preferred Return Shortfall', fr.preferred_return_shortfall, FMT_CCY, true);
+    addRet('LP Paid-In Capital', fr.lp_paid_in, FMT_CCY);
+    addRet('LP Distributions', fr.lp_distributions, FMT_CCY, true);
+    row += 2;
+  }
 
   // Value Driver Bridge
   const vd = state.value_drivers;
@@ -1571,6 +1612,44 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
       row++;
     }
     row++;
+  }
+
+  // ── Realised Equity Cashflows + Partial Exits (P4-5) ────────────────────
+  const eqCfs = ret.equity_cashflows ?? [];
+  const partialExits = (state.exit.partial_exits ?? []).filter(e => e.pct_sold > 0);
+  const hasInterimCf = eqCfs.some((c, i) => i > 0 && i < eqCfs.length - 1 && Math.abs(c) > 1e-9);
+  if (eqCfs.length && (partialExits.length || hasInterimCf)) {
+    row = writeSectionHeader(ws, row, 'REALISED EQUITY CASHFLOWS', 2);
+    ws.getCell(row, 1).value = 'Period'; ws.getCell(row, 2).value = `Cashflow (${ccy}m)`;
+    styleHeaderRow(ws, row, 1, 2);
+    row++;
+    for (let i = 0; i < eqCfs.length; i++) {
+      const label = i === 0 ? 'Entry (t0)' : i === eqCfs.length - 1 ? 'Exit' : `Year ${i}`;
+      ws.getCell(row, 1).value = label; ws.getCell(row, 1).font = F_BODY; ws.getCell(row, 1).border = THIN_BOTTOM;
+      const vc = ws.getCell(row, 2);
+      vc.value = eqCfs[i]; vc.numFmt = FMT_CCY; vc.border = THIN_BOTTOM; vc.alignment = { horizontal: 'right' };
+      vc.font = eqCfs[i] < 0 ? F_RED : F_GREEN;
+      if (i % 2 === 1) { ws.getCell(row, 1).fill = LIGHT_FILL; vc.fill = LIGHT_FILL; }
+      row++;
+    }
+    row++;
+    if (partialExits.length) {
+      row = writeSectionHeader(ws, row, 'PARTIAL EXITS / SELLDOWN', 4);
+      ws.getCell(row, 1).value = 'Year'; ws.getCell(row, 2).value = '% of Stake';
+      ws.getCell(row, 3).value = 'Exit Multiple'; ws.getCell(row, 4).value = 'Fee %';
+      styleHeaderRow(ws, row, 1, 4);
+      row++;
+      for (let i = 0; i < partialExits.length; i++) {
+        const e = partialExits[i];
+        ws.getCell(row, 1).value = `Year ${e.year}`; ws.getCell(row, 1).font = F_BODY; ws.getCell(row, 1).border = THIN_BOTTOM;
+        ws.getCell(row, 2).value = e.pct_sold; ws.getCell(row, 2).numFmt = FMT_PCT; ws.getCell(row, 2).font = F_BODY; ws.getCell(row, 2).border = THIN_BOTTOM; ws.getCell(row, 2).alignment = { horizontal: 'right' };
+        ws.getCell(row, 3).value = e.exit_multiple; ws.getCell(row, 3).numFmt = FMT_MULT; ws.getCell(row, 3).font = F_BODY; ws.getCell(row, 3).border = THIN_BOTTOM; ws.getCell(row, 3).alignment = { horizontal: 'right' };
+        ws.getCell(row, 4).value = e.exit_fee_pct; ws.getCell(row, 4).numFmt = FMT_PCT; ws.getCell(row, 4).font = F_BODY; ws.getCell(row, 4).border = THIN_BOTTOM; ws.getCell(row, 4).alignment = { horizontal: 'right' };
+        if (i % 2 === 1) { for (let c = 1; c <= 4; c++) ws.getCell(row, c).fill = LIGHT_FILL; }
+        row++;
+      }
+      row++;
+    }
   }
 
   // EBITDA Bridge
@@ -1982,7 +2061,16 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
 
     // Recovery waterfall
     if (ca.recovery_waterfall.length) {
-      row = writeSectionHeader(ws, row, 'RECOVERY WATERFALL (50% EV Stress)', 2);
+      row = writeSectionHeader(ws, row, 'RECOVERY WATERFALL (Year-of-Default Distressed EV)', 2);
+      if (ca.recovery_default_year != null || ca.recovery_stress_ev != null) {
+        ws.mergeCells(row, 1, row, 2);
+        const note = [
+          ca.recovery_default_year != null ? `Year of default: Yr ${ca.recovery_default_year}` : '',
+          ca.recovery_stress_ev != null ? `Distressed EV: ${ccy}${ca.recovery_stress_ev.toFixed(1)}m` : '',
+        ].filter(Boolean).join('   ·   ');
+        ws.getCell(row, 1).value = note; ws.getCell(row, 1).font = { ...F_BODY, size: 9 }; ws.getCell(row, 1).border = THIN_BOTTOM;
+        row++;
+      }
       ws.getCell(row, 1).value = 'Tranche'; ws.getCell(row, 2).value = 'Recovery %';
       styleHeaderRow(ws, row, 1, 2);
       row++;

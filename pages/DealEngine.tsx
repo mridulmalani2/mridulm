@@ -5,6 +5,8 @@ import { getInputTemplate, getAiPrompt } from '../lib/importTemplate';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
 import ReturnsSummary from '../components/deal-engine/outputs/ReturnsSummary';
+import FundReturnsPanel from '../components/deal-engine/outputs/FundReturnsPanel';
+import SponsorReturnsDetail from '../components/deal-engine/outputs/SponsorReturnsDetail';
 import ValueBridge from '../components/deal-engine/outputs/ValueBridge';
 import DebtScheduleTable from '../components/deal-engine/outputs/DebtScheduleTable';
 import BalanceSheetTable from '../components/deal-engine/outputs/BalanceSheetTable';
@@ -686,6 +688,8 @@ const DealEngine: React.FC = () => {
               {activeTab === 'returns' && (
                 <div className="space-y-4">
                   <ReturnsSummary />
+                  <FundReturnsPanel />
+                  <SponsorReturnsDetail />
                   <ValueBridge />
                   <EBITDABridgeChart />
                 </div>
