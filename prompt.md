@@ -1,3 +1,13 @@
+> **SUPERSEDED — architecture consolidated to a single TypeScript engine.**
+> Historical record only. This project previously ran a dual engine (TypeScript +
+> a mirrored Python backend under `backend/` on FastAPI); that Python engine, its
+> separate Excel exporter, and the dual-engine "mirroring rule" have been
+> **removed**. `lib/engine/` (TypeScript) is now the sole source of truth,
+> including the Excel export. Any mention below of Python, `backend/`, FastAPI,
+> `pytest`, Pydantic, or cross-engine parity is historical and no longer applies.
+> **Do not build, restore, or mirror a Python backend — implement all engine work
+> in `lib/engine/` (TypeScript) only.** Current architecture: `ENGINE_ARCHITECTURE.md`.
+
 # CLAUDE.md — Deal Intelligence Engine
 
 > **This file is the authoritative build prompt for Claude Code.**

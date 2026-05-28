@@ -15,8 +15,8 @@ const DEFAULT_LEVERAGE_COV = 6.0;
 const DEFAULT_DSCR_COV = 1.25;
 const DEFAULT_FCCR_COV = 1.15;
 
-// First-lien / senior tranche types for the senior-leverage metric. Mirrors the
-// Python backend `_is_senior_tranche` classification (revolver is pari-passu senior).
+// First-lien / senior tranche types for the senior-leverage metric
+// (revolver is pari-passu senior).
 const SENIOR_TRANCHE_TYPES = new Set(['senior', 'unitranche', 'revolver']);
 
 export function computeCreditAnalysis(

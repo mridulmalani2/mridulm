@@ -1,3 +1,12 @@
+> **SUPERSEDED — architecture consolidated to a single TypeScript engine.**
+> Historical record only. This project previously ran a dual engine (TypeScript +
+> a mirrored Python backend under `backend/` on FastAPI); that Python engine, its
+> separate Excel exporter, and the dual-engine "mirroring rule" have been
+> **removed**. `lib/engine/` (TypeScript) is now the sole source of truth,
+> including the Excel export. Any mention below of Python, `backend/`, FastAPI,
+> `pytest`, Pydantic, or cross-engine parity is historical and no longer applies.
+> Current architecture: `ENGINE_ARCHITECTURE.md`.
+
 # Trace Graph — Feature Specification for Claude Code
 
 ## Context

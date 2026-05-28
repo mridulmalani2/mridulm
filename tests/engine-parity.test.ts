@@ -1,17 +1,13 @@
 /**
- * Engine parity / regression suite (refactor plan P1-6).
+ * Engine invariants / regression suite (refactor plan P1-6).
  *
  * Runs canonical deals through the live TypeScript engine (`fullRecalc`) and
- * asserts the structural invariants that MUST hold — the same invariants the
- * Python suite asserts (tests/test_engine_parity.py), so both engines are held
- * to one contract in CI. Also pins the specific Phase-1 defects fixed in this
- * change so they cannot silently regress.
+ * asserts the structural invariants that MUST hold. Also pins the specific
+ * Phase-1 defects fixed earlier so they cannot silently regress.
  *
- * Note: byte-for-byte numeric parity between the TS and Python engines is a
- * Phase-5 (shared-kernel) goal — the two currently differ in their unlevered-FCF
- * definition (TS: EBITDA−tax−capex−ΔNWC; Python: NOPAT-based). This suite
- * therefore asserts invariants and within-engine relationships, not cross-engine
- * equality of IRR/MOIC.
+ * Asserts invariants and within-engine relationships (e.g. net-debt
+ * monotonicity, senior-leverage filtering), not specific IRR/MOIC values —
+ * those are pinned by the regression baseline (tests/regression.test.ts).
  */
 
 import { describe, it, expect } from 'vitest';

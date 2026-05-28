@@ -1,4 +1,4 @@
-/** TypeScript types mirroring the backend Pydantic models. */
+/** Core type definitions for the deal engine. */
 
 /** Refinancing of a single tranche at a given hold year (P4-3): reprice the rate,
  *  pay a one-time call/prepayment premium, and extend the maturity. */
