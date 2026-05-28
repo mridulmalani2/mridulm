@@ -1,96 +1,103 @@
 # Engine Architecture & Source of Truth
 
-**Status:** Governance reference (refactor plan P5-1). Read before changing any
-financial calculation.
+**Status:** Governance reference. Read before changing any financial calculation.
 
 ---
 
 ## 1. Source of truth
 
-The **TypeScript client engine** in `lib/engine/` is the **source of truth** for
-all financial calculations. It is what the UI runs and what users see.
+The **TypeScript engine** in `lib/engine/` is the **single source of truth** for
+all financial calculations. It runs entirely client-side (in the browser): it is
+what the UI executes, what users see, and what the Excel export is built from.
 
-The **Python backend engine** in `backend/engine/` (+ Pydantic models in
-`backend/models/`) is a **secondary analytical tool**. It exists for server-side
-analysis and as an independent cross-check, not as the canonical calculator.
+There is no separate backend calculator. The app ships as a static SPA
+(`netlify.toml` / `vercel.json` are SPA rewrites); every calculation —
+projections, debt schedule, returns, credit analysis, scenarios, the
+three-statement close, and the Excel workbook — happens in `lib/engine/*`.
 
-When the two disagree, the TypeScript result is authoritative for anything
-user-facing.
-
----
-
-## 2. The mirroring rule (non-negotiable)
-
-> Any change to a calculation in the TypeScript engine **must** be mirrored in the
-> Python engine within the **same PR**, with tests added/updated on **both** sides.
-
-This is how the dual engine avoids the divergence that produced the original
-18-bug cycle. A change that lands in only one engine is a regression in waiting.
-
-### Practical checklist for an engine change
-1. Implement in `lib/engine/*.ts` (source of truth).
-2. Mirror in `backend/engine/*.py` (+ `backend/models/*.py` for new fields).
-3. Add/extend tests in **both** `tests/*.test.ts` (vitest) and `tests/*.py` (pytest).
-4. Run all three gates locally: `npx vitest run`, `python3 -m pytest tests/`,
-   `npm run build`.
-5. Keep the three-statement close gate (`tests/three-statement.test.ts`) green —
-   any new flow that moves cash must have a balance-sheet offset.
+> **History.** This project previously carried a second, mirrored engine in
+> Python (`backend/`, under FastAPI) plus a parallel Python Excel exporter,
+> maintained as an independent cross-check under a "mirroring rule". That engine
+> was never deployed, and the frontend stopped calling it once computation moved
+> client-side (`lib/api.ts` is the now-empty stub left behind). It was removed to
+> eliminate the cost of building and testing every feature twice. **If a
+> server-side calculator is ever needed, run this same `lib/engine` under Node —
+> do not fork a second implementation in another language.**
 
 ---
 
-## 3. Known, intentional divergences
+## 2. Engine layout
 
-The two engines are **not** byte-identical by design. Parity tests assert
-*structural invariants*, not equal IRR/MOIC. Documented divergences:
+`fullRecalc` in `lib/engine/index.ts` is the orchestrator and the single entry
+point: it runs the convergence loop and assembles the whole pipeline. Both the UI
+(`store/dealEngine.ts`) and the tests call it — nothing re-assembles the pipeline
+by hand.
 
-| Area | TypeScript | Python | Why |
-|---|---|---|---|
-| Unlevered FCF | `EBITDA − tax − capex − ΔNWC` | NOPAT-based (`NOPAT + D&A − capex − ΔNWC − monitoring`) | Different FCF formulations; reconciled only by the shared kernel (P5-3) |
-| Monitoring fee | flows through `ebitda_adj` → P&L → equity | kept out of `ebitda_adj`; charged to equity separately | pre-existing convention |
-| Cash roll-forward | EBITDA-based FCF (tax effect only) | NI-based; non-cash items (fin-fee, OID, PIK) added back explicitly | follows each engine's FCF base |
-| Add-on acquisitions | fully modelled (`lib/engine/addOns.ts`) | fully modelled (`backend/engine/add_ons.py`) | at parity since D — revenue/debt injection, synergy ramp, equity outflow in returns, BS goodwill/equity offsets |
-| Credit analysis | `lib/engine/creditAnalysis.ts` (covenant headroom, springing) | `backend/engine/reality_check.py` (no DSCR headroom; springing TS-only) | structurally different modules |
-| `full_recalc` orchestrator | `lib/engine/index.ts` | none — tests assemble the pipeline manually | tech debt |
-
-When you add a feature that touches an area marked **TS-only**, add the field to
-the Python model for parity and note the divergence here.
+| Module | Responsibility |
+|---|---|
+| `index.ts` | `fullRecalc` orchestrator + convergence loop |
+| `modelState.ts` | `ModelState` shape, entry-field derivation, default model |
+| `sourcesUses.ts` | sources & uses reconciliation at close |
+| `projections.ts` | revenue/margin build, P&L, NWC, FCF bridge |
+| `debtSchedule.ts` | tranche schedules, interest, sweep, revolver, cash trap |
+| `oid.ts` | OID amortisation schedule |
+| `creditAnalysis.ts` | covenant headroom (leverage/DSCR/FCCR), springing, recovery |
+| `returns.ts` | IRR/MOIC, MIP, partial exits, value bridge |
+| `fundReturns.ts` | LP-level net IRR/MOIC, management fee, carry |
+| `addOns.ts` | bolt-on acquisitions (revenue/debt/synergy/equity) |
+| `balanceSheet.ts` | three-statement close |
+| `scenarios.ts` | scenario & sensitivity generation |
+| `realityCheck.ts`, `fragility.ts` | exit reality check, fragility scoring |
+| `excelExport.ts` | the institutional Excel workbook (via `exceljs`) |
+| `ai/*`, `aiGateway.ts` | AI gateway, providers, memo/solver |
 
 ---
 
-## 4. Convergence loop
+## 3. Convergence loop
 
-Both engines run an iterative `projections → debt schedule → update projections`
-loop until cash interest stabilises (PIK/sweep feedback). Tolerance scales with
-deal size (`max(0.01, base_revenue × 0.0001)`); iteration 0 may exit early.
+Projections and the debt schedule are mutually dependent (cash interest feeds FCF;
+FCF feeds the sweep that changes balances and therefore interest). `fullRecalc`
+iterates `projections → debt schedule → update projections` until cash interest
+stabilises (PIK/sweep feedback). Tolerance scales with deal size
+(`max(0.01, base_revenue × 0.0001)`); iteration 0 may exit early.
 `debt_convergence_failed` flags a non-converged result.
 
 ---
 
-## 5. The durable fix — shared calculation kernel (P5-3, future)
+## 4. Optional future cleanup — shared finance kernel
 
-The mirroring rule is a process control, not a structural guarantee. The durable
-solution is a **single shared calculation kernel** with no framework dependencies:
+A clean (but no-longer-urgent) refactor is to factor the pure arithmetic into a
+framework-free `lib/finance/*` kernel:
 
 - `lib/finance/interest.ts` — effective rate, average balance, PIK compounding
 - `lib/finance/irr.ts` — `solveIrr`, `solveIrrTimed`, mid-year convention
 - `lib/finance/sweep.ts` — sweep waterfall, priority tiers
 - `lib/finance/returns.ts` — MOIC, DPI, RVPI, bridge attribution
 
-Both engines would call the same arithmetic (the Python side via a shared test
-harness or WASM), eliminating divergence by construction. This is a large,
-multi-PR effort and is **not** yet started; until then, the mirroring rule above
-is mandatory.
+With a single engine this is organisational tidiness and testability, not a
+divergence fix. Not yet started.
 
 ---
 
-## 6. Test gates
+## 5. Test gates
 
 | Gate | Command | What it protects |
 |---|---|---|
-| TS engine | `npx vitest run` | invariants, Phase 1–4 features, regression baseline |
-| Python engine | `python3 -m pytest tests/` | mirrored invariants & features |
+| Engine + invariants | `npx vitest run` | invariants, Phase 1–4 features, regression baseline |
 | Build | `npm run build` (tsc + vite) | type safety, production build |
-| Three-statement close | part of vitest | balance sheet ties out every year |
+| Three-statement close | part of vitest (`tests/three-statement.test.ts`) | balance sheet ties out every year |
 | Regression baseline | `tests/regression.test.ts` | canonical deal outputs don't move silently (P5-4) |
 
-CI (`.github/workflows/ci.yml`) runs all three on every push and pull request.
+CI (`.github/workflows/ci.yml`) runs vitest + build on every push and pull request.
+
+---
+
+## 6. Rules for changing a calculation
+
+1. Implement in the relevant `lib/engine/*.ts` module.
+2. Add or extend tests in `tests/*.test.ts` (vitest).
+3. Keep the three-statement close gate green — any new flow that moves cash must
+   have a balance-sheet offset.
+4. If a change moves a canonical output **on purpose**, update
+   `tests/regression/baseline.json` in the same PR and say why in the message.
+5. Record any new or changed metric in `FINANCIAL_DEFINITIONS.md`.

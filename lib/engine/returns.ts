@@ -232,7 +232,7 @@ export function calculateReturns(
     ? state.exit.exit_ev_override
     : exitEbitda * state.exit.exit_ebitda_multiple;
   // Use net_debt_by_year (gross debt − actual cash on hand) so that accumulated
-  // cash reduces exit proceeds correctly, matching the Python backend convention.
+  // cash reduces exit proceeds correctly.
   const exitNetDebt = debtSchedule.net_debt_by_year.length
     ? debtSchedule.net_debt_by_year[debtSchedule.net_debt_by_year.length - 1]
     : 0;

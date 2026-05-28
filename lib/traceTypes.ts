@@ -1,4 +1,4 @@
-/** Trace Graph type definitions — mirrors backend/trace_map.py Pydantic models. */
+/** Trace Graph type definitions. */
 
 export interface TraceEdge {
   field_path: string;
