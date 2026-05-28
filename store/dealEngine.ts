@@ -18,7 +18,6 @@ import type { PanelInsights } from '../lib/engine/ai/gateway';
 import { generateInvestmentMemo } from '../lib/engine/ai/memoGenerator';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
 import type { AIProvider } from '../lib/engine/ai/providers';
-import { buildExcel } from '../lib/engine/excelExport';
 import { computeChangedTraceFields } from '../lib/traceMap';
 
 // ── LBO Financial Sanity Check ──────────────────────────────────────────
@@ -785,6 +784,7 @@ Be specific. Use the company name to infer business type and calibrate according
     try {
       const { modelState } = get();
       if (!modelState) return;
+      const { buildExcel } = await import('../lib/engine/excelExport');
       const blob = await buildExcel(modelState);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

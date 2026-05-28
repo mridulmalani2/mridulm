@@ -17,11 +17,6 @@ tsconfig.tsbuildinfo
 .next/
 next-env.d.ts
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
