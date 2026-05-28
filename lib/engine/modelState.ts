@@ -202,7 +202,6 @@ export function createDefaultModelState(): ModelState {
       moic: 0,
       dpi: 0,
       rvpi: 0,
-      cash_yield_avg: 0,
       payback_years: 0,
       irr_gross: null,
       irr_levered: null,

@@ -214,7 +214,7 @@ export function calculateReturns(
 
   if (entryEquity <= 0) {
     return {
-      irr: null, moic: 0, dpi: 0, rvpi: 0, cash_yield_avg: 0, payback_years: 0,
+      irr: null, moic: 0, dpi: 0, rvpi: 0, payback_years: 0,
       irr_gross: null, irr_levered: null, irr_unlevered: null,
       irr_convergence_failed: true, debt_convergence_failed: false,
       entry_equity: entryEquity,
@@ -395,20 +395,18 @@ export function calculateReturns(
   }
   const irrUnlevered = solveIrrAuto(unlevCfs, times);
 
-  // Payback
-  let cumulative = 0;
+  // Payback — linearly interpolate within the year cumulative equity cash flow turns
+  // positive. Reporting only the whole turning year overstates payback by up to a year.
+  let cumulative = equityCfs.length ? equityCfs[0] : 0;
   let payback = hp;
-  for (let t = 0; t < equityCfs.length; t++) {
+  for (let t = 1; t < equityCfs.length; t++) {
+    const prevCumulative = cumulative;
     cumulative += equityCfs[t];
-    if (cumulative >= 0 && t > 0) {
-      payback = t;
+    if (cumulative >= 0) {
+      payback = equityCfs[t] > 0 ? (t - 1) + -prevCumulative / equityCfs[t] : t;
       break;
     }
   }
-
-  // Cash yield
-  const totalFcfEq = projections.reduce((s, yr) => s + yr.fcf_to_equity, 0);
-  const cashYieldAvg = entryEquity > 0 && hp > 0 ? (totalFcfEq / hp) / entryEquity : 0;
 
   return {
     irr,
@@ -417,7 +415,6 @@ export function calculateReturns(
     // dpi_by_year tracks only interim distributions during the hold.
     dpi: moic,
     rvpi: 0,
-    cash_yield_avg: cashYieldAvg,
     payback_years: payback,
     irr_gross: irrGross,
     irr_levered: irrLevered,

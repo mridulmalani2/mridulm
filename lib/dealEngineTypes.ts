@@ -232,7 +232,6 @@ export interface Returns {
   moic: number;
   dpi: number;
   rvpi: number;
-  cash_yield_avg: number;
   payback_years: number;
   irr_gross: number | null;
   irr_levered: number | null;

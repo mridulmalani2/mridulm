@@ -52,6 +52,7 @@ TypeScript, implemented in `lib/engine/`.
 |---|---|---|---|---|
 | Equity IRR | IRR of `[−entry_equity, … distributions + partial proceeds …, residual_post_MIP]` | Mid-year convention shifts interim CFs to t+0.5 (P3-7 disclosure). Partial exits (P4-5) book proceeds at their year. | `returns.ts` | `phase3`, `phase4` |
 | MOIC | `(exit_equity + total_distributions) / invested` | `invested` = entry_equity + follow-on add-on equity (D); `exit_equity` = residual-post-MIP + interim partial proceeds. | `returns.ts` | `engine-parity`, `addon-equity` |
+| Payback (years) | first period the cumulative equity cash flow turns ≥ 0, **linearly interpolated** within that year | Fractional, not whole-year — whole-year reporting overstates payback by up to a year. | `returns.ts` | — |
 | Add-on equity | equity/mixed bolt-on `purchase_price × (1 − debt_pct)`, booked at the acquisition year | Outflow in the equity/levered/gross IRR streams + invested base for MOIC; unlevered subtracts the full purchase. Debt-funded bolt-ons = 0 (cost flows via synthetic debt). BS: acquired goodwill + fresh equity (D). | `addOns.ts`, `returns.ts` | `addon-equity` |
 | Gross / levered IRR | pre-fee variants | Exclude exit fee, MIP, OID and monitoring termination (sponsor-level). | `returns.ts` | — |
 | MIP payout | single hurdle, or highest cleared **ratchet** tier (optional IRR dual hurdle) | Tested on pre-MIP MOIC; promote crystallises on the residual stake at exit (P4-1, P4-5). | `returns.ts` `resolveMipPool` | `phase4` |
