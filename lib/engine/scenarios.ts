@@ -75,11 +75,31 @@ function deepClone(state: ModelState): ModelState {
  * capital structures no lender would agree to (the BUG-08 class of error).
  * Shared by the bear scenario and the leverage sensitivity table.
  */
+// Juniority rank: higher = more junior. Used to pick which tranche absorbs a debt-sizing
+// delta. Revolvers are senior commitments fixed at close and are never the flex tranche.
+function juniorityRank(trancheType: string): number {
+  if (trancheType === 'pik_note') return 3;
+  if (trancheType === 'mezzanine') return 2;
+  if (trancheType === 'revolver') return -1; // never flexed
+  return 1; // senior / unitranche
+}
+
 export function resizeJuniorToDebt(state: ModelState, targetDebt: number): void {
   if (!state.debt_tranches.length) return;
   const total = state.debt_tranches.reduce((s, t) => s + t.principal, 0);
   const delta = targetDebt - total;
-  const juniorIdx = state.debt_tranches.length - 1;
+  // Pick the MOST JUNIOR tranche by seniority, not by array position. The last array
+  // element is not necessarily the most junior, so flexing it could shrink SENIOR debt —
+  // a capital structure no lender would agree to (the BUG-08 class of error). Choose the
+  // highest juniority rank; ties break to the later array position; revolvers are excluded.
+  let juniorIdx = -1;
+  let bestRank = -Infinity;
+  for (let i = 0; i < state.debt_tranches.length; i++) {
+    const rank = juniorityRank(state.debt_tranches[i].tranche_type);
+    if (rank < 0) continue; // revolver — never the flex tranche
+    if (rank >= bestRank) { bestRank = rank; juniorIdx = i; }
+  }
+  if (juniorIdx < 0) juniorIdx = state.debt_tranches.length - 1; // all-revolver fallback
   state.debt_tranches[juniorIdx].principal = Math.max(0, state.debt_tranches[juniorIdx].principal + delta);
   state.debt_tranches[juniorIdx].amortization_schedule = [];
 }

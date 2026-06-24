@@ -1,9 +1,9 @@
 {
   "simple-bullet": {
-    "irr": 0.1488,
-    "moic": 2.0013,
+    "irr": 0.1814,
+    "moic": 2.3013,
     "entry_equity": 125.6,
-    "exit_equity": 251.363,
+    "exit_equity": 289.043,
     "exit_net_debt": 15.541,
     "net_debt_by_year": [
       70.41,
@@ -29,10 +29,10 @@
     "bs_closes": true
   },
   "pik": {
-    "irr": 0.1594,
-    "moic": 2.0953,
+    "irr": 0.1909,
+    "moic": 2.3953,
     "entry_equity": 106,
-    "exit_equity": 222.1,
+    "exit_equity": 253.9,
     "exit_net_debt": 49.969,
     "net_debt_by_year": [
       92.565,
@@ -58,10 +58,10 @@
     "bs_closes": true
   },
   "cash-sweep": {
-    "irr": 0.1623,
-    "moic": 2.1217,
+    "irr": 0.1935,
+    "moic": 2.4217,
     "entry_equity": 115.8,
-    "exit_equity": 245.692,
+    "exit_equity": 280.432,
     "exit_net_debt": 22.214,
     "net_debt_by_year": [
       80.925,
@@ -87,10 +87,10 @@
     "bs_closes": true
   },
   "revolver-first": {
-    "irr": 0.1488,
-    "moic": 2.0013,
+    "irr": 0.1814,
+    "moic": 2.3013,
     "entry_equity": 125.6,
-    "exit_equity": 251.363,
+    "exit_equity": 289.043,
     "exit_net_debt": 15.541,
     "net_debt_by_year": [
       70.41,
@@ -116,10 +116,10 @@
     "bs_closes": true
   },
   "addon": {
-    "irr": 0.4315,
-    "moic": 6.0116,
+    "irr": 0.4455,
+    "moic": 6.3116,
     "entry_equity": 115.8,
-    "exit_equity": 696.138,
+    "exit_equity": 730.878,
     "exit_net_debt": 54.289,
     "net_debt_by_year": [
       80.925,

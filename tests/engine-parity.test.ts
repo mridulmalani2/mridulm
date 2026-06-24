@@ -151,13 +151,80 @@ describe('P1-3 fragility & scenarios use the same add-on revenue base as the bas
 });
 
 describe('P1-4 senior leverage sums senior-type tranches, not array position', () => {
-  it('reports senior leverage from the term loan even when an undrawn revolver is in slot 0', () => {
+  it('reports senior NET leverage from the term loan even when an undrawn revolver is in slot 0', () => {
     const s = fullRecalc(canonicalDeals.find((d) => d.name === 'revolver-first')!.build());
     const ebitdaY1 = s.projections.years[0].ebitda_adj; // metric uses each year's EBITDA
     const tlbBalanceY1 = s.debt_schedule.tranche_schedules[1][0].ending_balance;
+    const cashY1 = s.debt_schedule.cash_balance_by_year[0] ?? 0;
     const seniorLevY1 = s.credit_analysis.metrics_by_year[0].senior_leverage;
     expect(seniorLevY1).toBeGreaterThan(0); // old bug reported ~0 (revolver slot 0)
-    expect(Math.abs(seniorLevY1 - tlbBalanceY1 / ebitdaY1)).toBeLessThan(1e-3);
+    // Senior leverage nets cash (same basis as total net leverage); revolver in slot 0 is 0.
+    expect(Math.abs(seniorLevY1 - Math.max(0, tlbBalanceY1 - cashY1) / ebitdaY1)).toBeLessThan(1e-3);
+  });
+
+  it('senior net leverage never exceeds total net leverage, every deal/year (Bug 7)', () => {
+    for (const deal of canonicalDeals) {
+      const s = fullRecalc(deal.build());
+      for (let i = 0; i < s.exit.holding_period; i++) {
+        const m = s.credit_analysis.metrics_by_year[i];
+        if (s.projections.years[i].ebitda_adj <= 0) continue; // 9999 sentinel years
+        expect(m.senior_leverage).toBeLessThanOrEqual(m.leverage + 1e-6);
+      }
+    }
+  });
+});
+
+describe('Bug 4 — resizeJuniorToDebt flexes the junior tranche by seniority, not array order', () => {
+  it('absorbs the delta in the mezzanine even when senior is the LAST array element', () => {
+    const s = canonicalDeals[0].build();
+    s.debt_tranches = [
+      tranche({ name: 'Mezz', tranche_type: 'mezzanine', principal: 20 }),
+      tranche({ name: 'Senior', tranche_type: 'senior', principal: 80 }), // last, but most senior
+    ];
+    resizeJuniorToDebt(s, 90); // reduce total debt by 10
+    expect(s.debt_tranches[1].principal).toBe(80); // senior preserved despite being last
+    expect(s.debt_tranches[0].principal).toBe(10); // mezzanine (junior) absorbs the −10
+  });
+
+  it('never flexes a revolver; picks the most-junior non-revolver tranche', () => {
+    const s = canonicalDeals[0].build();
+    s.debt_tranches = [
+      tranche({ name: 'TLB', tranche_type: 'senior', principal: 70 }),
+      tranche({ name: 'PIK', tranche_type: 'pik_note', principal: 20 }),
+      tranche({ name: 'RCF', tranche_type: 'revolver', principal: 10 }),
+    ];
+    resizeJuniorToDebt(s, 90); // −10
+    expect(s.debt_tranches[0].principal).toBe(70); // senior fixed
+    expect(s.debt_tranches[2].principal).toBe(10); // revolver untouched
+    expect(s.debt_tranches[1].principal).toBe(10); // PIK (most junior) absorbs the −10
+  });
+});
+
+describe('Clean-room — three-statement closes for an all-equity (no-debt) deal', () => {
+  it('accumulates retained FCF as cash and balances, with no debt to absorb it', () => {
+    const s = canonicalDeals[0].build();
+    s.debt_tranches = []; // all-equity buyout
+    const out = fullRecalc(s);
+    expect(out.balance_sheet.closes).toBe(true);
+    // Cash must roll forward (FCF has nowhere else to go without debt to sweep).
+    const lastCash = out.debt_schedule.cash_balance_by_year[out.exit.holding_period - 1];
+    expect(lastCash).toBeGreaterThan(0);
+    expect(out.debt_schedule.net_debt_by_year[0]).toBe(0);
+  });
+});
+
+describe('Bug 3 — recovery waterfall ignores EBITDA≤0 sentinel years', () => {
+  it('selects a positive-EBITDA default year and does not collapse recovery to zero', () => {
+    const s = canonicalDeals[0].build();
+    // Compress margin below zero so late years have non-positive EBITDA (9999 leverage sentinel).
+    s.margins.base_ebitda_margin = 0.05;
+    s.margins.target_ebitda_margin = -0.10;
+    s.margins.margin_by_year = [];
+    const out = fullRecalc(s);
+    expect(out.projections.years.some((y) => y.ebitda_adj <= 0)).toBe(true); // the sentinel case exists
+    const dyi = (out.credit_analysis.recovery_default_year ?? 1) - 1;
+    expect(out.projections.years[dyi].ebitda_adj).toBeGreaterThan(0); // chosen year is solvent
+    expect(out.credit_analysis.recovery_stress_ev ?? 0).toBeGreaterThan(0); // not a sentinel-driven 0
   });
 });
 

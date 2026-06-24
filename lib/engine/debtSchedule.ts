@@ -16,26 +16,10 @@ export function buildDebtSchedule(
   const taxRate = state.tax.tax_rate;
   const shield = state.tax.tax_shield_on_interest;
 
-  const empty: DebtScheduleResult = {
-    tranche_schedules: [],
-    total_debt_by_year: [],
-    net_debt_by_year: [],
-    leverage_ratio_by_year: [],
-    interest_coverage_by_year: [],
-    dscr_by_year: [],
-    total_cash_interest_by_year: [],
-    total_repayment_by_year: [],
-    total_mandatory_amort_by_year: [],
-    total_interest_tax_shield_by_year: [],
-    ecf_by_year: [],
-    total_commitment_fees_by_year: [],
-    cash_balance_by_year: [],
-    distributions_paid_by_year: [],
-    distribution_blocked_by_year: [],
-    refinancing_premium_by_year: [],
-  };
-
-  if (!tranches.length) return empty;
+  // NOTE: do NOT early-return for an all-equity deal (no tranches). The loops below all
+  // handle zero tranches (every reduce has an initial value), and the cash roll-forward
+  // must still run so retained FCF accumulates as cash — otherwise the three-statement
+  // balance sheet cannot close for a low/no-leverage structure.
 
   // Tranches drawn at entry start at full principal; tranches with a later
   // draw_year_index (e.g. add-on acquisition debt) start at zero and are drawn

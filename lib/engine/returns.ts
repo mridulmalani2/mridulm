@@ -19,7 +19,7 @@ function resolveMipPool(
   mip: ModelState['mip'],
   preMipMoic: number,
   preMipIrr: number | null,
-): { poolPct: number; cleared: boolean } {
+): { poolPct: number; cleared: boolean; moicThreshold: number } {
   const tiers = mip.ratchet_tiers;
   if (tiers && tiers.length) {
     let best: { moic_threshold: number; pool_pct: number } | null = null;
@@ -30,10 +30,29 @@ function resolveMipPool(
         best = { moic_threshold: t.moic_threshold, pool_pct: t.pool_pct };
       }
     }
-    return best ? { poolPct: best.pool_pct, cleared: true } : { poolPct: 0, cleared: false };
+    return best
+      ? { poolPct: best.pool_pct, cleared: true, moicThreshold: best.moic_threshold }
+      : { poolPct: 0, cleared: false, moicThreshold: mip.hurdle_moic };
   }
   const cleared = preMipMoic >= mip.hurdle_moic;
-  return { poolPct: cleared ? mip.mip_pool_pct : 0, cleared };
+  return { poolPct: cleared ? mip.mip_pool_pct : 0, cleared, moicThreshold: mip.hurdle_moic };
+}
+
+// ── Entry equity + management rollover share ────────────────────────────────
+// Total equity funding the deal (sponsor + management rollover), and the sponsor's
+// pro-rata share of it. `sweet_equity_pct` is management rollover (it reduces the
+// sponsor's check in Sources & Uses); the sponsor owns `sponsorShare` of the ordinary
+// equity and funds that share of any follow-on. With no rollover, share = 1 (no-op).
+function totalEntryEquity(state: ModelState): number {
+  const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
+  const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
+  return state.entry.enterprise_value + entryFee + state.fees.transaction_costs
+    + financingFees + oidTotal(state) - state.entry.total_debt_raised;
+}
+
+function sponsorRolloverShare(state: ModelState, totalEquity: number): number {
+  const rollover = (state.mip.sweet_equity_pct ?? 0) * state.entry.enterprise_value;
+  return totalEquity > 0 ? Math.max(0, (totalEquity - rollover) / totalEquity) : 1;
 }
 
 // ── IRR Solver ──────────────────────────────────────────────────────────
@@ -207,10 +226,13 @@ export function calculateReturns(
   const totalAddOnEquity = addOnEquityByYear.reduce((a, b) => a + b, 0);
 
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
-  const entryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const oid = oidTotal(state); // upfront OID funded by equity at close (P4-14)
-  const entryEquity =
-    state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees + oid - state.entry.total_debt_raised;
+  // Total equity check (sponsor + management rollover). The IRR/MOIC math runs on this
+  // 100% basis (pro-rata rollover leaves IRR/MOIC unchanged); reported sponsor-facing
+  // figures are scaled to the sponsor's share at the boundary below so they reconcile
+  // with Sources & Uses (which writes the sponsor a smaller check after rollover).
+  const entryEquity = totalEntryEquity(state);
+  const sponsorShare = sponsorRolloverShare(state, entryEquity);
 
   if (entryEquity <= 0) {
     return {
@@ -305,8 +327,14 @@ export function calculateReturns(
     preMipIrr = solveIrrAuto(preMipCfs, times);
   }
 
-  const { poolPct } = resolveMipPool(state.mip, preMipMoic, preMipIrr);
-  const mipPayoutFull = poolPct * exitEquityPreMipFull;
+  const { poolPct, moicThreshold } = resolveMipPool(state.mip, preMipMoic, preMipIrr);
+  // Carry ABOVE the hurdle: management participates in poolPct of equity value above the
+  // (return-of-capital × hurdle) threshold — not poolPct of the whole equity. A flat % of
+  // total equity gated by a binary hurdle creates an indefensible cliff (a tiny MOIC move
+  // across the hurdle swings the promote by poolPct × full equity); carry-above-hurdle is
+  // continuous and matches how management incentive plans actually pay out.
+  const hurdleEquity = moicThreshold * entryEquity;
+  const mipPayoutFull = poolPct * Math.max(0, exitEquityPreMipFull - hurdleEquity);
   // Promote crystallises on the residual stake held to final exit.
   const mipPayout = remainingStake * mipPayoutFull;
   const residualPostMip = remainingStake * (exitEquityPreMipFull - mipPayoutFull);
@@ -380,18 +408,23 @@ export function calculateReturns(
   }
   const irrGross = entryEquityGross > 0 ? solveIrrAuto(grossCfs, times) : null;
 
-  // Unlevered IRR
+  // Unlevered IRR — pure asset/enterprise performance with NO debt, so tax must be on
+  // unlevered EBIT (no interest shield). fcf_pre_debt carries the LEVERED tax bill (its
+  // tax line is computed after the interest deduction), which would inflate the
+  // "unlevered" return. Recompute FCFF = EBITDA − tax_on_EBIT − total capex − ΔNWC.
+  const unlevFcf = (yr: AnnualProjectionYear): number =>
+    yr.ebitda_adj - Math.max(0, yr.ebit) * state.tax.tax_rate - yr.total_capex - yr.delta_nwc;
   const entryCostUnlev = state.entry.enterprise_value + state.fees.transaction_costs;
   const unlevCfs: number[] = [-entryCostUnlev];
   for (let i = 0; i < projections.length - 1; i++) {
     // Add-on bolt-ons are an enterprise-level acquisition cost (full purchase price)
     // in their acquisition year — subtract so the unlevered return isn't a free asset.
-    unlevCfs.push(projections[i].fcf_pre_debt - (addOnPurchaseByYear[i] ?? 0));
+    unlevCfs.push(unlevFcf(projections[i]) - (addOnPurchaseByYear[i] ?? 0));
   }
   if (projections.length) {
     const lastYr = projections[projections.length - 1];
     // Unlevered IRR measures asset/enterprise performance — sponsor-level exit fee excluded.
-    unlevCfs.push(lastYr.fcf_pre_debt + exitEv - (addOnPurchaseByYear[projections.length - 1] ?? 0));
+    unlevCfs.push(unlevFcf(lastYr) + exitEv - (addOnPurchaseByYear[projections.length - 1] ?? 0));
   }
   const irrUnlevered = solveIrrAuto(unlevCfs, times);
 
@@ -408,6 +441,15 @@ export function calculateReturns(
     }
   }
 
+  // ── Sponsor-share reporting (management rollover) ──
+  // A pro-rata rollover leaves IRR/MOIC/percentages unchanged (sponsor funds and receives
+  // the same share), so only the ABSOLUTE sponsor equity figures shrink to the sponsor's
+  // stake — making entry/exit equity reconcile with Sources & Uses. share = 1 ⇒ no-op.
+  const sponsorEntryEquity = entryEquity * sponsorShare;
+  const sponsorExitEquity = exitEquity * sponsorShare;
+  const sponsorDistributions = totalDistributions * sponsorShare;
+  const sponsorEquityCfs = sponsorShare === 1 ? equityCfs : equityCfs.map((c) => c * sponsorShare);
+
   return {
     irr,
     moic,
@@ -421,16 +463,16 @@ export function calculateReturns(
     irr_unlevered: irrUnlevered,
     irr_convergence_failed: irr === null,
     debt_convergence_failed: false,   // set by fullRecalc after convergence loop
-    entry_equity: entryEquity,
-    exit_equity: exitEquity,
+    entry_equity: sponsorEntryEquity,
+    exit_equity: sponsorExitEquity,
     exit_ev: exitEv,
     exit_net_debt: exitNetDebt,
     mip_payout: mipPayout,
-    total_distributions: totalDistributions,
+    total_distributions: sponsorDistributions,
     dpi_by_year: dpiByYear,
     rvpi_by_year: rvpiByYear,
-    equity_cashflows: equityCfs,
-    add_on_equity_invested: totalAddOnEquity,
+    equity_cashflows: sponsorEquityCfs,
+    add_on_equity_invested: totalAddOnEquity * sponsorShare,
     convergence_iterations: 1,
     convergence_delta: 0,
   };
@@ -457,29 +499,34 @@ export function decomposeValueDrivers(
   const exitEquity = returns.exit_equity;
   const exitEv = returns.exit_ev;
 
+  // The bridge decomposes the SPONSOR's equity gain (returns.exit_equity/entry_equity are
+  // already net of management rollover), so each enterprise-level contribution is scaled to
+  // the sponsor's share. share = 1 ⇒ no-op for deals without rollover.
+  const ss = sponsorRolloverShare(state, totalEntryEquity(state));
+
   // Revenue growth contribution
   const hypoEvRevGrowth = exitRevenue * entryMargin * entryMultiple;
-  const deltaRev = hypoEvRevGrowth - entryEv;
+  const deltaRev = (hypoEvRevGrowth - entryEv) * ss;
 
   // Margin expansion
   const hypoEvMargin = exitRevenue * exitMarginAdj * entryMultiple;
-  const deltaMargin = hypoEvMargin - hypoEvRevGrowth;
+  const deltaMargin = (hypoEvMargin - hypoEvRevGrowth) * ss;
 
   // Multiple expansion
-  const deltaMultiple = exitEv - hypoEvMargin;
+  const deltaMultiple = (exitEv - hypoEvMargin) * ss;
 
   // Debt paydown
   const entryNetDebt = state.entry.total_debt_raised;
   const exitNetDebt = returns.exit_net_debt;
-  const deltaDebt = entryNetDebt - exitNetDebt;
+  const deltaDebt = (entryNetDebt - exitNetDebt) * ss;
 
   // Fees drag
   const vdFinancingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const vdEntryFee = state.fees.entry_fee_pct * state.entry.enterprise_value;
   const exitFee = state.fees.exit_fee_pct * exitEv;
   const monitoringTermination = monitoringTerminationPayment(state); // P4-11 exit cost
-  const feesDrag = vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee
-    + returns.mip_payout + monitoringTermination + oidTotal(state); // OID upfront cost (P4-14)
+  const feesDrag = (vdEntryFee + state.fees.transaction_costs + vdFinancingFees + exitFee
+    + returns.mip_payout + monitoringTermination + oidTotal(state)) * ss; // OID upfront cost (P4-14)
 
   // Bridge decomposes exit_equity − entry_equity only. Distributions are LP cash flows,
   // not value creation — they are already captured via delta_debt (lower exit cash reduces net debt).

@@ -17,19 +17,21 @@ function baseDeal(): ModelState {
   return canonicalDeals[0].build();
 }
 
-/** Effective MIP pool % implied by the post-MIP outputs (no partial exits ⇒
- *  exit_equity = preMip − mip; pool = mip / (exit_equity + mip)). */
-function impliedPool(r: { mip_payout: number; exit_equity: number }): number {
-  const preMip = r.exit_equity + r.mip_payout;
-  return preMip > 0 ? r.mip_payout / preMip : 0;
+/** Expected carry-ABOVE-hurdle MIP payout: management participates in `pool` of the
+ *  equity value above the (threshold × invested) return-of-capital line — not a flat
+ *  % of the whole equity. */
+function expectedCarry(preMipEquity: number, entryEquity: number, pool: number, threshold: number): number {
+  return pool * Math.max(0, preMipEquity - threshold * entryEquity);
 }
 
 describe('P4-1 MIP ratchet / dual hurdle', () => {
-  // Pre-MIP MOIC of the canonical deal, measured with MIP switched off.
+  // Pre-MIP equity / MOIC of the canonical deal, measured with MIP switched off.
   const noMip = baseDeal();
   noMip.mip.hurdle_moic = 99; // never clears ⇒ payout 0 ⇒ exit_equity == full pre-MIP
   const noMipR = fullRecalc(noMip).returns;
-  const preMipMoic = noMipR.exit_equity / noMipR.entry_equity;
+  const preMipEquity = noMipR.exit_equity;
+  const entryEq = noMipR.entry_equity;
+  const preMipMoic = preMipEquity / entryEq;
 
   it('a single-tier ratchet equal to the legacy hurdle reproduces single-hurdle behaviour', () => {
     const legacy = fullRecalc(baseDeal()).returns; // default pool 0.15, hurdle 2.0
@@ -40,7 +42,7 @@ describe('P4-1 MIP ratchet / dual hurdle', () => {
     expect(Math.abs((ratchet.irr ?? 0) - (legacy.irr ?? 0))).toBeLessThan(1e-9);
   });
 
-  it('selects the highest cleared MOIC tier', () => {
+  it('selects the highest cleared MOIC tier (carry above that tier threshold)', () => {
     const r = baseDeal();
     r.mip.ratchet_tiers = [
       { moic_threshold: preMipMoic - 1.0, pool_pct: 0.10 },
@@ -48,7 +50,8 @@ describe('P4-1 MIP ratchet / dual hurdle', () => {
       { moic_threshold: preMipMoic + 1.0, pool_pct: 0.25 }, // not cleared
     ];
     const out = fullRecalc(r).returns;
-    expect(impliedPool(out)).toBeCloseTo(0.18, 4);
+    // Highest cleared tier = pool 0.18 above the (preMipMoic − 0.2) threshold.
+    expect(out.mip_payout).toBeCloseTo(expectedCarry(preMipEquity, entryEq, 0.18, preMipMoic - 0.2), 2);
   });
 
   it('dual hurdle: an unreachable IRR threshold disqualifies its tier', () => {
@@ -58,7 +61,8 @@ describe('P4-1 MIP ratchet / dual hurdle', () => {
       { moic_threshold: preMipMoic - 0.2, pool_pct: 0.18, irr_threshold: 5.0 }, // blocked by 500% IRR hurdle
     ];
     const out = fullRecalc(r).returns;
-    expect(impliedPool(out)).toBeCloseTo(0.10, 4); // falls back to the MOIC-only tier
+    // Falls back to the MOIC-only tier: pool 0.10 above the (preMipMoic − 1.0) threshold.
+    expect(out.mip_payout).toBeCloseTo(expectedCarry(preMipEquity, entryEq, 0.10, preMipMoic - 1.0), 2);
   });
 
   it('pays nothing when no tier clears', () => {

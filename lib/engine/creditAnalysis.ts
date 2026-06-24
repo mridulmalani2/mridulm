@@ -108,7 +108,12 @@ export function computeCreditAnalysis(
       if (!SENIOR_TRANCHE_TYPES.has(tranche.tranche_type)) return sum;
       return sum + (debtSchedule.tranche_schedules[tIdx]?.[i]?.ending_balance ?? 0);
     }, 0);
-    const seniorLeverage = yr.ebitda_adj > 0 ? seniorDebt / yr.ebitda_adj : 9999;
+    // Net cash against the senior tier — cash is available to the most-senior creditors
+    // first — so senior NET leverage is on the same basis as total net leverage and can
+    // never exceed it (a gross-senior vs net-total mix could report senior > total).
+    const cashHeld = debtSchedule.cash_balance_by_year[i] ?? 0;
+    const seniorNetDebt = Math.max(0, seniorDebt - cashHeld);
+    const seniorLeverage = yr.ebitda_adj > 0 ? seniorNetDebt / yr.ebitda_adj : 9999;
 
     // Excess Cash Flow = FCF pre-debt minus all mandatory obligations.
     // Negative ECF means the company cannot cover mandatory debt service from operations
@@ -140,7 +145,9 @@ export function computeCreditAnalysis(
     dscrHeadroomByYear.push(dscrCapped - effDscr);
     springingBreachByYear.push(isSpringing && dscrCapped < (cov.springing_dscr_covenant ?? 0));
     fccrHeadroomByYear.push(Math.min(fccr, 99) - effFccrCov(i));
-    leverageHeadroomByYear.push(Math.max(0, effLevCov(i) - leverage));
+    // No floor: a breach (leverage > covenant) must surface as NEGATIVE headroom — the
+    // magnitude of the breach — consistent with DSCR/FCCR headroom. Clamping to 0 hid it.
+    leverageHeadroomByYear.push(effLevCov(i) - leverage);
     insolvencyWarningByYear.push(insolvencyWarning);
     ecfByYear.push(ecf);
   }
@@ -178,13 +185,20 @@ export function computeCreditAnalysis(
   const multipleHaircut = cov.recovery_multiple_haircut ?? 0.5;
   const distressedCostPct = cov.recovery_distressed_cost_pct ?? 0.10;
 
-  // Default year = peak leverage over the hold (fallback to last modelled year).
-  let defaultYrIdx = 0;
+  // Default year = peak NET leverage over the hold, considering ONLY years with positive
+  // EBITDA. The leverage series uses a 9999 sentinel when EBITDA ≤ 0; selecting such a
+  // year would compute the distressed EV on non-positive EBITDA and report 0% recovery for
+  // every tranche — exactly the distress case this waterfall exists to analyse. Fall back
+  // to the last modelled year only if no year has positive EBITDA.
+  let defaultYrIdx = metricsByYear.length - 1;
   let peakLev = -Infinity;
   for (let i = 0; i < metricsByYear.length; i++) {
+    const projYr = projections[i];
+    if (!projYr || projYr.ebitda_adj <= 0) continue; // skip the 9999 sentinel
     const lev = metricsByYear[i].leverage;
     if (lev > peakLev) { peakLev = lev; defaultYrIdx = i; }
   }
+  if (defaultYrIdx < 0) defaultYrIdx = 0;
   const defaultProj = projections[defaultYrIdx];
   const defaultEbitda = defaultProj ? defaultProj.ebitda_adj : 0;
   const distressedEv = defaultEbitda * (1 - ebitdaHaircut)

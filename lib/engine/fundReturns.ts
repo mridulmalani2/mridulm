@@ -11,11 +11,15 @@
  *   • Management fees are a per-year drag on the equity cashflow (years 1..hp).
  *     Basis = invested capital (deal equity) or committed (fund_size × deal share).
  *   • Net MOIC = net value to LPs / invested capital (net multiple on invested).
- *   • Preferred return compounds annually.
- *   • European (whole-fund): carry taken at exit on total profit above return-of-
- *     capital + preferred. American (deal-by-deal): carry taken as distributions
- *     clear the running capital + accrued-pref high-water.
- *   • No GP catch-up tier and no clawback (single-deal scope).
+ *   • Preferred return accrues on capital OUTSTANDING each year (time-weighted),
+ *     not as a flat compounded amount on full capital for the whole hold.
+ *   • Full waterfall per distribution: return of capital → preferred → 100% GP
+ *     catch-up to carry% of (pref + catch-up) → carry% of the residual.
+ *   • European (whole-fund): carry crystallised at exit. American (deal-by-deal):
+ *     carry taken as distributions clear each tier.
+ *   • Paid-in capital includes follow-on (add-on) equity; interim negative flows
+ *     are capital calls, not carry-eligible distributions.
+ *   • No clawback (single-deal scope).
  */
 
 import type { ModelState, Returns, FundReturns, FundAssumptions } from '../dealEngineTypes';
@@ -49,57 +53,64 @@ export function computeFundReturns(state: ModelState, returns: Returns): FundRet
     };
   }
 
-  // Gross inflows by hold year (index 0 = year 1 … hp-1 = year hp).
+  // Gross inflows by hold year (index 0 = year 1 … hp-1 = year hp). A NEGATIVE entry is an
+  // interim CAPITAL CALL (e.g. an equity-funded add-on draw), not a distribution — it adds
+  // to paid-in capital, not to carry-eligible proceeds.
   const grossInflows: number[] = [];
   for (let i = 1; i <= hp; i++) grossInflows.push(cfs[i] ?? 0);
-  const totalReceipts = grossInflows.reduce((s, g) => s + g, 0);
+
+  // Total LP paid-in capital = entry equity + follow-on (add-on) equity called over the hold
+  // (Bug 6: the overlay previously ignored follow-on capital, understating paid-in).
+  const addOnEquity = returns.add_on_equity_invested ?? 0;
+  const paidIn = invested + addOnEquity;
 
   // ── Management fee (annual drag, years 1..hp) ──
   const feeBasis = fa.management_fee_basis === 'committed'
     ? fa.fund_size * Math.max(0, Math.min(1, fa.deal_allocation_pct))
-    : invested;
+    : paidIn; // invested basis now includes follow-on capital
   const feePerYear = Math.max(0, fa.management_fee_pct) * Math.max(0, feeBasis);
   const feeByYear = grossInflows.map(() => feePerYear);
   const managementFeesTotal = feeByYear.reduce((s, f) => s + f, 0);
 
-  // ── Carried interest ──
+  // ── Carry waterfall (time-weighted, with 100% GP catch-up) ──
+  // Per positive distribution: (1) return of capital, (2) preferred return accrued on
+  // capital OUTSTANDING (time-weighted, not a flat compounded amount), (3) GP catch-up to
+  // carry% of (pref + catch-up), (4) carry% of the residual. American crystallises carry as
+  // distributions clear; European defers all carry to exit. Interim negative flows raise
+  // outstanding capital (a capital call), never trigger carry.
   const pref = Math.max(0, fa.preferred_return);
-  const carryRate = Math.max(0, fa.carry_rate);
+  const carryRate = Math.max(0, Math.min(0.99, fa.carry_rate));
+  const european = fa.carry_waterfall !== 'american';
   const carryByYear = new Array<number>(hp).fill(0);
-  let carriedInterest = 0;
-  let preferredShortfall = 0;
-
-  if (fa.carry_waterfall === 'american') {
-    // Deal-by-deal: pref accrues on outstanding capital; carry on receipts above
-    // the running capital + accrued-pref high-water.
-    let remainingCapital = invested;
-    let accruedPref = 0;
-    for (let i = 0; i < hp; i++) {
-      accruedPref += remainingCapital * pref;
-      let receipt = grossInflows[i];
-      const capReturn = Math.min(receipt, remainingCapital);
-      remainingCapital -= capReturn;
-      receipt -= capReturn;
-      const prefPaid = Math.min(receipt, accruedPref);
-      accruedPref -= prefPaid;
-      receipt -= prefPaid;
-      if (receipt > 0) {
-        carryByYear[i] = carryRate * receipt;
-        carriedInterest += carryByYear[i];
-      }
-    }
-    // Unreturned capital ⇒ the preferred is unmet by the still-accrued amount.
-    preferredShortfall = remainingCapital > 1e-9 ? accruedPref : 0;
-  } else {
-    // European (whole-fund): carry at exit on total profit above capital + pref.
-    const prefAmt = invested * (Math.pow(1 + pref, hp) - 1);
-    const profitAbovePref = Math.max(0, totalReceipts - invested - prefAmt);
-    carriedInterest = carryRate * profitAbovePref;
-    carryByYear[hp - 1] = carriedInterest;
-    const capitalReturned = Math.min(totalReceipts, invested);
-    const prefMet = Math.max(0, totalReceipts - capitalReturned);
-    preferredShortfall = Math.max(0, prefAmt - prefMet);
+  let remainingCapital = invested;
+  let accruedPref = 0;
+  let cumPrefPaid = 0;
+  let cumCarry = 0;
+  let grossDistributions = 0;
+  for (let i = 0; i < hp; i++) {
+    accruedPref += remainingCapital * pref; // accrue on capital outstanding this year
+    let receipt = grossInflows[i];
+    if (receipt < 0) { remainingCapital += -receipt; continue; } // interim capital call
+    grossDistributions += receipt;
+    // (1) return of capital
+    const capReturn = Math.min(receipt, remainingCapital);
+    remainingCapital -= capReturn; receipt -= capReturn;
+    // (2) preferred return
+    const prefPaid = Math.min(receipt, accruedPref);
+    accruedPref -= prefPaid; cumPrefPaid += prefPaid; receipt -= prefPaid;
+    // (3) GP catch-up to carry% of (pref + catch-up): target cumCarry = r/(1−r) × cumPrefPaid
+    const catchUpTarget = carryRate < 1 ? (carryRate / (1 - carryRate)) * cumPrefPaid : Infinity;
+    const catchUp = Math.max(0, Math.min(receipt, catchUpTarget - cumCarry));
+    cumCarry += catchUp; receipt -= catchUp;
+    // (4) residual carry split
+    const split = carryRate * receipt;
+    cumCarry += split; receipt -= split;
+    if (!european) carryByYear[i] = catchUp + split; // American: pay as you go
   }
+  const carriedInterest = cumCarry;
+  if (european) carryByYear[hp - 1] = carriedInterest; // European: all carry crystallised at exit
+  // Preferred shortfall = pref still accrued and unpaid at the end (time-weighted).
+  const preferredShortfall = Math.max(0, accruedPref);
 
   // ── Net LP cashflows ──
   const times = fundTimeVector(hp, state.exit.mid_year_convention ?? false);
@@ -109,8 +120,9 @@ export function computeFundReturns(state: ModelState, returns: Returns): FundRet
   }
   const netIrr = solveIrrAuto(lpCfs, times);
 
-  const lpDistributions = totalReceipts - managementFeesTotal - carriedInterest;
-  const netMoic = invested > 0 ? lpDistributions / invested : 0;
+  // Distributions to LPs = positive proceeds less fees and carry, over total paid-in.
+  const lpDistributions = grossDistributions - managementFeesTotal - carriedInterest;
+  const netMoic = paidIn > 0 ? lpDistributions / paidIn : 0;
   const grossToNetSpread = grossIrr != null && netIrr != null ? grossIrr - netIrr : null;
 
   return {
@@ -122,7 +134,7 @@ export function computeFundReturns(state: ModelState, returns: Returns): FundRet
     management_fees_total: managementFeesTotal,
     carried_interest: carriedInterest,
     preferred_return_shortfall: preferredShortfall,
-    lp_paid_in: invested,
+    lp_paid_in: paidIn,
     lp_distributions: lpDistributions,
   };
 }
