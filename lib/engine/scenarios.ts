@@ -2,9 +2,8 @@
 
 import type { ModelState, ScenarioSet, SensitivityTable, ValueDriverDecomposition } from '../dealEngineTypes';
 import { deriveEntryFields, ensureListLengths } from './modelState';
-import { buildProjections, updateProjectionsWithDebt } from './projections';
-import { buildDebtSchedule } from './debtSchedule';
-import { calculateReturns, decomposeValueDrivers } from './returns';
+import { decomposeValueDrivers } from './returns';
+import { runConvergedModel } from './converge';
 import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 
 interface ScenarioMetrics {
@@ -51,49 +50,13 @@ function runFullModel(state: ModelState) {
   // sensitivity outputs use the same revenue/leverage base as the base case.
   const { originalTranches } = injectAddOns(state);
 
-  const MAX_ITER = 10;
-  const TOLERANCE = Math.max(0.01, state.revenue.base_revenue * 0.0001);
-  const hp = state.exit.holding_period;
+  // Single shared solver (lib/engine/converge.ts) — identical loop, cap and
+  // tolerance to fullRecalc, so scenarios can never diverge from the base case.
+  const { returns, projections, debtSchedule } = runConvergedModel(state);
 
-  let proj = buildProjections(state);
-  let ds = buildDebtSchedule(state, proj);
-  let updatedProj = proj;
-  let prevTotalInterest = 0;
-  let iterations = 0;
-  let convergenceDelta = 0;
-
-  for (let iter = 0; iter < MAX_ITER; iter++) {
-    iterations = iter + 1;
-    ds = buildDebtSchedule(state, updatedProj);
-
-    const pikByYear: number[] = [];
-    for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
-      let pik = 0;
-      if (ds.tranche_schedules.length) {
-        for (let t = 0; t < ds.tranche_schedules.length; t++) {
-          pik += ds.tranche_schedules[t][yrIdx].pik_accrual;
-        }
-      }
-      pikByYear.push(pik);
-    }
-
-    updatedProj = updateProjectionsWithDebt(
-      proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
-    );
-
-    const currentTotalInterest = ds.total_cash_interest_by_year.reduce((a, b) => a + b, 0);
-    convergenceDelta = Math.abs(currentTotalInterest - prevTotalInterest);
-    if (convergenceDelta < TOLERANCE) break;
-    prevTotalInterest = currentTotalInterest;
-    proj = updatedProj;
-  }
-
-  const ret = calculateReturns(state, updatedProj, ds);
-  ret.convergence_iterations = iterations;
-  ret.convergence_delta = convergenceDelta;
   // Restore real entry tranches so callers / subsequent clones never see synthetics.
   state.debt_tranches = originalTranches;
-  return { returns: ret, projections: updatedProj, debtSchedule: ds };
+  return { returns, projections, debtSchedule };
 }
 
 function quickIrrMoic(state: ModelState): { irr: number | null; moic: number; exitEquity: number } {

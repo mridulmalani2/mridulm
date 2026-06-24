@@ -6,9 +6,7 @@ import type {
   FragilityStressResult,
 } from '../dealEngineTypes';
 import { deriveEntryFields, ensureListLengths } from './modelState';
-import { buildProjections, updateProjectionsWithDebt } from './projections';
-import { buildDebtSchedule } from './debtSchedule';
-import { calculateReturns } from './returns';
+import { runConvergedModel } from './converge';
 import { injectAddOns, stripSyntheticAddOnTranches } from './addOns';
 
 function deepClone(state: ModelState): ModelState {
@@ -23,41 +21,10 @@ function quickCalc(state: ModelState): { irr: number | null; moic: number } {
   // the base case (which includes add-ons), not on a lower-revenue stripped model.
   const { originalTranches } = injectAddOns(state);
 
-  const MAX_ITER = 10;
-  const TOLERANCE = Math.max(0.01, state.revenue.base_revenue * 0.0001);
-  const hp = state.exit.holding_period;
+  // Single shared solver (lib/engine/converge.ts) — same loop as the base case, so
+  // a fragility stress is a true sensitivity, not a differently-converged model.
+  const { returns: ret } = runConvergedModel(state);
 
-  let proj = buildProjections(state);
-  let updatedProj = proj;
-  let ds = buildDebtSchedule(state, proj);
-  let prevTotalInterest = 0;
-
-  for (let iter = 0; iter < MAX_ITER; iter++) {
-    ds = buildDebtSchedule(state, updatedProj);
-
-    const pikByYear: number[] = [];
-    for (let yrIdx = 0; yrIdx < hp; yrIdx++) {
-      let pik = 0;
-      if (ds.tranche_schedules.length) {
-        for (let t = 0; t < ds.tranche_schedules.length; t++) {
-          pik += ds.tranche_schedules[t][yrIdx].pik_accrual;
-        }
-      }
-      pikByYear.push(pik);
-    }
-
-    updatedProj = updateProjectionsWithDebt(
-      proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
-    );
-
-    const currentTotalInterest = ds.total_cash_interest_by_year.reduce((a, b) => a + b, 0);
-    const delta = Math.abs(currentTotalInterest - prevTotalInterest);
-    if (delta < TOLERANCE) break;
-    prevTotalInterest = currentTotalInterest;
-    proj = updatedProj;
-  }
-
-  const ret = calculateReturns(state, updatedProj, ds);
   state.debt_tranches = originalTranches;
   return { irr: ret.irr, moic: ret.moic };
 }

@@ -40,10 +40,11 @@ TypeScript, implemented in `lib/engine/`.
 | DSCR | `FCF_pre_debt / (cash_interest + commitment_fees + mandatory_amort)` | Mandatory amort only (excludes discretionary sweep). | `creditAnalysis.ts` | — |
 | FCCR | `(EBITDA − maintenance_capex − tax) / (cash_interest + mandatory_amort)` | **Maintenance** capex only — growth capex is discretionary (P2-2). | `creditAnalysis.ts` | — |
 | Interest coverage | `EBITDA / cash_interest` | 9999 sentinel when interest = 0. | `creditAnalysis.ts` | — |
-| Senior leverage | `Σ senior-type tranche balances / EBITDA` | Filter by `tranche_type` (senior/unitranche/revolver), **not** array position (P1-4). | `creditAnalysis.ts` | `engine-parity` |
+| Leverage (per year) | `net_debt / EBITDA` | **Net** leverage — cash on hand nets against gross debt (standard total-net-leverage covenant basis). Drives covenant headroom, the peak-leverage recovery year, and the cash-trap block. *Entry leverage* (above) is the distinct gross entry metric. | `creditAnalysis.ts`, `debtSchedule.ts` | `regression`, `phase4b` |
+| Senior leverage | `Σ senior-type tranche balances / EBITDA` | Filter by `tranche_type` (senior/unitranche/revolver), **not** array position (P1-4). Gross (senior tranches are first-lien, not cash-netted). | `creditAnalysis.ts` | `engine-parity` |
 | Effective covenant | `*_covenant_by_year[t] ?? *_covenant` | Step-down schedules override the scalar (P2-4). | `creditAnalysis.ts` | — |
 | Springing DSCR | applies only when `revolver_drawn / commitment > threshold` | Tighter test in drawn years (P4-8). | `creditAnalysis.ts` | `phase4d` |
-| Cash trap | block distributions when `leverage > block_leverage` or `DSCR < block_dscr` | Same metric definitions as the credit metrics (P4-13). | `debtSchedule.ts` | `phase4b` |
+| Cash trap | block distributions when `leverage > block_leverage` or `DSCR < block_dscr` | Net leverage (cash available *before* the distribution nets against debt) and DSCR — same definitions as the credit metrics, so a block aligns with the displayed covenant breach (P4-13). | `debtSchedule.ts` | `phase4b` |
 | Recovery waterfall | distressed EV at peak-leverage year, senior→junior | EV = `EBITDA×(1−haircut) × entry_mult×(1−haircut) × (1−distressed_cost)`, year-of-default basis (P4-10). | `creditAnalysis.ts` | `phase4d` |
 
 ## Returns

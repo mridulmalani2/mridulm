@@ -12,7 +12,7 @@ import type {
   CetparResult,
 } from '../lib/dealEngineTypes';
 import { fullRecalc, createDefaultModelState } from '../lib/engine/index';
-import { generateScenarios, generateSensitivityTable } from '../lib/engine/scenarios';
+import { generateScenarios, generateSensitivityTable, generateAllSensitivityTables } from '../lib/engine/scenarios';
 import { callAI, generatePanelInsights, runCetpar, callRedlineAI, STRUCTURE_SYSTEM_PROMPT } from '../lib/engine/ai/gateway';
 import type { PanelInsights } from '../lib/engine/ai/gateway';
 import { generateInvestmentMemo } from '../lib/engine/ai/memoGenerator';
@@ -784,8 +784,15 @@ Be specific. Use the company name to infer business type and calibrate according
     try {
       const { modelState } = get();
       if (!modelState) return;
+      // Recompute from scratch and attach the engine's own scenarios + full
+      // sensitivity grid, so the workbook is a faithful projection of the live
+      // model: never a stale snapshot, and its sensitivity sheets read the exact
+      // tables the on-screen heatmap renders (no separate approximation).
+      const exportState = fullRecalc(JSON.parse(JSON.stringify(modelState)) as ModelState);
+      exportState.scenarios = generateScenarios(exportState);
+      exportState.sensitivity_tables = generateAllSensitivityTables(exportState);
       const { buildExcel } = await import('../lib/engine/excelExport');
-      const blob = await buildExcel(modelState);
+      const blob = await buildExcel(exportState);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

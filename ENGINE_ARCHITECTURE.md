@@ -29,13 +29,14 @@ three-statement close, and the Excel workbook — happens in `lib/engine/*`.
 ## 2. Engine layout
 
 `fullRecalc` in `lib/engine/index.ts` is the orchestrator and the single entry
-point: it runs the convergence loop and assembles the whole pipeline. Both the UI
-(`store/dealEngine.ts`) and the tests call it — nothing re-assembles the pipeline
-by hand.
+point: it runs the shared convergence solver (`lib/engine/converge.ts`) and
+assembles the whole pipeline. Both the UI (`store/dealEngine.ts`) and the tests
+call it — nothing re-assembles the pipeline by hand.
 
 | Module | Responsibility |
 |---|---|
-| `index.ts` | `fullRecalc` orchestrator + convergence loop |
+| `index.ts` | `fullRecalc` orchestrator — assembles the pipeline |
+| `converge.ts` | the **single** convergence solver (`runConvergenceLoop` / `runConvergedModel`), shared by `fullRecalc`, scenarios and fragility |
 | `modelState.ts` | `ModelState` shape, entry-field derivation, default model |
 | `sourcesUses.ts` | sources & uses reconciliation at close |
 | `projections.ts` | revenue/margin build, P&L, NWC, FCF bridge |
@@ -46,9 +47,9 @@ by hand.
 | `fundReturns.ts` | LP-level net IRR/MOIC, management fee, carry |
 | `addOns.ts` | bolt-on acquisitions (revenue/debt/synergy/equity) |
 | `balanceSheet.ts` | three-statement close |
-| `scenarios.ts` | scenario & sensitivity generation |
+| `scenarios.ts` | scenario & sensitivity generation (full model re-run per cell) |
 | `realityCheck.ts`, `fragility.ts` | exit reality check, fragility scoring |
-| `excelExport.ts` | the institutional Excel workbook (via `exceljs`) |
+| `excelExport.ts` | the institutional Excel workbook (via `exceljs`) — a pure projection of `state`; its sensitivity sheets read the engine's `sensitivity_tables`, not a private approximation |
 | `ai/*`, `aiGateway.ts` | AI gateway, providers, memo/solver |
 
 ---
@@ -56,17 +57,24 @@ by hand.
 ## 3. Convergence loop
 
 Projections and the debt schedule are mutually dependent (cash interest feeds FCF;
-FCF feeds the sweep that changes balances and therefore interest). `fullRecalc`
-iterates `projections → debt schedule → update projections` until cash interest
-stabilises (PIK/sweep feedback). Tolerance scales with deal size
+FCF feeds the sweep that changes balances and therefore interest). The single
+solver in `lib/engine/converge.ts` (`runConvergenceLoop`) iterates
+`projections → debt schedule → update projections` until cash interest stabilises
+(PIK/sweep feedback). Tolerance scales with deal size
 (`max(0.01, base_revenue × 0.0001)`); iteration 0 may exit early.
-`debt_convergence_failed` flags a non-converged result.
+`debt_convergence_failed` flags a non-converged result. `fullRecalc`, the scenario
+runner (`scenarios.ts`) and the fragility runner (`fragility.ts`) all call this one
+solver — they never hand-roll their own loop — so they cannot diverge. The
+`engine-parity` test pins base-scenario and fragility returns to `fullRecalc`.
 
 ---
 
 ## 4. Optional future cleanup — shared finance kernel
 
-A clean (but no-longer-urgent) refactor is to factor the pure arithmetic into a
+The convergence loop is now a single shared solver (`converge.ts`), and the Excel
+export reads the engine's own sensitivity tables rather than a private
+approximation — the two structural divergence sources are closed. A further
+(optional) refactor is to factor the remaining pure arithmetic into a
 framework-free `lib/finance/*` kernel:
 
 - `lib/finance/interest.ts` — effective rate, average balance, PIK compounding
@@ -74,8 +82,8 @@ framework-free `lib/finance/*` kernel:
 - `lib/finance/sweep.ts` — sweep waterfall, priority tiers
 - `lib/finance/returns.ts` — MOIC, DPI, RVPI, bridge attribution
 
-With a single engine this is organisational tidiness and testability, not a
-divergence fix. Not yet started.
+This is organisational tidiness and testability, not a divergence fix. Not yet
+started.
 
 ---
 

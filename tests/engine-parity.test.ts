@@ -46,6 +46,20 @@ describe('engine invariants (all canonical deals)', () => {
         }
       });
 
+      it('per-year leverage is NET debt / EBITDA in both series (debt schedule + credit analysis)', () => {
+        for (let i = 0; i < hp; i++) {
+          const ebitda = s.projections.years[i].ebitda_adj;
+          if (ebitda <= 0) continue; // sentinel territory
+          const expected = ds.net_debt_by_year[i] / ebitda;
+          expect(Math.abs(ds.leverage_ratio_by_year[i] - expected)).toBeLessThan(1e-6);
+          expect(Math.abs(s.credit_analysis.metrics_by_year[i].leverage - expected)).toBeLessThan(1e-6);
+          // …and strictly below the gross ratio whenever cash is on hand.
+          if ((ds.cash_balance_by_year[i] ?? 0) > 0) {
+            expect(ds.leverage_ratio_by_year[i]).toBeLessThan(ds.total_debt_by_year[i] / ebitda + 1e-9);
+          }
+        }
+      });
+
       it('does not leak synthetic add-on tranches into the input state', () => {
         expect(s.debt_tranches.some((t) => t._synthetic_addon)).toBe(false);
       });
@@ -145,6 +159,31 @@ describe('P1-4 senior leverage sums senior-type tranches, not array position', (
     expect(seniorLevY1).toBeGreaterThan(0); // old bug reported ~0 (revolver slot 0)
     expect(Math.abs(seniorLevY1 - tlbBalanceY1 / ebitdaY1)).toBeLessThan(1e-3);
   });
+});
+
+describe('engine unity: one solver, three callers (WS1)', () => {
+  // fullRecalc (index.ts), the base scenario (scenarios.ts → runFullModel) and the
+  // fragility base case (fragility.ts → quickCalc) all run the SAME convergence loop
+  // in lib/engine/converge.ts. On identical assumptions they must produce identical
+  // returns — not merely close. This is the guard that keeps the extracted solver
+  // from silently diverging again.
+  for (const deal of canonicalDeals) {
+    describe(deal.name, () => {
+      const full = fullRecalc(deal.build());
+      const baseScenario = generateScenarios(deal.build()).find((sc) => sc.name === 'base')!;
+
+      it('base scenario IRR/MOIC/exit-equity equal fullRecalc', () => {
+        expect(Math.abs((baseScenario.irr ?? 0) - (full.returns.irr ?? 0))).toBeLessThan(1e-9);
+        expect(Math.abs(baseScenario.moic - full.returns.moic)).toBeLessThan(1e-9);
+        expect(Math.abs(baseScenario.exit_equity - full.returns.exit_equity)).toBeLessThan(1e-6);
+      });
+
+      it('fragility base IRR/MOIC equal fullRecalc', () => {
+        expect(Math.abs((full.fragility.base_irr ?? 0) - (full.returns.irr ?? 0))).toBeLessThan(1e-9);
+        expect(Math.abs(full.fragility.base_moic - full.returns.moic)).toBeLessThan(1e-9);
+      });
+    });
+  }
 });
 
 describe('regression: simple bullet deal stays in a sane range', () => {
