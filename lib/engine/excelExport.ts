@@ -23,6 +23,11 @@ type WB = import('exceljs').Workbook;
 
 const CCY_SYMBOLS: Record<string, string> = { GBP: '\u00a3', EUR: '\u20ac', USD: '$', INR: '₹', JPY: '¥' };
 
+// Scenario display labels — avoid "Bear"/"Stress" (those imply correlated/probabilistic
+// stress tests); these are deterministic perturbations of the base case (plan §7.2).
+const SCENARIO_LABELS: Record<string, string> = { bear: 'Downside', stress: 'Severe Downside' };
+const scenarioLabel = (name: string): string => (SCENARIO_LABELS[name] ?? name).toUpperCase();
+
 // Colors
 const NAVY = 'FF1a2744';
 const WHITE = 'FFFFFFFF';
@@ -432,7 +437,7 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
     ws.getCell(row, 2).border = MED_BOTTOM;
     row += 1;
 
-    const scHeaders = ['', ...state.scenarios.map(s => s.name.toUpperCase())];
+    const scHeaders = ['', ...state.scenarios.map(s => scenarioLabel(s.name))];
     for (let i = 0; i < scHeaders.length; i++) {
       ws.getCell(row, i + 2).value = scHeaders[i];
     }
@@ -592,7 +597,7 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
     ['P&L', 'Income statement — engine-computed, churn & add-ons included'],
     ['Cash Flow & Debt', 'Free cash flow build and tranche-level debt schedule'],
     ['Returns', 'IRR, MOIC, value creation bridge, EBITDA waterfall'],
-    ['Scenarios', 'Bull / Base / Bear / Stress scenario comparison (if generated)'],
+    ['Scenarios', 'Bull / Base / Downside / Severe Downside scenario comparison (if generated)'],
     ['Risk', 'Exit reality check, credit analysis, covenant headroom, ECF'],
     ['Stress Testing', 'Fragility analysis — individual & combined stress scenarios'],
   ];
@@ -1452,7 +1457,6 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
   }
   addRet('DPI', ret.dpi, FMT_MULT, true);
   addRet('Payback Period (years)', ret.payback_years, '0.0');
-  addRet('Average Cash Yield', ret.cash_yield_avg, FMT_PCT, true);
   // Distribution metrics (shown when distributions exist)
   if (totalDist > 0) {
     addRet('Total Distributions', totalDist, FMT_CCY);
@@ -1836,7 +1840,7 @@ function buildScenariosSheet(wb: WB, state: ModelState, ccy: string) {
   // Scenario comparison
   if (state.scenarios.length) {
     row = writeSectionHeader(ws, row, 'SCENARIO COMPARISON', state.scenarios.length + 1);
-    const headers = ['Metric', ...state.scenarios.map(s => s.name.toUpperCase())];
+    const headers = ['Metric', ...state.scenarios.map(s => scenarioLabel(s.name))];
     for (let i = 0; i < headers.length; i++) {
       ws.getCell(row, i + 1).value = headers[i];
       ws.getColumn(i + 1).width = i === 0 ? 24 : 16;

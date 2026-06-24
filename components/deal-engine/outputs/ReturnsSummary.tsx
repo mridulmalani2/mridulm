@@ -103,27 +103,25 @@ const ReturnsSummary: React.FC = () => {
           <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Payback</div>
         </div>
         <div>
-          <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
-            {fmtPct(ret.cash_yield_avg)}
+          <div
+            className="text-lg font-semibold mb-0.5"
+            style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace", cursor: 'help' }}
+            title="DPI (distributions to paid-in): cumulative interim distributions ÷ entry equity realised during the hold. Exit proceeds are captured in MOIC."
+          >
+            {ret.dpi_by_year && ret.dpi_by_year.length ? fmtPct(ret.dpi_by_year[ret.dpi_by_year.length - 1]) : '0.0%'}
           </div>
-          <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Cash Yield</div>
+          <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>DPI</div>
         </div>
       </div>
 
-      {/* DPI / Distributions row (shown only when distributions exist) */}
+      {/* Distributions row (shown only when interim distributions exist; DPI lives in the row above) */}
       {(ret.total_distributions ?? 0) > 0 && (
-        <div className="grid grid-cols-3 gap-4 mt-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 12 }}>
+        <div className="grid grid-cols-2 gap-4 mt-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)', paddingTop: 12 }}>
           <div>
             <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
               {fmtCurrency(ret.total_distributions, currency)}
             </div>
             <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>Distributions</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
-              {ret.dpi_by_year && ret.dpi_by_year.length ? fmtPct(ret.dpi_by_year[ret.dpi_by_year.length - 1]) : '0%'}
-            </div>
-            <div className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>DPI</div>
           </div>
           <div>
             <div className="text-lg font-semibold mb-0.5" style={{ color: '#111111', fontFamily: "'JetBrains Mono', monospace" }}>
@@ -133,6 +131,11 @@ const ReturnsSummary: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modeling-convention caveat — guards against false precision (refactor plan §7.4) */}
+      <div className="mt-4 text-[9px] leading-snug" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>
+        Indicative · annual-period model, static rates · IRR carries ~±2–4pp methodology uncertainty.
+      </div>
     </div>
   );
 };

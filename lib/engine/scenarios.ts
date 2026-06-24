@@ -152,7 +152,7 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
     value_drivers: baseM.value_drivers,
   });
 
-  // Bear
+  // Downside (internal id 'bear')
   const bear = deepClone(state);
   bear.revenue.growth_rates = baseGrowth.map((g) => Math.max(g - 0.02, -0.1));
   bear.exit.exit_ebitda_multiple = Math.max(baseExitMult - 1.5, 1.0);
@@ -182,7 +182,7 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
     irr: bearM.irr,
     moic: bearM.moic,
     exit_equity: bearM.exitEquity,
-    description: 'Bear: -200bps growth, -1.5x exit multiple, 50% margin expansion.',
+    description: 'Downside: −200bps growth, −1.5x exit multiple, 50% margin expansion. Debt sized off downside forward EBITDA.',
     dscr_by_year: bearM.dscr_by_year,
     leverage_by_year: bearM.leverage_by_year,
     covenant_breach_year: bearM.covenant_breach_year,
@@ -216,7 +216,7 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
     value_drivers: bullM.value_drivers,
   });
 
-  // Stress
+  // Severe Downside (internal id 'stress')
   const stress = deepClone(state);
   const stressGrowth: number[] = [];
   for (let t = 0; t < hp; t++) {
@@ -242,7 +242,7 @@ export function generateScenarios(state: ModelState): ScenarioSet[] {
     irr: stressM.irr,
     moic: stressM.moic,
     exit_equity: stressM.exitEquity,
-    description: 'Stress: 0% growth yr1-2, halved thereafter, -1.0x exit multiple, flat margin.',
+    description: 'Severe downside: 0% growth yr1-2, halved thereafter, −1.0x exit multiple, flat margin.',
     dscr_by_year: stressM.dscr_by_year,
     leverage_by_year: stressM.leverage_by_year,
     covenant_breach_year: stressM.covenant_breach_year,

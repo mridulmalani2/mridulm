@@ -9,6 +9,15 @@ const SCENARIO_ACCENT: Record<string, string> = {
   stress: '#b91c1c',
 };
 
+// Display labels avoid "Bear"/"Stress" — those imply correlated, probabilistic
+// stress testing; these scenarios are deterministic perturbations (refactor plan §7.2).
+const SCENARIO_LABEL: Record<string, string> = {
+  bear: 'Downside',
+  base: 'Base',
+  bull: 'Bull',
+  stress: 'Severe Downside',
+};
+
 const ScenarioPanel: React.FC = () => {
   const scenarios = useDealEngineStore((s) => s.scenarios);
   const loadScenarios = useDealEngineStore((s) => s.loadScenarios);
@@ -24,8 +33,16 @@ const ScenarioPanel: React.FC = () => {
 
   return (
     <div className="p-5 mb-3" style={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)' }}>
-      <div className="text-[10px] font-medium tracking-widest uppercase mb-4" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
-        Scenarios
+      <div className="flex items-center gap-1.5 mb-4">
+        <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+          Scenarios
+        </span>
+        <span
+          title="Deterministic perturbations of the base case (growth, exit multiple, margin) — not correlated or probabilistic stress tests. Downside and Severe Downside size debt off their own forward EBITDA; each card shows survival and covenant-breach checks."
+          style={{ cursor: 'help', color: 'rgba(17,17,17,0.3)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}
+        >
+          ⓘ
+        </span>
       </div>
       <div className="grid grid-cols-4 gap-3">
         {['bear', 'base', 'bull', 'stress'].map((name) => {
@@ -36,7 +53,7 @@ const ScenarioPanel: React.FC = () => {
           return (
             <div key={name} className="p-3" style={{ background: '#F9F9F7', border: '1px solid rgba(17,17,17,0.08)', borderTop: `2px solid ${accent}` }}>
               <div className="text-[9px] font-medium tracking-widest uppercase mb-2.5" style={{ color: accent, fontFamily: "'JetBrains Mono', monospace" }}>
-                {name}
+                {SCENARIO_LABEL[name] ?? name}
               </div>
               <div className="font-playfair text-2xl font-bold mb-1" style={{ color: irrColor(sc.irr) }}>
                 {sc.irr != null ? fmtPct(sc.irr) : 'N/C'}
