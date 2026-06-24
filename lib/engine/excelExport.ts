@@ -4,8 +4,8 @@ import type {
   ModelState,
   AnnualProjectionYear,
 } from '../dealEngineTypes';
-import { solveIrr } from './returns';
 import { oidAmortByYear, oidTotal } from './oid';
+import { generateSensitivityTable } from './scenarios';
 
 let ExcelJS: typeof import('exceljs') | null = null;
 
@@ -268,64 +268,6 @@ interface PLRefs {
 
 const ASHEET = "'Assumptions'";
 const PLSHEET = "'P&L'";
-
-// ── Sensitivity helpers ──────────────────────────────────────────────────
-
-/**
- * Fast IRR computation for a given entry × exit multiple combination.
- * Holds all operating assumptions fixed (debt, exit EBITDA, fees) and only
- * varies the multiple — the standard "quick sensitivity" methodology used
- * in investment banking pitch books and IC memos.
- */
-function irrForMultiples(state: ModelState, entryMult: number, exitMult: number): number | null {
-  const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-  const totalDebt = state.entry.total_debt_raised;
-  const su = state.sources_and_uses;
-  const entryFees = su.transaction_fees + su.financing_fees;
-  const exitEbitda = state.exit.exit_ebitda;
-  const exitNetDebt = state.returns.exit_net_debt;
-  const mip = state.returns.mip_payout;
-  const exitFeePct = state.fees.exit_fee_pct;
-  const hp = state.exit.holding_period;
-  const distributions = (state.exit.interim_distributions ?? []).reduce((a, b) => a + b, 0);
-
-  const entryEV = entryEbitda * entryMult;
-  const entryEq = entryEV - totalDebt - entryFees;
-  if (entryEq <= 0) return null;
-
-  const exitEV = exitEbitda * exitMult;
-  const exitEq = exitEV - exitNetDebt - exitFeePct * exitEV - mip + distributions;
-  if (exitEq <= 0) return null;
-
-  const cfs = [-entryEq, ...Array(hp - 1).fill(0), exitEq];
-  return solveIrr(cfs);
-}
-
-function moicForMultiples(state: ModelState, entryMult: number, exitMult: number): number | null {
-  const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-  const totalDebt = state.entry.total_debt_raised;
-  const su = state.sources_and_uses;
-  const entryFees = su.transaction_fees + su.financing_fees;
-  const exitEbitda = state.exit.exit_ebitda;
-  const exitNetDebt = state.returns.exit_net_debt;
-  const mip = state.returns.mip_payout;
-  const exitFeePct = state.fees.exit_fee_pct;
-  const distributions = (state.exit.interim_distributions ?? []).reduce((a, b) => a + b, 0);
-
-  const entryEV = entryEbitda * entryMult;
-  const entryEq = entryEV - totalDebt - entryFees;
-  if (entryEq <= 0) return null;
-
-  const exitEV = exitEbitda * exitMult;
-  const exitEq = exitEV - exitNetDebt - exitFeePct * exitEV - mip + distributions;
-  return exitEq / entryEq;
-}
-
-/** Build a range of multiples centered on the base, stepped by `step`. */
-function multRange(base: number, steps: number, step: number): number[] {
-  const half = Math.floor(steps / 2);
-  return Array.from({ length: steps }, (_, i) => Math.round((base + (i - half) * step) * 4) / 4);
-}
 
 // ── Main Export ──────────────────────────────────────────────────────────
 
@@ -1689,12 +1631,18 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
   row += 2;
 
   // ── IRR Sensitivity: Entry × Exit EBITDA Multiple ──────────────────────
-  // Standard IC / pitch-book 2-D sensitivity table. Computes IRR analytically
-  // (one solveIrr call per cell) — fast; no full recalc required.
+  // Sourced directly from the engine's own sensitivity tables (table 3:
+  // entry_multiple × exit_multiple) — the exact grid the on-screen heatmap
+  // renders, where every cell is a full model re-run. Excel and UI are therefore
+  // identical, not two approximations. Fall back to computing the engine table
+  // here if the store has not populated state.sensitivity_tables yet.
   const baseEntry = state.entry.entry_ebitda_multiple;
   const baseExit = state.exit.exit_ebitda_multiple;
-  const entryMults = multRange(baseEntry, 5, 0.5);
-  const exitMults  = multRange(baseExit,  5, 0.5);
+  const entryExit = state.sensitivity_tables.find(
+    (t) => t.row_variable === 'entry_multiple' && t.col_variable === 'exit_multiple',
+  ) ?? generateSensitivityTable(state, 3);
+  const entryMults = entryExit.row_values;
+  const exitMults = entryExit.col_values;
   const nCols = exitMults.length + 1; // +1 for row-header column
 
   row = writeSectionHeader(ws, row, 'IRR SENSITIVITY  —  Entry EBITDA Multiple × Exit EBITDA Multiple', nCols + 1);
@@ -1720,7 +1668,7 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
 
     for (let j = 0; j < exitMults.length; j++) {
       const xm = exitMults[j];
-      const irr = irrForMultiples(state, em, xm);
+      const irr = entryExit.irr_matrix[i]?.[j] ?? null;
       const isBaseCell = isBaseRow && Math.abs(xm - baseExit) < 0.26;
       const cell = ws.getCell(row, j + 2);
       cell.value = irr;
@@ -1782,7 +1730,7 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
 
     for (let j = 0; j < exitMults.length; j++) {
       const xm = exitMults[j];
-      const moic = moicForMultiples(state, em, xm);
+      const moic = entryExit.moic_matrix[i]?.[j] ?? null;
       const isBaseCell = isBaseRow && Math.abs(xm - baseExit) < 0.26;
       const cell = ws.getCell(row, j + 2);
       cell.value = moic ?? null;
