@@ -262,7 +262,11 @@ export function buildDebtSchedule(
       const endingDebt = balances.reduce((s, b) => s + b, 0);
       const ebitdaAdj = projYr ? projYr.ebitda_adj : 0;
       const debtService = totalCashInterest + totalCommitmentFees + totalMandatoryAmort;
-      const levr = ebitdaAdj > 0 ? endingDebt / ebitdaAdj : Infinity;
+      // Net leverage basis — cash available before the distribution nets against
+      // debt, the same Net Debt / EBITDA definition as the displayed covenant
+      // metrics, so a block always aligns with the displayed leverage breach.
+      const netDebtForBlock = Math.max(0, endingDebt - Math.max(0, cashPostService));
+      const levr = ebitdaAdj > 0 ? netDebtForBlock / ebitdaAdj : Infinity;
       const dscr = debtService > 0 ? fcfPreDebt / debtService : Infinity;
       if (cov!.distribution_block_leverage != null && levr > cov!.distribution_block_leverage) distBlocked = true;
       if (cov!.distribution_block_dscr != null && dscr < cov!.distribution_block_dscr) distBlocked = true;
@@ -323,9 +327,12 @@ export function buildDebtSchedule(
 
     totalDebtByYear.push(totDebt);
     // Net debt = gross debt − actual cash on balance sheet (not a conceptual reserve).
-    netDebtByYear.push(Math.max(0, totDebt - cashHeld));
-    // Use 9999 sentinel when EBITDA ≤ 0 — returning 0 is misleading (implies no debt).
-    leverageByYear.push(ebitdaAdj > 0 ? totDebt / ebitdaAdj : 9999);
+    const netDebt = Math.max(0, totDebt - cashHeld);
+    netDebtByYear.push(netDebt);
+    // Leverage covenant basis is NET debt / EBITDA — cash nets against debt, the
+    // standard LBO total-net-leverage convention (matches creditAnalysis and the
+    // cash-trap block). 9999 sentinel when EBITDA ≤ 0 — returning 0 is misleading.
+    leverageByYear.push(ebitdaAdj > 0 ? netDebt / ebitdaAdj : 9999);
     // 9999 = "no interest / no debt service" sentinel; capped in display layer.
     coverageByYear.push(totCashInt > 0 ? ebitdaAdj / totCashInt : 9999);
     dscrByYear.push(debtService > 0 ? fcfPre / debtService : 9999);

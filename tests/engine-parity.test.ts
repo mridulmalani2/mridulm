@@ -46,6 +46,20 @@ describe('engine invariants (all canonical deals)', () => {
         }
       });
 
+      it('per-year leverage is NET debt / EBITDA in both series (debt schedule + credit analysis)', () => {
+        for (let i = 0; i < hp; i++) {
+          const ebitda = s.projections.years[i].ebitda_adj;
+          if (ebitda <= 0) continue; // sentinel territory
+          const expected = ds.net_debt_by_year[i] / ebitda;
+          expect(Math.abs(ds.leverage_ratio_by_year[i] - expected)).toBeLessThan(1e-6);
+          expect(Math.abs(s.credit_analysis.metrics_by_year[i].leverage - expected)).toBeLessThan(1e-6);
+          // …and strictly below the gross ratio whenever cash is on hand.
+          if ((ds.cash_balance_by_year[i] ?? 0) > 0) {
+            expect(ds.leverage_ratio_by_year[i]).toBeLessThan(ds.total_debt_by_year[i] / ebitda + 1e-9);
+          }
+        }
+      });
+
       it('does not leak synthetic add-on tranches into the input state', () => {
         expect(s.debt_tranches.some((t) => t._synthetic_addon)).toBe(false);
       });

@@ -74,6 +74,7 @@ export function computeCreditAnalysis(
     const mandatoryAmort = debtSchedule.total_mandatory_amort_by_year[i] || 0;
     const totalRepayment = debtSchedule.total_repayment_by_year[i] || 0;
     const totalDebt = debtSchedule.total_debt_by_year[i] || 0;
+    const netDebt = debtSchedule.net_debt_by_year[i] || 0;
     const commitmentFees = debtSchedule.total_commitment_fees_by_year[i] || 0;
 
     // Mandatory debt service includes commitment fees — they are a real recurring cash cost.
@@ -96,8 +97,9 @@ export function computeCreditAnalysis(
     const fcfPreDebt = yr.fcf_pre_debt;
     const dscr = mandatoryDebtService > 0 ? fcfPreDebt / mandatoryDebtService : 9999;
 
-    // Leverage: Net Debt / EBITDA; 9999 sentinel when EBITDA ≤ 0 (distressed).
-    const leverage = yr.ebitda_adj > 0 ? totalDebt / yr.ebitda_adj : 9999;
+    // Leverage: Net Debt / EBITDA (cash nets against debt — the standard LBO
+    // total-net-leverage covenant basis); 9999 sentinel when EBITDA ≤ 0 (distressed).
+    const leverage = yr.ebitda_adj > 0 ? netDebt / yr.ebitda_adj : 9999;
 
     // Senior leverage = sum of ALL first-lien/senior tranche balances (filter by
     // type, not array position). Using position [0] mis-reported senior leverage

@@ -58,14 +58,16 @@ describe('P4-4 PIK toggle', () => {
 
 describe('P4-13 cash-trap / dividend restriction', () => {
   function distDeal(): ModelState {
-    const s = canonicalDeals[0].build(); // senior 80 bullet, EBITDA ~22 ⇒ leverage > 3x
+    // senior 80 bullet, EBITDA ~22; net leverage at the year-2 decision point
+    // (cash before the distribution nets against debt) is ~2.4x.
+    const s = canonicalDeals[0].build();
     s.exit.interim_distributions = [0, 3, 0, 0, 0];
     return s;
   }
 
   it('blocks the distribution when leverage breaches the trigger', () => {
     const s = distDeal();
-    s.credit_covenants = { ...s.credit_covenants, distribution_block_leverage: 3.0 };
+    s.credit_covenants = { ...s.credit_covenants, distribution_block_leverage: 2.0 };
     const out = fullRecalc(s);
     expect(out.debt_schedule.distributions_paid_by_year[1]).toBe(0);
     expect(out.debt_schedule.distribution_blocked_by_year[1]).toBe(true);
@@ -81,7 +83,7 @@ describe('P4-13 cash-trap / dividend restriction', () => {
   });
 
   it('blocking retains cash on the balance sheet vs the unblocked case', () => {
-    const blocked = fullRecalc((() => { const s = distDeal(); s.credit_covenants = { ...s.credit_covenants, distribution_block_leverage: 3.0 }; return s; })());
+    const blocked = fullRecalc((() => { const s = distDeal(); s.credit_covenants = { ...s.credit_covenants, distribution_block_leverage: 2.0 }; return s; })());
     const paid = fullRecalc((() => { const s = distDeal(); s.credit_covenants = { ...s.credit_covenants, distribution_block_leverage: 10.0 }; return s; })());
     expect(blocked.debt_schedule.cash_balance_by_year[1]).toBeGreaterThan(paid.debt_schedule.cash_balance_by_year[1]);
   });
