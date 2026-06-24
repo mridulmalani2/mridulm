@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ExcelJS from 'exceljs';
 import { fullRecalc } from '../lib/engine/index';
-import { generateSensitivityTable } from '../lib/engine/scenarios';
+import { generateSensitivityTable, generateAllSensitivityTables } from '../lib/engine/scenarios';
 import { canonicalDeals } from './fixtures/canonicalDeals';
 
 /**
@@ -193,6 +193,30 @@ describe('WS2: Excel sensitivity grid equals the engine (UI == Excel)', () => {
         const xlMoic = moicGrid!.values[i][j];
         expect(xlMoic).not.toBeNull();
         expect(Math.abs((xlMoic as number) - engineMoic)).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it('uses the store-populated sensitivity_tables when present (the live export path)', async () => {
+    // The store's exportExcel pre-populates state.sensitivity_tables via
+    // generateAllSensitivityTables before calling buildExcel. Confirm the
+    // workbook reads those tables (identical grid), not only the lazy fallback.
+    const { buildExcel } = await import('../lib/engine/excelExport');
+    const s = fullRecalc(canonicalDeals[0].build());
+    s.sensitivity_tables = generateAllSensitivityTables(s);
+    const table = s.sensitivity_tables.find(
+      (t) => t.row_variable === 'entry_multiple' && t.col_variable === 'exit_multiple',
+    )!;
+    const wb = await loadWorkbook(await buildExcel(s));
+    const irrGrid = readGrid(wb, 'IRR SENSITIVITY');
+    expect(irrGrid).not.toBeNull();
+    expect(irrGrid!.values.length).toBe(table.irr_matrix.length);
+    for (let i = 0; i < table.irr_matrix.length; i++) {
+      for (let j = 0; j < table.col_values.length; j++) {
+        const eng = table.irr_matrix[i][j];
+        const xl = irrGrid!.values[i][j];
+        if (eng == null) expect(xl).toBeNull();
+        else expect(Math.abs((xl as number) - eng)).toBeLessThan(1e-9);
       }
     }
   });
