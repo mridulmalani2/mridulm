@@ -200,6 +200,19 @@ describe('Bug 4 — resizeJuniorToDebt flexes the junior tranche by seniority, n
   });
 });
 
+describe('Clean-room — three-statement closes for an all-equity (no-debt) deal', () => {
+  it('accumulates retained FCF as cash and balances, with no debt to absorb it', () => {
+    const s = canonicalDeals[0].build();
+    s.debt_tranches = []; // all-equity buyout
+    const out = fullRecalc(s);
+    expect(out.balance_sheet.closes).toBe(true);
+    // Cash must roll forward (FCF has nowhere else to go without debt to sweep).
+    const lastCash = out.debt_schedule.cash_balance_by_year[out.exit.holding_period - 1];
+    expect(lastCash).toBeGreaterThan(0);
+    expect(out.debt_schedule.net_debt_by_year[0]).toBe(0);
+  });
+});
+
 describe('Bug 3 — recovery waterfall ignores EBITDA≤0 sentinel years', () => {
   it('selects a positive-EBITDA default year and does not collapse recovery to zero', () => {
     const s = canonicalDeals[0].build();
