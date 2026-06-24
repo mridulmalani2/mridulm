@@ -147,6 +147,31 @@ describe('P1-4 senior leverage sums senior-type tranches, not array position', (
   });
 });
 
+describe('engine unity: one solver, three callers (WS1)', () => {
+  // fullRecalc (index.ts), the base scenario (scenarios.ts → runFullModel) and the
+  // fragility base case (fragility.ts → quickCalc) all run the SAME convergence loop
+  // in lib/engine/converge.ts. On identical assumptions they must produce identical
+  // returns — not merely close. This is the guard that keeps the extracted solver
+  // from silently diverging again.
+  for (const deal of canonicalDeals) {
+    describe(deal.name, () => {
+      const full = fullRecalc(deal.build());
+      const baseScenario = generateScenarios(deal.build()).find((sc) => sc.name === 'base')!;
+
+      it('base scenario IRR/MOIC/exit-equity equal fullRecalc', () => {
+        expect(Math.abs((baseScenario.irr ?? 0) - (full.returns.irr ?? 0))).toBeLessThan(1e-9);
+        expect(Math.abs(baseScenario.moic - full.returns.moic)).toBeLessThan(1e-9);
+        expect(Math.abs(baseScenario.exit_equity - full.returns.exit_equity)).toBeLessThan(1e-6);
+      });
+
+      it('fragility base IRR/MOIC equal fullRecalc', () => {
+        expect(Math.abs((full.fragility.base_irr ?? 0) - (full.returns.irr ?? 0))).toBeLessThan(1e-9);
+        expect(Math.abs(full.fragility.base_moic - full.returns.moic)).toBeLessThan(1e-9);
+      });
+    });
+  }
+});
+
 describe('regression: simple bullet deal stays in a sane range', () => {
   const s = fullRecalc(canonicalDeals[0].build());
   it('IRR is positive and MOIC is plausible', () => {
