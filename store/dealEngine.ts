@@ -382,7 +382,7 @@ Be specific. Use the company name to infer business type and calibrate according
             aiMs.exit.exit_ebitda_multiple = Math.max(3, Math.min(30, aiMs.exit.exit_ebitda_multiple));
 
             const aiState = fullRecalc(aiMs);
-            set({ modelState: aiState, isCalculating: false });
+            set({ modelState: aiState, isCalculating: false, startScreen: 'model' });
             // Fire panel insights in background (non-blocking)
             get().refreshPanelInsights();
             return;
@@ -392,7 +392,7 @@ Be specific. Use the company name to infer business type and calibrate according
         }
       }
 
-      set({ modelState: initialResult, isCalculating: false });
+      set({ modelState: initialResult, isCalculating: false, startScreen: 'model' });
       // Fire panel insights if API key available (non-blocking)
       if (get().apiKey) get().refreshPanelInsights();
     } catch (e: unknown) {

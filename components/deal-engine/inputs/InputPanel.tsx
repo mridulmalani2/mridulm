@@ -56,6 +56,7 @@ const InputPanel: React.FC = () => {
   const updateField = useDealEngineStore((s) => s.updateField);
   const addTranche = useDealEngineStore((s) => s.addTranche);
   const removeTranche = useDealEngineStore((s) => s.removeTranche);
+  const prov = useDealEngineStore((s) => s.provenanceMap);
   const [showDistributions, setShowDistributions] = useState(false);
 
   if (!ms) return null;
@@ -161,21 +162,45 @@ const InputPanel: React.FC = () => {
   const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[ms.currency ?? 'GBP'] ?? '£';
   const entryMultWarn = ms.entry.entry_ebitda_multiple > 15 ? 'High entry — flag for IC' : undefined;
   const levWarn = ms.entry.leverage_ratio > 7 ? 'Covenant breach risk' : undefined;
+  const driver = ms.entry.entry_valuation_driver ?? 'multiple';
 
   return (
     <div
       className="h-full overflow-y-auto flex-shrink-0"
       style={{ width: 320, background: '#ffffff', borderRight: '1px solid rgba(17,17,17,0.1)' }}
     >
-      {/* Entry */}
+      {/* Entry — assumptions + extracted facts (with provenance); EV/multiple is single-driver */}
       <Section title="Entry">
         <InputField label="Deal Name" path="deal_name" value={ms.deal_name} type="text" />
         <InputField label="Sector" path="sector" value={ms.sector} type="select" options={SECTORS} />
         <InputField label="Currency" path="currency" value={ms.currency} type="select" options={CURRENCIES} />
-        <InputField label="LTM Revenue" path="revenue.base_revenue" value={ms.revenue.base_revenue} suffix={`${csym}m`} />
-        <InputField label="EBITDA Margin" path="margins.base_ebitda_margin" value={ms.margins.base_ebitda_margin} suffix="%" step={0.01} />
-        <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} />
-        <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => v.toFixed(1)} />
+        <InputField label="LTM Revenue" path="revenue.base_revenue" value={ms.revenue.base_revenue} suffix={`${csym}m`} provenance={prov['revenue.base_revenue']} />
+        <InputField label="EBITDA Margin" path="margins.base_ebitda_margin" value={ms.margins.base_ebitda_margin} suffix="%" step={0.01} provenance={prov['margins.base_ebitda_margin']} />
+
+        {/* Single valuation driver: one of {multiple, EV} is the input, the other read-only derived */}
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>Set entry by</span>
+          <div className="flex" style={{ border: '1px solid rgba(17,17,17,0.15)' }}>
+            {(['multiple', 'ev'] as const).map((d) => (
+              <button key={d} onClick={() => updateField('entry.entry_valuation_driver', d)}
+                className="px-2 py-0.5 text-[9px] tracking-widest uppercase transition-colors"
+                style={{ background: driver === d ? '#111' : 'transparent', color: driver === d ? '#fff' : 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {d === 'ev' ? 'EV' : 'Multiple'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {driver === 'multiple' ? (
+          <>
+            <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} provenance={prov['entry.entry_ebitda_multiple']} />
+            <InputField label="Enterprise Value (derived)" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => v.toFixed(1)} readOnly />
+          </>
+        ) : (
+          <>
+            <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => v.toFixed(1)} provenance={prov['entry.enterprise_value']} />
+            <InputField label="Entry Multiple (derived)" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" formatter={(v) => v.toFixed(2)} readOnly />
+          </>
+        )}
       </Section>
 
       {/* Debt Structure */}

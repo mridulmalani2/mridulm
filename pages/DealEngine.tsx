@@ -4,6 +4,8 @@ import { useDealEngineStore } from '../store/dealEngine';
 import { getInputTemplate, getAiPrompt } from '../lib/importTemplate';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
+import SourceScreen from '../components/deal-engine/start/SourceScreen';
+import AssumptionsReview from '../components/deal-engine/start/AssumptionsReview';
 import ReturnsSummary from '../components/deal-engine/outputs/ReturnsSummary';
 import FundReturnsPanel from '../components/deal-engine/outputs/FundReturnsPanel';
 import SponsorReturnsDetail from '../components/deal-engine/outputs/SponsorReturnsDetail';
@@ -128,7 +130,7 @@ const SuggestionsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   </div>
 );
 
-const InitializeForm: React.FC = () => {
+const InitializeForm: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const initializeModel = useDealEngineStore((s) => s.initializeModel);
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
@@ -188,14 +190,24 @@ const InitializeForm: React.FC = () => {
         {/* ── Left: editorial explanation — below form on mobile ──────── */}
         <div className="flex-1 order-2 lg:order-1 pb-8 lg:py-12">
           {/* Back link */}
-          <div className="mb-5">
-            <Link
-              to="/"
-              className="text-[10px] tracking-widest uppercase transition-colors hover:text-[#111]"
-              style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", textDecoration: 'none' }}
-            >
-              ← mridulmalani.com
-            </Link>
+          <div className="mb-5 flex items-center gap-4">
+            {onBack ? (
+              <button
+                onClick={onBack}
+                className="text-[10px] tracking-widest uppercase transition-colors hover:text-[#111]"
+                style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                ← back to EDGAR search
+              </button>
+            ) : (
+              <Link
+                to="/"
+                className="text-[10px] tracking-widest uppercase transition-colors hover:text-[#111]"
+                style={{ color: 'rgba(17,17,17,0.35)', fontFamily: "'JetBrains Mono', monospace", textDecoration: 'none' }}
+              >
+                ← mridulmalani.com
+              </Link>
+            )}
           </div>
 
           <div className="border-t-[3px] border-[#111] mb-6" />
@@ -516,6 +528,7 @@ type OutputTab = 'returns' | 'su' | 'debt' | 'balancesheet' | 'credit' | 'fragil
 
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
+  const startScreen = useDealEngineStore((s) => s.startScreen);
   const apiKey = useDealEngineStore((s) => s.apiKey);
   const clearApiKey = useDealEngineStore((s) => s.clearApiKey);
   const traceModeActive = useDealEngineStore((s) => s.traceModeActive);
@@ -528,6 +541,7 @@ const DealEngine: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(true);
   const [inputPanelOpen, setInputPanelOpen] = useState(false);
   const [showTraceHint, setShowTraceHint] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   );
@@ -545,7 +559,13 @@ const DealEngine: React.FC = () => {
     if (!isLargeScreen) setChatOpen(false);
   }, [isLargeScreen]);
 
-  if (!modelState) return <InitializeForm />;
+  // ── 3-screen start flow (Phase 1): Source → Assumptions review → Model ──
+  if (startScreen === 'assumptions') return <AssumptionsReview />;
+  if (startScreen !== 'model' || !modelState) {
+    return manualEntry
+      ? <InitializeForm onBack={() => setManualEntry(false)} />
+      : <SourceScreen onManual={() => setManualEntry(true)} />;
+  }
 
   const showInputPanel = isLargeScreen || inputPanelOpen;
 
