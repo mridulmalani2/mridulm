@@ -130,16 +130,19 @@ EDGAR:  Source ───importFromEdgar────┐
 Manual: Manual facts ─loadFromHistoricals┘   (edit + provenance, Build)              (inputs+assumptions left, outputs right)
 ```
 
-Both entry routes converge on **one** downstream by producing the same `RawHistoricals`: EDGAR
-extracts it (`edgar` provenance), manual entry types the identical factual surface
-(`manualHistoricals`, `user` provenance). The assumptions-review and model screens are shared
-verbatim — there is no second input path that could diverge.
+**All** entry routes converge on **one** downstream by producing the same `RawHistoricals`:
+SEC EDGAR (`edgar` provenance, `mapXbrl`), ESEF/Europe (`esef` provenance, `mapIfrs`), or manual
+entry (`user` provenance, `manualHistoricals`). The assumptions-review and model screens are
+shared verbatim — there is no second input path that could diverge. Adding a future source is
+just a new client + a mapper that emits `RawHistoricals`.
 
 | Concern | Where |
 |---|---|
-| SEC proxy (only server surface) | `api/edgar/[...path].ts` — User-Agent, SSRF allowlist, edge cache, throttle |
-| Typed EDGAR client + pure helpers | `lib/edgar/client.ts` (`searchCompanies`, `parseEdgarUrl`, `getCompanyFacts`, `getSubmissions`) |
-| XBRL → factual inputs | `lib/edgar/mapXbrl.ts` — tag-alias chains, single-FY alignment, per-field provenance, gaps |
+| Filings proxy (only server surface) | `api/edgar.ts` — single `/api/edgar?path=…` function. SSRF allowlist for SEC (`data.sec.gov`/`www.sec.gov`), ESEF (`filings.xbrl.org`) and GLEIF (`api.gleif.org`); compliant User-Agent, edge cache, streaming, throttle |
+| Typed SEC client + pure helpers | `lib/edgar/client.ts` (`searchCompanies`, `parseEdgarUrl`, `getCompanyFacts`, `getSubmissions`; shared `getJson`) |
+| Typed ESEF (Europe) client | `lib/edgar/esef.ts` — `searchEsefByName` (GLEIF name→LEI), `getEsefFilings`, `getEsefReport` (xBRL-JSON) |
+| US-GAAP → factual inputs | `lib/edgar/mapXbrl.ts` — tag-alias chains, single-FY alignment, per-field provenance, gaps |
+| IFRS (ESEF) → factual inputs | `lib/edgar/mapIfrs.ts` — the European analogue; ifrs-full alias chains, non-dimensional totals, `esef` provenance. Face-statement concepts extract cleanly; D&A/debt/NWC are often untagged → gaps |
 | Provenance / factual types | `lib/edgar/types.ts` (`RawHistoricals`, `SourcedValue`, `Provenance`, `ProvenanceMap`) |
 | Draft composition | `lib/edgar/buildModel.ts` — facts (EDGAR provenance) + sector-default assumptions ('default') |
 | Screens + badges | `components/deal-engine/start/{SourceScreen,AssumptionsReview}.tsx`, `inputs/ProvenanceBadge.tsx` |
