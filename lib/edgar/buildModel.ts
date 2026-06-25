@@ -125,7 +125,10 @@ export const FACTUAL_FIELD_PATHS = [
   'tax.nol_carryforward',
 ] as const;
 
-const userGap = (label: string): Provenance => ({ source: 'user', detail: `${label}: not in filings — please confirm` });
+// A factual field the filing didn't provide: flagged 'missing' (shown empty, never a guessed
+// value, never attributed to the user). The kept number is a neutral placeholder so the live
+// preview can still compute — it is NOT displayed; the field reads empty until the user fills it.
+const missingProv = (label: string): Provenance => ({ source: 'missing', detail: `${label}: not in the filing — enter a value` });
 const defaultProv = (detail: string): Provenance => ({ source: 'default', detail });
 
 /**
@@ -150,7 +153,7 @@ export function draftModelFromHistoricals(raw: RawHistoricals, opts: DraftOption
   // ── Factual inputs (from filings) ──
   const setFactual = (path: string, target: { set: (v: number) => void }, sv: SourcedValue | null, gapLabel: string, fallback: number) => {
     if (sv) { target.set(sv.value); prov[path] = sv.provenance; }
-    else { target.set(fallback); prov[path] = userGap(gapLabel); if (!raw.gaps.includes(gapLabel)) raw.gaps.push(gapLabel); }
+    else { target.set(fallback); prov[path] = missingProv(gapLabel); if (!raw.gaps.includes(gapLabel)) raw.gaps.push(gapLabel); }
   };
 
   setFactual('revenue.base_revenue', { set: (v) => { s.revenue.base_revenue = v; } }, raw.ltm_revenue, 'LTM revenue', 100);

@@ -41,6 +41,13 @@ describe('draftModelFromHistoricals', () => {
   it('defaults imported currency to USD', () => {
     expect(state.currency).toBe('USD');
   });
+
+  it("flags a factual field the filing lacks as 'missing' (never 'user'/guessed)", () => {
+    const gapped = { ...raw(), net_debt: null };
+    const { provenance } = draftModelFromHistoricals(gapped, { sector: 'Industrials' });
+    expect(provenance['entry.net_debt_at_entry'].source).toBe('missing');  // not 'user', not 'default'
+    expect(provenance['revenue.base_revenue'].source).toBe('edgar');       // present fields unaffected
+  });
 });
 
 describe('store import → review → build sequence', () => {

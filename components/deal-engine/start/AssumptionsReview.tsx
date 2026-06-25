@@ -33,10 +33,13 @@ const Row: React.FC<{
   step?: number;
 }> = ({ label, path, value, provenance, unit, pct, readOnly, options }) => {
   const editAssumption = useDealEngineStore((s) => s.editAssumption);
-  const display = pct && typeof value === 'number' ? (value * 100).toFixed(2) : (typeof value === 'number' ? String(value) : value);
-  const [local, setLocal] = useState(String(display));
+  // A 'missing' field (the filing didn't provide it) reads EMPTY — never a placeholder number —
+  // until the user types, at which point its provenance flips to 'user'.
+  const missing = provenance?.source === 'missing';
+  const fmt = (v: number | string) => (pct && typeof v === 'number' ? (v * 100).toFixed(2) : String(v));
+  const [local, setLocal] = useState(missing ? '' : fmt(value));
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => { setLocal(String(pct && typeof value === 'number' ? (value * 100).toFixed(2) : value)); }, [value, pct]);
+  useEffect(() => { setLocal(missing ? '' : fmt(value)); }, [value, pct, missing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const commit = useCallback((raw: string) => {
     setLocal(raw);
@@ -66,9 +69,10 @@ const Row: React.FC<{
       ) : (
         <input
           type="text" value={local} readOnly={readOnly}
+          placeholder={missing ? 'not in filing — enter a value' : undefined}
           onChange={(e) => commit(e.target.value)}
           className="w-full px-2 py-1.5 text-xs"
-          style={{ background: readOnly ? paper : '#fff', border: '1px solid rgba(17,17,17,0.12)', color: readOnly ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: mono, outline: 'none' }}
+          style={{ background: readOnly ? paper : '#fff', border: `1px solid ${missing ? 'rgba(185,28,28,0.35)' : 'rgba(17,17,17,0.12)'}`, color: readOnly ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: mono, outline: 'none' }}
         />
       )}
     </div>
