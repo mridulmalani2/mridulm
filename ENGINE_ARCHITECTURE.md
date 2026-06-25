@@ -125,9 +125,15 @@ after the user has seen and approved every input. `startScreen`
 (`'source' | 'assumptions' | 'model'`) in `store/dealEngine.ts` gates it.
 
 ```
-Source ──importFromEdgar──▶ Assumptions review ──buildModelFromDraft──▶ Model
-(pick a company)             (edit + provenance, Build)                  (assumptions left, outputs right)
+EDGAR:  Source ───importFromEdgar────┐
+                                     ├─▶ Assumptions review ──buildModelFromDraft──▶ Model
+Manual: Manual facts ─loadFromHistoricals┘   (edit + provenance, Build)              (inputs+assumptions left, outputs right)
 ```
+
+Both entry routes converge on **one** downstream by producing the same `RawHistoricals`: EDGAR
+extracts it (`edgar` provenance), manual entry types the identical factual surface
+(`manualHistoricals`, `user` provenance). The assumptions-review and model screens are shared
+verbatim — there is no second input path that could diverge.
 
 | Concern | Where |
 |---|---|
