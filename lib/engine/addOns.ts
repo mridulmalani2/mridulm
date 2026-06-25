@@ -139,6 +139,12 @@ export function injectAddOns(state: ModelState): { impact: AddOnImpact; original
 
   const impact = computeAddOnImpact(state);
   state.revenue.acquisition_revenue = impact.revenue_by_year;
+  // Phase 0C: surface each add-on's OWN EBITDA (at its margin, plus cost synergies) and its
+  // one-time integration cost so the projection build blends the correct margin and routes the
+  // integration cash through FCF + the tax base, instead of applying the parent margin to
+  // acquired revenue and burying integration/synergies in a display-only bridge.
+  state._addon_ebitda_by_year = impact.ebitda_by_year;
+  state._addon_integration_by_year = impact.integration_cost_by_year;
 
   const synthetic = buildAddOnDebtTranches(state, impact);
   if (synthetic.length) {

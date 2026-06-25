@@ -83,8 +83,8 @@ describe('clean-room: independent re-derivation matches the engine', () => {
       it('per-year FCF and debt/interest/net-debt identities hold', () => {
         for (let i = 0; i < hp; i++) {
           const y = ty(i);
-          // FCF pre-debt = EBITDA − tax − total capex − ΔNWC
-          expect(Math.abs(y.fcf_pre_debt - (y.ebitda_adj - y.tax - y.total_capex - y.delta_nwc))).toBeLessThan(1e-2);
+          // FCF pre-debt = EBITDA − tax − total capex − ΔNWC − one-time integration cost (0C)
+          expect(Math.abs(y.fcf_pre_debt - (y.ebitda_adj - y.tax - y.total_capex - y.delta_nwc - y.integration_cost))).toBeLessThan(1e-2);
           // total cash interest = Σ tranche cash interest
           const sumInt = ds.tranche_schedules.reduce((acc, tr) => acc + (tr[i]?.cash_interest ?? 0), 0);
           expect(Math.abs(sumInt - (ds.total_cash_interest_by_year[i] ?? 0))).toBeLessThan(1e-2);

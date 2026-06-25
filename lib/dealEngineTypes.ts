@@ -90,6 +90,10 @@ export interface RevenueAssumptions {
   base_revenue: number;
   growth_rates: number[];
   organic_growth: number[];
+  /** Add-on (bolt-on) revenue per hold year, FULLY GROWN to that year. Derived: injected by
+   *  `injectAddOns` from `add_on_acquisitions`. This is the add-on's own revenue path and is
+   *  added ON TOP of the organic business — it must NOT be compounded into the organic growth
+   *  base again (that double-counted it pre-Phase-0C). */
   acquisition_revenue: number[];
   churn_rate: number;
 }
@@ -205,6 +209,9 @@ export interface AnnualProjectionYear {
   /** §163(j) business interest disallowed (and carried forward) this year, or — when the
    *  interest tax shield is switched off — the interest denied deduction. 0 by default. (Phase 0A) */
   disallowed_interest: number;
+  /** One-time add-on integration cash cost expensed this year (Phase 0C). Deductible (reduces
+   *  the tax base) and a cash outflow in FCF, but excluded from adjusted EBITDA. 0 by default. */
+  integration_cost: number;
   net_income: number;
   nopat: number;
   maintenance_capex: number;
@@ -466,6 +473,14 @@ export interface ModelState {
   chat_history: ChatMessage[];
   // Transient: tracks which entry field was last edited for EV/Multiple sync
   _lastEditedEntryField?: 'multiple' | 'ev' | null;
+  /** Transient (Phase 0C): add-on EBITDA contribution per hold year — each bolt-on's revenue at
+   *  ITS OWN margin plus cost synergies. Injected by `injectAddOns`, consumed by the projection
+   *  build so consolidated EBITDA blends the add-on margin instead of the parent's. Recomputed
+   *  every recalc; never user-edited or persisted. */
+  _addon_ebitda_by_year?: number[];
+  /** Transient (Phase 0C): one-time add-on integration cash cost per hold year. Injected by
+   *  `injectAddOns`, flowed into FCF and the tax base in the projection build. */
+  _addon_integration_by_year?: number[];
 }
 
 export interface PendingEdit {

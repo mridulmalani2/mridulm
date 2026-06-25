@@ -77,6 +77,15 @@ off, `nol_carryforward = 0`, `minimum_tax_rate = 0`) reproduce the legacy inline
 | Fund net IRR / MOIC | LP cashflows after management fee + carry over preferred return | European (whole-fund) or American (deal-by-deal); fees a drag, net MOIC on invested (P4-2). | `fundReturns.ts` | `phase4` |
 | Value bridge | `Δrev + Δmargin + Δmultiple + Δdebt − fees_drag = exit_equity − entry_equity` | Distributions are LP cashflows, not value creation. `fees_drag` includes OID + monitoring termination. | `returns.ts decomposeValueDrivers` | — |
 
+## Add-on (bolt-on) economics (Phase 0C)
+
+| Metric | Formula | Convention / notes | Module | Test |
+|---|---|---|---|---|
+| Consolidated revenue | `organic + acquisition_revenue` | Organic (parent) revenue compounds at the growth rate; the add-on path is grown **once** by the add-on module and added on top — it is NOT re-compounded into the organic base (that double-counted it pre-0C). | `projections.ts`, `addOns.ts` | `addon-economics` |
+| Consolidated EBITDA | `organic_revenue × parent_margin + Σ add-on EBITDA + cost synergies` | Each add-on contributes EBITDA at **its own** margin (not the parent margin applied to acquired revenue); reported `ebitda_margin` is the blend `EBITDA / revenue`. | `projections.ts`, `addOns.ts` | `addon-economics` |
+| Integration cost | one-time, acquisition year: cash outflow in FCF and a deductible expense (reduces the tax base, **not** interest) | Kept out of adjusted EBITDA (exceptional); flows to both net income and cash so the BS still closes. Surfaced on `AnnualProjectionYear.integration_cost`. | `projections.ts`, `tax.ts` (`otherDeductions`) | `addon-economics` |
+| EBITDA bridge | `entry + organic_growth + margin_expansion + add_on_ebitda + cost_synergies = exit EBITDA` | Organic growth/margin walk the **parent** revenue and margin; add-on EBITDA (ex-synergies) and cost synergies are separate bars, so the walk reconciles exactly (it double-counted acquired revenue pre-0C). | `ebitdaBridge.ts` | `addon-economics` |
+
 ## Three-statement model
 
 | Metric | Formula | Convention / notes | Module | Test |

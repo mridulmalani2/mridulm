@@ -35,6 +35,9 @@ export interface TaxLineInput {
   /** Other amortised financing costs deductible this year (financing-fee amort + OID amort).
    *  These are interest for §163(j) purposes, so they share the interest-limitation base. */
   financingDeductions: number;
+  /** Non-interest deductible expenses this year (e.g. one-time add-on integration costs).
+   *  Reduce the tax base but are NOT subject to the §163(j) interest limitation. Default 0. */
+  otherDeductions?: number;
   /** EBITDA (monitoring-fee-adjusted) — used only when the §163(j) ATI basis is 'ebitda'. */
   ebitdaForAti: number;
 }
@@ -80,10 +83,11 @@ export function computeAnnualTax(
   run: TaxRunningState,
 ): TaxLineResult {
   const { ebit, interestExpense, financingDeductions, ebitdaForAti } = input;
+  const otherDeductions = input.otherDeductions ?? 0;
 
   // Book pretax income (drives net income / the P&L) — full interest always deducted here;
   // the tax *base* may differ when interest is limited below.
-  const ebt = ebit - interestExpense - financingDeductions;
+  const ebt = ebit - interestExpense - financingDeductions - otherDeductions;
 
   // Total business interest subject to the deductibility rules.
   const totalInterest = interestExpense + financingDeductions;
@@ -116,9 +120,11 @@ export function computeAnnualTax(
   }
 
   // ── (2) Taxable income before the NOL deduction ──
-  // With the shield on and §163(j) disabled (the default), deductibleInterest === totalInterest
-  // so this equals `ebt` exactly, preserving the historical tax base.
-  const taxableBeforeNol = ebit - deductibleInterest;
+  // With the shield on, §163(j) disabled and no other deductions (the default),
+  // deductibleInterest === totalInterest and otherDeductions === 0, so this equals `ebt`
+  // exactly, preserving the historical tax base. Other deductions (e.g. integration costs)
+  // reduce the base but are NOT interest, so they never enter the §163(j) limitation above.
+  const taxableBeforeNol = ebit - deductibleInterest - otherDeductions;
 
   // ── (3) NOL offset — post-2017 80%-of-taxable-income cap (pre-2017 NOLs offset 100%);
   //         optional §382 ownership-change annual limit ──

@@ -38,22 +38,34 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const finFeeAmort = hp > 0 ? financingFees / hp : 0;
   const oidAmort = oidAmortByYear(state); // non-cash, tax-deductible OID amort (P4-14)
 
-  let prevRevenue = baseRevenue;
+  // Track organic and total revenue separately (Phase 0C). The organic (parent) base is what
+  // compounds at the growth rate; add-on revenue is grown independently by the add-on module
+  // and added ON TOP — compounding the total again double-counted the add-on (pre-0C bug).
+  let prevOrganic = baseRevenue;
+  let prevTotal = baseRevenue;
   const years: AnnualProjectionYear[] = [];
 
   for (let t = 0; t < hp; t++) {
     const growth = state.revenue.growth_rates[t];
-    const acqRev = state.revenue.acquisition_revenue[t] || 0;
-    const churnDrag = state.revenue.churn_rate > 0 ? prevRevenue * state.revenue.churn_rate : 0;
+    const acqRev = state.revenue.acquisition_revenue[t] || 0;          // add-on revenue, already grown
+    const acqEbitda = state._addon_ebitda_by_year?.[t] ?? 0;           // add-on EBITDA at its own margin + cost synergies
+    const integrationCost = state._addon_integration_by_year?.[t] ?? 0; // one-time, acquisition year
+    // Churn hits the organic base; the add-on path is grown by the add-on module.
+    const churnDrag = state.revenue.churn_rate > 0 ? prevOrganic * state.revenue.churn_rate : 0;
 
-    const revenue = prevRevenue * (1 + growth) - churnDrag + acqRev;
+    const organicRevenue = prevOrganic * (1 + growth) - churnDrag;
+    const revenue = organicRevenue + acqRev;
     const margin = state.margins.margin_by_year[t];
 
-    const ebitda = revenue * margin;
+    // Consolidated EBITDA: organic revenue at the PARENT margin PLUS each add-on's own EBITDA
+    // (its revenue at its own margin) and cost synergies. The reported margin is the blend —
+    // not the parent margin applied to acquired revenue (the pre-0C error).
+    const ebitda = organicRevenue * margin + acqEbitda;
     // Monitoring-fee termination at exit (P4-11): the agreement terminates on sale, so
     // no monitoring fee in the final hold year.
     const monFeeThisYr = t === hp - 1 ? 0 : monitoringFee;
     const ebitdaAdj = ebitda - monFeeThisYr;
+    const ebitdaMargin = revenue > 0 ? ebitda / revenue : margin;
     const da = revenue * daPct;
     const ebit = ebitdaAdj - da;
 
@@ -78,6 +90,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
         ebit,
         interestExpense: interestEstimate,
         financingDeductions: finFeeAmort + (oidAmort[t] ?? 0),
+        otherDeductions: integrationCost, // one-time integration cost, deductible (Phase 0C)
         ebitdaForAti: ebitdaAdj,
       },
       state.tax,
@@ -101,10 +114,14 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       deltaNwc = explicit[t] ?? 0;
     } else {
       const prevMargin = t === 0 ? state.margins.base_ebitda_margin : state.margins.margin_by_year[t - 1];
-      deltaNwc = nwcBalance(revenue, margin, state.margins) - nwcBalance(prevRevenue, prevMargin, state.margins);
+      // NWC tracks the TOTAL business (organic + acquired), so the change is measured against
+      // the prior-year total revenue.
+      deltaNwc = nwcBalance(revenue, margin, state.margins) - nwcBalance(prevTotal, prevMargin, state.margins);
     }
 
-    const fcfPreDebt = ebitdaAdj - tax - totalCapex - deltaNwc;
+    // FCF pre-debt: adjusted EBITDA (clean) less cash tax, capex, ΔNWC and any one-time add-on
+    // integration cost (a real cash outflow, kept out of EBITDA but deductible above) (Phase 0C).
+    const fcfPreDebt = ebitdaAdj - tax - totalCapex - deltaNwc - integrationCost;
     // Operating FCF before growth investment (P4-6) = total FCF pre-debt + growth capex.
     const operatingFcfPreGrowth = fcfPreDebt + gCapex;
 
@@ -112,10 +129,10 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       year: t + 1,
       revenue,
       revenue_growth: growth,
-      organic_revenue: prevRevenue * (1 + growth),
+      organic_revenue: organicRevenue,
       acquisition_revenue: acqRev,
       ebitda,
-      ebitda_margin: margin,
+      ebitda_margin: ebitdaMargin,
       ebitda_adj: ebitdaAdj,
       da,
       ebit,
@@ -125,6 +142,7 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       tax,
       nol_used: nolUsage,
       disallowed_interest: taxLine.disallowedInterest,
+      integration_cost: integrationCost,
       net_income: netIncome,
       nopat,
       maintenance_capex: mCapex,
@@ -136,7 +154,8 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       fcf_to_equity: 0,
     });
 
-    prevRevenue = revenue;
+    prevOrganic = organicRevenue; // organic compounds; the add-on path is grown separately
+    prevTotal = revenue;
   }
 
   return years;
@@ -166,12 +185,14 @@ export function updateProjectionsWithDebt(
     const totalInterestExpense = actualCashInterest + actualPik;
 
     yr.interest_expense = totalInterestExpense;
-    // Re-run the shared tax line on the converged interest (same ordering as buildProjections).
+    // Re-run the shared tax line on the converged interest (same ordering as buildProjections),
+    // keeping the one-time integration cost deductible (Phase 0C).
     const taxLine = computeAnnualTax(
       {
         ebit: yr.ebit,
         interestExpense: totalInterestExpense,
         financingDeductions: finFeeAmort + (oidAmort[i] ?? 0),
+        otherDeductions: yr.integration_cost,
         ebitdaForAti: yr.ebitda_adj,
       },
       state.tax,
@@ -183,7 +204,7 @@ export function updateProjectionsWithDebt(
     yr.disallowed_interest = taxLine.disallowedInterest;
 
     yr.net_income = yr.ebt - yr.tax;
-    yr.fcf_pre_debt = yr.ebitda_adj - yr.tax - yr.total_capex - yr.delta_nwc;
+    yr.fcf_pre_debt = yr.ebitda_adj - yr.tax - yr.total_capex - yr.delta_nwc - yr.integration_cost;
     yr.operating_fcf_pre_growth_capex = yr.fcf_pre_debt + yr.growth_capex;
 
     const actualRepayment = i < totalRepaymentByYear.length ? totalRepaymentByYear[i] : 0;
