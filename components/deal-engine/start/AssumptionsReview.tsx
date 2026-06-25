@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import ProvenanceBadge from '../inputs/ProvenanceBadge';
 import type { Provenance } from '../../../lib/edgar/types';
+import { dependsOnMissing, anyFactualMissing } from '../../../lib/edgar/missing';
 
 /**
  * Screen 2 — Assumptions review (Phase 1). Two clearly-labelled groups:
@@ -99,7 +100,10 @@ const AssumptionsReview: React.FC = () => {
   const p = (path: string): Provenance | undefined => prov[path];
   // A factual field the filing lacked is rendered empty + MISSING; the model is not reachable until
   // every such field is confirmed (no guessed placeholder may silently feed the headline returns).
-  const hasMissing = Object.values(prov).some((pr) => pr?.source === 'missing');
+  const hasMissing = anyFactualMissing(prov);
+  // A derived figure computed from an unconfirmed placeholder is shown N/C, never the fabricated
+  // number (the taint map lives in lib/edgar/missing.ts so every surface gates identically).
+  const na = (path: string, formatted: string): string => (dependsOnMissing(prov, path) ? 'N/C' : formatted);
   // Label the factual source from the provenance of a core extracted field.
   const factSource = prov['revenue.base_revenue']?.source;
   const sourceLabel = factSource === 'esef' ? 'ESEF filings' : factSource === 'edgar' ? 'SEC EDGAR' : 'your inputs';
@@ -213,11 +217,11 @@ const AssumptionsReview: React.FC = () => {
               {driver === 'multiple'
                 ? <>
                     <Row label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} provenance={p('entry.entry_ebitda_multiple')} unit="x" />
-                    <Row label="Enterprise Value (derived)" path="entry.enterprise_value" value={Number(ms.entry.enterprise_value.toFixed(1))} unit={`${csym}m`} readOnly />
+                    <Row label="Enterprise Value (derived)" path="entry.enterprise_value" value={na('entry.enterprise_value', ms.entry.enterprise_value.toFixed(1))} unit={`${csym}m`} readOnly />
                   </>
                 : <>
                     <Row label="Enterprise Value" path="entry.enterprise_value" value={Number(ms.entry.enterprise_value.toFixed(1))} provenance={p('entry.enterprise_value')} unit={`${csym}m`} />
-                    <Row label="Entry Multiple (derived)" path="entry.entry_ebitda_multiple" value={Number(ms.entry.entry_ebitda_multiple.toFixed(2))} unit="x" readOnly />
+                    <Row label="Entry Multiple (derived)" path="entry.entry_ebitda_multiple" value={na('entry.entry_ebitda_multiple', ms.entry.entry_ebitda_multiple.toFixed(2))} unit="x" readOnly />
                   </>}
             </div>
 
@@ -234,7 +238,8 @@ const AssumptionsReview: React.FC = () => {
         {/* Live preview + Build */}
         <div className="mt-6 flex items-center justify-between flex-wrap gap-4 p-4" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
           <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
-            Implied: EV {csym}{ms.entry.enterprise_value.toFixed(0)}m · Entry equity {csym}{ms.returns.entry_equity.toFixed(0)}m · IRR {ms.returns.irr != null ? `${(ms.returns.irr * 100).toFixed(1)}%` : 'N/C'} · MOIC {ms.returns.moic.toFixed(2)}x
+            Implied: EV {na('entry.enterprise_value', `${csym}${ms.entry.enterprise_value.toFixed(0)}m`)} · Entry equity {na('returns.entry_equity', `${csym}${ms.returns.entry_equity.toFixed(0)}m`)} · IRR {na('returns.irr', ms.returns.irr != null ? `${(ms.returns.irr * 100).toFixed(1)}%` : 'N/C')} · MOIC {na('returns.moic', `${ms.returns.moic.toFixed(2)}x`)}
+            {hasMissing && <span style={{ color: '#b91c1c' }}> · fill MISSING inputs to compute</span>}
           </div>
           <button onClick={build} disabled={hasMissing}
             title={hasMissing ? 'Fill the MISSING fields before building' : undefined}

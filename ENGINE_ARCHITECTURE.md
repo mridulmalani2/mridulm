@@ -152,8 +152,12 @@ carries `edgar`/`esef` provenance and a filing link); forward/structure inputs a
 (`default` → `ai` → `user` as they are suggested/edited); outputs are computed. Nothing
 factual is silently defaulted — a field the filing genuinely lacks gets provenance `'missing'`
 (a red **MISSING** badge, rendered as an EMPTY input on Screen 2; a neutral placeholder is kept
-in `ModelState` only so the live preview computes, never shown and never tagged `'user'`). The
-provenance flips to `'user'` once the user fills it. The entry **EV ↔ multiple** relationship has a **single driver**
+in `ModelState` only so the engine solve doesn't divide-by-zero, never shown and never tagged
+`'user'`). The provenance flips to `'user'` once the user fills it. **Taint:** the invariant is "no
+value DERIVED from an unconfirmed input is presented as real" — a displayed figure computed from a
+`'missing'` placeholder shows **N/C**, gated by one shared dependency map (`lib/edgar/missing.ts`):
+EV/multiple depend on revenue+margin; implied returns are N/C if any factual input is missing; the
+AI-suggest prompt omits missing facts; Build is blocked until all are filled. The entry **EV ↔ multiple** relationship has a **single driver**
 (`entry.entry_valuation_driver`): one is the input, the other a read-only derived output —
 there is no bidirectional recompute.
 
