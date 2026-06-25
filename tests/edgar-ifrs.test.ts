@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { mapIfrsReport } from '../lib/edgar/mapIfrs';
-import type { XbrlJsonReport } from '../lib/edgar/esef';
+import { rankEsefMatches, type EsefTickerEntry, type XbrlJsonReport } from '../lib/edgar/esef';
 import sample from './fixtures/esef-report-sample.json';
 
 const report = sample as unknown as XbrlJsonReport;
@@ -45,6 +45,24 @@ describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
     expect(r.ltm_revenue?.provenance.tag).toBe('ifrs-full:Revenue');
     expect(r.ltm_revenue?.provenance.url).toContain('filings.xbrl.org');
     expect(r.gaps).toEqual([]);
+  });
+});
+
+describe('rankEsefMatches — searches the ESEF-filer universe (surfaces the listed parent)', () => {
+  const ENTITIES: EsefTickerEntry[] = [
+    { lei: '549300MKFYEKVRWML317', name: 'UNILEVER PLC' },
+    { lei: 'AAAA0000000000000001', name: 'UNILEVER FRANCE SAS' },
+    { lei: '213800WFQ334R8UXUG83', name: 'VINCI' },
+    { lei: '529900D6BF99LW9R2E68', name: 'SAP SE' },
+  ];
+  it('ranks the shorter/cleaner listed name first (the GLEIF-subsidiary bug)', () => {
+    const m = rankEsefMatches(ENTITIES, 'unilever');
+    expect(m[0].name).toBe('UNILEVER PLC');                 // the listed filer, not the subsidiary
+    expect(m.map((x) => x.lei)).toContain('AAAA0000000000000001'); // both still offered
+  });
+  it('ranks an exact name first and honours an empty query', () => {
+    expect(rankEsefMatches(ENTITIES, 'vinci')[0].name).toBe('VINCI');
+    expect(rankEsefMatches(ENTITIES, '  ')).toEqual([]);
   });
 });
 

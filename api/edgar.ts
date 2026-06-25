@@ -59,9 +59,11 @@ function resolveTarget(segments: string[]): Resolved | null {
   }
 
   // ── Europe (ESEF) ──
-  // GLEIF fuzzy name → LEI completion (free, keyless). Drives the European autocomplete.
-  if (endpoint === 'gleif' && rest.length === 1 && rest[0].length >= 2 && rest[0].length <= 120) {
-    return { url: `https://api.gleif.org/api/v1/fuzzycompletions?field=entity.legalName&q=${encodeURIComponent(rest[0])}`, sMaxAge: 86_400 };
+  // The full list of entities that have ESEF filings (~7k, ~3MB). Cached client-side and
+  // searched there, like SEC company_tickers — so every autocomplete hit is actually importable
+  // (GLEIF, by contrast, returns every legal entity, surfacing non-filing subsidiaries).
+  if (endpoint === 'esef-entities' && rest.length === 0) {
+    return { url: 'https://filings.xbrl.org/api/entities?page%5Bsize%5D=30000', sMaxAge: 86_400 };
   }
   // An entity's ESEF filings on filings.xbrl.org (keyed by LEI).
   if (endpoint === 'esef-filings' && rest.length === 1 && LEI_RE.test(rest[0])) {
@@ -115,7 +117,7 @@ export default async function handler(request: Request): Promise<Response> {
     });
 
     if (!upstream.ok) {
-      const detail = upstream.status === 404 ? 'Not found on EDGAR (unknown CIK or no such filing/concept).'
+      const detail = upstream.status === 404 ? 'Not found at the source (unknown identifier or no such filing).'
         : upstream.status === 403 ? 'EDGAR refused the request (User-Agent / rate policy).'
         : upstream.status === 429 ? 'EDGAR rate limit hit — please retry shortly.'
         : `EDGAR returned ${upstream.status}.`;

@@ -107,7 +107,7 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
             />
             {(matches.length > 0 || searching) && (
               <div className="absolute left-0 right-0 z-20 mt-1 max-h-72 overflow-y-auto" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.15)' }}>
-                {searching && <div className="px-3 py-2 text-[11px]" style={labelStyle}>Searching {isSec ? 'EDGAR' : 'GLEIF'}…</div>}
+                {searching && <div className="px-3 py-2 text-[11px]" style={labelStyle}>Searching {isSec ? 'EDGAR' : 'ESEF filers'}…</div>}
                 {matches.map((m) => (
                   <button key={m.id} onClick={m.onPick}
                     className="w-full text-left px-3 py-2 transition-colors hover:bg-[rgba(17,17,17,0.03)] flex items-center justify-between">

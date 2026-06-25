@@ -44,27 +44,49 @@ export interface EsefFiling {
   viewerUrl?: string;       // the inline-XBRL viewer
 }
 
-// ── Name → LEI (GLEIF fuzzy completion) ─────────────────────────────────────
+// ── Name → LEI search (over the entities that actually have ESEF filings) ────
+// We search the filings.xbrl.org entity universe (~7k) rather than GLEIF: GLEIF returns EVERY
+// legal entity, so a query like "Unilever" surfaces non-filing subsidiaries above the listed
+// parent. Here every match is guaranteed to have an ESEF report. Mirrors SEC company_tickers.
 
-interface GleifCompletion {
-  attributes?: { value?: string };
-  relationships?: { 'lei-records'?: { data?: { id?: string } } };
+export interface EsefTickerEntry { lei: string; name: string }
+
+interface EntitiesApiResponse { data?: { attributes?: { identifier?: string; name?: string } }[] }
+
+let entityCache: EsefTickerEntry[] | null = null;
+
+/** Fetch (and memoise) the full ESEF-filer list for client-side autocomplete. */
+export async function loadEsefEntities(): Promise<EsefTickerEntry[]> {
+  if (entityCache) return entityCache;
+  const res = await getJson<EntitiesApiResponse>('esef-entities');
+  entityCache = (res.data ?? [])
+    .map((e) => ({ lei: e.attributes?.identifier ?? '', name: e.attributes?.name ?? '' }))
+    .filter((e) => e.lei && e.name);
+  return entityCache;
 }
 
-/** Resolve a free-text company name to candidate {name, LEI} via GLEIF. Deduped by LEI. */
-export async function searchEsefByName(query: string, limit = 10): Promise<EsefEntityMatch[]> {
-  const q = query.trim();
-  if (q.length < 2) return [];
-  const res = await getJson<{ data?: GleifCompletion[] }>(`gleif/${q}`);
-  const out: EsefEntityMatch[] = [];
-  const seen = new Set<string>();
-  for (const c of res.data ?? []) {
-    const lei = c.relationships?.['lei-records']?.data?.id;
-    const name = c.attributes?.value;
-    if (lei && name && !seen.has(lei)) { seen.add(lei); out.push({ name, lei }); }
-    if (out.length >= limit) break;
+/** Deterministic fuzzy ranking over filer names: exact > prefix > word-boundary > substring. */
+export function rankEsefMatches(entities: EsefTickerEntry[], query: string, limit = 12): EsefEntityMatch[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const scored: { e: EsefTickerEntry; score: number }[] = [];
+  for (const e of entities) {
+    const name = e.name.toLowerCase();
+    let score = 0;
+    if (name === q) score = 1000;
+    else if (name.startsWith(q)) score = 800 - name.length;
+    else if (name.includes(` ${q}`)) score = 500 - name.length;
+    else if (name.includes(q)) score = 200 - name.length;
+    if (score > 0) scored.push({ e, score });
   }
-  return out;
+  scored.sort((a, b) => b.score - a.score || a.e.name.localeCompare(b.e.name));
+  return scored.slice(0, limit).map(({ e }) => ({ name: e.name, lei: e.lei }));
+}
+
+/** Resolve a free-text company name to candidate {name, LEI} from the ESEF-filer universe. */
+export async function searchEsefByName(query: string, limit = 12): Promise<EsefEntityMatch[]> {
+  if (query.trim().length < 2) return [];
+  return rankEsefMatches(await loadEsefEntities(), query, limit);
 }
 
 // ── Filings for an entity ───────────────────────────────────────────────────
@@ -104,13 +126,4 @@ export async function getEsefReport(jsonUrl: string): Promise<XbrlJsonReport> {
   const rel = jsonUrl.replace(/^\/+/, '');                 // strip leading slash(es)
   if (!rel.endsWith('.json')) throw new Error(`Unexpected ESEF report URL: ${jsonUrl}`);
   return getJson<XbrlJsonReport>(`esef-report/${rel}`);
-}
-
-/** Convenience: resolve an entity's latest report straight to its facts (+ the chosen filing). */
-export async function getLatestEsefReport(lei: string): Promise<{ filing: EsefFiling; report: XbrlJsonReport } | null> {
-  const filings = await getEsefFilings(lei);
-  if (!filings.length) return null;
-  const filing = filings[0];
-  const report = await getEsefReport(filing.jsonUrl);
-  return { filing, report };
 }

@@ -21,7 +21,7 @@ import type { AIProvider } from '../lib/engine/ai/providers';
 import { computeChangedTraceFields } from '../lib/traceMap';
 import { getCompanyFacts, getSubmissions, extractRecentFilings } from '../lib/edgar/client';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
-import { getLatestEsefReport } from '../lib/edgar/esef';
+import { getEsefFilings, getEsefReport } from '../lib/edgar/esef';
 import { mapIfrsReport } from '../lib/edgar/mapIfrs';
 import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
 import type { RawHistoricals, ProvenanceMap, Provenance } from '../lib/edgar/types';
@@ -810,17 +810,18 @@ Be specific. Use the company name to infer business type and calibrate according
   importFromEsef: async (lei, opts) => {
     set({ isCalculating: true, error: null });
     try {
-      const result = await getLatestEsefReport(lei);
-      if (!result) {
-        set({ error: 'No ESEF filing found for this entity on filings.xbrl.org — it may not be an EU/UK-listed issuer. Try another, or use Manual entry.', isCalculating: false });
+      const filings = await getEsefFilings(lei);
+      if (!filings.length) {
+        set({ error: 'No ESEF filing found for this entity — pick the listed parent (not a subsidiary), or use Manual entry.', isCalculating: false });
         return;
       }
-      const { filing, report } = result;
       const base = 'https://filings.xbrl.org';
-      const raw = mapIfrsReport(report, {
-        entityName: opts?.dealName ?? filing.entityName,
-        reportUrl: filing.viewerUrl ? `${base}${filing.viewerUrl}` : (filing.reportUrl ? `${base}${filing.reportUrl}` : undefined),
-      });
+      // Link to the rendered report (or the iXBRL viewer) so the user can open the filing to fill
+      // gaps (ESEF often leaves D&A / debt / working capital untagged).
+      const docUrl = (f: typeof filings[number]) => `${base}${f.reportUrl ?? f.viewerUrl ?? f.jsonUrl}`;
+      const filing = filings[0];
+      const report = await getEsefReport(filing.jsonUrl);
+      const raw = mapIfrsReport(report, { entityName: opts?.dealName ?? filing.entityName, reportUrl: docUrl(filing) });
       const sector = opts?.sector ?? 'Other';
       const { state, provenance } = draftModelFromHistoricals(raw, {
         dealName: opts?.dealName ?? filing.entityName ?? raw.entityName,
@@ -830,7 +831,7 @@ Be specific. Use the company name to infer business type and calibrate according
       set({
         rawHistoricals: raw,
         provenanceMap: provenance,
-        sourceFilings: filing.reportUrl ? [{ form: `ESEF · ${filing.country ?? ''}`.trim(), filingDate: filing.periodEnd, documentUrl: `${base}${filing.reportUrl}` }] : [],
+        sourceFilings: filings.slice(0, 3).map((f) => ({ form: `ESEF${f.country ? ' · ' + f.country : ''}`, filingDate: f.periodEnd, documentUrl: docUrl(f) })),
         modelState: recalc,
         startScreen: 'assumptions',
         isCalculating: false,
