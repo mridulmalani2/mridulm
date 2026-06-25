@@ -27,12 +27,16 @@ const InputField: React.FC<InputFieldProps> = ({
 }) => {
   void _aiToggleable; void _min; void _max; void _step;
   const updateField = useDealEngineStore((s) => s.updateField);
-  const [localVal, setLocalVal] = useState(String(value));
+  // A factual field the filing lacked: render EMPTY (the neutral placeholder in ModelState is never
+  // shown) with a MISSING badge. Editing it flips the source to 'user' (store.updateField), after
+  // which it displays normally — the same invariant the assumptions-review Row enforces.
+  const isMissing = provenance?.source === 'missing';
+  const [localVal, setLocalVal] = useState(isMissing ? '' : String(value));
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    setLocalVal(String(value));
-  }, [value]);
+    setLocalVal(isMissing ? '' : String(value));
+  }, [value, isMissing]);
 
   const handleChange = useCallback((newVal: string) => {
     setLocalVal(newVal);
@@ -50,7 +54,7 @@ const InputField: React.FC<InputFieldProps> = ({
 
   const fieldStyle = {
     background: readOnly ? '#F9F9F7' : '#ffffff',
-    border: `1px solid ${warning ? '#b91c1c' : 'rgba(17,17,17,0.12)'}`,
+    border: `1px solid ${warning || isMissing ? 'rgba(185,28,28,0.55)' : 'rgba(17,17,17,0.12)'}`,
     color: readOnly ? 'rgba(17,17,17,0.4)' : '#111111',
     fontFamily: "'JetBrains Mono', monospace",
     outline: 'none',
@@ -84,6 +88,7 @@ const InputField: React.FC<InputFieldProps> = ({
           value={displayVal ?? localVal}
           onChange={(e) => handleChange(e.target.value)}
           readOnly={readOnly}
+          placeholder={isMissing ? '— enter value —' : undefined}
           className="w-full px-2 py-1.5 text-xs"
           style={fieldStyle}
         />

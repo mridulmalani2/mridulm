@@ -33,6 +33,10 @@ const DA_TAGS = [
   'DepreciationAndAmortization',
   'DepreciationDepletionAndAmortizationNonproductionAndAmortizationOfDeferredCharges',
 ];
+// Components to reconstruct D&A when no combined concept is tagged (require BOTH — depreciation
+// alone would understate). Mirrors the IFRS reconstruction in mapIfrs.ts.
+const DEPRECIATION_TAGS = ['Depreciation', 'DepreciationNonproduction'];
+const AMORTIZATION_TAGS = ['AmortizationOfIntangibleAssets', 'AmortizationOfDeferredChargesAndOtherDeferredCosts'];
 const CAPEX_TAGS = [
   'PaymentsToAcquirePropertyPlantAndEquipment',
   'PaymentsToAcquireProductiveAssets',
@@ -48,6 +52,19 @@ const LT_DEBT_CURRENT_TAGS = ['LongTermDebtCurrent', 'LongTermDebtAndCapitalLeas
 const SHORT_TERM_DEBT_TAGS = ['ShortTermBorrowings'];
 const DEBT_CURRENT_TOTAL_TAGS = ['DebtCurrent'];
 const TOTAL_DEBT_TAGS = ['DebtLongtermAndShorttermCombinedAmount', 'LongTermDebt'];
+// us-gaap:LongTermDebt is the roll-up of current+noncurrent BORROWINGS and EXCLUDES leases, so
+// finance leases are safe to add on top of it (like the split base). DebtLongtermAndShorttermCombinedAmount
+// has ambiguous lease treatment, so leases are NOT added when it is the base.
+const LEASE_EXCLUDING_TOTAL_TAGS = new Set(['LongTermDebt']);
+// Finance (capital) lease liabilities are debt-like and added to gross debt by default — but ONLY
+// when the chosen long-term-debt concept EXCLUDES leases (LongTermDebtNoncurrent), never when it's
+// the combined LongTermDebtAndCapitalLeaseObligations (which already includes them → double-count).
+// Operating lease liabilities (ASC 842) are conventionally excluded from debt in credit analysis,
+// so they are NOT added (this is the US-GAAP analogue of the all-leases IFRS-16 treatment, which
+// has no operating/finance split for lessees).
+const FINANCE_LEASE_NONCURRENT_TAGS = ['FinanceLeaseLiabilityNoncurrent'];
+const FINANCE_LEASE_CURRENT_TAGS = ['FinanceLeaseLiabilityCurrent'];
+const LEASE_INCLUSIVE_DEBT_TAGS = new Set(['LongTermDebtAndCapitalLeaseObligations', 'LongTermDebtAndCapitalLeaseObligationsCurrent']);
 const CASH_TAGS = [
   'CashAndCashEquivalentsAtCarryingValue',
   'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
@@ -114,8 +131,13 @@ function latestFullYearDuration(concept: XbrlConcept): { fact: XbrlFactValue; un
 function durationAtStrict(concept: XbrlConcept, end?: string): { fact: XbrlFactValue; unit: string } | null {
   if (!end) return null;
   const m = monetaryFacts(concept); if (!m) return null;
+  // The isAnnual fallback exists to catch annual facts whose duration can't be computed (no
+  // `start`). It must NOT accept a fact with a computable, clearly sub-year duration (e.g. a Q4 /
+  // fiscal-year-change stub tagged fp:'FY') — summing such a stub with a full-year component
+  // understates a headline flow (relevant to D&A reconstruction, which sums two facts).
+  const notPartial = (x: XbrlFactValue) => !x.start || !x.end || (Date.parse(x.end) - Date.parse(x.start)) / 86_400_000 >= 350;
   const f = m.facts.find((x) => x.end === end && isFullYear(x))
-    ?? m.facts.find((x) => x.end === end && isAnnual(x));
+    ?? m.facts.find((x) => x.end === end && isAnnual(x) && notPartial(x));
   return f ? { fact: f, unit: m.unit } : null;
 }
 
@@ -157,6 +179,9 @@ export interface MapOptions {
   currency?: string;
   /** Sector hint (e.g. SIC description from the submissions payload). */
   sicDescription?: string;
+  /** Include finance (capital) lease liabilities in gross/net debt (default true). Operating
+   *  leases are always excluded (conventional US credit treatment). */
+  includeFinanceLeasesInDebt?: boolean;
 }
 
 export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): RawHistoricals {
@@ -198,7 +223,19 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
 
   // ── EBITDA = Operating income + D&A ──
   const opinc = rawDuration(OPERATING_INCOME_TAGS, anchorEnd);
-  const daRaw = rawDuration(DA_TAGS, anchorEnd);
+  // D&A: a combined concept first; else reconstruct from depreciation + amortization (both
+  // required — depreciation alone understates). Reconstruction carries derived provenance.
+  let daRaw = rawDuration(DA_TAGS, anchorEnd);
+  if (!daRaw) {
+    const dep = rawDuration(DEPRECIATION_TAGS, anchorEnd);
+    const amort = rawDuration(AMORTIZATION_TAGS, anchorEnd);
+    if (dep && amort) {
+      daRaw = {
+        value: dep.value + amort.value, tag: `${dep.tag} + ${amort.tag}`,
+        prov: { source: 'edgar', detail: `${dep.tag} + ${amort.tag} (derived D&A)`, tag: 'derived:DA', taxonomy: 'us-gaap', unit: dep.prov.unit, fy: anchorFy, period: anchorEnd, url: dep.prov.url },
+      };
+    }
+  }
   const da = daRaw ? sv(daRaw.value, daRaw.prov) : null;
   let ltm_ebitda: SourcedValue | null = null;
   if (opinc && daRaw) {
@@ -259,16 +296,45 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     ? { value: currentParts.reduce((s, p) => s + p.value, 0), tag: currentParts.map((p) => p.tag).join(' + '), prov: currentParts[0].prov }
     : debtCurrentTotal;
 
-  const debtParts = [ltNon, currentDebt].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
+  // Base debt: prefer the DISJOINT specifics; otherwise fall back to a single aggregate total-debt
+  // concept (LongTermDebt / DebtLongtermAndShorttermCombinedAmount). The fallback must never be
+  // SILENTLY DROPPED — a lone lease fact must not suppress the real total (which would collapse
+  // gross debt to just the lease and flip the deal to false net-cash).
+  const splitParts = [ltNon, currentDebt].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
+  const baseFromSplit = splitParts.length > 0;
+  const baseParts = baseFromSplit ? splitParts : (totalDebtDirect ? [totalDebtDirect] : []);
+  // The aggregate fallback is lease-eligible only when it is the lease-EXCLUDING LongTermDebt (not
+  // the ambiguous combined total) — so an identical filer who tags the roll-up concept instead of
+  // the split specifics still gets leases added, while a possibly-lease-inclusive combined total
+  // does not (avoids double-count).
+  const aggregateLeaseExcluding = !baseFromSplit && !!totalDebtDirect && LEASE_EXCLUDING_TOTAL_TAGS.has(totalDebtDirect.tag);
+
+  // Finance (capital) lease liabilities — added by default, but ONLY onto a base that EXCLUDES them
+  // (the split specifics, or the lease-excluding aggregate LongTermDebt), and only for the slot that
+  // didn't already bundle them:
+  //   • a lease-inclusive concept in a slot (LongTermDebtAndCapitalLeaseObligations[Current]) → skip that slot's lease;
+  //   • currentDebt sourced from the DebtCurrent TOTAL already includes current finance leases → skip the current lease;
+  //   • an AGGREGATE total-debt base has ambiguous lease treatment → add no separate leases (avoids double-count).
+  // Operating leases (ASC 842) are intentionally never added.
+  const includeFinLeases = opts.includeFinanceLeasesInDebt ?? true;
+  const ltNonBundled = !!(ltNon && LEASE_INCLUSIVE_DEBT_TAGS.has(ltNon.tag));
+  const ltCurBundled = !!(ltCur && LEASE_INCLUSIVE_DEBT_TAGS.has(ltCur.tag));
+  const currentFromTotal = !currentParts.length && !!debtCurrentTotal;   // DebtCurrent bundles current leases
+  const finLeaseNon = rawInstant(FINANCE_LEASE_NONCURRENT_TAGS, anchorEnd);
+  const finLeaseCur = rawInstant(FINANCE_LEASE_CURRENT_TAGS, anchorEnd);
+  const leaseParts = includeFinLeases && (baseFromSplit || aggregateLeaseExcluding)
+    ? [ltNonBundled ? null : finLeaseNon, (ltCurBundled || currentFromTotal) ? null : finLeaseCur].filter(Boolean) as { value: number; prov: Provenance; tag: string }[]
+    : [];
+
+  const debtParts = [...baseParts, ...leaseParts];
   let gross_debt: SourcedValue | null = null;
   if (debtParts.length) {
     const total = debtParts.reduce((s, p) => s + p.value, 0);
+    const leaseNote = leaseParts.length ? ' (incl. finance leases)' : '';
     gross_debt = sv(total, {
-      source: 'edgar', detail: `${debtParts.map((p) => p.tag).join(' + ')} (derived)`, tag: 'derived:GrossDebt',
+      source: 'edgar', detail: `${debtParts.map((p) => p.tag).join(' + ')}${leaseNote} (derived)`, tag: 'derived:GrossDebt',
       period: anchorEnd, fy: anchorFy, url: debtParts[0].prov.url,
     });
-  } else if (totalDebtDirect) {
-    gross_debt = sv(totalDebtDirect.value, totalDebtDirect.prov);
   }
   let net_debt: SourcedValue | null = null;
   if (gross_debt) {

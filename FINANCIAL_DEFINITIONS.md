@@ -95,3 +95,18 @@ off, `nol_carryforward = 0`, `minimum_tax_rate = 0`) reproduce the legacy inline
 | Operating FCF (pre-growth) | `fcf_pre_debt + growth_capex` | PE FCF bridge presentation (P4-6). | `projections.ts` | `phase4e` |
 | Goodwill (opening) | purchase-accounting residual that closes the t=0 BS | `(debt + equity) − cash − NWC − PP&E − deferred fin costs`. | `balanceSheet.ts` | `phase3` |
 | Balance check | `total_assets − total_liabilities_and_equity` | Closes by construction within the convergence tolerance; a non-zero value is a real integrity flag. | `balanceSheet.ts` | `three-statement` |
+
+## Filing import — factual extraction (Phase 1)
+
+How the import flow derives the FACTUAL inputs from a public filing. These are extraction
+conventions, not engine maths; every value carries provenance and a filing gap is surfaced (never
+silently defaulted). All sources emit the same `RawHistoricals` → one draft → review → model.
+
+| Field | How it is extracted | Convention / notes | Module | Test |
+|---|---|---|---|---|
+| EBITDA (import) | `operating profit + D&A` (both must be found, else gap) | Never guessed — if either is untagged it surfaces as a gap, not an estimate. | `mapXbrl.ts`, `mapIfrs.ts` | `edgar-map`, `edgar-ifrs` |
+| D&A (import) | combined concept first; else **reconstructed** from depreciation + amortisation (both required); ESEF also reads the cash-flow-statement adjustment line | Depreciation alone is rejected (understates). | `mapXbrl.ts` (`DEPRECIATION_TAGS`+`AMORTIZATION_TAGS`), `mapIfrs.ts` (`DA` incl. `AdjustmentsForDepreciationAndAmortisationExpense`) | `edgar-map`, `edgar-ifrs` |
+| Net debt (import) | `gross debt − cash`, where **gross debt = borrowings + lease liabilities** | **Leases are debt-like and included by default.** ESEF (IFRS 16): all lease liabilities (no lessee operating/finance split) — `includeLeasesInDebt` (default `true`). US-GAAP (ASC 842): **finance** lease liabilities only; operating leases are conventionally excluded — `includeFinanceLeasesInDebt` (default `true`). Anti-double-count: leases are never added on top of a combined concept that already bundles them (`BorrowingsAndLeaseLiabilities`, `LongTermDebtAndCapitalLeaseObligations`). Provenance names the lease component + amount. A directly-reported issuer-extension net-debt tag wins terminally. | `mapIfrs.ts`, `mapXbrl.ts` | `edgar-ifrs`, `edgar-map` |
+| ESEF deep recovery | layered per field: (a) `ifrs-full` face → (b) expanded `ifrs-full` chains → (c) extension-namespace regex (trap-denylisted, currency/magnitude/shortest-name tie-break) → (d) component reconstruction → (e) single-axis dimensional roll-up (default/domain member excluded) | First layer to yield a value wins (precedence is the double-count guard — a total always beats its parts). Each recovered value's `provenance.detail` states the method. | `mapIfrs.ts` | `edgar-ifrs` |
+| Effective tax rate (import) | `tax expense ÷ pretax`, clamped `[0, 0.6]`; else statutory default | The one factual field with a defensible default (a rate is always needed) — flagged `default` provenance, not a gap. | `mapXbrl.ts`, `mapIfrs.ts` | `edgar-map`, `edgar-ifrs` |
+| Missing factual field | a field NO source/layer can derive → provenance `'missing'` | Rendered as an EMPTY input with a red **MISSING** badge; a neutral placeholder is kept in `ModelState` only so the live preview computes (never shown). NEVER a guessed default, NEVER tagged `'user'`. Editing it flips the source to `'user'`. | `buildModel.ts` (`missingProv`), `AssumptionsReview.tsx`, `ProvenanceBadge.tsx` | `edgar-missing`, `edgar-screens-smoke` |

@@ -22,6 +22,7 @@ import AssumptionsReview from '../components/deal-engine/start/AssumptionsReview
 import SourceScreen from '../components/deal-engine/start/SourceScreen';
 import ManualFactsScreen from '../components/deal-engine/start/ManualFactsScreen';
 import ProvenanceBadge from '../components/deal-engine/inputs/ProvenanceBadge';
+import InputField from '../components/deal-engine/inputs/InputField';
 
 const draft = () => {
   const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
@@ -46,6 +47,20 @@ describe('AssumptionsReview SSR', () => {
     expect(html).toContain('Build Model');
     expect(html).toContain('EDGAR');      // a factual-field provenance badge
     expect(html).toContain('AI-suggest');
+  });
+
+  it('renders a MISSING badge + empty placeholder for a field the filing lacks', () => {
+    const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
+    const sparse = { ...raw, capex: null, capex_pct_revenue: null };   // filing lacked capex
+    const { state, provenance } = draftModelFromHistoricals(sparse, { dealName: raw.entityName });
+    holder.state = {
+      modelState: state, provenanceMap: provenance, rawHistoricals: sparse, sourceFilings: [],
+      editAssumption: noop, aiSuggestAssumptions: noop, isSuggesting: false,
+      buildModelFromDraft: noop, setStartScreen: noop, error: null, apiKey: null,
+    };
+    const html = renderToStaticMarkup(React.createElement(AssumptionsReview));
+    expect(html).toContain('MISSING');             // the red badge
+    expect(html).toContain('— enter value —');     // the empty-input placeholder (no guessed number)
   });
 });
 
@@ -84,5 +99,18 @@ describe('ProvenanceBadge', () => {
   });
   it('renders nothing without provenance', () => {
     expect(renderToStaticMarkup(React.createElement(ProvenanceBadge, {}))).toBe('');
+  });
+});
+
+describe('InputField (model screen) honours the missing invariant', () => {
+  it('renders a MISSING badge + empty placeholder, not the hidden placeholder number', () => {
+    holder.state = { updateField: noop };
+    const html = renderToStaticMarkup(React.createElement(InputField, {
+      label: 'D&A % Revenue', path: 'margins.da_pct_revenue', value: 0.03, suffix: '%',
+      provenance: { source: 'missing', detail: 'D&A %: not reported in the filing — enter to confirm' },
+    }));
+    expect(html).toContain('MISSING');
+    expect(html).toContain('— enter value —');
+    expect(html).not.toContain('value="0.03"');   // the placeholder number is never shown
   });
 });
