@@ -12,6 +12,7 @@
 import type { ModelState } from '../dealEngineTypes';
 import { createDefaultModelState } from '../engine/modelState';
 import type { RawHistoricals, SourcedValue, Provenance, ProvenanceMap } from './types';
+import { missingProv } from './types';
 
 /** Sector starting points for the FORWARD assumptions (not facts). */
 export interface SectorDefault {
@@ -125,7 +126,6 @@ export const FACTUAL_FIELD_PATHS = [
   'tax.nol_carryforward',
 ] as const;
 
-const userGap = (label: string): Provenance => ({ source: 'user', detail: `${label}: not in filings — please confirm` });
 const defaultProv = (detail: string): Provenance => ({ source: 'default', detail });
 
 /**
@@ -148,9 +148,14 @@ export function draftModelFromHistoricals(raw: RawHistoricals, opts: DraftOption
   s.company_description = `Imported from SEC EDGAR${raw.fiscalYear ? ` · FY${raw.fiscalYear}` : ''}.`;
 
   // ── Factual inputs (from filings) ──
-  const setFactual = (path: string, target: { set: (v: number) => void }, sv: SourcedValue | null, gapLabel: string, fallback: number) => {
+  // A field the filing genuinely lacks gets a NEUTRAL placeholder in ModelState (so fullRecalc /
+  // the live preview can still compute) but is tagged provenance 'missing' — the review screen
+  // renders it as an EMPTY input with a red MISSING badge. It is NEVER tagged 'user' (which would
+  // imply the user typed it) and the placeholder is never shown. Editing it flips the source to
+  // 'user' via the store.
+  const setFactual = (path: string, target: { set: (v: number) => void }, sv: SourcedValue | null, gapLabel: string, placeholder: number) => {
     if (sv) { target.set(sv.value); prov[path] = sv.provenance; }
-    else { target.set(fallback); prov[path] = userGap(gapLabel); if (!raw.gaps.includes(gapLabel)) raw.gaps.push(gapLabel); }
+    else { target.set(placeholder); prov[path] = missingProv(gapLabel); if (!raw.gaps.includes(gapLabel)) raw.gaps.push(gapLabel); }
   };
 
   setFactual('revenue.base_revenue', { set: (v) => { s.revenue.base_revenue = v; } }, raw.ltm_revenue, 'LTM revenue', 100);

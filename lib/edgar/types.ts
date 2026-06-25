@@ -4,8 +4,13 @@
  * for each field and nothing is ever silently assumed.
  */
 
-/** Who produced a value. Drives the provenance badge on screens 2 and 3. */
-export type ProvenanceSource = 'edgar' | 'esef' | 'ai' | 'user' | 'default';
+/** Who produced a value. Drives the provenance badge on screens 2 and 3.
+ *  `'missing'` = a factual field the filing genuinely lacks: it is rendered as an EMPTY input
+ *  with a red MISSING badge and is NEVER given a guessed default or tagged 'user' (which would
+ *  falsely imply the user typed it). It appears only in the draft's `ProvenanceMap`, never inside
+ *  a `RawHistoricals` (those stay null + recorded in `gaps`). Once the user fills it, the store
+ *  flips the source to 'user'. */
+export type ProvenanceSource = 'edgar' | 'esef' | 'ai' | 'user' | 'default' | 'missing';
 
 export interface Provenance {
   source: ProvenanceSource;
@@ -70,3 +75,14 @@ export interface RawHistoricals {
 
 /** fieldPath → provenance, surfaced as source badges across the assumptions review + model. */
 export type ProvenanceMap = Record<string, Provenance>;
+
+/**
+ * Provenance for a factual field the filing genuinely does NOT provide. The review screen renders
+ * the input EMPTY (no guessed number) with a red MISSING badge; the user fills it (→ 'user').
+ * A neutral placeholder may be kept inside `ModelState` only so the live preview can compute — it
+ * is never displayed and never tagged 'user'.
+ */
+export const missingProv = (label: string): Provenance => ({
+  source: 'missing',
+  detail: `${label}: not reported in the filing — enter to confirm`,
+});

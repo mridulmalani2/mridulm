@@ -408,7 +408,7 @@ Be specific. Use the company name to infer business type and calibrate according
   updateField: async (path, value) => {
     set({ isCalculating: true, error: null });
     try {
-      const { modelState, modelVersion } = get();
+      const { modelState, modelVersion, provenanceMap } = get();
       if (!modelState) throw new Error('No model initialized');
 
       const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
@@ -445,8 +445,12 @@ Be specific. Use the company name to infer business type and calibrate according
 
       const result = fullRecalc(state);
       const changedFields = computeChangedTraceFields(modelState, result);
+      // Editing a field on the model screen makes it user-sourced — in particular this clears a
+      // 'missing' provenance (the field is no longer an unfilled gap), mirroring editAssumption.
+      const userProv: Provenance = { source: 'user', detail: 'Edited on the model screen' };
       set({
         modelState: result,
+        provenanceMap: { ...provenanceMap, [path]: userProv },
         modelVersion: modelVersion + 1,
         lastChangedTraceFields: changedFields,
         isCalculating: false,
@@ -920,10 +924,18 @@ Set trigger_recalculation true.`;
   },
 
   buildModelFromDraft: () => {
-    const { modelState } = get();
+    const { modelState, provenanceMap } = get();
     if (!modelState) return;
+    // A factual field the filing lacked must be confirmed before it can feed the headline model —
+    // never let a neutral placeholder become an accepted input the user acts on (the cardinal
+    // 'missing' invariant). The review screen also disables Build while any field is still 'missing'.
+    const missing = Object.entries(provenanceMap).filter(([, p]) => p.source === 'missing').map(([path]) => path);
+    if (missing.length) {
+      set({ error: `Confirm the ${missing.length} field(s) marked MISSING before building.` });
+      return;
+    }
     const built = fullRecalc(modelState);
-    set({ modelState: built, startScreen: 'model', modelVersion: get().modelVersion + 1 });
+    set({ modelState: built, startScreen: 'model', modelVersion: get().modelVersion + 1, error: null });
     if (get().apiKey) get().refreshPanelInsights();
   },
 

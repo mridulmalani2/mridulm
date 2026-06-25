@@ -141,17 +141,19 @@ just a new client + a mapper that emits `RawHistoricals`.
 | Filings proxy (only server surface) | `api/edgar.ts` — single `/api/edgar?path=…` function. SSRF allowlist for SEC (`data.sec.gov`/`www.sec.gov`), ESEF (`filings.xbrl.org`) and GLEIF (`api.gleif.org`); compliant User-Agent, edge cache, streaming, throttle |
 | Typed SEC client + pure helpers | `lib/edgar/client.ts` (`searchCompanies`, `parseEdgarUrl`, `getCompanyFacts`, `getSubmissions`; shared `getJson`) |
 | Typed ESEF (Europe) client | `lib/edgar/esef.ts` — `searchEsefByName` (GLEIF name→LEI), `getEsefFilings`, `getEsefReport` (xBRL-JSON) |
-| US-GAAP → factual inputs | `lib/edgar/mapXbrl.ts` — tag-alias chains, single-FY alignment, per-field provenance, gaps |
-| IFRS (ESEF) → factual inputs | `lib/edgar/mapIfrs.ts` — the European analogue; ifrs-full alias chains, non-dimensional totals, `esef` provenance. Face-statement concepts extract cleanly; D&A/debt/NWC are often untagged → gaps |
-| Provenance / factual types | `lib/edgar/types.ts` (`RawHistoricals`, `SourcedValue`, `Provenance`, `ProvenanceMap`) |
+| US-GAAP → factual inputs | `lib/edgar/mapXbrl.ts` — tag-alias chains, single-FY alignment, per-field provenance, gaps. D&A reconstructs from depreciation + amortisation when uncombined; gross debt adds **finance** lease liabilities (ASC 842; operating leases excluded), dedup-guarded against lease-inclusive concepts |
+| IFRS (ESEF) → factual inputs | `lib/edgar/mapIfrs.ts` — the European analogue, now mining the WHOLE report, not just the `ifrs-full` face. A **layered resolver** per field: (a) `ifrs-full` face → (b) expanded `ifrs-full` chains (incl. cash-flow D&A) → (c) extension-namespace regex (trap-denylisted) → (d) component reconstruction → (e) single-axis dimensional roll-up (default member excluded). First layer wins (precedence = the double-count guard); each recovered value's provenance states the method. Gross debt includes IFRS-16 lease liabilities. Only what NO layer can derive stays a gap |
+| Provenance / factual types | `lib/edgar/types.ts` (`RawHistoricals`, `SourcedValue`, `Provenance` incl. the `'missing'` source, `ProvenanceMap`, `missingProv`) |
 | Draft composition | `lib/edgar/buildModel.ts` — facts (EDGAR provenance) + sector-default assumptions ('default') |
 | Screens + badges | `components/deal-engine/start/{SourceScreen,AssumptionsReview}.tsx`, `inputs/ProvenanceBadge.tsx` |
 
 **Inputs/assumptions/outputs are kept separate.** Factual inputs come from filings (each
-carries `edgar` provenance and a filing link); forward/structure inputs are assumptions
+carries `edgar`/`esef` provenance and a filing link); forward/structure inputs are assumptions
 (`default` → `ai` → `user` as they are suggested/edited); outputs are computed. Nothing
-factual is silently defaulted — a filing gap is surfaced on Screen 2 (provenance becomes
-`user` once filled). The entry **EV ↔ multiple** relationship has a **single driver**
+factual is silently defaulted — a field the filing genuinely lacks gets provenance `'missing'`
+(a red **MISSING** badge, rendered as an EMPTY input on Screen 2; a neutral placeholder is kept
+in `ModelState` only so the live preview computes, never shown and never tagged `'user'`). The
+provenance flips to `'user'` once the user fills it. The entry **EV ↔ multiple** relationship has a **single driver**
 (`entry.entry_valuation_driver`): one is the input, the other a read-only derived output —
 there is no bidirectional recompute.
 

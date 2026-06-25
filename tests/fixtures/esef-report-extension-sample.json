@@ -1,0 +1,25 @@
+{
+  "documentInfo": {
+    "documentType": "https://xbrl.org/2021/xbrl-json",
+    "namespaces": {
+      "ifrs-full": "http://xbrl.ifrs.org/taxonomy/2022-03-24/ifrs-full",
+      "company": "http://www.example-issuer.com/xbrl/ext",
+      "iso4217": "http://www.xbrl.org/2003/iso4217"
+    }
+  },
+  "facts": {
+    "rev2024": { "value": "1000000000", "dimensions": { "concept": "ifrs-full:Revenue", "entity": "lei:EXTCO", "period": "2024-01-01T00:00:00/2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "rev2023": { "value": "920000000", "dimensions": { "concept": "ifrs-full:Revenue", "entity": "lei:EXTCO", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "opinc2024": { "value": "150000000", "dimensions": { "concept": "ifrs-full:ProfitLossFromOperatingActivities", "entity": "lei:EXTCO", "period": "2024-01-01T00:00:00/2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "daCfAdj2024": { "value": "50000000", "dimensions": { "concept": "ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense", "entity": "lei:EXTCO", "period": "2024-01-01T00:00:00/2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "pretax2024": { "value": "120000000", "dimensions": { "concept": "ifrs-full:ProfitLossBeforeTax", "entity": "lei:EXTCO", "period": "2024-01-01T00:00:00/2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "tax2024": { "value": "30000000", "dimensions": { "concept": "ifrs-full:IncomeTaxExpenseContinuingOperations", "entity": "lei:EXTCO", "period": "2024-01-01T00:00:00/2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "cash2024": { "value": "50000000", "dimensions": { "concept": "ifrs-full:CashAndCashEquivalents", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "netdebtExt2024": { "value": "200000000", "dimensions": { "concept": "company:NetDebt", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "netdebtRatioTrap2024": { "value": "3.5", "dimensions": { "concept": "company:NetDebtToEBITDARatio", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "xbrli:pure" } },
+    "inv2024": { "value": "80000000", "dimensions": { "concept": "ifrs-full:Inventories", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "recv2024": { "value": "120000000", "dimensions": { "concept": "ifrs-full:TradeAndOtherCurrentReceivables", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "othca2024": { "value": "30000000", "dimensions": { "concept": "ifrs-full:OtherCurrentAssets", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "cl2024": { "value": "180000000", "dimensions": { "concept": "ifrs-full:CurrentLiabilities", "entity": "lei:EXTCO", "period": "2025-01-01T00:00:00", "unit": "iso4217:EUR" } }
+  }
+}

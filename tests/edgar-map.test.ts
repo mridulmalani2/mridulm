@@ -152,6 +152,115 @@ describe('mapCompanyFacts — foreign reporting currency (Finding 5)', () => {
   });
 });
 
+describe('mapCompanyFacts — D&A reconstruction from components', () => {
+  const instant = (val: number) => ({ units: { USD: [{ start: '2023-01-01', end: '2023-12-31', val, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } });
+  it('reconstructs D&A from depreciation + amortization when no combined concept is tagged', () => {
+    const c = clone();
+    delete c.facts['us-gaap']['DepreciationDepletionAndAmortization'];
+    c.facts['us-gaap']['Depreciation'] = instant(50000000);
+    c.facts['us-gaap']['AmortizationOfIntangibleAssets'] = instant(12500000);
+    const r = mapCompanyFacts(c);
+    expect(r.da?.value).toBeCloseTo(62.5, 6);                 // 50 + 12.5
+    expect(r.da?.provenance.tag).toBe('derived:DA');
+    expect(r.da?.provenance.detail).toMatch(/Depreciation \+ AmortizationOfIntangibleAssets/);
+    expect(r.ltm_ebitda?.value).toBeCloseTo(250, 6);         // 187.5 opinc + 62.5
+    expect(r.gaps).not.toContain('D&A %');
+  });
+  it('does NOT reconstruct from depreciation alone (would understate D&A)', () => {
+    const c = clone();
+    delete c.facts['us-gaap']['DepreciationDepletionAndAmortization'];
+    c.facts['us-gaap']['Depreciation'] = instant(50000000);  // no amortization component
+    const r = mapCompanyFacts(c);
+    expect(r.da).toBeNull();
+    expect(r.gaps).toContain('D&A %');
+  });
+  it('rejects a sub-year (Q4 stub) component at the anchor end — never sums a 3-month with a 12-month figure', () => {
+    const c = clone();
+    delete c.facts['us-gaap']['DepreciationDepletionAndAmortization'];
+    c.facts['us-gaap']['Depreciation'] = instant(50000000);  // full-year
+    // Amortization tagged only as a 92-day stub ending on the anchor date (fp:'FY' but partial).
+    c.facts['us-gaap']['AmortizationOfIntangibleAssets'] = { units: { USD: [{ start: '2023-10-01', end: '2023-12-31', val: 3125000, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } };
+    const r = mapCompanyFacts(c);
+    expect(r.da).toBeNull();                                  // partial amort stub rejected → no blended D&A
+    expect(r.gaps).toContain('D&A %');
+  });
+});
+
+describe('mapCompanyFacts — finance leases in gross debt (US analogue of IFRS-16)', () => {
+  const lease = (val: number) => ({ units: { USD: [{ end: '2023-12-31', val, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } });
+  it('adds finance (capital) lease liabilities to gross debt by default', () => {
+    const c = clone();
+    c.facts['us-gaap']['FinanceLeaseLiabilityNoncurrent'] = lease(20000000);
+    c.facts['us-gaap']['FinanceLeaseLiabilityCurrent'] = lease(5000000);
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(360, 6);          // 335 + 20 + 5
+    expect(r.gross_debt?.provenance.detail).toMatch(/incl\. finance leases/);
+    expect(r.net_debt?.value).toBeCloseTo(280, 6);            // 360 − 80
+  });
+  it('does NOT double-count when the debt concept already bundles capital leases', () => {
+    const c = clone();
+    const ltNon = c.facts['us-gaap']['LongTermDebtNoncurrent'];
+    delete c.facts['us-gaap']['LongTermDebtNoncurrent'];
+    c.facts['us-gaap']['LongTermDebtAndCapitalLeaseObligations'] = ltNon;  // lease-inclusive tag
+    c.facts['us-gaap']['FinanceLeaseLiabilityNoncurrent'] = lease(20000000);
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(335, 6);          // leases already inside → NOT + 20
+  });
+  it('honours includeFinanceLeasesInDebt: false', () => {
+    const c = clone();
+    c.facts['us-gaap']['FinanceLeaseLiabilityNoncurrent'] = lease(20000000);
+    const r = mapCompanyFacts(c, { includeFinanceLeasesInDebt: false });
+    expect(r.gross_debt?.value).toBeCloseTo(335, 6);          // unchanged
+  });
+});
+
+describe('mapCompanyFacts — debt/lease edge cases (adversarial-review regressions)', () => {
+  const instant = (val: number) => ({ units: { USD: [{ end: '2023-12-31', val, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } });
+  const onlyTotalDebt = (): CompanyFacts => {
+    const c = clone();
+    for (const t of ['LongTermDebtNoncurrent', 'LongTermDebtCurrent', 'ShortTermBorrowings']) delete c.facts['us-gaap'][t];
+    return c;
+  };
+
+  it('keeps the aggregate LongTermDebt total (never collapses to the lease) and adds finance leases (lease-excluding)', () => {
+    const c = onlyTotalDebt();
+    c.facts['us-gaap']['LongTermDebt'] = instant(335000000);          // aggregate total only (excludes leases)
+    c.facts['us-gaap']['FinanceLeaseLiabilityNoncurrent'] = instant(20000000);
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(355, 6);                  // 335 total + 20 lease, NOT collapsed to 20
+    expect(r.net_debt?.value).toBeCloseTo(275, 6);                    // 355 − 80, never net-cash
+  });
+
+  it('does NOT add finance leases to the ambiguous combined total (may already include them)', () => {
+    const c = onlyTotalDebt();
+    c.facts['us-gaap']['DebtLongtermAndShorttermCombinedAmount'] = instant(340000000);
+    c.facts['us-gaap']['FinanceLeaseLiabilityNoncurrent'] = instant(20000000);
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(340, 6);                  // leases NOT added on top of the ambiguous total
+  });
+
+  it('suppresses the CURRENT finance lease when current debt came from the DebtCurrent total', () => {
+    const c = clone();
+    delete c.facts['us-gaap']['LongTermDebtCurrent'];
+    delete c.facts['us-gaap']['ShortTermBorrowings'];
+    c.facts['us-gaap']['DebtCurrent'] = instant(33000000);            // total current debt (incl. current lease)
+    c.facts['us-gaap']['FinanceLeaseLiabilityCurrent'] = instant(8000000);
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(333, 6);                  // 300 ltNon + 33 DebtCurrent, NOT + 8 again
+  });
+
+  it('adds the NONCURRENT finance lease but suppresses only the bundled CURRENT slot (per-slot guard)', () => {
+    const c = clone();
+    const ltCur = c.facts['us-gaap']['LongTermDebtCurrent'];
+    delete c.facts['us-gaap']['LongTermDebtCurrent'];
+    delete c.facts['us-gaap']['ShortTermBorrowings'];
+    c.facts['us-gaap']['LongTermDebtAndCapitalLeaseObligationsCurrent'] = ltCur;  // lease-inclusive CURRENT (=25)
+    c.facts['us-gaap']['FinanceLeaseLiabilityNoncurrent'] = instant(20000000);
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(345, 6);                  // 300 ltNon + 25 (incl cur lease) + 20 nc lease
+  });
+});
+
 describe('mapCompanyFacts — statutory tax fallback (not a hard gap)', () => {
   it("uses the statutory default and flags provenance 'default' when no effective rate is derivable", () => {
     const c = clone();

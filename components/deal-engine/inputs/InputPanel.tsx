@@ -327,9 +327,9 @@ const InputPanel: React.FC = () => {
       <Section title="Margins" defaultOpen={false}>
         <InputField label="Target EBITDA Margin" path="margins.target_ebitda_margin" value={ms.margins.target_ebitda_margin} suffix="%" step={0.01} aiToggleable />
         <InputField label="Trajectory" path="margins.margin_trajectory" value={ms.margins.margin_trajectory} type="select" options={TRAJECTORIES} />
-        <InputField label="D&A % Revenue" path="margins.da_pct_revenue" value={ms.margins.da_pct_revenue} suffix="%" step={0.005} />
-        <InputField label="Maint. Capex % Rev" path="margins.capex_pct_revenue" value={ms.margins.capex_pct_revenue} suffix="%" step={0.005} />
-        <InputField label="NWC % Revenue" path="margins.nwc_pct_revenue" value={ms.margins.nwc_pct_revenue} suffix="%" step={0.01} />
+        <InputField label="D&A % Revenue" path="margins.da_pct_revenue" value={ms.margins.da_pct_revenue} suffix="%" step={0.005} provenance={prov['margins.da_pct_revenue']} />
+        <InputField label="Maint. Capex % Rev" path="margins.capex_pct_revenue" value={ms.margins.capex_pct_revenue} suffix="%" step={0.005} provenance={prov['margins.capex_pct_revenue']} />
+        <InputField label="NWC % Revenue" path="margins.nwc_pct_revenue" value={ms.margins.nwc_pct_revenue} suffix="%" step={0.01} provenance={prov['margins.nwc_pct_revenue']} />
 
         {/* Days-based working capital (P4-9) — overrides the % peg when on */}
         <div className="mb-2.5 mt-1">
@@ -369,7 +369,7 @@ const InputPanel: React.FC = () => {
         )}
         <InputField label="Financing Fee %" path="fees.financing_fee_pct" value={ms.fees.financing_fee_pct} suffix="%" step={0.005} />
         <InputField label="Transaction Costs" path="fees.transaction_costs" value={ms.fees.transaction_costs} suffix={`${csym}m`} />
-        <InputField label="Tax Rate" path="tax.tax_rate" value={ms.tax.tax_rate} suffix="%" step={0.01} />
+        <InputField label="Tax Rate" path="tax.tax_rate" value={ms.tax.tax_rate} suffix="%" step={0.01} provenance={prov['tax.tax_rate']} />
         <InputField label="NOL Carryforward" path="tax.nol_carryforward" value={ms.tax.nol_carryforward} suffix={`${csym}m`} />
       </Section>
 

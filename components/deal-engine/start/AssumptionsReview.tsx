@@ -33,10 +33,14 @@ const Row: React.FC<{
   step?: number;
 }> = ({ label, path, value, provenance, unit, pct, readOnly, options }) => {
   const editAssumption = useDealEngineStore((s) => s.editAssumption);
-  const display = pct && typeof value === 'number' ? (value * 100).toFixed(2) : (typeof value === 'number' ? String(value) : value);
-  const [local, setLocal] = useState(String(display));
+  // A factual field the filing lacks: render EMPTY (no guessed number) with a red MISSING badge.
+  // The store flips its source to 'user' once a real value is committed, after which it displays
+  // normally. The neutral placeholder held in ModelState is never shown.
+  const isMissing = provenance?.source === 'missing';
+  const fmt = (v: number | string) => (pct && typeof v === 'number' ? (v * 100).toFixed(2) : String(v));
+  const [local, setLocal] = useState(isMissing ? '' : fmt(value));
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => { setLocal(String(pct && typeof value === 'number' ? (value * 100).toFixed(2) : value)); }, [value, pct]);
+  useEffect(() => { setLocal(isMissing ? '' : fmt(value)); }, [value, pct, isMissing]);
 
   const commit = useCallback((raw: string) => {
     setLocal(raw);
@@ -67,8 +71,9 @@ const Row: React.FC<{
         <input
           type="text" value={local} readOnly={readOnly}
           onChange={(e) => commit(e.target.value)}
+          placeholder={isMissing ? '— enter value —' : undefined}
           className="w-full px-2 py-1.5 text-xs"
-          style={{ background: readOnly ? paper : '#fff', border: '1px solid rgba(17,17,17,0.12)', color: readOnly ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: mono, outline: 'none' }}
+          style={{ background: readOnly ? paper : '#fff', border: `1px solid ${isMissing ? 'rgba(185,28,28,0.55)' : 'rgba(17,17,17,0.12)'}`, color: readOnly ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: mono, outline: 'none' }}
         />
       )}
     </div>
@@ -92,6 +97,9 @@ const AssumptionsReview: React.FC = () => {
   const csym = CSYM[ms.currency] ?? '$';
   const driver = ms.entry.entry_valuation_driver ?? 'multiple';
   const p = (path: string): Provenance | undefined => prov[path];
+  // A factual field the filing lacked is rendered empty + MISSING; the model is not reachable until
+  // every such field is confirmed (no guessed placeholder may silently feed the headline returns).
+  const hasMissing = Object.values(prov).some((pr) => pr?.source === 'missing');
   // Label the factual source from the provenance of a core extracted field.
   const factSource = prov['revenue.base_revenue']?.source;
   const sourceLabel = factSource === 'esef' ? 'ESEF filings' : factSource === 'edgar' ? 'SEC EDGAR' : 'your inputs';
@@ -228,9 +236,10 @@ const AssumptionsReview: React.FC = () => {
           <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
             Implied: EV {csym}{ms.entry.enterprise_value.toFixed(0)}m · Entry equity {csym}{ms.returns.entry_equity.toFixed(0)}m · IRR {ms.returns.irr != null ? `${(ms.returns.irr * 100).toFixed(1)}%` : 'N/C'} · MOIC {ms.returns.moic.toFixed(2)}x
           </div>
-          <button onClick={build}
+          <button onClick={build} disabled={hasMissing}
+            title={hasMissing ? 'Fill the MISSING fields before building' : undefined}
             className="px-8 py-2.5 text-sm tracking-widest uppercase transition-colors"
-            style={{ background: '#CC0000', color: '#fff', fontFamily: mono, border: '1px solid #CC0000', letterSpacing: '0.12em' }}>
+            style={{ background: hasMissing ? 'rgba(17,17,17,0.15)' : '#CC0000', color: '#fff', fontFamily: mono, border: `1px solid ${hasMissing ? 'rgba(17,17,17,0.15)' : '#CC0000'}`, letterSpacing: '0.12em', cursor: hasMissing ? 'not-allowed' : 'pointer' }}>
             Build Model →
           </button>
         </div>
