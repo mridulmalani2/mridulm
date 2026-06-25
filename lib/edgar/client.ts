@@ -197,6 +197,13 @@ async function getJson<T>(path: string): Promise<T> {
     try { const body = await res.json() as { error?: string }; if (body?.error) detail = body.error; } catch { /* non-JSON */ }
     throw new Error(detail);
   }
+  // A 200 that isn't JSON means the request didn't reach the proxy function — almost always the
+  // SPA rewrite serving index.html for /api/* (the rewrite must exclude /api). Give a clear
+  // diagnostic instead of a cryptic "Unexpected token '<'" JSON-parse error.
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('json')) {
+    throw new Error('The EDGAR proxy is not reachable — /api/edgar returned a non-JSON page. The serverless function may not be deployed, or the SPA rewrite is intercepting /api/*.');
+  }
   return res.json() as Promise<T>;
 }
 
