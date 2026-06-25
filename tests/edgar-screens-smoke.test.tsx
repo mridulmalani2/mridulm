@@ -20,6 +20,7 @@ import type { CompanyFacts } from '../lib/edgar/client';
 import sample from './fixtures/companyfacts-sample.json';
 import AssumptionsReview from '../components/deal-engine/start/AssumptionsReview';
 import SourceScreen from '../components/deal-engine/start/SourceScreen';
+import ManualFactsScreen from '../components/deal-engine/start/ManualFactsScreen';
 import ProvenanceBadge from '../components/deal-engine/inputs/ProvenanceBadge';
 
 const draft = () => {
@@ -58,6 +59,18 @@ describe('SourceScreen SSR', () => {
     expect(html).toContain('Company name or ticker');
     expect(html).toContain('coming soon');
     expect(html).toContain('Manual entry');
+  });
+});
+
+describe('ManualFactsScreen SSR', () => {
+  it('renders the factual-inputs form mirroring the 10-K surface', () => {
+    holder.state = { loadFromHistoricals: noop };
+    const html = renderToStaticMarkup(React.createElement(ManualFactsScreen, { onBack: noop }));
+    expect(html).toContain('Enter the facts');
+    expect(html).toContain('LTM Revenue');
+    expect(html).toContain('EBITDA Margin');
+    expect(html).toContain('Net Debt at Entry');
+    expect(html).toContain('Review Assumptions');
   });
 });
 

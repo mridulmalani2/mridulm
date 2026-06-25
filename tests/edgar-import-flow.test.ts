@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
-import { draftModelFromHistoricals } from '../lib/edgar/buildModel';
+import { draftModelFromHistoricals, manualHistoricals } from '../lib/edgar/buildModel';
 import { useDealEngineStore } from '../store/dealEngine';
 import type { CompanyFacts } from '../lib/edgar/client';
 import sample from './fixtures/companyfacts-sample.json';
@@ -78,6 +78,37 @@ describe('store import → review → build sequence', () => {
     useDealEngineStore.getState().loadFromHistoricals(raw());
     useDealEngineStore.getState().buildModelFromDraft();
     expect(useDealEngineStore.getState().startScreen).toBe('model');
+    expect(useDealEngineStore.getState().modelState!.balance_sheet.closes).toBe(true);
+  });
+});
+
+describe('manual entry converges on the SAME downstream as EDGAR (zero divergence)', () => {
+  beforeEach(() => { useDealEngineStore.getState().resetModel(); });
+
+  const manual = () => manualHistoricals({
+    dealName: 'PrivateCo', sector: 'Industrials', currency: 'USD',
+    ltmRevenue: 200, ebitdaMargin: 0.22, daPctRevenue: 0.04, capexPctRevenue: 0.05,
+    nwcPctRevenue: 0.12, netDebt: 60, taxRate: 0.25, nol: 0,
+  });
+
+  it('manualHistoricals seeds the factual fields with USER provenance', () => {
+    const { state, provenance } = draftModelFromHistoricals(manual(), { sector: 'Industrials' });
+    expect(state.revenue.base_revenue).toBeCloseTo(200, 6);
+    expect(state.margins.base_ebitda_margin).toBeCloseTo(0.22, 6);
+    expect(state.entry.net_debt_at_entry).toBeCloseTo(60, 6);
+    // Factual fields are 'user' (typed), not 'edgar'; assumptions still 'default'.
+    expect(provenance['revenue.base_revenue'].source).toBe('user');
+    expect(provenance['margins.base_ebitda_margin'].source).toBe('user');
+    expect(provenance['revenue.growth_rates'].source).toBe('default');
+  });
+
+  it('flows through the identical loadFromHistoricals → assumptions → build path', () => {
+    useDealEngineStore.getState().loadFromHistoricals(manual(), { sector: 'Industrials', dealName: 'PrivateCo' });
+    expect(useDealEngineStore.getState().startScreen).toBe('assumptions');       // SAME review screen
+    expect(useDealEngineStore.getState().provenanceMap['revenue.base_revenue'].source).toBe('user');
+    useDealEngineStore.getState().editAssumption('exit.exit_ebitda_multiple', 9);
+    useDealEngineStore.getState().buildModelFromDraft();
+    expect(useDealEngineStore.getState().startScreen).toBe('model');             // SAME model screen
     expect(useDealEngineStore.getState().modelState!.balance_sheet.closes).toBe(true);
   });
 });

@@ -52,6 +52,55 @@ export function inferSector(sic?: string): string {
   return 'Other';
 }
 
+/** The factual inputs a user types on the manual-entry screen — the SAME surface the 10-K/EDGAR
+ *  mapper extracts, just sourced by hand. Decimals for rates/margins. */
+export interface ManualFactsInput {
+  dealName: string;
+  sector: string;
+  currency: ModelState['currency'];
+  ltmRevenue: number;
+  ebitdaMargin: number;      // decimal (0.25 = 25%)
+  daPctRevenue: number;      // decimal
+  capexPctRevenue: number;   // decimal
+  nwcPctRevenue: number;     // decimal
+  netDebt: number;
+  taxRate: number;           // decimal
+  nol?: number;
+}
+
+/**
+ * Build a RawHistoricals from manually-entered facts (Phase 1) — identical SHAPE to what
+ * `mapCompanyFacts` produces, with every value tagged 'user' provenance. This is what unifies
+ * the manual and EDGAR routes: both yield a RawHistoricals that flows through the SAME
+ * draftModelFromHistoricals → assumptions review → model. Zero divergence.
+ */
+export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
+  const userProv = (label: string): Provenance => ({ source: 'user', detail: `Manually entered — ${label}` });
+  const sv = (value: number, label: string): SourcedValue => ({ value, provenance: userProv(label) });
+  const rev = inp.ltmRevenue;
+  return {
+    entityName: inp.dealName,
+    currency: inp.currency,
+    basis: 'FY',
+    ltm_revenue: sv(rev, 'LTM revenue'),
+    ltm_ebitda: sv(rev * inp.ebitdaMargin, 'EBITDA'),
+    ebitda_margin: sv(inp.ebitdaMargin, 'EBITDA margin'),
+    da: sv(rev * inp.daPctRevenue, 'D&A'),
+    da_pct_revenue: sv(inp.daPctRevenue, 'D&A %'),
+    capex: sv(rev * inp.capexPctRevenue, 'Capex'),
+    capex_pct_revenue: sv(inp.capexPctRevenue, 'Capex %'),
+    nwc: sv(rev * inp.nwcPctRevenue, 'NWC'),
+    nwc_pct_revenue: sv(inp.nwcPctRevenue, 'NWC %'),
+    gross_debt: null,
+    cash: null,
+    net_debt: sv(inp.netDebt, 'Net debt at entry'),
+    effective_tax_rate: sv(inp.taxRate, 'Effective tax rate'),
+    nol_carryforward: inp.nol && inp.nol > 0 ? sv(inp.nol, 'NOL carryforward') : null,
+    sector: { value: 0, provenance: userProv('Sector') },
+    gaps: [],
+  };
+}
+
 export interface DraftOptions {
   dealName?: string;
   sector?: string;            // engine sector bucket (else inferred from raw.sector / Other)
