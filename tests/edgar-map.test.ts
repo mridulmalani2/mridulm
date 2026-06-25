@@ -92,6 +92,66 @@ describe('mapCompanyFacts — gaps are surfaced, never silently defaulted', () =
   });
 });
 
+describe('mapCompanyFacts — strict fiscal-year alignment (no cross-year drift)', () => {
+  it('a concept missing at the revenue anchor becomes a gap, not a different-year substitution', () => {
+    const c = clone();
+    // Drop the FY2023 operating-income fact (keep FY2021/FY2022). Revenue still anchors FY2023.
+    const oi = c.facts['us-gaap']['OperatingIncomeLoss'].units.USD;
+    c.facts['us-gaap']['OperatingIncomeLoss'].units.USD = oi.filter((f) => f.end !== '2023-12-31');
+    const r = mapCompanyFacts(c);
+    expect(r.fiscalYear).toBe(2023);                 // revenue still anchors FY2023
+    expect(r.ltm_ebitda).toBeNull();                 // NOT a FY2022-opinc + FY2023-D&A blend
+    expect(r.gaps).toContain('LTM EBITDA');
+  });
+
+  it('a partial reporting period is never imported as a full year', () => {
+    const facts = {
+      cik: 1, entityName: 'StubCo', facts: {
+        'us-gaap': {
+          RevenueFromContractWithCustomerExcludingAssessedTax: {
+            units: { USD: [{ start: '2023-07-01', end: '2023-12-31', val: 600000000, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-01' }] },
+          },
+        },
+      },
+    } as unknown as CompanyFacts;
+    const r = mapCompanyFacts(facts);
+    expect(r.ltm_revenue).toBeNull();                // 184-day period rejected as a full year
+    expect(r.gaps).toContain('LTM revenue');
+  });
+});
+
+describe('mapCompanyFacts — debt aliases do not double-count (Finding 4)', () => {
+  it('ignores DebtCurrent when the disjoint specifics are present', () => {
+    const c = clone();
+    // Add DebtCurrent (total current debt — already includes the 25 of current LT maturities).
+    c.facts['us-gaap']['DebtCurrent'] = { units: { USD: [{ end: '2023-12-31', val: 35000000, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } };
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(335, 6); // 300 + 25 + 10, NOT + 35 again (= 370)
+    expect(r.net_debt?.value).toBeCloseTo(255, 6);
+  });
+
+  it('falls back to DebtCurrent only when the specifics are absent', () => {
+    const c = clone();
+    delete c.facts['us-gaap']['LongTermDebtCurrent'];
+    delete c.facts['us-gaap']['ShortTermBorrowings'];
+    c.facts['us-gaap']['DebtCurrent'] = { units: { USD: [{ end: '2023-12-31', val: 30000000, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } };
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt?.value).toBeCloseTo(330, 6); // 300 noncurrent + 30 DebtCurrent fallback
+  });
+});
+
+describe('mapCompanyFacts — foreign reporting currency (Finding 5)', () => {
+  it('detects the filing unit as the reporting currency', () => {
+    const c = clone();
+    const rev = c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'].units.USD;
+    delete (c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'].units as Record<string, unknown>).USD;
+    c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'].units.EUR = rev;
+    const r = mapCompanyFacts(c);
+    expect(r.currency).toBe('EUR');
+    expect(r.ltm_revenue?.provenance.unit).toBe('EUR');
+  });
+});
+
 describe('mapCompanyFacts — statutory tax fallback (not a hard gap)', () => {
   it("uses the statutory default and flags provenance 'default' when no effective rate is derivable", () => {
     const c = clone();

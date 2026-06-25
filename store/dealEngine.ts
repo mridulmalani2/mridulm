@@ -773,7 +773,7 @@ Be specific. Use the company name to infer business type and calibrate according
       const { state, provenance } = draftModelFromHistoricals(raw, {
         dealName: opts?.dealName ?? raw.entityName,
         sector,
-        currency: 'USD',
+        // currency comes from the detected filing unit (raw.currency); overridable on review.
       });
       const recalc = fullRecalc(state);
       set({
@@ -802,7 +802,7 @@ Be specific. Use the company name to infer business type and calibrate according
 
   loadFromHistoricals: (raw, opts) => {
     const sector = opts?.sector ?? inferSector(raw.sector?.provenance.detail);
-    const { state, provenance } = draftModelFromHistoricals(raw, { dealName: opts?.dealName ?? raw.entityName, sector, currency: 'USD' });
+    const { state, provenance } = draftModelFromHistoricals(raw, { dealName: opts?.dealName ?? raw.entityName, sector });
     const recalc = fullRecalc(state);
     set({ rawHistoricals: raw, provenanceMap: provenance, modelState: recalc, startScreen: 'assumptions', sourceFilings: [] });
   },

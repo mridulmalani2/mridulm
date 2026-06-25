@@ -167,15 +167,16 @@ export function extractRecentFilings(subs: Submissions, forms?: string[]): Filin
   const want = forms ? new Set(forms) : null;
   const out: FilingRef[] = [];
   for (let i = 0; i < r.accessionNumber.length; i++) {
-    const form = r.form[i];
-    if (want && !want.has(form)) continue;
+    const form = r.form?.[i];
     const accession = r.accessionNumber[i];
+    if (!accession || !form) continue;           // malformed/truncated parallel arrays — skip
+    if (want && !want.has(form)) continue;
     const accNoDash = accession.replace(/-/g, '');
-    const primaryDocument = r.primaryDocument[i] ?? '';
+    const primaryDocument = r.primaryDocument?.[i] ?? '';
     out.push({
       accession,
       form,
-      filingDate: r.filingDate[i],
+      filingDate: r.filingDate?.[i] ?? '',
       reportDate: r.reportDate?.[i],
       primaryDocument,
       documentUrl: `https://www.sec.gov/Archives/edgar/data/${Number(cikDigits)}/${accNoDash}/${primaryDocument}`,

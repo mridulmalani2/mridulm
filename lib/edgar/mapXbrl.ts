@@ -42,7 +42,11 @@ const ASSETS_CURRENT_TAGS = ['AssetsCurrent'];
 const LIABILITIES_CURRENT_TAGS = ['LiabilitiesCurrent'];
 const LT_DEBT_NONCURRENT_TAGS = ['LongTermDebtNoncurrent', 'LongTermDebtAndCapitalLeaseObligations'];
 const LT_DEBT_CURRENT_TAGS = ['LongTermDebtCurrent', 'LongTermDebtAndCapitalLeaseObligationsCurrent'];
-const SHORT_TERM_DEBT_TAGS = ['ShortTermBorrowings', 'DebtCurrent'];
+// ShortTermBorrowings is disjoint from the current LT portion. DebtCurrent is the TOTAL current
+// debt (it usually already includes the current LT portion), so it's a fallback only — summing
+// it alongside LongTermDebtCurrent would double-count (Finding 4).
+const SHORT_TERM_DEBT_TAGS = ['ShortTermBorrowings'];
+const DEBT_CURRENT_TOTAL_TAGS = ['DebtCurrent'];
 const TOTAL_DEBT_TAGS = ['DebtLongtermAndShorttermCombinedAmount', 'LongTermDebt'];
 const CASH_TAGS = [
   'CashAndCashEquivalentsAtCarryingValue',
@@ -56,6 +60,9 @@ const PRETAX_TAGS = [
   'IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic',
 ];
 const NOL_TAGS = ['OperatingLossCarryforwards'];
+
+/** Currencies the engine models — a detected XBRL unit outside this set falls back to USD. */
+const KNOWN_CURRENCIES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'INR']);
 
 // ── Concept / fact selection ────────────────────────────────────────────────
 
@@ -87,34 +94,37 @@ function isFullYear(f: XbrlFactValue): boolean {
 
 const latestBy = (a: XbrlFactValue, b: XbrlFactValue) => (Date.parse(b.end) > Date.parse(a.end) ? b : a);
 
-/** Latest full-year duration fact (form 10-K/20-F, ~12 months), or latest annual fact. */
-function latestAnnualDuration(concept: XbrlConcept): { fact: XbrlFactValue; unit: string } | null {
+/**
+ * Latest FULL-YEAR (~12-month) annual duration fact — used ONLY to find the reporting anchor.
+ * Returns null if the concept has only partial/interim periods: we never treat a sub-year
+ * period (e.g. a fiscal-year-change transition stub) as a full year (Finding 2).
+ */
+function latestFullYearDuration(concept: XbrlConcept): { fact: XbrlFactValue; unit: string } | null {
   const m = monetaryFacts(concept); if (!m) return null;
   const fy = m.facts.filter((f) => isAnnual(f) && isFullYear(f));
-  const pool = fy.length ? fy : m.facts.filter(isAnnual);
-  if (!pool.length) return null;
-  return { fact: pool.reduce(latestBy), unit: m.unit };
+  if (!fy.length) return null;
+  return { fact: fy.reduce(latestBy), unit: m.unit };
 }
 
-/** Full-year duration fact ending exactly on `end`, else the latest annual one. */
-function durationAt(concept: XbrlConcept, end?: string): { fact: XbrlFactValue; unit: string } | null {
+/**
+ * Full-year duration fact ending EXACTLY on the anchor `end`. STRICT — no cross-year drift: if
+ * the concept has no fact at the anchor period it returns null (→ a gap), rather than silently
+ * substituting a different fiscal year with false provenance (Findings 1 & 3).
+ */
+function durationAtStrict(concept: XbrlConcept, end?: string): { fact: XbrlFactValue; unit: string } | null {
+  if (!end) return null;
   const m = monetaryFacts(concept); if (!m) return null;
-  if (end) {
-    const exact = m.facts.find((f) => f.end === end && isFullYear(f))
-      ?? m.facts.find((f) => f.end === end && isAnnual(f));
-    if (exact) return { fact: exact, unit: m.unit };
-  }
-  return latestAnnualDuration(concept);
+  const f = m.facts.find((x) => x.end === end && isFullYear(x))
+    ?? m.facts.find((x) => x.end === end && isAnnual(x));
+  return f ? { fact: f, unit: m.unit } : null;
 }
 
-/** Instant fact at `end`, else the latest annual instant. */
-function instantAt(concept: XbrlConcept, end?: string): { fact: XbrlFactValue; unit: string } | null {
+/** Instant (balance-sheet) fact at EXACTLY the anchor `end`. STRICT — no cross-year drift. */
+function instantAtStrict(concept: XbrlConcept, end?: string): { fact: XbrlFactValue; unit: string } | null {
+  if (!end) return null;
   const m = monetaryFacts(concept); if (!m) return null;
-  if (end) { const exact = m.facts.find((f) => f.end === end); if (exact) return { fact: exact, unit: m.unit }; }
-  const annual = m.facts.filter(isAnnual);
-  const pool = annual.length ? annual : m.facts;
-  if (!pool.length) return null;
-  return { fact: pool.reduce(latestBy), unit: m.unit };
+  const f = m.facts.find((x) => x.end === end);
+  return f ? { fact: f, unit: m.unit } : null;
 }
 
 // ── Provenance ──────────────────────────────────────────────────────────────
@@ -159,19 +169,29 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
 
   const rawDuration = (tags: string[], end?: string): { value: number; prov: Provenance; tag: string } | null => {
     const c = firstConcept(facts, tags); if (!c) return null;
-    const pick = durationAt(c.concept, end); if (!pick) return null;
+    const pick = durationAtStrict(c.concept, end); if (!pick) return null;
     return { value: M(pick.fact.val), prov: edgarProvenance(c.tag, 'us-gaap', pick.unit, pick.fact, cik10), tag: c.tag };
   };
   const rawInstant = (tags: string[], end?: string): { value: number; prov: Provenance; tag: string } | null => {
     const c = firstConcept(facts, tags); if (!c) return null;
-    const pick = instantAt(c.concept, end); if (!pick) return null;
+    const pick = instantAtStrict(c.concept, end); if (!pick) return null;
     return { value: M(pick.fact.val), prov: edgarProvenance(c.tag, 'us-gaap', pick.unit, pick.fact, cik10), tag: c.tag };
   };
 
-  // ── Revenue (the fiscal-year anchor) ──
-  const revenue = rawDuration(REVENUE_TAGS);
-  const anchorEnd = revenue ? revenue.prov.period : undefined;
-  const anchorFy = revenue ? revenue.prov.fy : undefined;
+  // ── Reporting anchor: the latest FULL-YEAR period from revenue (or operating income when
+  //    revenue is untagged). EVERY figure below is pulled STRICTLY from this one period — a
+  //    concept missing at the anchor becomes a gap, never a cross-year substitution. ──
+  const revC = firstConcept(facts, REVENUE_TAGS);
+  const opC = firstConcept(facts, OPERATING_INCOME_TAGS);
+  const anchor = (revC && latestFullYearDuration(revC.concept)) || (opC && latestFullYearDuration(opC.concept)) || null;
+  const anchorEnd = anchor?.fact.end;
+  const anchorFy = anchor?.fact.fy;
+  // Reporting currency = the unit on the anchor fact (USD for EDGAR; EUR/GBP/… for foreign
+  // filers). Falls back to USD only when the unit isn't a currency the engine models (Finding 5).
+  const detectedCcy = anchor && KNOWN_CURRENCIES.has(anchor.unit) ? anchor.unit : undefined;
+
+  // ── Revenue (strictly at the anchor) ──
+  const revenue = rawDuration(REVENUE_TAGS, anchorEnd);
   const ltm_revenue = revenue ? sv(revenue.value, revenue.prov) : null;
   if (!ltm_revenue) gaps.push('LTM revenue');
   const revenueVal = ltm_revenue?.value ?? 0;
@@ -222,15 +242,24 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   }
   const nwc_pct = nwc && revenueVal > 0 ? sv(nwc.value / revenueVal, { ...nwc.provenance, detail: 'NWC ÷ revenue (derived)' }) : null;
 
-  // ── Net debt = (LT noncurrent + LT current + short-term) − cash ──
+  // ── Net debt = (LT noncurrent + current debt) − cash ──
   const ltNon = rawInstant(LT_DEBT_NONCURRENT_TAGS, anchorEnd);
   const ltCur = rawInstant(LT_DEBT_CURRENT_TAGS, anchorEnd);
   const stDebt = rawInstant(SHORT_TERM_DEBT_TAGS, anchorEnd);
+  const debtCurrentTotal = rawInstant(DEBT_CURRENT_TOTAL_TAGS, anchorEnd);
   const totalDebtDirect = rawInstant(TOTAL_DEBT_TAGS, anchorEnd);
   const cashRaw = rawInstant(CASH_TAGS, anchorEnd);
   const cash = cashRaw ? sv(cashRaw.value, cashRaw.prov) : null;
 
-  const debtParts = [ltNon, ltCur, stDebt].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
+  // Current debt: prefer the DISJOINT specifics (short-term borrowings + current LT maturities);
+  // fall back to DebtCurrent (the total current-debt concept) only when neither is tagged, since
+  // DebtCurrent usually already includes the current LT portion (Finding 4 — avoid double-count).
+  const currentParts = [stDebt, ltCur].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
+  const currentDebt = currentParts.length
+    ? { value: currentParts.reduce((s, p) => s + p.value, 0), tag: currentParts.map((p) => p.tag).join(' + '), prov: currentParts[0].prov }
+    : debtCurrentTotal;
+
+  const debtParts = [ltNon, currentDebt].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
   let gross_debt: SourcedValue | null = null;
   if (debtParts.length) {
     const total = debtParts.reduce((s, p) => s + p.value, 0);
@@ -244,8 +273,9 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   let net_debt: SourcedValue | null = null;
   if (gross_debt) {
     net_debt = sv(gross_debt.value - (cash?.value ?? 0), {
-      source: 'edgar', detail: 'Gross debt − cash (derived)', tag: 'derived:NetDebt', period: anchorEnd, fy: anchorFy,
-      url: gross_debt.provenance.url,
+      source: 'edgar',
+      detail: cash ? 'Gross debt − cash (derived)' : 'Gross debt (no cash reported at period) (derived)',
+      tag: 'derived:NetDebt', period: anchorEnd, fy: anchorFy, url: gross_debt.provenance.url,
     });
   } else {
     gaps.push('Net debt at entry');
@@ -277,7 +307,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   return {
     entityName: facts.entityName ?? 'Unknown',
     cik10,
-    currency: opts.currency ?? 'USD',
+    currency: opts.currency ?? detectedCcy ?? 'USD',
     fiscalYear: anchorFy,
     periodEnd: anchorEnd,
     basis: 'FY',

@@ -92,7 +92,9 @@ export function draftModelFromHistoricals(raw: RawHistoricals, opts: DraftOption
   const prov: ProvenanceMap = {};
 
   s.deal_name = opts.dealName ?? raw.entityName ?? 'Imported Deal';
-  s.currency = opts.currency ?? 'USD';   // EDGAR reports USD; visible override on the review screen
+  // Reporting currency detected from the filing (USD for most EDGAR; EUR/GBP/… for foreign
+  // filers), with a visible override on the review screen. Falls back to USD.
+  s.currency = opts.currency ?? (raw.currency as ModelState['currency']) ?? 'USD';
   s.sector = sector;
   s.company_description = `Imported from SEC EDGAR${raw.fiscalYear ? ` · FY${raw.fiscalYear}` : ''}.`;
 
