@@ -120,6 +120,29 @@ export interface TaxAssumptions {
   dtl_unwind_years: number;
   nol_carryforward: number;
   minimum_tax_rate: number;
+  /** Post-2017 NOL usage cap as a fraction of taxable income computed *before* the NOL
+   *  deduction. Default 0.80 — the TCJA limits post-2017 NOLs to 80% of taxable income.
+   *  (Phase 0A) */
+  nol_limitation_pct?: number;
+  /** Pre-2017 NOLs are NOT subject to the 80% cap (they offset 100% of taxable income,
+   *  but expire after 20 years). When true the 80% limitation is bypassed. Default false
+   *  (treat the carryforward as post-2017). (Phase 0A) */
+  nol_is_pre_2017?: boolean;
+  /** Optional §382 ownership-change annual NOL-usage limit (absolute, deal currency £m).
+   *  An LBO is itself an ownership change, capping annual use of acquired NOLs at roughly
+   *  (equity value × long-term tax-exempt rate). Absent/0 ⇒ no §382 limit. (Phase 0A) */
+  section_382_annual_limit?: number;
+  /** §163(j) business-interest-expense limitation. When enabled, deductible interest is
+   *  capped at section_163j_ati_pct × ATI and disallowed interest carries forward. Default
+   *  false — preserves the unlimited-deduction behaviour of existing/saved models. (Phase 0A) */
+  section_163j_enabled?: boolean;
+  /** §163(j) cap as a fraction of ATI. Default 0.30 (30% of ATI). (Phase 0A) */
+  section_163j_ati_pct?: number;
+  /** ATI basis: 'ebit' (post-2022 — no depreciation/amortisation add-back, the default) or
+   *  'ebitda' (pre-2022 — adds D&A back to the cap base). (Phase 0A) */
+  section_163j_ati_basis?: 'ebit' | 'ebitda';
+  /** Optional opening §163(j) disallowed-interest carryforward (deal currency £m). Default 0. (Phase 0A) */
+  section_163j_carryforward?: number;
 }
 
 export interface EntryAssumptions {
@@ -179,6 +202,9 @@ export interface AnnualProjectionYear {
   ebt: number;
   tax: number;
   nol_used: number;
+  /** §163(j) business interest disallowed (and carried forward) this year, or — when the
+   *  interest tax shield is switched off — the interest denied deduction. 0 by default. (Phase 0A) */
+  disallowed_interest: number;
   net_income: number;
   nopat: number;
   maintenance_capex: number;

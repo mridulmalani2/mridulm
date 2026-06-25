@@ -4,7 +4,7 @@ import type {
   ModelState,
   AnnualProjectionYear,
 } from '../dealEngineTypes';
-import { oidAmortByYear, oidTotal } from './oid';
+import { oidAmortFromSchedule, oidTotal } from './oid';
 import { generateSensitivityTable } from './scenarios';
 
 let ExcelJS: typeof import('exceljs') | null = null;
@@ -1323,8 +1323,8 @@ function buildCashFlowDebtSheet(
   if (refiPrem.some(v => v > 0)) {
     row = writeDataRow(ws, row, 'Refinancing Premium (one-time)', refiPrem.map(v => (v > 0 ? -v : 0)), FMT_CCY);
   }
-  // OID amortisation (P4-14) — non-cash, tax-deductible.
-  const cfOidAmort = oidAmortByYear(state);
+  // OID amortisation (P4-14) — non-cash, tax-deductible; schedule-aware (Phase 0B).
+  const cfOidAmort = oidAmortFromSchedule(state, ds);
   if (cfOidAmort.some(v => v > 0)) {
     row = writeDataRow(ws, row, 'OID Amortisation (non-cash)', cfOidAmort, FMT_CCY, { alt: true });
   }

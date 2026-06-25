@@ -23,7 +23,7 @@ import type {
 } from '../dealEngineTypes';
 import type { AddOnImpact } from './addOns';
 import { nwcBalance } from './projections';
-import { oidTotal, oidAmortByYear } from './oid';
+import { oidTotal, oidAmortFromSchedule } from './oid';
 
 const CLOSE_TOLERANCE = 0.01; // £m — joint-consistency tolerance
 
@@ -51,7 +51,10 @@ export function computeBalanceSheet(
   const openingPpe = 0;                                // net PP&E builds from capex − D&A over the hold
   // Capitalised financing costs = upfront bank fees + OID (P4-14); both amortise over the hold.
   const oidTot = oidTotal(state);
-  const oidAmort = oidAmortByYear(state);
+  // Schedule-aware OID write-down (Phase 0B) — the SAME series the converged projections
+  // deducted for tax, so the deferred-cost asset and the tax/net-income flows stay consistent
+  // (and the statement still closes) even when a tranche prepays or refinances early.
+  const oidAmort = oidAmortFromSchedule(state, debtSchedule);
   const openingDefFin = financingFees + oidTot;
   // Goodwill is the residual that closes the opening balance sheet (purchase accounting).
   const openingGoodwill =

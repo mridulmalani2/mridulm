@@ -2,6 +2,7 @@
 
 import type { ModelState, AnnualProjectionYear, MarginAssumptions } from '../dealEngineTypes';
 import { oidAmortByYear } from './oid';
+import { computeAnnualTax, initTaxState } from './tax';
 
 /**
  * Net working capital balance for a given revenue and EBITDA margin (P4-9).
@@ -29,8 +30,8 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
   const daPct = state.margins.da_pct_revenue;
   const capexPct = state.margins.capex_pct_revenue;
   const taxRate = state.tax.tax_rate;
-  const minTaxRate = state.tax.minimum_tax_rate;
-  let nolRemaining = state.tax.nol_carryforward;
+  // Shared running tax state (NOL balance + §163(j) carryforward) threaded across the hold.
+  const taxRun = initTaxState(state.tax);
 
   const totalDebt = state.entry.total_debt_raised;
   const financingFees = state.fees.financing_fee_pct * totalDebt;
@@ -70,22 +71,21 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       }
     }
 
-    const ebt = ebit - interestEstimate - finFeeAmort - (oidAmort[t] ?? 0);
-
-    let tax: number;
-    let nolUsage = 0;
-    if (ebt > 0) {
-      // NOLs reduce taxable income, not tax liability directly.
-      nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, ebt) : 0;
-      const taxableIncome = ebt - nolUsage;
-      const rawTax = taxableIncome * taxRate;
-      const minTax = taxableIncome * minTaxRate;
-      tax = Math.max(rawTax, minTax);
-      nolRemaining -= nolUsage;
-    } else {
-      tax = 0;
-      nolUsage = 0;
-    }
+    // Tax: §163(j) interest limit → taxable income → NOL (80% cap) → minimum tax.
+    // Shared with the post-debt true-up so the two passes cannot diverge (see tax.ts).
+    const taxLine = computeAnnualTax(
+      {
+        ebit,
+        interestExpense: interestEstimate,
+        financingDeductions: finFeeAmort + (oidAmort[t] ?? 0),
+        ebitdaForAti: ebitdaAdj,
+      },
+      state.tax,
+      taxRun,
+    );
+    const ebt = taxLine.ebt;
+    const tax = taxLine.tax;
+    const nolUsage = taxLine.nolUsed;
 
     const netIncome = ebt - tax;
     const nopat = ebit * (1 - taxRate);
@@ -123,7 +123,8 @@ export function buildProjections(state: ModelState): AnnualProjectionYear[] {
       financing_fee_amort: finFeeAmort,
       ebt,
       tax,
-      nol_used: ebt > 0 ? nolUsage : 0,
+      nol_used: nolUsage,
+      disallowed_interest: taxLine.disallowedInterest,
       net_income: netIncome,
       nopat,
       maintenance_capex: mCapex,
@@ -147,12 +148,16 @@ export function updateProjectionsWithDebt(
   cashInterestByYear: number[],
   pikAccrualByYear: number[],
   totalRepaymentByYear: number[],
+  /** Schedule-aware OID amortisation derived from the actual debt schedule (Phase 0B). The
+   *  caller (converge.ts) passes `oidAmortFromSchedule(state, ds)` so the tax deduction
+   *  matches the balance-sheet write-down. Falls back to the straight-line seed. */
+  oidAmortOverride?: number[],
 ): AnnualProjectionYear[] {
   const hp = state.exit.holding_period;
-  let nolRemaining = state.tax.nol_carryforward;
+  const taxRun = initTaxState(state.tax);
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   const finFeeAmort = hp > 0 ? financingFees / hp : 0;
-  const oidAmort = oidAmortByYear(state); // P4-14
+  const oidAmort = oidAmortOverride ?? oidAmortByYear(state); // P4-14, schedule-aware (Phase 0B)
 
   for (let i = 0; i < projections.length; i++) {
     const yr = projections[i];
@@ -161,20 +166,21 @@ export function updateProjectionsWithDebt(
     const totalInterestExpense = actualCashInterest + actualPik;
 
     yr.interest_expense = totalInterestExpense;
-    yr.ebt = yr.ebit - totalInterestExpense - finFeeAmort - (oidAmort[i] ?? 0);
-
-    if (yr.ebt > 0) {
-      const nolUsage = nolRemaining > 0 ? Math.min(nolRemaining, yr.ebt) : 0;
-      const taxableIncome = yr.ebt - nolUsage;
-      const rawTax = taxableIncome * state.tax.tax_rate;
-      const minTax = taxableIncome * state.tax.minimum_tax_rate;
-      yr.tax = Math.max(rawTax, minTax);
-      yr.nol_used = nolUsage;
-      nolRemaining -= nolUsage;
-    } else {
-      yr.tax = 0;
-      yr.nol_used = 0;
-    }
+    // Re-run the shared tax line on the converged interest (same ordering as buildProjections).
+    const taxLine = computeAnnualTax(
+      {
+        ebit: yr.ebit,
+        interestExpense: totalInterestExpense,
+        financingDeductions: finFeeAmort + (oidAmort[i] ?? 0),
+        ebitdaForAti: yr.ebitda_adj,
+      },
+      state.tax,
+      taxRun,
+    );
+    yr.ebt = taxLine.ebt;
+    yr.tax = taxLine.tax;
+    yr.nol_used = taxLine.nolUsed;
+    yr.disallowed_interest = taxLine.disallowedInterest;
 
     yr.net_income = yr.ebt - yr.tax;
     yr.fcf_pre_debt = yr.ebitda_adj - yr.tax - yr.total_capex - yr.delta_nwc;

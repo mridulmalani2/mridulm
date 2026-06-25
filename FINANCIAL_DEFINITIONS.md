@@ -27,11 +27,25 @@ TypeScript, implemented in `lib/engine/`.
 | Effective rate | floating: `max(base_rate_by_year[t] ?? base_rate + spread, floor)`; fixed: `interest_rate` | Forward base-rate path supported (P3-3). Refinancing reprices from its year (P4-3). | `debtSchedule.ts` | `phase3`, `phase4c` |
 | PIK accrual | `beg_bal × pik_rate` | PIK toggle (P4-4) elects PIK or cash per year; cash election pays the note coupon. | `debtSchedule.ts` | `phase4b` |
 | Net debt | `max(0, gross_debt − cash_on_hand)` | Cash on hand, not min-cash reserve. | `debtSchedule.ts` | `engine-parity` |
-| Cash sweep | tiered by `sweep_priority`, pro-rata within tier, capped at `cash_sweep_pct × outstanding` | Available = post-service FCF − incremental floor shortfall. | `debtSchedule.ts` | `phase4b` |
+| Cash sweep | tiered by `sweep_priority`, pro-rata within tier, capped at `cash_sweep_pct × outstanding` | Available = **beginning cash + post-service FCF − refi premium − min cash** — sweeps **accumulated** balance-sheet cash above the floor, not just the current year's FCF, and never sweeps below min cash (Phase 0B). | `debtSchedule.ts` | `phase4b`, `debt-mechanics` |
 | Revolver draw/repay | draw to the min-cash floor; repay from post-service excess | Interest on opening drawn balance (P3-4). | `debtSchedule.ts` | `phase3` |
 | Bullet at exit | schedule all-zeros; principal nets against sale proceeds | Not amortised from operating cash. | `modelState.ts` | `phase3` |
 | Refinancing premium | `prepayment_premium × outstanding` in the refi year | One-time cash cost; charged to equity on the BS (P4-3). | `debtSchedule.ts` | `phase4c` |
-| OID amortisation | `(oid_pct × par) / maturity` per year | Non-cash, tax-deductible; capitalised as deferred financing cost (P4-14). | `oid.ts`, `projections.ts` | `phase4h` |
+| OID amortisation | schedule-aware: `max(remaining/years_left, remaining × principal_retired/beg_bal)`, written off in full on sweep-to-zero or refi | Non-cash, tax-deductible; capitalised as deferred financing cost (P4-14). Telescopes to the prior `(oid_pct × par)/maturity` for a held bullet, so unchanged unless a tranche prepays or refinances early (Phase 0B). Same series feeds the tax deduction and the BS deferred-cost write-down, so the close holds. | `oid.ts` `oidAmortFromSchedule`, `projections.ts`, `balanceSheet.ts` | `phase4h`, `debt-mechanics` |
+
+## Tax (one shared line for both projection passes — `tax.ts` `computeAnnualTax`)
+
+Sequencing when pretax income is positive: **§163(j) interest limit → taxable income → NOL
+offset → minimum tax**. Defaults (`tax_shield_on_interest = true`, `section_163j_enabled`
+off, `nol_carryforward = 0`, `minimum_tax_rate = 0`) reproduce the legacy inline tax exactly.
+
+| Metric | Formula | Convention / notes | Module | Test |
+|---|---|---|---|---|
+| Book EBT | `EBIT − interest − financing-fee/OID amort` | Drives net income; unchanged. The tax *base* may differ when interest is limited. | `tax.ts` | `tax` |
+| Interest tax shield | deductible interest = `0` if `tax_shield_on_interest=false`, else §163(j)-limited (below) | Shield-off makes interest **permanently** non-deductible (BEAT-style) — nothing carries forward. | `tax.ts` | `tax` |
+| §163(j) interest cap | deductible interest = `min(interest + carryforward, ati_pct × ATI)`; excess carries forward | `ati_pct` default 30%; ATI = EBIT (post-2022) or EBITDA (`section_163j_ati_basis='ebitda'`, pre-2022). Disabled by default. The disallowed amount is surfaced per year on `AnnualProjectionYear.disallowed_interest`. | `tax.ts` | `tax` |
+| NOL offset | `nolUsed = min(nolRemaining, limit_pct × taxableBeforeNol, §382 limit)` | `limit_pct` = 80% post-2017 (TCJA), 100% if `nol_is_pre_2017`; optional `section_382_annual_limit`. | `tax.ts` | `tax` |
+| Cash tax | `max(taxableIncome × tax_rate, taxableIncome × minimum_tax_rate)` | Minimum tax applies last on the post-NOL base (Pillar Two / CAMT proxy). | `tax.ts` | `tax` |
 
 ## Coverage & covenants
 

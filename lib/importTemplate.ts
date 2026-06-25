@@ -40,6 +40,12 @@ export function getInputTemplate(): Record<string, unknown> {
       dtl_unwind_years: 0,
       nol_carryforward: 0,
       minimum_tax_rate: 0,
+      nol_limitation_pct: 0.80,
+      nol_is_pre_2017: false,
+      section_382_annual_limit: 0,
+      section_163j_enabled: false,
+      section_163j_ati_pct: 0.30,
+      section_163j_ati_basis: "ebit",
     },
 
     entry: {
@@ -186,6 +192,17 @@ TAX
   nol_carryforward   Net operating loss carryforward balance in £m. Use 0 if none.
   minimum_tax_rate   Minimum effective tax rate if subject to Pillar Two global minimum tax.
                      Use 0 if not applicable.
+  nol_limitation_pct  Post-2017 NOLs offset at most this fraction of taxable income (US TCJA
+                      cap = 0.80). Only bites when nol_carryforward > 0. Default 0.80.
+  nol_is_pre_2017    true only for legacy pre-2017 NOLs, which offset 100% of taxable income
+                     (bypassing the 80% cap). Default false.
+  section_382_annual_limit  Optional §382 ownership-change annual NOL-usage cap in £m. An LBO is
+                      itself an ownership change. Use 0 for no §382 limit.
+  section_163j_enabled  true to apply the US §163(j) business-interest limitation (cap on
+                        deductible interest, excess carried forward). Default false. Enable for
+                        US C-corp targets; leave false for jurisdictions with their own regime.
+  section_163j_ati_pct  §163(j) cap as a fraction of ATI. Default 0.30 (30%).
+  section_163j_ati_basis  "ebit" (post-2022, the default) or "ebitda" (pre-2022 add-back of D&A).
 
 ENTRY
   entry_ebitda_multiple  EV / LTM EBITDA multiple paid at acquisition (e.g., 11.5 for 11.5×).
