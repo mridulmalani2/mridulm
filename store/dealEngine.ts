@@ -19,6 +19,10 @@ import { generateInvestmentMemo } from '../lib/engine/ai/memoGenerator';
 import { buildProviderConfig, detectProvider } from '../lib/engine/ai/providers';
 import type { AIProvider } from '../lib/engine/ai/providers';
 import { computeChangedTraceFields } from '../lib/traceMap';
+import { getCompanyFacts, getSubmissions, extractRecentFilings } from '../lib/edgar/client';
+import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
+import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
+import type { RawHistoricals, ProvenanceMap, Provenance } from '../lib/edgar/types';
 
 // ── LBO Financial Sanity Check ──────────────────────────────────────────
 // Derived from first principles:
@@ -146,6 +150,18 @@ interface DealEngineStore {
   /** Pending ceteris paribus solver result awaiting user option selection. */
   cetparResult: CetparResult | null;
 
+  // ── Phase 1: real-filing import + assumptions review ──
+  /** Which start-flow screen is active. 'model' once the deal is built. */
+  startScreen: 'source' | 'assumptions' | 'model';
+  /** Factual historicals extracted from filings (null until an import runs). */
+  rawHistoricals: RawHistoricals | null;
+  /** fieldPath → provenance for every populated input (EDGAR / AI / user / default). */
+  provenanceMap: ProvenanceMap;
+  /** Filing links surfaced on the review screen (the target's recent 10-Ks/20-Fs). */
+  sourceFilings: { form: string; filingDate: string; documentUrl: string }[];
+  /** True while AI is suggesting the assumptions group. */
+  isSuggesting: boolean;
+
   setApiKey: (key: string) => void;
   setAiProvider: (provider: AIProvider) => void;
   setProviderAndKey: (provider: AIProvider, key: string) => void;
@@ -179,6 +195,19 @@ interface DealEngineStore {
   setActiveSensitivityTable: (t: number) => void;
   selectCetparOption: (option: CetparResult['options'][number]) => void;
   dismissCetpar: () => void;
+
+  // ── Phase 1 actions ──
+  setStartScreen: (screen: 'source' | 'assumptions' | 'model') => void;
+  /** Import a target by CIK: fetch + map filings, draft the assumptions, go to review. */
+  importFromEdgar: (cik10: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
+  /** Draft directly from already-mapped historicals (10-K upload path / programmatic). */
+  loadFromHistoricals: (raw: RawHistoricals, opts?: { dealName?: string; sector?: string }) => void;
+  /** Edit one reviewed field; marks its provenance 'user' and re-derives the live draft. */
+  editAssumption: (path: string, value: unknown) => void;
+  /** AI-suggest the forward assumptions (sector-aware) using the saved provider/key. */
+  aiSuggestAssumptions: () => Promise<void>;
+  /** Commit the reviewed draft → full model, switch to the model screen. */
+  buildModelFromDraft: () => void;
 }
 
 export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
@@ -203,6 +232,11 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
   lastChangedTraceFields: [],
   traceModeActive: false,
   cetparResult: null,
+  startScreen: 'source',
+  rawHistoricals: null,
+  provenanceMap: {},
+  sourceFilings: [],
+  isSuggesting: false,
 
   setApiKey: (key) => {
     localStorage.setItem('deal-engine-api-key', key);
@@ -230,7 +264,7 @@ export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
 
   toggleTraceMode: () => set((s) => ({ traceModeActive: !s.traceModeActive })),
 
-  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null, pendingEdits: [] }),
+  resetModel: () => set({ modelState: null, chatHistory: [], lastDiffs: [], lastAnalysis: null, aiPanelInsights: null, aiPanelInsightsLoading: false, memoContent: null, isMemoGenerating: false, error: null, pendingEdits: [], startScreen: 'source', rawHistoricals: null, provenanceMap: {}, sourceFilings: [], isSuggesting: false }),
 
   initializeModel: async (inputs) => {
     set({ isCalculating: true, error: null });
@@ -376,19 +410,13 @@ Be specific. Use the company name to infer business type and calibrate according
       applyUpdate(stateDict, path, value);
       const state = stateDict as unknown as ModelState;
 
-      // Track which entry field was edited for clean bidirectional sync in deriveEntryFields
+      // Editing the multiple or EV makes THAT field the single valuation driver; the other
+      // becomes a derived read-only output in deriveEntryFields (which also honours the
+      // LTM/NTM basis — so we no longer hand-derive it here with LTM-only EBITDA).
       if (path === 'entry.entry_ebitda_multiple') {
-        state._lastEditedEntryField = 'multiple';
-        const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-        if (ebitda > 0) {
-          state.entry.enterprise_value = ebitda * (value as number);
-        }
+        state.entry.entry_valuation_driver = 'multiple';
       } else if (path === 'entry.enterprise_value') {
-        state._lastEditedEntryField = 'ev';
-        const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-        if (ebitda > 0) {
-          state.entry.entry_ebitda_multiple = (value as number) / ebitda;
-        }
+        state.entry.entry_valuation_driver = 'ev';
       } else if (path === 'entry.leverage_ratio') {
         const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
         const targetLeverage = value as number;
@@ -403,15 +431,11 @@ Be specific. Use the company name to infer business type and calibrate according
           }
           state.entry.leverage_ratio = targetLeverage;
         }
-        state._lastEditedEntryField = null;
       } else if (path === 'exit.exit_ev_override') {
         const exitEvVal = value as number;
         if (exitEvVal > 0 && state.exit.exit_ebitda > 0) {
           state.exit.exit_ebitda_multiple = exitEvVal / state.exit.exit_ebitda;
         }
-        state._lastEditedEntryField = null;
-      } else {
-        state._lastEditedEntryField = null;
       }
 
       const result = fullRecalc(state);
@@ -648,8 +672,8 @@ Be specific. Use the company name to infer business type and calibrate according
       const state = stateDict as unknown as ModelState;
       const evEdit = pendingEdits.find(e => e.field === 'entry.enterprise_value');
       const multEdit = pendingEdits.find(e => e.field === 'entry.entry_ebitda_multiple');
-      if (evEdit) state._lastEditedEntryField = 'ev';
-      else if (multEdit) state._lastEditedEntryField = 'multiple';
+      if (evEdit) state.entry.entry_valuation_driver = 'ev';
+      else if (multEdit) state.entry.entry_valuation_driver = 'multiple';
 
       const result = fullRecalc(state);
 
@@ -722,6 +746,140 @@ Be specific. Use the company name to infer business type and calibrate according
     const { chatHistory } = get();
     const msg: ChatMessage = { role: 'assistant', content: 'Ceteris paribus analysis dismissed.', timestamp: new Date().toISOString() };
     set({ cetparResult: null, chatHistory: [...chatHistory, msg] });
+  },
+
+  // ── Phase 1: real-filing import + assumptions review ───────────────────────
+
+  setStartScreen: (screen) => set({ startScreen: screen }),
+
+  importFromEdgar: async (cik10, opts) => {
+    set({ isCalculating: true, error: null });
+    try {
+      const facts = await getCompanyFacts(cik10);
+
+      // Submissions are best-effort: they enrich sector + filing links but aren't required.
+      let sicDescription: string | undefined;
+      let filings: { form: string; filingDate: string; documentUrl: string }[] = [];
+      try {
+        const subs = await getSubmissions(cik10);
+        sicDescription = subs.sicDescription;
+        filings = extractRecentFilings(subs, ['10-K', '20-F', '40-F'])
+          .slice(0, 3)
+          .map((f) => ({ form: f.form, filingDate: f.filingDate, documentUrl: f.documentUrl }));
+      } catch { /* submissions unavailable — proceed with companyfacts only */ }
+
+      const raw = mapCompanyFacts(facts, { sicDescription });
+      const sector = opts?.sector ?? inferSector(sicDescription);
+      const { state, provenance } = draftModelFromHistoricals(raw, {
+        dealName: opts?.dealName ?? raw.entityName,
+        sector,
+        currency: 'USD',
+      });
+      const recalc = fullRecalc(state);
+      set({
+        rawHistoricals: raw,
+        provenanceMap: provenance,
+        sourceFilings: filings,
+        modelState: recalc,
+        startScreen: 'assumptions',
+        isCalculating: false,
+        chatHistory: [],
+        scenarios: [],
+        sensitivityTables: [],
+        memoContent: null,
+        aiPanelInsights: null,
+      });
+    } catch (e: unknown) {
+      const msg = (e as Error).message || 'Import failed';
+      set({
+        error: /not found/i.test(msg)
+          ? 'Not found on EDGAR — this looks like a private target or an unknown CIK. Try the company autocomplete, or upload a 10-K (coming soon).'
+          : `EDGAR import failed: ${msg}`,
+        isCalculating: false,
+      });
+    }
+  },
+
+  loadFromHistoricals: (raw, opts) => {
+    const sector = opts?.sector ?? inferSector(raw.sector?.provenance.detail);
+    const { state, provenance } = draftModelFromHistoricals(raw, { dealName: opts?.dealName ?? raw.entityName, sector, currency: 'USD' });
+    const recalc = fullRecalc(state);
+    set({ rawHistoricals: raw, provenanceMap: provenance, modelState: recalc, startScreen: 'assumptions', sourceFilings: [] });
+  },
+
+  editAssumption: (path, value) => {
+    const { modelState, provenanceMap, modelVersion } = get();
+    if (!modelState) return;
+    const stateDict = JSON.parse(JSON.stringify(modelState)) as Record<string, unknown>;
+    applyUpdate(stateDict, path, value);
+    const state = stateDict as unknown as ModelState;
+    // Editing the multiple or EV makes that field the single valuation driver (deriveEntryFields
+    // derives the other, honouring the LTM/NTM basis).
+    if (path === 'entry.entry_ebitda_multiple') state.entry.entry_valuation_driver = 'multiple';
+    else if (path === 'entry.enterprise_value') state.entry.entry_valuation_driver = 'ev';
+    const result = fullRecalc(state);
+    const userProv: Provenance = { source: 'user', detail: 'Edited on the assumptions review' };
+    set({
+      modelState: result,
+      provenanceMap: { ...provenanceMap, [path]: userProv },
+      modelVersion: modelVersion + 1,
+      memoContent: null,
+      scenarios: [],
+    });
+  },
+
+  aiSuggestAssumptions: async () => {
+    const { modelState, apiKey, aiProvider, provenanceMap } = get();
+    if (!modelState) return;
+    if (!apiKey) { set({ error: 'Add an API key (Settings) to use AI-suggest — it reuses your saved provider.' }); return; }
+    set({ isSuggesting: true, error: null });
+    try {
+      const config = buildProviderConfig(aiProvider, apiKey);
+      const revM = modelState.revenue.base_revenue.toFixed(0);
+      const marM = (modelState.margins.base_ebitda_margin * 100).toFixed(1);
+      const message = `Set realistic FORWARD LBO assumptions for ${modelState.deal_name} (${modelState.sector}).
+Extracted facts (do NOT change these): LTM revenue ${revM}M ${modelState.currency}, EBITDA margin ${marM}%.
+Update ONLY these forward assumptions, each as the noted unit, citing sector comps in your rationale:
+- revenue.growth_rates: 5-year array of DECIMAL growth rates (0.08 = 8%). PE range 0.03–0.20; never > 0.50.
+- margins.target_ebitda_margin: DECIMAL exit margin after the hold.
+- margins.margin_trajectory: linear | front_loaded | back_loaded.
+- entry.entry_ebitda_multiple: sector-appropriate entry EV/EBITDA.
+- exit.exit_ebitda_multiple: realistic exit multiple vs entry.
+- entry.leverage_ratio: entry net leverage (×EBITDA), market-clearing for this credit profile.
+Set trigger_recalculation true.`;
+      const result = await callAI(message, modelState, [], config);
+      if (result.error) { set({ error: result.error, isSuggesting: false }); return; }
+      if (result.updatedStateDict && result.appliedDiffs.length > 0) {
+        const ms = result.updatedStateDict as unknown as ModelState;
+        // Clamp AI values to sane PE bounds (same guardrails as the manual init path).
+        ms.revenue.growth_rates = (ms.revenue.growth_rates || []).map((g) => Math.max(-0.30, Math.min(0.50, g)));
+        ms.margins.target_ebitda_margin = Math.max(0.05, Math.min(0.60, ms.margins.target_ebitda_margin));
+        ms.entry.entry_ebitda_multiple = Math.max(3, Math.min(30, ms.entry.entry_ebitda_multiple));
+        ms.exit.exit_ebitda_multiple = Math.max(3, Math.min(30, ms.exit.exit_ebitda_multiple));
+        ms.entry.leverage_ratio = Math.max(0, Math.min(8, ms.entry.leverage_ratio));
+        ms.entry.entry_valuation_driver = 'multiple';
+        // Mark every AI-touched field's provenance.
+        const nextProv: ProvenanceMap = { ...provenanceMap };
+        for (const d of result.appliedDiffs) {
+          const root = d.field.split('.').slice(0, 2).join('.');
+          nextProv[root] = { source: 'ai', detail: `AI-suggested (${aiProvider})` };
+        }
+        const recalc = fullRecalc(ms);
+        set({ modelState: recalc, provenanceMap: nextProv, isSuggesting: false });
+        return;
+      }
+      set({ isSuggesting: false, error: 'AI returned no assumption changes — try again.' });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, isSuggesting: false });
+    }
+  },
+
+  buildModelFromDraft: () => {
+    const { modelState } = get();
+    if (!modelState) return;
+    const built = fullRecalc(modelState);
+    set({ modelState: built, startScreen: 'model', modelVersion: get().modelVersion + 1 });
+    if (get().apiKey) get().refreshPanelInsights();
   },
 
   generateAssumptions: async () => {

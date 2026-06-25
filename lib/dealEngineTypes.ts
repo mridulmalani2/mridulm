@@ -162,6 +162,11 @@ export interface EntryAssumptions {
    *  last-twelve-months base EBITDA; 'ntm' values off forward EBITDA = base × (1 + Y1 growth),
    *  so the same multiple implies a higher EV on a growing target. Leverage stays on LTM. */
   entry_ebitda_basis?: 'ltm' | 'ntm';
+  /** SINGLE driver of the entry EV↔multiple relationship (Phase 1). 'multiple' (default) ⇒ the
+   *  user sets the multiple and EV is derived; 'ev' ⇒ the user sets EV and the multiple is
+   *  derived. Replaces the old transient `_lastEditedEntryField` two-way sync — exactly one of
+   *  the pair is an input, the other is a read-only output, removing the circular ambiguity. */
+  entry_valuation_driver?: 'multiple' | 'ev';
 }
 
 export interface PartialExitEvent {
@@ -479,8 +484,6 @@ export interface ModelState {
   ai_overrides: Record<string, unknown>;
   ai_toggle_fields: string[];
   chat_history: ChatMessage[];
-  // Transient: tracks which entry field was last edited for EV/Multiple sync
-  _lastEditedEntryField?: 'multiple' | 'ev' | null;
   /** Transient (Phase 0C): add-on EBITDA contribution per hold year — each bolt-on's revenue at
    *  ITS OWN margin plus cost synergies. Injected by `injectAddOns`, consumed by the projection
    *  build so consolidated EBITDA blends the add-on margin instead of the parent's. Recomputed
