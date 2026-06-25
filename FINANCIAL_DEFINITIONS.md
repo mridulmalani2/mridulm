@@ -16,8 +16,9 @@ TypeScript, implemented in `lib/engine/`.
 |---|---|---|---|---|
 | Sponsor entry equity | `EV + entry_fee + transaction_costs + financing_fees + OID − total_debt_raised` | Entry advisory fee is target-borne in S&U but **included** in the MOIC/IRR denominator (sponsor cash out). OID (P4-14) is funded by equity at close. | `returns.ts` `calculateReturns` | `engine-parity`, `phase4h` |
 | Total debt raised | `Σ tranche.principal` (par) | Par, not net of OID. | `modelState.ts deriveEntryFields` | `engine-parity` |
-| Entry leverage | `total_debt_raised / entry EBITDA` | Gross leverage at entry. | `creditAnalysis.ts` | — |
+| Entry leverage | `total_debt_raised / entry EBITDA` | Gross leverage at entry. Always on **LTM** base EBITDA, even when the multiple is quoted NTM. | `creditAnalysis.ts` | — |
 | Sources = Uses | sponsor equity is the plug | Balances by construction. OID added to uses (P4-14). | `sourcesUses.ts` | — |
+| EBITDA valuation basis | entry EV = `multiple × (LTM base EBITDA)`; NTM = `multiple × base × (1 + Y1 growth)`. Exit EV = `multiple × (LTM exit-year EBITDA)`; NTM = `multiple × exit EBITDA × (1 + terminal growth)` | `entry_ebitda_basis` / `exit_ebitda_basis`, default `'ltm'` (existing deals unchanged). NTM implies a higher EV per turn on a growing target. An `exit_ev_override` still wins. (Phase 0D) | `modelState.ts deriveEntryFields`, `returns.ts` | `valuation-basis` |
 
 ## Debt schedule
 

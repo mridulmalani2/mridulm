@@ -250,9 +250,16 @@ export function calculateReturns(
 
   const exitYr = projections.length ? projections[projections.length - 1] : null;
   const exitEbitda = exitYr ? exitYr.ebitda_adj : 0;
+  // Phase 0D: the exit multiple may be quoted on forward (NTM) EBITDA — the exit-year EBITDA
+  // grown one year at the terminal (last modelled) growth rate. 'ltm' (default) uses the
+  // final hold-year EBITDA, so existing deals are unchanged.
+  const terminalGrowth = state.revenue.growth_rates[hp - 1] ?? 0;
+  const exitValuationEbitda = state.exit.exit_ebitda_basis === 'ntm'
+    ? exitEbitda * (1 + terminalGrowth)
+    : exitEbitda;
   const exitEv = (state.exit.exit_ev_override != null && state.exit.exit_ev_override > 0)
     ? state.exit.exit_ev_override
-    : exitEbitda * state.exit.exit_ebitda_multiple;
+    : exitValuationEbitda * state.exit.exit_ebitda_multiple;
   // Use net_debt_by_year (gross debt − actual cash on hand) so that accumulated
   // cash reduces exit proceeds correctly.
   const exitNetDebt = debtSchedule.net_debt_by_year.length

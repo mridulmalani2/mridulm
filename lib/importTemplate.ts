@@ -50,6 +50,7 @@ export function getInputTemplate(): Record<string, unknown> {
 
     entry: {
       entry_ebitda_multiple: 11.5,
+      entry_ebitda_basis: "ltm",
       net_debt_at_entry: 0,
       min_cash_balance: 5,
       leverage_ratio: 4.5,
@@ -110,6 +111,7 @@ export function getInputTemplate(): Record<string, unknown> {
       exit_ebitda_multiple: 12.0,
       exit_revenue_multiple: 0,
       exit_method: "secondary_buyout",
+      exit_ebitda_basis: "ltm",
       mid_year_convention: false,
       interim_distributions: [0, 0, 0, 0, 0],
       exit_ev_override: null,
@@ -205,7 +207,10 @@ TAX
   section_163j_ati_basis  "ebit" (post-2022, the default) or "ebitda" (pre-2022 add-back of D&A).
 
 ENTRY
-  entry_ebitda_multiple  EV / LTM EBITDA multiple paid at acquisition (e.g., 11.5 for 11.5×).
+  entry_ebitda_multiple  EV / EBITDA multiple paid at acquisition (e.g., 11.5 for 11.5×).
+  entry_ebitda_basis  "ltm" (default — multiple on last-twelve-months base EBITDA) or "ntm"
+                      (multiple on forward EBITDA = base × (1 + Y1 growth); higher EV per turn).
+                      Leverage is always quoted on LTM EBITDA regardless.
   net_debt_at_entry   Net debt (gross debt minus cash) on the target's balance sheet at closing,
                       in £m. Use 0 if a clean, debt-free balance sheet or unknown.
   min_cash_balance    Minimum operational cash the business must hold at all times, in £m.
@@ -258,6 +263,8 @@ EXIT
   holding_period     Investment hold period in years (integer, typically 3–7).
                      IMPORTANT: This controls all array lengths elsewhere in the model.
   exit_ebitda_multiple  EV / EBITDA multiple at exit.
+  exit_ebitda_basis  "ltm" (default — multiple on final hold-year EBITDA) or "ntm" (multiple on
+                     forward EBITDA = exit-year EBITDA × (1 + terminal growth)).
   exit_revenue_multiple Use 0 — model defaults to EBITDA-based exit valuation.
   exit_method        One of: "secondary_buyout", "strategic", "ipo", "recapitalization"
   mid_year_convention  false (year-end cash flows, standard for PE).

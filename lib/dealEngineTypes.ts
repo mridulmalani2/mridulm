@@ -158,6 +158,10 @@ export interface EntryAssumptions {
   total_debt_raised: number;
   leverage_ratio: number;
   min_cash_balance: number;
+  /** EBITDA basis the entry multiple is applied to (Phase 0D). 'ltm' (default) values off the
+   *  last-twelve-months base EBITDA; 'ntm' values off forward EBITDA = base × (1 + Y1 growth),
+   *  so the same multiple implies a higher EV on a growing target. Leverage stays on LTM. */
+  entry_ebitda_basis?: 'ltm' | 'ntm';
 }
 
 export interface PartialExitEvent {
@@ -176,6 +180,10 @@ export interface ExitAssumptions {
   exit_ebitda_multiple: number;
   exit_revenue_multiple: number;
   exit_method: 'strategic' | 'secondary_buyout' | 'ipo' | 'recapitalization';
+  /** EBITDA basis the exit multiple is applied to (Phase 0D). 'ltm' (default) values off the
+   *  final hold-year EBITDA; 'ntm' values off forward EBITDA = exit-year EBITDA × (1 + terminal
+   *  growth), i.e. the buyer pays the multiple on next-twelve-months EBITDA. */
+  exit_ebitda_basis?: 'ltm' | 'ntm';
   mid_year_convention: boolean;
   interim_distributions: number[];
   exit_ev_override: number | null;
