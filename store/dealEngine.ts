@@ -1020,6 +1020,7 @@ Set trigger_recalculation true.`;
       set({
         modelState: result,
         isCalculating: false,
+        startScreen: 'model', // a loaded saved model goes straight to the model view
         chatHistory: [],
         scenarios: [],
         sensitivityTables: [],
