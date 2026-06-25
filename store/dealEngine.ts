@@ -790,11 +790,13 @@ Be specific. Use the company name to infer business type and calibrate according
         aiPanelInsights: null,
       });
     } catch (e: unknown) {
-      const msg = (e as Error).message || 'Import failed';
+      // eslint-disable-next-line no-console
+      console.error('importFromEdgar failed:', e);
+      const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
       set({
         error: /not found/i.test(msg)
           ? 'Not found on EDGAR — this looks like a private target or an unknown CIK. Try the company autocomplete, or upload a 10-K (coming soon).'
-          : `EDGAR import failed: ${msg}`,
+          : `EDGAR import failed: ${msg || 'unknown error'}`,
         isCalculating: false,
       });
     }

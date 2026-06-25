@@ -122,8 +122,10 @@ export default async function handler(request: Request): Promise<Response> {
       return json({ error: detail, status: upstream.status }, upstream.status === 429 ? 429 : 502);
     }
 
-    const data = await upstream.text();
-    return new Response(data, {
+    // STREAM the upstream body straight through rather than buffering it. companyfacts for a
+    // large issuer (e.g. Apple) is tens of MB — buffering via `.text()` blows the Edge
+    // function's memory/response limit and 500s. Streaming pipes it without holding it all.
+    return new Response(upstream.body, {
       status: 200,
       headers: {
         'content-type': 'application/json; charset=utf-8',

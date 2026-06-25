@@ -194,7 +194,12 @@ async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(`${PROXY_BASE}/${path}`, { headers: { Accept: 'application/json' } });
   if (!res.ok) {
     let detail = `EDGAR request failed (${res.status})`;
-    try { const body = await res.json() as { error?: string }; if (body?.error) detail = body.error; } catch { /* non-JSON */ }
+    // The error body may be a string OR an object (e.g. a platform 500). Coerce so callers
+    // never surface a useless "[object Object]".
+    try {
+      const body = await res.json() as { error?: unknown };
+      if (body?.error != null) detail = typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+    } catch { /* non-JSON error body */ }
     throw new Error(detail);
   }
   // A 200 that isn't JSON means the request didn't reach the proxy function — almost always the
