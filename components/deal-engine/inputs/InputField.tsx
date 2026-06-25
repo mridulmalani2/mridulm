@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import ProvenanceBadge from './ProvenanceBadge';
+import type { Provenance } from '../../../lib/edgar/types';
 
 interface InputFieldProps {
   label: string;
@@ -15,11 +17,13 @@ interface InputFieldProps {
   step?: number;
   warning?: string;
   formatter?: (v: number) => string;
+  /** Optional provenance badge (EDGAR/AI/user/default) shown next to the label (Phase 1). */
+  provenance?: Provenance;
 }
 
 const InputField: React.FC<InputFieldProps> = ({
   label, path, value, type = 'number', options, suffix, readOnly,
-  aiToggleable: _aiToggleable, min: _min, max: _max, step: _step, warning, formatter,
+  aiToggleable: _aiToggleable, min: _min, max: _max, step: _step, warning, formatter, provenance,
 }) => {
   void _aiToggleable; void _min; void _max; void _step;
   const updateField = useDealEngineStore((s) => s.updateField);
@@ -55,8 +59,9 @@ const InputField: React.FC<InputFieldProps> = ({
   return (
     <div className="mb-2.5">
       <div className="flex items-center justify-between mb-0.5">
-        <label className="text-[10px] tracking-wider" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
+        <label className="text-[10px] tracking-wider flex items-center gap-1.5" style={{ color: 'rgba(17,17,17,0.45)', fontFamily: "'JetBrains Mono', monospace" }}>
           {label}
+          <ProvenanceBadge provenance={provenance} />
         </label>
         {suffix && (
           <span className="text-[10px]" style={{ color: 'rgba(17,17,17,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>

@@ -90,6 +90,10 @@ export interface RevenueAssumptions {
   base_revenue: number;
   growth_rates: number[];
   organic_growth: number[];
+  /** Add-on (bolt-on) revenue per hold year, FULLY GROWN to that year. Derived: injected by
+   *  `injectAddOns` from `add_on_acquisitions`. This is the add-on's own revenue path and is
+   *  added ON TOP of the organic business — it must NOT be compounded into the organic growth
+   *  base again (that double-counted it pre-Phase-0C). */
   acquisition_revenue: number[];
   churn_rate: number;
 }
@@ -120,6 +124,29 @@ export interface TaxAssumptions {
   dtl_unwind_years: number;
   nol_carryforward: number;
   minimum_tax_rate: number;
+  /** Post-2017 NOL usage cap as a fraction of taxable income computed *before* the NOL
+   *  deduction. Default 0.80 — the TCJA limits post-2017 NOLs to 80% of taxable income.
+   *  (Phase 0A) */
+  nol_limitation_pct?: number;
+  /** Pre-2017 NOLs are NOT subject to the 80% cap (they offset 100% of taxable income,
+   *  but expire after 20 years). When true the 80% limitation is bypassed. Default false
+   *  (treat the carryforward as post-2017). (Phase 0A) */
+  nol_is_pre_2017?: boolean;
+  /** Optional §382 ownership-change annual NOL-usage limit (absolute, deal currency £m).
+   *  An LBO is itself an ownership change, capping annual use of acquired NOLs at roughly
+   *  (equity value × long-term tax-exempt rate). Absent/0 ⇒ no §382 limit. (Phase 0A) */
+  section_382_annual_limit?: number;
+  /** §163(j) business-interest-expense limitation. When enabled, deductible interest is
+   *  capped at section_163j_ati_pct × ATI and disallowed interest carries forward. Default
+   *  false — preserves the unlimited-deduction behaviour of existing/saved models. (Phase 0A) */
+  section_163j_enabled?: boolean;
+  /** §163(j) cap as a fraction of ATI. Default 0.30 (30% of ATI). (Phase 0A) */
+  section_163j_ati_pct?: number;
+  /** ATI basis: 'ebit' (post-2022 — no depreciation/amortisation add-back, the default) or
+   *  'ebitda' (pre-2022 — adds D&A back to the cap base). (Phase 0A) */
+  section_163j_ati_basis?: 'ebit' | 'ebitda';
+  /** Optional opening §163(j) disallowed-interest carryforward (deal currency £m). Default 0. (Phase 0A) */
+  section_163j_carryforward?: number;
 }
 
 export interface EntryAssumptions {
@@ -131,6 +158,15 @@ export interface EntryAssumptions {
   total_debt_raised: number;
   leverage_ratio: number;
   min_cash_balance: number;
+  /** EBITDA basis the entry multiple is applied to (Phase 0D). 'ltm' (default) values off the
+   *  last-twelve-months base EBITDA; 'ntm' values off forward EBITDA = base × (1 + Y1 growth),
+   *  so the same multiple implies a higher EV on a growing target. Leverage stays on LTM. */
+  entry_ebitda_basis?: 'ltm' | 'ntm';
+  /** SINGLE driver of the entry EV↔multiple relationship (Phase 1). 'multiple' (default) ⇒ the
+   *  user sets the multiple and EV is derived; 'ev' ⇒ the user sets EV and the multiple is
+   *  derived. Replaces the old transient `_lastEditedEntryField` two-way sync — exactly one of
+   *  the pair is an input, the other is a read-only output, removing the circular ambiguity. */
+  entry_valuation_driver?: 'multiple' | 'ev';
 }
 
 export interface PartialExitEvent {
@@ -149,6 +185,10 @@ export interface ExitAssumptions {
   exit_ebitda_multiple: number;
   exit_revenue_multiple: number;
   exit_method: 'strategic' | 'secondary_buyout' | 'ipo' | 'recapitalization';
+  /** EBITDA basis the exit multiple is applied to (Phase 0D). 'ltm' (default) values off the
+   *  final hold-year EBITDA; 'ntm' values off forward EBITDA = exit-year EBITDA × (1 + terminal
+   *  growth), i.e. the buyer pays the multiple on next-twelve-months EBITDA. */
+  exit_ebitda_basis?: 'ltm' | 'ntm';
   mid_year_convention: boolean;
   interim_distributions: number[];
   exit_ev_override: number | null;
@@ -179,6 +219,12 @@ export interface AnnualProjectionYear {
   ebt: number;
   tax: number;
   nol_used: number;
+  /** §163(j) business interest disallowed (and carried forward) this year, or — when the
+   *  interest tax shield is switched off — the interest denied deduction. 0 by default. (Phase 0A) */
+  disallowed_interest: number;
+  /** One-time add-on integration cash cost expensed this year (Phase 0C). Deductible (reduces
+   *  the tax base) and a cash outflow in FCF, but excluded from adjusted EBITDA. 0 by default. */
+  integration_cost: number;
   net_income: number;
   nopat: number;
   maintenance_capex: number;
@@ -438,8 +484,14 @@ export interface ModelState {
   ai_overrides: Record<string, unknown>;
   ai_toggle_fields: string[];
   chat_history: ChatMessage[];
-  // Transient: tracks which entry field was last edited for EV/Multiple sync
-  _lastEditedEntryField?: 'multiple' | 'ev' | null;
+  /** Transient (Phase 0C): add-on EBITDA contribution per hold year — each bolt-on's revenue at
+   *  ITS OWN margin plus cost synergies. Injected by `injectAddOns`, consumed by the projection
+   *  build so consolidated EBITDA blends the add-on margin instead of the parent's. Recomputed
+   *  every recalc; never user-edited or persisted. */
+  _addon_ebitda_by_year?: number[];
+  /** Transient (Phase 0C): one-time add-on integration cash cost per hold year. Injected by
+   *  `injectAddOns`, flowed into FCF and the tax base in the projection build. */
+  _addon_integration_by_year?: number[];
 }
 
 export interface PendingEdit {

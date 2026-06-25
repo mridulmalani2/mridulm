@@ -28,8 +28,9 @@ const EBITDABridgeChart: React.FC = () => {
     { label: 'Margin Expansion', value: bridge.margin_expansion_contribution, type: bridge.margin_expansion_contribution >= 0 ? 'positive' as const : 'negative' as const },
     ...(bridge.cost_synergies !== 0 ? [{ label: 'Cost Synergies', value: bridge.cost_synergies, type: 'positive' as const }] : []),
     ...(bridge.add_on_ebitda !== 0 ? [{ label: 'Add-on EBITDA', value: bridge.add_on_ebitda, type: 'positive' as const }] : []),
-    ...(bridge.integration_costs !== 0 ? [{ label: 'Integration Costs', value: -bridge.integration_costs, type: 'negative' as const }] : []),
-    ...(bridge.monitoring_fees !== 0 ? [{ label: 'Monitoring Fees', value: -bridge.monitoring_fees, type: 'negative' as const }] : []),
+    // Integration costs and monitoring fees are BELOW-EBITDA cash items (Phase 0C routes them
+    // through FCF, not EBITDA), so they are intentionally NOT bars in the entry→exit EBITDA
+    // walk — including them made the waterfall fail to foot to the Exit EBITDA total.
     { label: 'Exit EBITDA', value: bridge.exit_ebitda, type: 'base' as const },
   ];
 

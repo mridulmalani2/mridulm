@@ -138,11 +138,17 @@ export function buildDebtSchedule(
     }
 
     // Second pass: cash sweep — tiered by sweep_priority, pro-rata within each tier.
-    // Available for sweep = post-service FCF minus the incremental floor shortfall.
+    // Available for sweep = ALL post-mandatory-service cash above the min-cash floor,
+    // INCLUDING cash accumulated on the balance sheet in prior years — not just this year's
+    // FCF (Phase 0B). Previously only the current year's excess flowed to the sweep, so idle
+    // prior-year cash sat on the balance sheet, inflating later-year gross debt and therefore
+    // overstating cash interest. Subtracting minCash keeps the floor intact (so this can never
+    // sweep below it, and the revolver below never has to redraw to refill); subtracting the
+    // refinancing premium reserves that competing cash claim before any sweep.
     const minCash = state.entry.min_cash_balance || 0;
-    const floorShortfall = Math.max(0, minCash - cashBalance);
-    const ecf = fcfPreDebt - totalMandatoryAmort - totalCashInterest - totalCommitmentFees - floorShortfall;
-    let availableForSweep = Math.max(0, ecf);
+    const cashAvailableAboveFloor =
+      cashBalance + fcfPreDebt - totalCashInterest - totalCommitmentFees - totalMandatoryAmort - refiPremiumThisYear - minCash;
+    let availableForSweep = Math.max(0, cashAvailableAboveFloor);
 
     // Group sweep-eligible tranche indices by priority (lower = senior).
     // Tranches without an explicit sweep_priority default to their array index,

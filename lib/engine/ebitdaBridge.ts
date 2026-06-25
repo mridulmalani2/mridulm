@@ -8,29 +8,33 @@ export function computeEBITDABridge(
   projections: AnnualProjectionYear[],
   addOnImpact?: AddOnImpact,
 ): EBITDABridge {
-  const entryEbitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
+  const baseMargin = state.margins.base_ebitda_margin;
+  const entryRevenue = state.revenue.base_revenue;
+  const entryEbitda = entryRevenue * baseMargin;
   const exitYr = projections.length > 0 ? projections[projections.length - 1] : null;
   const exitEbitda = exitYr ? exitYr.ebitda_adj : entryEbitda;
-  const exitRevenue = exitYr ? exitYr.revenue : state.revenue.base_revenue;
-  const entryRevenue = state.revenue.base_revenue;
-
-  // Revenue growth at entry margin (what revenue growth contributes at constant margin)
-  const organicRevenueContribution = (exitRevenue - entryRevenue) * state.margins.base_ebitda_margin;
-
-  // Margin expansion contribution (on exit revenue, difference from base margin)
-  const exitMargin = exitYr ? exitYr.ebitda_margin : state.margins.base_ebitda_margin;
-  const marginExpansionContribution = exitRevenue * (exitMargin - state.margins.base_ebitda_margin);
-
-  // Add-on EBITDA: use exit-year EBITDA from the module (includes growth and synergies)
-  // rather than static LTM at acquisition, which diverged from projected EBITDA.
   const exitIdx = projections.length - 1;
+
+  // Walk the PARENT (organic) business only, then add the add-on contribution separately, so
+  // the components reconcile to consolidated exit EBITDA without double-counting acquired
+  // revenue (Phase 0C). Organic exit revenue and the parent margin come from the projection.
+  const parentExitRevenue = exitYr ? exitYr.organic_revenue : entryRevenue;
+  const parentExitMargin = exitYr ? (state.margins.margin_by_year[exitIdx] ?? baseMargin) : baseMargin;
+
+  // Revenue growth at the entry margin (constant-margin organic growth contribution).
+  const organicRevenueContribution = (parentExitRevenue - entryRevenue) * baseMargin;
+  // Margin expansion on the organic base (parent margin lift vs base).
+  const marginExpansionContribution = parentExitRevenue * (parentExitMargin - baseMargin);
+
+  // Add-on EBITDA at the add-on's OWN margin (excluding cost synergies, which are a separate
+  // bar) and cost synergies — both at the exit year (full run-rate).
   let addOnEbitda = 0;
   let integrationCosts = 0;
   let costSynergies = 0;
   if (addOnImpact) {
-    addOnEbitda = exitIdx >= 0 ? (addOnImpact.ebitda_by_year[exitIdx] ?? 0) : 0;
+    costSynergies = exitIdx >= 0 ? (addOnImpact.cost_synergies_by_year[exitIdx] ?? 0) : 0;
+    addOnEbitda = (exitIdx >= 0 ? (addOnImpact.ebitda_by_year[exitIdx] ?? 0) : 0) - costSynergies;
     integrationCosts = addOnImpact.integration_cost_by_year.reduce((s, v) => s + v, 0);
-    costSynergies = addOnImpact.cost_synergies_by_year.reduce((s, v) => s + v, 0);
   } else {
     for (const addon of (state.add_on_acquisitions || [])) {
       addOnEbitda += addon.revenue * addon.ebitda_margin;

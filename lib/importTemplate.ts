@@ -40,10 +40,17 @@ export function getInputTemplate(): Record<string, unknown> {
       dtl_unwind_years: 0,
       nol_carryforward: 0,
       minimum_tax_rate: 0,
+      nol_limitation_pct: 0.80,
+      nol_is_pre_2017: false,
+      section_382_annual_limit: 0,
+      section_163j_enabled: false,
+      section_163j_ati_pct: 0.30,
+      section_163j_ati_basis: "ebit",
     },
 
     entry: {
       entry_ebitda_multiple: 11.5,
+      entry_ebitda_basis: "ltm",
       net_debt_at_entry: 0,
       min_cash_balance: 5,
       leverage_ratio: 4.5,
@@ -104,6 +111,7 @@ export function getInputTemplate(): Record<string, unknown> {
       exit_ebitda_multiple: 12.0,
       exit_revenue_multiple: 0,
       exit_method: "secondary_buyout",
+      exit_ebitda_basis: "ltm",
       mid_year_convention: false,
       interim_distributions: [0, 0, 0, 0, 0],
       exit_ev_override: null,
@@ -186,9 +194,23 @@ TAX
   nol_carryforward   Net operating loss carryforward balance in £m. Use 0 if none.
   minimum_tax_rate   Minimum effective tax rate if subject to Pillar Two global minimum tax.
                      Use 0 if not applicable.
+  nol_limitation_pct  Post-2017 NOLs offset at most this fraction of taxable income (US TCJA
+                      cap = 0.80). Only bites when nol_carryforward > 0. Default 0.80.
+  nol_is_pre_2017    true only for legacy pre-2017 NOLs, which offset 100% of taxable income
+                     (bypassing the 80% cap). Default false.
+  section_382_annual_limit  Optional §382 ownership-change annual NOL-usage cap in £m. An LBO is
+                      itself an ownership change. Use 0 for no §382 limit.
+  section_163j_enabled  true to apply the US §163(j) business-interest limitation (cap on
+                        deductible interest, excess carried forward). Default false. Enable for
+                        US C-corp targets; leave false for jurisdictions with their own regime.
+  section_163j_ati_pct  §163(j) cap as a fraction of ATI. Default 0.30 (30%).
+  section_163j_ati_basis  "ebit" (post-2022, the default) or "ebitda" (pre-2022 add-back of D&A).
 
 ENTRY
-  entry_ebitda_multiple  EV / LTM EBITDA multiple paid at acquisition (e.g., 11.5 for 11.5×).
+  entry_ebitda_multiple  EV / EBITDA multiple paid at acquisition (e.g., 11.5 for 11.5×).
+  entry_ebitda_basis  "ltm" (default — multiple on last-twelve-months base EBITDA) or "ntm"
+                      (multiple on forward EBITDA = base × (1 + Y1 growth); higher EV per turn).
+                      Leverage is always quoted on LTM EBITDA regardless.
   net_debt_at_entry   Net debt (gross debt minus cash) on the target's balance sheet at closing,
                       in £m. Use 0 if a clean, debt-free balance sheet or unknown.
   min_cash_balance    Minimum operational cash the business must hold at all times, in £m.
@@ -241,6 +263,8 @@ EXIT
   holding_period     Investment hold period in years (integer, typically 3–7).
                      IMPORTANT: This controls all array lengths elsewhere in the model.
   exit_ebitda_multiple  EV / EBITDA multiple at exit.
+  exit_ebitda_basis  "ltm" (default — multiple on final hold-year EBITDA) or "ntm" (multiple on
+                     forward EBITDA = exit-year EBITDA × (1 + terminal growth)).
   exit_revenue_multiple Use 0 — model defaults to EBITDA-based exit valuation.
   exit_method        One of: "secondary_buyout", "strategic", "ipo", "recapitalization"
   mid_year_convention  false (year-end cash flows, standard for PE).

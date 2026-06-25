@@ -10,10 +10,16 @@ The **TypeScript engine** in `lib/engine/` is the **single source of truth** for
 all financial calculations. It runs entirely client-side (in the browser): it is
 what the UI executes, what users see, and what the Excel export is built from.
 
-There is no separate backend calculator. The app ships as a static SPA
+There is no separate backend **calculator**. The app ships as a static SPA
 (`netlify.toml` / `vercel.json` are SPA rewrites); every calculation —
 projections, debt schedule, returns, credit analysis, scenarios, the
 three-statement close, and the Excel workbook — happens in `lib/engine/*`.
+
+The **one** server-side surface (Phase 1) is a thin SEC EDGAR proxy
+(`api/edgar/[...path].ts`, Vercel Edge) that the import flow calls to fetch public
+filings — it sets SEC's required `User-Agent`, allowlists EDGAR endpoints (SSRF-safe),
+and edge-caches responses. It computes nothing and holds no secrets; the engine remains
+the single source of truth.
 
 > **History.** This project previously carried a second, mirrored engine in
 > Python (`backend/`, under FastAPI) plus a parallel Python Excel exporter,
@@ -109,3 +115,47 @@ CI (`.github/workflows/ci.yml`) runs vitest + build on every push and pull reque
 4. If a change moves a canonical output **on purpose**, update
    `tests/regression/baseline.json` in the same PR and say why in the message.
 5. Record any new or changed metric in `FINANCIAL_DEFINITIONS.md`.
+
+---
+
+## 7. Real-filing import + assumptions review (Phase 1)
+
+The start flow is a three-screen, auditable sequence — the model is only reachable
+after the user has seen and approved every input. `startScreen`
+(`'source' | 'assumptions' | 'model'`) in `store/dealEngine.ts` gates it.
+
+```
+EDGAR:  Source ───importFromEdgar────┐
+                                     ├─▶ Assumptions review ──buildModelFromDraft──▶ Model
+Manual: Manual facts ─loadFromHistoricals┘   (edit + provenance, Build)              (inputs+assumptions left, outputs right)
+```
+
+Both entry routes converge on **one** downstream by producing the same `RawHistoricals`: EDGAR
+extracts it (`edgar` provenance), manual entry types the identical factual surface
+(`manualHistoricals`, `user` provenance). The assumptions-review and model screens are shared
+verbatim — there is no second input path that could diverge.
+
+| Concern | Where |
+|---|---|
+| SEC proxy (only server surface) | `api/edgar/[...path].ts` — User-Agent, SSRF allowlist, edge cache, throttle |
+| Typed EDGAR client + pure helpers | `lib/edgar/client.ts` (`searchCompanies`, `parseEdgarUrl`, `getCompanyFacts`, `getSubmissions`) |
+| XBRL → factual inputs | `lib/edgar/mapXbrl.ts` — tag-alias chains, single-FY alignment, per-field provenance, gaps |
+| Provenance / factual types | `lib/edgar/types.ts` (`RawHistoricals`, `SourcedValue`, `Provenance`, `ProvenanceMap`) |
+| Draft composition | `lib/edgar/buildModel.ts` — facts (EDGAR provenance) + sector-default assumptions ('default') |
+| Screens + badges | `components/deal-engine/start/{SourceScreen,AssumptionsReview}.tsx`, `inputs/ProvenanceBadge.tsx` |
+
+**Inputs/assumptions/outputs are kept separate.** Factual inputs come from filings (each
+carries `edgar` provenance and a filing link); forward/structure inputs are assumptions
+(`default` → `ai` → `user` as they are suggested/edited); outputs are computed. Nothing
+factual is silently defaulted — a filing gap is surfaced on Screen 2 (provenance becomes
+`user` once filled). The entry **EV ↔ multiple** relationship has a **single driver**
+(`entry.entry_valuation_driver`): one is the input, the other a read-only derived output —
+there is no bidirectional recompute.
+
+`lib/importTemplate.ts` remains the canonical field list (and the paste-into-a-chatbot kit
+is kept as a power-user fallback reachable from the manual-entry path).
+
+**Dev note:** the proxy runs on Vercel (or `vercel dev`); under plain `vite dev` the
+`/api/edgar/*` routes 404, so the EDGAR path needs a Vercel runtime. The mapping and flow
+are covered by `tests/edgar-*.test.ts` against a committed `companyfacts` fixture
+(network-free).

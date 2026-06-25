@@ -14,6 +14,7 @@ import type { ModelState, AnnualProjectionYear } from '../dealEngineTypes';
 import { buildProjections, updateProjectionsWithDebt } from './projections';
 import { buildDebtSchedule } from './debtSchedule';
 import { calculateReturns } from './returns';
+import { oidAmortFromSchedule } from './oid';
 
 // PIK interest compounds onto principal each period, so the interest/tax feedback
 // loop can take more cycles to stabilise than a plain cash-pay deal. One cap, used
@@ -70,8 +71,11 @@ export function runConvergenceLoop(state: ModelState): ConvergenceResult {
       pikByYear.push(pik);
     }
 
+    // Schedule-aware OID amortisation from THIS iteration's debt schedule (Phase 0B), so the
+    // tax deduction matches the balance sheet's deferred-cost write-down on the same schedule.
+    const oidAmort = oidAmortFromSchedule(state, ds);
     updatedProj = updateProjectionsWithDebt(
-      proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year,
+      proj, state, ds.total_cash_interest_by_year, pikByYear, ds.total_repayment_by_year, oidAmort,
     );
 
     // Check convergence on total cash interest (the quantity the feedback loop moves).

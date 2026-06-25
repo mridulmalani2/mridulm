@@ -4,7 +4,7 @@ import type {
   ModelState,
   AnnualProjectionYear,
 } from '../dealEngineTypes';
-import { oidAmortByYear, oidTotal } from './oid';
+import { oidAmortFromSchedule, oidTotal } from './oid';
 import { generateSensitivityTable } from './scenarios';
 
 let ExcelJS: typeof import('exceljs') | null = null;
@@ -1323,8 +1323,8 @@ function buildCashFlowDebtSheet(
   if (refiPrem.some(v => v > 0)) {
     row = writeDataRow(ws, row, 'Refinancing Premium (one-time)', refiPrem.map(v => (v > 0 ? -v : 0)), FMT_CCY);
   }
-  // OID amortisation (P4-14) — non-cash, tax-deductible.
-  const cfOidAmort = oidAmortByYear(state);
+  // OID amortisation (P4-14) — non-cash, tax-deductible; schedule-aware (Phase 0B).
+  const cfOidAmort = oidAmortFromSchedule(state, ds);
   if (cfOidAmort.some(v => v > 0)) {
     row = writeDataRow(ws, row, 'OID Amortisation (non-cash)', cfOidAmort, FMT_CCY, { alt: true });
   }
@@ -1606,14 +1606,15 @@ function buildReturnsSheet(wb: WB, state: ModelState, ccy: string, _aRefs: Assum
     styleHeaderRow(ws, row, 1, 2);
     row++;
 
+    // Integration costs and monitoring fees are BELOW-EBITDA cash items (Phase 0C routes them
+    // through FCF, not EBITDA) and are intentionally excluded from this entry→exit EBITDA walk
+    // so it foots to Exit EBITDA. They appear in the cash-flow / returns sheets instead.
     const ebRows: [string, number, boolean][] = [
       ['Entry EBITDA', eb.entry_ebitda, false],
       ['(+) Organic Revenue Contribution', eb.organic_revenue_contribution, true],
       ['(+) Margin Expansion', eb.margin_expansion_contribution, false],
       ['(+) Cost Synergies', eb.cost_synergies, true],
       ['(+) Add-On EBITDA', eb.add_on_ebitda, false],
-      ['(-) Integration Costs', -eb.integration_costs, true],
-      ['(-) Monitoring Fees', -eb.monitoring_fees, false],
       ['Exit EBITDA (Adjusted)', eb.exit_ebitda, false],
     ];
     for (const [label, val, alt] of ebRows) {

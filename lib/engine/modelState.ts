@@ -4,14 +4,21 @@ import type { ModelState } from '../dealEngineTypes';
 import { oidTotal } from './oid';
 
 export function deriveEntryFields(state: ModelState): void {
-  const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin;
-  if (ebitda > 0) {
-    if (state._lastEditedEntryField === 'ev') {
-      // EV was explicitly edited — back-solve multiple
-      state.entry.entry_ebitda_multiple = state.entry.enterprise_value / ebitda;
+  const ebitda = state.revenue.base_revenue * state.margins.base_ebitda_margin; // LTM base EBITDA
+  // Phase 0D: the entry multiple may be quoted on forward (NTM) EBITDA — base grown by Y1.
+  // Leverage (below) stays on LTM EBITDA, the standard entry-leverage basis.
+  const y1Growth = state.revenue.growth_rates[0] ?? 0;
+  const valuationEbitda = state.entry.entry_ebitda_basis === 'ntm' ? ebitda * (1 + y1Growth) : ebitda;
+  // Single explicit driver (Phase 1): one of {multiple, EV} is the input and the other is the
+  // derived read-only output. Default 'multiple' reproduces the prior forward-solve behaviour.
+  const driver = state.entry.entry_valuation_driver ?? 'multiple';
+  if (valuationEbitda > 0) {
+    if (driver === 'ev') {
+      // EV is the input — derive the multiple (read-only) on the chosen LTM/NTM basis.
+      state.entry.entry_ebitda_multiple = state.entry.enterprise_value / valuationEbitda;
     } else {
-      // Multiple was edited, or neither was explicitly edited — forward-solve EV
-      state.entry.enterprise_value = ebitda * state.entry.entry_ebitda_multiple;
+      // Multiple is the input — derive EV (read-only).
+      state.entry.enterprise_value = valuationEbitda * state.entry.entry_ebitda_multiple;
     }
   }
   if (state.entry.enterprise_value > 0 && state.revenue.base_revenue > 0) {
@@ -25,8 +32,6 @@ export function deriveEntryFields(state: ModelState): void {
   const financingFees = state.fees.financing_fee_pct * state.entry.total_debt_raised;
   state.entry.equity_check =
     state.entry.enterprise_value + entryFee + state.fees.transaction_costs + financingFees + oidTotal(state) - state.entry.total_debt_raised;
-  // Clear the flag after use so subsequent recalcs default to forward-solve
-  state._lastEditedEntryField = null;
 }
 
 function pad(lst: number[], defaultVal: number, length: number): number[] {
