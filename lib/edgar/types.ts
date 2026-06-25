@@ -4,8 +4,10 @@
  * for each field and nothing is ever silently assumed.
  */
 
-/** Who produced a value. Drives the provenance badge on screens 2 and 3. */
-export type ProvenanceSource = 'edgar' | 'esef' | 'ai' | 'user' | 'default';
+/** Who produced a value. Drives the provenance badge on screens 2 and 3.
+ *  'missing' = a factual field the filing did NOT provide — shown empty and flagged for the
+ *  user to enter; it is never a guessed value and never falsely attributed to the user. */
+export type ProvenanceSource = 'edgar' | 'esef' | 'ai' | 'user' | 'default' | 'missing';
 
 export interface Provenance {
   source: ProvenanceSource;

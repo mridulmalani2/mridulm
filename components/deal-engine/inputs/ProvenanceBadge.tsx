@@ -13,6 +13,7 @@ const STYLES: Record<Provenance['source'], { label: string; color: string; borde
   ai:      { label: 'AI',      color: '#CC0000', border: 'rgba(204,0,0,0.30)',    bg: 'rgba(204,0,0,0.05)' },
   user:    { label: 'YOU',     color: '#111111', border: 'rgba(17,17,17,0.30)',   bg: 'rgba(17,17,17,0.04)' },
   default: { label: 'DEFAULT', color: '#b45309', border: 'rgba(180,83,9,0.30)',   bg: 'rgba(180,83,9,0.05)' },
+  missing: { label: 'MISSING', color: '#b91c1c', border: 'rgba(185,28,28,0.40)',  bg: 'rgba(185,28,28,0.06)' },
 };
 
 const mono = "'JetBrains Mono', monospace";
