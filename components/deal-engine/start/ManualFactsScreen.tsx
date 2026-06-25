@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { manualHistoricals } from '../../../lib/edgar/buildModel';
 import type { ModelState } from '../../../lib/dealEngineTypes';
+import ApiKeyInline from './ApiKeyInline';
 
 /**
  * Manual-entry "facts" screen (Phase 1) — for private targets not on EDGAR. It collects the
@@ -112,6 +113,9 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <button type="submit" className="w-full py-2.5 text-sm tracking-widest uppercase" style={{ background: '#CC0000', color: '#fff', fontFamily: mono, border: '1px solid #CC0000', letterSpacing: '0.12em' }}>
             Review Assumptions →
           </button>
+
+          {/* Optional AI key — reused by AI-suggest on the next screen */}
+          <ApiKeyInline />
         </div>
       </form>
     </div>

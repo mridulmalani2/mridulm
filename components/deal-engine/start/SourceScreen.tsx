@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { searchCompanies, parseEdgarUrl, type CompanyMatch } from '../../../lib/edgar/client';
+import ApiKeyInline from './ApiKeyInline';
 
 /**
  * Screen 1 — Source (Phase 1). Pull the target's ACTUAL financials from SEC EDGAR: search by
@@ -143,6 +144,9 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
               Manual entry (private)
             </button>
           </div>
+
+          {/* Optional AI key — reused by AI-suggest on the next screen */}
+          <ApiKeyInline />
         </div>
 
         <p className="mt-4 text-[10px]" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: mono, lineHeight: 1.7 }}>
