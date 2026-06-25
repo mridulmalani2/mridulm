@@ -126,10 +126,17 @@ export function computeAnnualTax(
   // reduce the base but are NOT interest, so they never enter the §163(j) limitation above.
   const taxableBeforeNol = ebit - deductibleInterest - otherDeductions;
 
-  // ── (3) NOL offset — post-2017 80%-of-taxable-income cap (pre-2017 NOLs offset 100%);
-  //         optional §382 ownership-change annual limit ──
+  // ── (3) NOL — a NEGATIVE taxable base banks a fresh carryforward (post-2017 NOLs carry
+  //         forward indefinitely); a POSITIVE base is offset, capped at limit_pct and any
+  //         §382 annual limit (pre-2017 NOLs offset 100%). Banking the loss is what makes the
+  //         engine generate NOLs at all — and it also preserves a §163(j) deduction released
+  //         above current income, which would otherwise evaporate (floored at 0 with the
+  //         carryforward already consumed). ──
   let nolUsed = 0;
-  if (taxableBeforeNol > 0 && run.nolRemaining > 0) {
+  if (taxableBeforeNol < 0) {
+    // Operating loss, or a released interest deduction exceeding income → new NOL carryforward.
+    run.nolRemaining += -taxableBeforeNol;
+  } else if (taxableBeforeNol > 0 && run.nolRemaining > 0) {
     const limitPct = tax.nol_is_pre_2017 ? 1 : (tax.nol_limitation_pct ?? DEFAULT_NOL_LIMITATION_PCT);
     const annual382 = tax.section_382_annual_limit && tax.section_382_annual_limit > 0
       ? tax.section_382_annual_limit

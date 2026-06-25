@@ -45,7 +45,7 @@ off, `nol_carryforward = 0`, `minimum_tax_rate = 0`) reproduce the legacy inline
 | Book EBT | `EBIT − interest − financing-fee/OID amort` | Drives net income; unchanged. The tax *base* may differ when interest is limited. | `tax.ts` | `tax` |
 | Interest tax shield | deductible interest = `0` if `tax_shield_on_interest=false`, else §163(j)-limited (below) | Shield-off makes interest **permanently** non-deductible (BEAT-style) — nothing carries forward. | `tax.ts` | `tax` |
 | §163(j) interest cap | deductible interest = `min(interest + carryforward, ati_pct × ATI)`; excess carries forward | `ati_pct` default 30%; ATI = EBIT (post-2022) or EBITDA (`section_163j_ati_basis='ebitda'`, pre-2022). Disabled by default. The disallowed amount is surfaced per year on `AnnualProjectionYear.disallowed_interest`. | `tax.ts` | `tax` |
-| NOL offset | `nolUsed = min(nolRemaining, limit_pct × taxableBeforeNol, §382 limit)` | `limit_pct` = 80% post-2017 (TCJA), 100% if `nol_is_pre_2017`; optional `section_382_annual_limit`. | `tax.ts` | `tax` |
+| NOL offset / banking | positive base: `nolUsed = min(nolRemaining, limit_pct × taxableBeforeNol, §382 limit)`; negative base: `nolRemaining += −taxableBeforeNol` | `limit_pct` = 80% post-2017 (TCJA), 100% if `nol_is_pre_2017`; optional `section_382_annual_limit`. A loss year (or a released §163(j) deduction above income) **banks** a fresh carryforward, so loss-making/levered targets generate and later use NOLs. | `tax.ts` | `tax` |
 | Cash tax | `max(taxableIncome × tax_rate, taxableIncome × minimum_tax_rate)` | Minimum tax applies last on the post-NOL base (Pillar Two / CAMT proxy). | `tax.ts` | `tax` |
 
 ## Coverage & covenants

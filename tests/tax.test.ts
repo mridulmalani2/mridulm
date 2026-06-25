@@ -38,15 +38,30 @@ describe('computeAnnualTax — default path equals the legacy inline logic', () 
     expect(r.tax).toBeCloseTo(17.5, 9);
   });
 
-  it('a pretax loss pays no tax and uses no NOL', () => {
+  it('a pretax loss pays no tax, uses no NOL, and banks the loss as a fresh carryforward', () => {
     const tax = baseTax({ nol_carryforward: 100 });
     const run = initTaxState(tax);
-    const r = computeAnnualTax(line(20, 40), tax, run); // EBT = −20
+    const r = computeAnnualTax(line(20, 40), tax, run); // EBT = −20, taxable base −20
     expect(r.ebt).toBe(-20);
     expect(r.taxableIncome).toBe(0);
     expect(r.tax).toBe(0);
     expect(r.nolUsed).toBe(0);
-    expect(run.nolRemaining).toBe(100); // untouched
+    expect(run.nolRemaining).toBe(120); // banks the 20 loss (post-2017 NOLs carry forward)
+  });
+
+  it('a loss year banks an NOL that offsets a later profitable year (80% cap)', () => {
+    const tax = baseTax({ nol_carryforward: 0 });
+    const run = initTaxState(tax);
+    // Year 1: loss of 50 (EBIT 0, interest 50) → banks 50 NOL, no tax.
+    const y1 = computeAnnualTax(line(0, 50), tax, run);
+    expect(y1.tax).toBe(0);
+    expect(run.nolRemaining).toBeCloseTo(50, 9);
+    // Year 2: profit 100 → the banked 50 is below the 80% cap (80), so it is fully used.
+    const y2 = computeAnnualTax(line(100, 0), tax, run);
+    expect(y2.nolUsed).toBeCloseTo(50, 9);
+    expect(y2.taxableIncome).toBeCloseTo(50, 9);
+    expect(y2.tax).toBeCloseTo(12.5, 9);
+    expect(run.nolRemaining).toBeCloseTo(0, 9);
   });
 });
 
