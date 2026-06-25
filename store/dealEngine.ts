@@ -21,6 +21,8 @@ import type { AIProvider } from '../lib/engine/ai/providers';
 import { computeChangedTraceFields } from '../lib/traceMap';
 import { getCompanyFacts, getSubmissions, extractRecentFilings } from '../lib/edgar/client';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
+import { getEsefFilings, getEsefReport } from '../lib/edgar/esef';
+import { mapIfrsReport } from '../lib/edgar/mapIfrs';
 import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
 import type { RawHistoricals, ProvenanceMap, Provenance } from '../lib/edgar/types';
 
@@ -200,6 +202,9 @@ interface DealEngineStore {
   setStartScreen: (screen: 'source' | 'assumptions' | 'model') => void;
   /** Import a target by CIK: fetch + map filings, draft the assumptions, go to review. */
   importFromEdgar: (cik10: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
+  /** Import a European target by LEI: fetch its latest ESEF report (filings.xbrl.org), map the
+   *  IFRS facts, draft the assumptions, go to review — same downstream as the SEC path. */
+  importFromEsef: (lei: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
   /** Draft directly from already-mapped historicals (10-K upload path / programmatic). */
   loadFromHistoricals: (raw: RawHistoricals, opts?: { dealName?: string; sector?: string }) => void;
   /** Edit one reviewed field; marks its provenance 'user' and re-derives the live draft. */
@@ -799,6 +804,44 @@ Be specific. Use the company name to infer business type and calibrate according
           : `EDGAR import failed: ${msg || 'unknown error'}`,
         isCalculating: false,
       });
+    }
+  },
+
+  importFromEsef: async (lei, opts) => {
+    set({ isCalculating: true, error: null });
+    try {
+      const filings = await getEsefFilings(lei);
+      if (!filings.length) {
+        set({ error: 'No ESEF filing found for this entity — pick the listed parent (not a subsidiary), or use Manual entry.', isCalculating: false });
+        return;
+      }
+      const base = 'https://filings.xbrl.org';
+      // Link to the rendered report (or the iXBRL viewer) so the user can open the filing to fill
+      // gaps (ESEF often leaves D&A / debt / working capital untagged).
+      const docUrl = (f: typeof filings[number]) => `${base}${f.reportUrl ?? f.viewerUrl ?? f.jsonUrl}`;
+      const filing = filings[0];
+      const report = await getEsefReport(filing.jsonUrl);
+      const raw = mapIfrsReport(report, { entityName: opts?.dealName ?? filing.entityName, reportUrl: docUrl(filing) });
+      const sector = opts?.sector ?? 'Other';
+      const { state, provenance } = draftModelFromHistoricals(raw, {
+        dealName: opts?.dealName ?? filing.entityName ?? raw.entityName,
+        sector,
+      });
+      const recalc = fullRecalc(state);
+      set({
+        rawHistoricals: raw,
+        provenanceMap: provenance,
+        sourceFilings: filings.slice(0, 3).map((f) => ({ form: `ESEF${f.country ? ' · ' + f.country : ''}`, filingDate: f.periodEnd, documentUrl: docUrl(f) })),
+        modelState: recalc,
+        startScreen: 'assumptions',
+        isCalculating: false,
+        chatHistory: [], scenarios: [], sensitivityTables: [], memoContent: null, aiPanelInsights: null,
+      });
+    } catch (e: unknown) {
+      // eslint-disable-next-line no-console
+      console.error('importFromEsef failed:', e);
+      const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
+      set({ error: `ESEF import failed: ${msg || 'unknown error'}`, isCalculating: false });
     }
   },
 

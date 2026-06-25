@@ -5,7 +5,7 @@
  */
 
 /** Who produced a value. Drives the provenance badge on screens 2 and 3. */
-export type ProvenanceSource = 'edgar' | 'ai' | 'user' | 'default';
+export type ProvenanceSource = 'edgar' | 'esef' | 'ai' | 'user' | 'default';
 
 export interface Provenance {
   source: ProvenanceSource;

@@ -28,6 +28,8 @@ const SEC_USER_AGENT = `Mridul Malani LBO Deal Engine (${CONTACT_EMAIL})`;
 const CIK_RE = /^CIK\d{10}$/;                 // zero-padded 10-digit, e.g. CIK0000320193
 const TAXONOMY_ALLOW = new Set(['us-gaap', 'dei', 'ifrs-full', 'srt']);
 const TAG_RE = /^[A-Za-z][A-Za-z0-9]{0,80}$/; // XBRL concept names are alphanumeric
+const LEI_RE = /^[A-Za-z0-9]{18,20}$/;        // Legal Entity Identifier (20 alphanumeric)
+const ESEF_SEG_RE = /^[A-Za-z0-9._-]+$/;      // safe path segment for an ESEF report json_url
 
 interface Resolved {
   url: string;
@@ -54,6 +56,26 @@ function resolveTarget(segments: string[]): Resolved | null {
   if (endpoint === 'companyconcept' && rest.length === 3
       && CIK_RE.test(rest[0]) && TAXONOMY_ALLOW.has(rest[1]) && TAG_RE.test(rest[2])) {
     return { url: `https://data.sec.gov/api/xbrl/companyconcept/${rest[0]}/${rest[1]}/${rest[2]}.json`, sMaxAge: 21_600 };
+  }
+
+  // ── Europe (ESEF) ──
+  // The full list of entities that have ESEF filings (~7k, ~3MB). Cached client-side and
+  // searched there, like SEC company_tickers — so every autocomplete hit is actually importable
+  // (GLEIF, by contrast, returns every legal entity, surfacing non-filing subsidiaries).
+  if (endpoint === 'esef-entities' && rest.length === 0) {
+    return { url: 'https://filings.xbrl.org/api/entities?page%5Bsize%5D=30000', sMaxAge: 86_400 };
+  }
+  // An entity's ESEF filings on filings.xbrl.org (keyed by LEI).
+  if (endpoint === 'esef-filings' && rest.length === 1 && LEI_RE.test(rest[0])) {
+    return { url: `https://filings.xbrl.org/api/entities/${rest[0].toUpperCase()}/filings?include=entity`, sMaxAge: 21_600 };
+  }
+  // An ESEF report's xBRL-JSON facts file (the `json_url` from the filings list). Each path
+  // segment is validated to safe chars and the last must be a .json; the host is fixed, so no
+  // SSRF — and we reject any `..` traversal segment.
+  if (endpoint === 'esef-report' && rest.length >= 1
+      && rest.every((s) => ESEF_SEG_RE.test(s) && s !== '..')
+      && rest[rest.length - 1].endsWith('.json')) {
+    return { url: `https://filings.xbrl.org/${rest.join('/')}`, sMaxAge: 21_600 };
   }
   return null;
 }
@@ -90,11 +112,12 @@ export default async function handler(request: Request): Promise<Response> {
   try {
     await throttle();
     const upstream = await fetch(target.url, {
-      headers: { 'User-Agent': SEC_USER_AGENT, 'Accept': 'application/json', 'Accept-Encoding': 'gzip, deflate' },
+      // filings.xbrl.org + GLEIF speak JSON:API; SEC speaks plain JSON — accept both.
+      headers: { 'User-Agent': SEC_USER_AGENT, 'Accept': 'application/json, application/vnd.api+json', 'Accept-Encoding': 'gzip, deflate' },
     });
 
     if (!upstream.ok) {
-      const detail = upstream.status === 404 ? 'Not found on EDGAR (unknown CIK or no such filing/concept).'
+      const detail = upstream.status === 404 ? 'Not found at the source (unknown identifier or no such filing).'
         : upstream.status === 403 ? 'EDGAR refused the request (User-Agent / rate policy).'
         : upstream.status === 429 ? 'EDGAR rate limit hit — please retry shortly.'
         : `EDGAR returned ${upstream.status}.`;

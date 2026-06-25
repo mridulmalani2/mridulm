@@ -9,6 +9,7 @@ import type { Provenance } from '../../../lib/edgar/types';
 
 const STYLES: Record<Provenance['source'], { label: string; color: string; border: string; bg: string }> = {
   edgar:   { label: 'EDGAR',   color: '#15803d', border: 'rgba(21,128,61,0.35)',  bg: 'rgba(21,128,61,0.06)' },
+  esef:    { label: 'ESEF',    color: '#1d4ed8', border: 'rgba(29,78,216,0.35)',  bg: 'rgba(29,78,216,0.06)' },
   ai:      { label: 'AI',      color: '#CC0000', border: 'rgba(204,0,0,0.30)',    bg: 'rgba(204,0,0,0.05)' },
   user:    { label: 'YOU',     color: '#111111', border: 'rgba(17,17,17,0.30)',   bg: 'rgba(17,17,17,0.04)' },
   default: { label: 'DEFAULT', color: '#b45309', border: 'rgba(180,83,9,0.30)',   bg: 'rgba(180,83,9,0.05)' },

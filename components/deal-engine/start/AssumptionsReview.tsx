@@ -92,6 +92,9 @@ const AssumptionsReview: React.FC = () => {
   const csym = CSYM[ms.currency] ?? '$';
   const driver = ms.entry.entry_valuation_driver ?? 'multiple';
   const p = (path: string): Provenance | undefined => prov[path];
+  // Label the factual source from the provenance of a core extracted field.
+  const factSource = prov['revenue.base_revenue']?.source;
+  const sourceLabel = factSource === 'esef' ? 'ESEF filings' : factSource === 'edgar' ? 'SEC EDGAR' : 'your inputs';
 
   return (
     <div className="min-h-screen overflow-y-auto" style={{ background: paper }}>
@@ -109,7 +112,7 @@ const AssumptionsReview: React.FC = () => {
           </div>
         </div>
         <p className="mb-5" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 13 }}>
-          {raw ? <>Extracted from SEC EDGAR{raw.fiscalYear ? ` · FY${raw.fiscalYear}` : ''}. Review every input below — facts link back to the filing; assumptions are yours to set.</> : 'Review every input below before building.'}
+          {raw ? <>Extracted from {sourceLabel}{raw.fiscalYear ? ` · FY${raw.fiscalYear}` : ''}. Review every input below — facts link back to the filing; assumptions are yours to set.</> : 'Review every input below before building.'}
         </p>
 
         {/* Filing links */}

@@ -51,7 +51,7 @@ describe('AssumptionsReview SSR', () => {
 
 describe('SourceScreen SSR', () => {
   it('renders the search, URL path and the coming-soon upload', () => {
-    holder.state = { importFromEdgar: noop, isCalculating: false, error: null };
+    holder.state = { importFromEdgar: noop, importFromEsef: noop, isCalculating: false, error: null };
     const html = renderToStaticMarkup(
       React.createElement(MemoryRouter, null, React.createElement(SourceScreen, { onManual: noop })),
     );
