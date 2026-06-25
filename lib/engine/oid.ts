@@ -63,10 +63,15 @@ export function oidAmortFromSchedule(state: ModelState, ds: DebtScheduleResult):
     const maturity = t.debt_maturity_years && t.debt_maturity_years > 0 ? t.debt_maturity_years : hp;
     const sched = ds.tranche_schedules[tIdx] ?? [];
     const refiYearIdx = t.refinancing ? t.refinancing.year - 1 : -1;
+    // A tranche drawn mid-hold (add-on acquisition debt) has no OID to amortise before it is
+    // drawn — its balance is 0 in those years. Amortise only from the draw year, over the
+    // post-draw remaining life. Entry-drawn tranches (drawIdx = 0) are unchanged.
+    const drawIdx = t.draw_year_index ?? 0;
 
     let remaining = oid;
     for (let i = 0; i < hp; i++) {
       if (remaining <= OID_WRITEOFF_TOL) break;
+      if (i < drawIdx) continue; // tranche not yet drawn — nothing to amortise
       const yr = sched[i];
       const begBal = yr ? yr.beginning_balance : 0;
       const endBal = yr ? yr.ending_balance : 0;
@@ -79,7 +84,7 @@ export function oidAmortFromSchedule(state: ModelState, ds: DebtScheduleResult):
         continue;
       }
 
-      const yearsLeft = Math.max(1, maturity - i);
+      const yearsLeft = Math.max(1, maturity - (i - drawIdx));
       const timeSlice = remaining / yearsLeft;                          // ≡ oid/maturity for a held bullet
       const retired = Math.max(0, begBal - endBal);
       const prepayShare = begBal > OID_WRITEOFF_TOL ? remaining * (retired / begBal) : 0;
