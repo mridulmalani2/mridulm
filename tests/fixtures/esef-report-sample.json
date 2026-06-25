@@ -1,0 +1,25 @@
+{
+  "documentInfo": {
+    "documentType": "https://xbrl.org/2021/xbrl-json",
+    "namespaces": {
+      "ifrs-full": "http://xbrl.ifrs.org/taxonomy/2022-03-24/ifrs-full",
+      "iso4217": "http://www.xbrl.org/2003/iso4217"
+    }
+  },
+  "facts": {
+    "rev2023": { "value": "1200000000", "dimensions": { "concept": "ifrs-full:Revenue", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "rev2022": { "value": "1100000000", "dimensions": { "concept": "ifrs-full:Revenue", "entity": "lei:EUROPA", "period": "2022-01-01T00:00:00/2023-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "rev2023seg": { "value": "500000000", "dimensions": { "concept": "ifrs-full:Revenue", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR", "ifrs-full:OperatingSegmentsAxis": "europa:NorthSegmentMember" } },
+    "opinc2023": { "value": "180000000", "dimensions": { "concept": "ifrs-full:ProfitLossFromOperatingActivities", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "da2023": { "value": "60000000", "dimensions": { "concept": "ifrs-full:DepreciationAndAmortisationExpense", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "pretax2023": { "value": "150000000", "dimensions": { "concept": "ifrs-full:ProfitLossBeforeTax", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "tax2023": { "value": "31500000", "dimensions": { "concept": "ifrs-full:IncomeTaxExpenseContinuingOperations", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "capex2023": { "value": "48000000", "dimensions": { "concept": "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00/2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "cash2023": { "value": "80000000", "dimensions": { "concept": "ifrs-full:CashAndCashEquivalents", "entity": "lei:EUROPA", "period": "2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "cash2022": { "value": "65000000", "dimensions": { "concept": "ifrs-full:CashAndCashEquivalents", "entity": "lei:EUROPA", "period": "2023-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "ncborrow2023": { "value": "300000000", "dimensions": { "concept": "ifrs-full:NoncurrentBorrowings", "entity": "lei:EUROPA", "period": "2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "cborrow2023": { "value": "35000000", "dimensions": { "concept": "ifrs-full:CurrentBorrowings", "entity": "lei:EUROPA", "period": "2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "ca2023": { "value": "400000000", "dimensions": { "concept": "ifrs-full:CurrentAssets", "entity": "lei:EUROPA", "period": "2024-01-01T00:00:00", "unit": "iso4217:EUR" } },
+    "cl2023": { "value": "250000000", "dimensions": { "concept": "ifrs-full:CurrentLiabilities", "entity": "lei:EUROPA", "period": "2024-01-01T00:00:00", "unit": "iso4217:EUR" } }
+  }
+}

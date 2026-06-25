@@ -21,6 +21,8 @@ import type { AIProvider } from '../lib/engine/ai/providers';
 import { computeChangedTraceFields } from '../lib/traceMap';
 import { getCompanyFacts, getSubmissions, extractRecentFilings } from '../lib/edgar/client';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
+import { getLatestEsefReport } from '../lib/edgar/esef';
+import { mapIfrsReport } from '../lib/edgar/mapIfrs';
 import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
 import type { RawHistoricals, ProvenanceMap, Provenance } from '../lib/edgar/types';
 
@@ -200,6 +202,9 @@ interface DealEngineStore {
   setStartScreen: (screen: 'source' | 'assumptions' | 'model') => void;
   /** Import a target by CIK: fetch + map filings, draft the assumptions, go to review. */
   importFromEdgar: (cik10: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
+  /** Import a European target by LEI: fetch its latest ESEF report (filings.xbrl.org), map the
+   *  IFRS facts, draft the assumptions, go to review — same downstream as the SEC path. */
+  importFromEsef: (lei: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
   /** Draft directly from already-mapped historicals (10-K upload path / programmatic). */
   loadFromHistoricals: (raw: RawHistoricals, opts?: { dealName?: string; sector?: string }) => void;
   /** Edit one reviewed field; marks its provenance 'user' and re-derives the live draft. */
@@ -799,6 +804,43 @@ Be specific. Use the company name to infer business type and calibrate according
           : `EDGAR import failed: ${msg || 'unknown error'}`,
         isCalculating: false,
       });
+    }
+  },
+
+  importFromEsef: async (lei, opts) => {
+    set({ isCalculating: true, error: null });
+    try {
+      const result = await getLatestEsefReport(lei);
+      if (!result) {
+        set({ error: 'No ESEF filing found for this entity on filings.xbrl.org — it may not be an EU/UK-listed issuer. Try another, or use Manual entry.', isCalculating: false });
+        return;
+      }
+      const { filing, report } = result;
+      const base = 'https://filings.xbrl.org';
+      const raw = mapIfrsReport(report, {
+        entityName: opts?.dealName ?? filing.entityName,
+        reportUrl: filing.viewerUrl ? `${base}${filing.viewerUrl}` : (filing.reportUrl ? `${base}${filing.reportUrl}` : undefined),
+      });
+      const sector = opts?.sector ?? 'Other';
+      const { state, provenance } = draftModelFromHistoricals(raw, {
+        dealName: opts?.dealName ?? filing.entityName ?? raw.entityName,
+        sector,
+      });
+      const recalc = fullRecalc(state);
+      set({
+        rawHistoricals: raw,
+        provenanceMap: provenance,
+        sourceFilings: filing.reportUrl ? [{ form: `ESEF · ${filing.country ?? ''}`.trim(), filingDate: filing.periodEnd, documentUrl: `${base}${filing.reportUrl}` }] : [],
+        modelState: recalc,
+        startScreen: 'assumptions',
+        isCalculating: false,
+        chatHistory: [], scenarios: [], sensitivityTables: [], memoContent: null, aiPanelInsights: null,
+      });
+    } catch (e: unknown) {
+      // eslint-disable-next-line no-console
+      console.error('importFromEsef failed:', e);
+      const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
+      set({ error: `ESEF import failed: ${msg || 'unknown error'}`, isCalculating: false });
     }
   },
 

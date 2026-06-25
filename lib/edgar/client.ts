@@ -190,7 +190,9 @@ export function extractRecentFilings(subs: Submissions, forms?: string[]): Filin
 
 const PROXY_BASE = '/api/edgar';
 
-async function getJson<T>(path: string): Promise<T> {
+/** Fetch JSON through the same-origin proxy (`/api/edgar?path=…`). Shared by the SEC and ESEF
+ *  clients. Coerces non-string/HTML errors into legible messages. */
+export async function getJson<T>(path: string): Promise<T> {
   // The endpoint travels as a query param to a single fixed function route (?path=…) — far more
   // reliable on Vercel than a multi-segment catch-all.
   const res = await fetch(`${PROXY_BASE}?path=${encodeURIComponent(path)}`, { headers: { Accept: 'application/json' } });
