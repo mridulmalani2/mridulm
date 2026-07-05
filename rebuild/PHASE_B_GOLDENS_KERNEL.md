@@ -19,14 +19,22 @@ the engine **exactly**; there is no tolerance dance.
 | G3 | Senior TLB + fixed-rate PIK note | PIK compounding, payoff at par+accrued, OID amortization & exit write-off, §163(j) binding |
 | G4 | Loss-making Y1–2, NOL opening balance, §382 limit, minimum tax | Full tax state machine incl. carryforwards |
 
-Per golden, commit THREE artifacts under `tests/goldens/G<n>/`:
-1. `G<n>.xlsx` — the workbook, formulas visible, **labeled intermediate columns** (per-tranche
-   interest, sweep pool, ECF applied per tranche, tax lines: ATI, deductible interest, NOL
-   used, cash tax) — these intermediates are what Phase C's per-module gates test against.
-2. `expected.json` — extracted values (script `scripts/extract-golden.ts` reads the xlsx and
-   emits it; committed output).
-3. The **agreement check**: a vitest test asserting `expected.json` matches a fresh extraction
-   of the committed xlsx (guards against silent divergence between workbook and fixture).
+**Process amendment (2026-07-05, standing authority; supersedes the xlsx requirement):**
+the "hand workbook" is realized as a SPEC-literal derivation script in a DIFFERENT language
+from the engine (`scripts/goldens/spec_calc.py` — Python, no TS imports), because a binary
+xlsx is undiffable/unreviewable in PRs (architecture-review finding) and no formula
+evaluator exists in CI. Independence is preserved by (a) the different-language rule,
+(b) the committed SPEC §17 check values derived by hand during the A3 review, and (c) the
+adjudication pass below (separate agents hand-re-derive selected lines from SPEC).
+
+Per golden, commit THESE artifacts under `tests/goldens/G<n>/`:
+1. `expected.json` — full per-year intermediates (per-tranche interest, sweep pool & per-
+   tranche application, tax lines: ATI, deductible, NOL pools, cash tax, BS rows) — what
+   Phase C's per-module gates test against.
+2. `schedule.csv` — the same numbers as a human-auditable table (the "workbook face").
+3. `DERIVATION.md` — each line's SPEC section + the adjudication sign-off record.
+The **agreement check** (vitest) asserts expected.json is byte-identical to a fresh run of
+the derivation script (guards against silent fixture edits).
 
 **Adjudication rule (binding):** when engine and workbook disagree, the disputed line is
 re-derived a third time directly from SPEC formulas by a different person/agent than the

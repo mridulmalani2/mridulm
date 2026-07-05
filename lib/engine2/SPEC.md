@@ -124,7 +124,7 @@ module. HY make-whole likewise enters only with Phase G refinancing.
 - **PIK: accrual = beginning balance × pik_rate**, compounds into balance at year end; no
   cash. Fixed-rate `pik_note` tranche type is in v1; per-year cash/PIK election is v2.
   AHYDO note in §6.
-- **Commitment fee** on undrawn revolver commitment only [CONFIRMED DR-1 Item 8]: sits in
+- **Commitment fee** on BEGINNING-of-year undrawn commitment (draws happen at waterfall step 6, year-end) [CONFIRMED DR-1 Item 8; adjudication 2026-07-05]: sits in
   the finance-cost line and **in DSCR debt service**; not in ICR's interest. Agency/L-C fee
   granularity is deliberately out of scope ("overkill for an annual LBO" — DR-1).
 - Revolver interest on **beginning drawn balance** (DR-1 Item 3 names this the
@@ -220,7 +220,7 @@ double count)`. D&A = da_pct × rev. Capex = maint_pct × rev + growth_capex[t].
 NWC: **operating NWC** (excludes cash/debt) via **days** or **% of revenue**.
 **Days formulas (365 basis)**: AR = DSO/365 × revenue; Inventory = DIO/365 × COGS;
 AP = DPO/365 × COGS; **COGS proxy = revenue × (1 − EBITDA margin)** (disclosed proxy).
-`ΔNWC[t] = NWC[t] − NWC[t−1]`; NWC[0] from facts.
+`ΔNWC[t] = NWC[t] − NWC[t−1]`; NWC[0] from facts (pct method: pct × facts revenue; days method: the §7 formulas on facts revenue/margin).
 **Fee amortization — two separate lines** (§6 treats them differently):
 - **OID amortization**: straight-line over the tranche's maturity; §163(j)-capped interest.
 - **Financing-fee amortization**: total fee = pct × total commitments, allocated pro-rata by
@@ -414,7 +414,8 @@ call — never a second calculation path (architecture-review finding, 2026-07-0
 
 ## §17 Golden deal definitions (Phase B builds the workbooks from EXACTLY these inputs)
 
-Facts per §16 units ($m, decimal fractions). All goldens: growth_capex = 0 every year
+Facts per §16 units ($m, decimal fractions). All goldens: ati_pct = 30% and minimum_rate = 0
+unless stated (G4 overrides minimum_rate = 15%); rollover = 0; growth_capex = 0 every year
 (stated capex is MAINT capex); financing-fee base = total commitments incl. revolver,
 allocated pro-rata by commitment over each tranche's maturity (§7); exit fees = fees_pct ×
 exit EV (§9); mid-year off. Workbook construction may surface infeasibilities — those flow
@@ -432,7 +433,7 @@ debt); exit fees 1.5%; min cash 5.0; no debt; MIP null; monitoring null; NOL poo
 §163(j) applies (no interest → inert).
 Check values: sponsor equity = 200 + 4 + 5 = 209.0; annual FCF = 25 − 5.5 − 3 − 0 = 16.5;
 exit equity = 200 − 0 + (5 + 5×16.5) − 3 = 284.5; MOIC = 284.5/209 = 1.3612;
-IRR = 1.3612^(1/5) − 1 ≈ 6.3618%. (PP&E rolls flat at 20.0: capex = D&A.)
+IRR = (284.5/209)^(1/5) − 1 = 6.3622% (corrected v1.0.1 — the v1.0 hand-approximation 6.3618% was 0.4bp off, outside the ±0.1bp tolerance). (PP&E rolls flat at 20.0: capex = D&A.)
 
 **G2 — TLB + revolver, 75% sweep, committed downside scenario** (proves §3 waterfall order,
 ECF pool, commitment fee, §13 scenario semantics):
@@ -503,6 +504,8 @@ Floor-breach itself (revolver exhausted) is covered by a kernel fixture, not a g
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.0.2 | 2026-07-05 | Adjudication pass (2 independent derivers, 167 lines, ZERO mismatches — goldens signed gospel). Ambiguities they resolved now stated explicitly: §17 golden defaults (ati_pct 30%, min_rate 0, rollover 0); §4 commitment fee on BEGINNING-of-year undrawn; §7 NWC[0] reading. Noted: fixtures store 2dp display values (±0.005 boundary artifacts are display precision, not engine values); BS merges DFC + unamortized OID into one line | Adjudication `wf_01aabc2d` |
+| v1.0.1 | 2026-07-05 | Phase B derivation: G1 IRR check value corrected to 6.3622% (closed form, was a 0.4bp hand-approximation error); all 22 §17 asserts verified against the committed reference derivation (tests/goldens/, scripts/goldens/spec_calc.py) | Phase B1 |
 | **v1.0** | 2026-07-05 | **Phase A3 review round applied (3 lenses, 47 findings) and SIGNED under the owner's standing decision authority.** §6 rewritten as a fully determined state machine: two NOL pools (acquired: §382 + layer cap, consumed first; post-close: banked losses, 80% cap, §382-free), explicit loss branch, negative-ATI floor, ATI = EBITDA_adj, §163(j) carryforward post-close-only with defined roll-forward, capped pool (cash + PIK + OID amort) split from UNCAPPED deductions (financing-fee amort + commitment fees + exit write-off — Treas. Reg. §1.163(j)-1(b)(22)); §382 basis corrected to EV in the CFDF frame (the v0.96 sponsor+rollover gloss was wrong). §7: margin-trajectory formula, NWC days formulas + COGS proxy, split OID/fee amortization with pro-rata allocation. §8: explicit PP&E roll. §9: exit-equity formula includes closing cash (matches G1); exit-fee base = exit EV; exit-year monitoring fee drop rule. §13: typed field-level deltas; scenario waterfall block. §14: mirror invariants (16) + committed-scenario invariant (17). §17 goldens re-derived after recomputation falsified three committed asserts: G3 PIK payoff 237.9161 (was misrounded), G3 §163(j) binds EVERY year / never releases (tested as such), G3 hurdle 1.5x (2.0x promote was out of the money), G4 rebuilt (D&A 7%) to produce a genuine Y1 tax loss + floor/§382 binds with §163(j) explicitly non-binding, per-golden net-PP&E facts (PP&E stays positive), G2 gains revolver maturity + committed downside scenario G2-D, NEW G5 forces the revolver draw/repay cycle. types.ts restructured to match (discriminated tranche unions, RevolverYear schedule, two NOL pools, ScenarioDeltas, sensitivity base anchors, ExitBlock cash line, GP-fee-income memo, indexing contract). | A3 review `wf_a8ea0357`; ledger C-19/C-20 |
 | v0.9 | 2026-07-04 | Initial skeleton; all conventions drafted, 12 [RESEARCH-CONFIRM] markers open | 4-lens adversarial review of the overhaul plan |
 | v0.97 | 2026-07-05 | Promoted to canonical location `lib/engine2/SPEC.md` (skeleton in rebuild/ is now a pointer stub). Added §16 (input schema — the `types.ts` contract + class rules) and §17 (golden deal definitions G1–G4 with concrete inputs and check values, incl. G1 closed form and the G3 PIK payoff 135×1.12^5). Dual-engine guardrails enacted (CI engine-freeze job, tests/engine2-boundary.test.ts, ENGINE_ARCHITECTURE §0) | Phase A4/A2 |
