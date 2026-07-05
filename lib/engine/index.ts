@@ -97,3 +97,4 @@ export function fullRecalc(state: ModelState): ModelState {
 
 export { deriveEntryFields, ensureListLengths, createDefaultModelState } from './modelState';
 export { generateScenarios, generateSensitivityTable, generateAllSensitivityTables } from './scenarios';
+// freeze-guard demo — this PR must FAIL the engine-freeze job
