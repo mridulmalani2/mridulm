@@ -29,6 +29,23 @@ Every deferred feature re-enters through the same template. **Never two features
 | 11 | **Covenant step-downs UI / springing** | Engine fields exist from v1 spec; expose + scenario integration |
 | 12 | **Trace mode v2** | Rebuilt against ModelOutput with SPEC-section links in trace cards (the spec makes traces meaningful: each node cites its formula) |
 
+## v2 items deferred by SPEC but not yet scheduled (pull into the backlog when prioritized)
+
+Recorded so every spec deferral has a tracked re-entry path (verifier finding, 2026-07-05):
+- **Step-up purchase accounting** (asset / §338(h)(10) / §336(e): §197 15-yr goodwill
+  amortization, permanent 100% bonus depreciation post-OBBBA, DTL unwind) — SPEC §8.
+- **Call-protection module** (private-credit 102/101 hard call, CoC 101 put, HY make-whole)
+  — SPEC §3/§9 disclosed omissions; pairs with backlog #5 (refinancing).
+- **XIRR on actual close/exit dates with first-year stub** — SPEC §1's stated upgrade path
+  (retires the mid-year toggle; DR-2's preferred practice).
+- **Quarterly engine periods** — SPEC §1 deferral (distinct from backlog #2's LTM
+  quarter-stitching, which is data-side).
+- **Actual/360 day-count gross-up per tranche** — SPEC §4 v2 refinement (~1.0–1.4% interest
+  understatement disclosed meanwhile).
+- **Transaction-cost 70/30 success-fee split** (Rev. Proc. 2011-29) — SPEC §6 v2 refinement.
+- **Mezzanine warrants / equity kicker** (2–8% of equity — DR-4) — belongs with backlog #8
+  (sweet equity/strips).
+
 ## Standing rules
 - A feature that would add a second calculation path for an existing number is rejected by
   construction — it must flow through `runModel`.

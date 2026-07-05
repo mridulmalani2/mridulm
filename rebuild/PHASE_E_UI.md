@@ -27,6 +27,13 @@ leverage + Y1 DSCR, FCF sparkline; each element deep-links) · Returns (3 stream
 bridges) · **Operating model** (the FCF waterfall table — new) · S&U · Debt schedule ·
 Balance sheet · Credit (N/A semantics — no 9999/99 ever rendered) · Sensitivity · Scenarios
 (incl. single-factor stress rows; per-scenario credit metrics + mini bridge).
+Two DR-5 alignments: (a) the on-screen Summary tab is a returns-first dashboard VARIANT; the
+**exportable one-pager/memo skeleton follows the R&P panel order** recorded in
+`conventions.json presentation.summaryPanelOrder` (price → S&U → returns → capitalization →
+credit → FCF) — both consume the same ModelOutput; (b) the Debt-schedule footer renders the
+deleveraging subtotals **FCF conversion % and cumulative paydown as % of entry debt**
+(SPEC §11). Plus a dedicated **Assumptions & methodology page** (SPEC §15) listing every
+disclosed simplification with its rationale.
 Coherence warnings (from `check.ts`, same run) render as a banner strip; they gate rendering
 prominence, never computation.
 **Removal list (deliberate scope cuts, remove the UI surfaces cleanly):** Fragility tab,
