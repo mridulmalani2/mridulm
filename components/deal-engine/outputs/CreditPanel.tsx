@@ -1,8 +1,10 @@
 import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 
-const fmt = (v: number, decimals = 1) => v.toFixed(decimals);
-const fmtCcy = (v: number, decimals = 1) => (v >= 0 ? '' : '(') + Math.abs(v).toFixed(decimals) + (v < 0 ? ')' : '');
+import { fmtNumber } from '../../../lib/formatters';
+
+const fmt = (v: number, decimals = 1) => fmtNumber(v, decimals);
+const fmtCcy = (v: number, decimals = 1) => (v >= 0 ? '' : '(') + fmtNumber(Math.abs(v), decimals) + (v < 0 ? ')' : '');
 const pct = (v: number) => (v * 100).toFixed(1) + '%';
 
 const CreditPanel: React.FC = () => {
@@ -19,8 +21,8 @@ const CreditPanel: React.FC = () => {
   const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'INR' ? '\u20B9' : currency === 'JPY' ? '\u00A5' : '\u00A3';
 
   const leverageCov = cov?.leverage_covenant ?? 6.0;
-  const dscrCov = cov?.dscr_covenant ?? 1.15;
-  const fccrCov = cov?.fccr_covenant ?? 1.10;
+  const dscrCov = cov?.dscr_covenant ?? 1.10; // PHASE 0: aligned with createDefaultModelState
+  const fccrCov = cov?.fccr_covenant ?? 1.15;
 
   const hasInsolvencyRisk = ca.insolvency_warning_by_year?.some(w => w);
 

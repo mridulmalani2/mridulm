@@ -1,7 +1,8 @@
 import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import { fmtNumber } from '../../../lib/formatters';
 
-const fmt = (v: number) => v.toFixed(1);
+const fmt = (v: number) => fmtNumber(v);
 
 const EBITDABridgeChart: React.FC = () => {
   const bridge = useDealEngineStore((s) => s.modelState?.ebitda_bridge);

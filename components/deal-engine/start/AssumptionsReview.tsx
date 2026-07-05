@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { fmtNumber } from '../../../lib/formatters';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import ProvenanceBadge from '../inputs/ProvenanceBadge';
 import type { Provenance } from '../../../lib/edgar/types';
@@ -234,7 +235,7 @@ const AssumptionsReview: React.FC = () => {
         {/* Live preview + Build */}
         <div className="mt-6 flex items-center justify-between flex-wrap gap-4 p-4" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
           <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
-            Implied: EV {csym}{ms.entry.enterprise_value.toFixed(0)}m · Entry equity {csym}{ms.returns.entry_equity.toFixed(0)}m · IRR {ms.returns.irr != null ? `${(ms.returns.irr * 100).toFixed(1)}%` : 'N/C'} · MOIC {ms.returns.moic.toFixed(2)}x
+            Implied: EV {csym}{fmtNumber(ms.entry.enterprise_value, 0)}m · Entry equity {csym}{fmtNumber(ms.returns.entry_equity, 0)}m · IRR {ms.returns.irr != null ? `${(ms.returns.irr * 100).toFixed(1)}%` : 'N/C'} · MOIC {ms.returns.moic.toFixed(2)}x
           </div>
           <button onClick={build} disabled={hasMissing}
             title={hasMissing ? 'Fill the MISSING fields before building' : undefined}

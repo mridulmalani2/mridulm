@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SHOW_LEGACY_OUTPUTS } from '../lib/legacyOutputs';
 import { useDealEngineStore } from '../store/dealEngine';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
@@ -69,7 +70,9 @@ const DealEngine: React.FC = () => {
 
   const showInputPanel = isLargeScreen || inputPanelOpen;
 
-  const tabs: { id: OutputTab; label: string }[] = [
+  // PHASE 0 (rebuild/PHASE_0_HOTFIX.md): Fragility and Reality Check are hidden, not deleted
+  // — see lib/legacyOutputs.ts (shared with the Excel export so workbook and screen agree).
+  const tabs: { id: OutputTab; label: string }[] = ([
     { id: 'returns', label: 'Returns' },
     { id: 'su', label: 'S&U' },
     { id: 'debt', label: 'Debt' },
@@ -79,7 +82,9 @@ const DealEngine: React.FC = () => {
     { id: 'sensitivity', label: 'Sensitivity' },
     { id: 'scenarios', label: 'Scenarios' },
     { id: 'reality', label: 'Reality Check' },
-  ];
+  ] as { id: OutputTab; label: string }[]).filter(
+    (t) => SHOW_LEGACY_OUTPUTS || (t.id !== 'fragility' && t.id !== 'reality'),
+  );
 
   return (
     <div className="flex flex-col h-screen" style={{ background: '#F9F9F7' }}>
