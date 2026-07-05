@@ -2,8 +2,9 @@ import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
 import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
+import { fmtNumber } from '../../../lib/formatters';
 
-const fmt = (v: number, decimals = 1) => v.toFixed(decimals);
+const fmt = (v: number, decimals = 1) => fmtNumber(v, decimals);
 const pct = (v: number) => (v * 100).toFixed(1) + '%';
 
 const SourcesUsesTable: React.FC = () => {

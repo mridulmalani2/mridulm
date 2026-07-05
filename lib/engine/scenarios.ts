@@ -23,7 +23,7 @@ function scenarioMetrics(state: ModelState): ScenarioMetrics {
   const { returns: ret, projections, debtSchedule: ds } = runFullModel(state);
   const cov = state.credit_covenants;
   const levCov = (i: number) => cov?.leverage_covenant_by_year?.[i] ?? cov?.leverage_covenant ?? 6.0;
-  const dscrCov = (i: number) => cov?.dscr_covenant_by_year?.[i] ?? cov?.dscr_covenant ?? 1.25;
+  const dscrCov = (i: number) => cov?.dscr_covenant_by_year?.[i] ?? cov?.dscr_covenant ?? 1.10; // PHASE 0: aligned default
   const dscr = ds.dscr_by_year;
   const lev = ds.leverage_ratio_by_year;
   let breach: number | null = null;

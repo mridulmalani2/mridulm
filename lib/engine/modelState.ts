@@ -292,7 +292,10 @@ export function createDefaultModelState(): ModelState {
     },
     credit_covenants: {
       leverage_covenant: 6.0,
-      dscr_covenant: 1.25,
+      // PHASE 0 fix (rebuild/DIFF_LEDGER.md L-2/L-7): 1.25 made the DEFAULT deal breach its
+      // own covenant in Y1 (default-flow DSCR ~1.2x). Suggested covenants must be coherent
+      // with the suggested deal; engine2 replaces absolutes with headroom-based suggestions.
+      dscr_covenant: 1.10,
       fccr_covenant: 1.15,
     },
     credit_analysis: {

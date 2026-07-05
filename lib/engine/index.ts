@@ -21,7 +21,8 @@ export function fullRecalc(state: ModelState): ModelState {
   if (!state.exit.interim_distributions) state.exit.interim_distributions = [];
   if (state.exit.exit_ev_override === undefined) state.exit.exit_ev_override = null;
   if (!state.credit_covenants) {
-    state.credit_covenants = { leverage_covenant: 6.0, dscr_covenant: 1.25, fccr_covenant: 1.15 };
+    // PHASE 0: 1.10 matches createDefaultModelState (rebuild/DIFF_LEDGER.md L-2/L-7) — 1.25 made the default deal self-breach.
+    state.credit_covenants = { leverage_covenant: 6.0, dscr_covenant: 1.10, fccr_covenant: 1.15 };
   }
   // Defensive: clear any synthetic add-on tranches left over from a prior pass so
   // entry leverage / equity (derived below) are computed on real entry debt only.

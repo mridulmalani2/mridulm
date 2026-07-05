@@ -1,4 +1,5 @@
 import React from 'react';
+import { fmtNumber } from '../../../lib/formatters';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from 'recharts';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
@@ -42,12 +43,12 @@ const ValueBridge: React.FC = () => {
             tick={{ fontSize: 9, fill: 'rgba(17,17,17,0.4)', fontFamily: "'JetBrains Mono', monospace" }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => `${v.toFixed(0)}`}
+            tickFormatter={(v) => fmtNumber(v, 0)}
           />
           <Tooltip
             contentStyle={{ background: '#ffffff', border: '1px solid rgba(17,17,17,0.1)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#111111' }}
             labelStyle={{ color: '#111111' }}
-            formatter={(val) => val != null ? [`${sym}${Number(val).toFixed(1)}m`, ''] : ['—', '']}
+            formatter={(val) => val != null ? [`${sym}${fmtNumber(Number(val))}m`, ''] : ['—', '']}
           />
           {/* Invisible base bar */}
           <Bar dataKey="base" stackId="a" fill="transparent" />

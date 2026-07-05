@@ -1,4 +1,5 @@
 /** Value formatters for trace edge labels and chips. */
+import { fmtNumber } from '../../../lib/formatters';
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   GBP: '£', EUR: '€', USD: '$', CHF: 'CHF ', INR: '₹',
@@ -40,5 +41,5 @@ export function formatTraceValue(
     return value ? 'On' : 'Off';
   }
   // Default: currency
-  return `${sym}${Math.abs(value).toFixed(1)}m`;
+  return `${sym}${fmtNumber(Math.abs(value))}m`;
 }
