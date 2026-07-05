@@ -192,18 +192,18 @@ Gates are defined in each phase file. Phase A is **timeboxed** and sign-off auth
 owner after one review round — review-paralysis is this project's disease; the spec is
 versioned (changelog + golden update), not litigated forever.
 
-## 7. Open decisions for the owner
+## 7. Owner decisions — RESOLVED 2026-07-05
 
-1. **Phase 0 scope** — ship the read-only FCF exhibit on the old engine too (1 week extra,
-   visible win), or formatting/tab-hiding only? Recommendation: formatting + hiding only;
-   keep the FCF exhibit for v2 where its numbers are trustworthy.
-2. **Saved models** — old localStorage saves: migrate or "unsupported" banner at cutover?
-   Recommendation: banner. The old ModelState is exactly the shape being retired.
-3. **Trading-multiple anchor** — needs a share-price source (one free quote endpoint via the
-   existing proxy). Include in v1 (recommended) or defer with the field shipping without the
-   reference line?
-4. **Trace mode** — port in Phase E (walkthrough gate includes it) or explicitly v2?
-   Recommendation: v2; it multiplies E's surface and the new spec/goldens already provide
-   auditability.
-5. **ESEF path in v1** — keep Europe import live through the rebuild (it shares RawHistoricals,
-   so cost is low) or US-only until Phase G? Recommendation: keep.
+The owner granted standing decision authority on 2026-07-05 ("make the best decision; the
+goal is simply a model that can be used to evaluate LBOs in real-life PE workflows, no
+placeholders or assumptions strictly; build autonomously"). Decisions locked:
+
+1. **Phase 0 scope** — formatting + tab-hiding + covenant-default fix only; no FCF exhibit
+   on the old engine (its numbers aren't trustworthy enough to promote).
+2. **Saved models** — "unsupported" banner at cutover; the old ModelState shape is retired.
+3. **Trading-multiple anchor** — IN for v1 (shares outstanding + one free quote endpoint via
+   the existing proxy; implied trading EV/EBITDA next to the entry-multiple field).
+4. **Trace mode** — v2 (Phase G-12); the spec + goldens carry auditability meanwhile.
+5. **ESEF path** — kept live through the rebuild (shares RawHistoricals; low cost).
+6. **Hold-period suggestion** — 5 years (underwriting convention), with the realized-hold
+   (~7yr, Bain 2026) context line in the UI.

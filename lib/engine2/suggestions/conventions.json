@@ -19,9 +19,8 @@
   "deal": {
     "holdPeriodYears": {
       "suggested": 5,
-      "ownerDecisionPending": true,
-      "basis": "Practitioner underwriting convention — NOT research-extracted. DR-4 Rec 2 recommends 7 years, citing realized median holds (~7yr: Bain Global PE Report 2026; PitchBook 7.1yr median for 2023 exits). Owner to confirm 5 vs 7 at Phase A sign-off; UI shows the realized-hold context line either way.",
-      "citation": "convention choice pending owner; context: Bain GPE Report 2026 (Feb 2026), PitchBook via LCD",
+      "basis": "OWNER-decided 2026-07-05: 5 years (practitioner underwriting convention — underwriting hold, not realized hold). The UI shows a context line: realized median holds at exit are ~7yr (Bain GPE Report 2026; PitchBook 7.1yr median for 2023 exits), which DR-4 Rec 2 preferred.",
+      "citation": "owner decision; context: Bain GPE Report 2026 (Feb 2026), PitchBook via LCD",
       "asOf": "2026-02"
     },
     "exitMultiple": {
