@@ -4,6 +4,33 @@
 
 ---
 
+## 0. TEMPORARY DUAL-ENGINE REGIME (2026-07 → Phase F cutover)
+
+A ground-up successor engine is being built at `lib/engine2/` against a written
+specification (`lib/engine2/SPEC.md`), per the program in `rebuild/`. Until the Phase F
+cutover, TWO engines exist in this repo. Because parallel engines are this project's
+documented killer (see §1 History), the period is governed by hard rules:
+
+1. **`lib/engine/**` and `lib/dealEngineTypes.ts` are FROZEN.** CI (`engine-freeze` job)
+   fails any PR that touches them unless the PR carries the `FREEZE-EXCEPTION` label AND
+   appends a row to `rebuild/DIFF_LEDGER.md`. The old engine receives render-breaking
+   hotfixes only; every production bug found during the window is fixed in engine2 and
+   ledgered instead of patched here.
+2. **Import boundary** (`tests/engine2-boundary.test.ts`): `lib/engine2` may never import
+   from `lib/engine` or `lib/dealEngineTypes.ts`; no module outside engine2 may import from
+   both engines.
+3. **The spec is the arbiter.** Where the engines disagree, `lib/engine2/SPEC.md` + the
+   golden workbooks (`tests/goldens/`) decide; every intentional divergence is a row in
+   `rebuild/DIFF_LEDGER.md`, and Phase F's differential report is generated against that
+   ledger.
+4. **Sunset:** at Phase F (`rebuild/PHASE_F_CUTOVER.md`) the old engine is deleted, this
+   section is replaced by its sunset record, and the single-source-of-truth rule below
+   applies to the successor.
+
+Until cutover, §§1–7 below describe the FROZEN legacy engine and remain accurate for it.
+
+---
+
 ## 1. Source of truth
 
 The **TypeScript engine** in `lib/engine/` is the **single source of truth** for
