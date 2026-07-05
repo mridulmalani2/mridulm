@@ -47,3 +47,5 @@ that moves a number.
 | C-14 | Leverage basis under NTM entry | same EBITDA as valuation | always FY/LTM for sizing & covenants (§11) |
 | C-15 | Monitoring fee | deducted, income leg vanishes | OFF by default; when ON: deducted + GP-income memo line (§9) |
 | C-16 | Value bridge | reconciles "approximately", distributions once double-counted | exact to pre-MIP equity Δ + explicit walk-down (§12) |
+| C-17 | §163(j) ATI basis default | `section_163j_ati_basis` default `'ebit'` (described post-2022 TCJA law) | default **EBITDA** — OBBBA (P.L. 119-21, Jul 2025) permanently restored EBITDA-based ATI for TY beginning after 12/31/2024; EBIT stays as a pre-2025 toggle (SPEC §6, DR-3) — deductible interest ↑ on levered deals |
+| C-18 | Acquired-NOL usability | extracted NOL flowed straight into the tax schedule as usable | acquired-NOL survival is an explicit assumption, **default OFF** (target NOLs generally don't survive asset/338(h)(10)/336(e) structures — DR-3); fact still displayed; enabling activates the §382 limit (suggested = equity × LTTER ~3.58%) — cash taxes ↑ where the old engine assumed usable NOLs |
