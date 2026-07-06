@@ -1,0 +1,126 @@
+/**
+ * engine2/sourcesUses.ts — SPEC §2 sources & uses at close (Phase C build order #2).
+ *
+ * Convention: cash-free / debt-free acquisition; the model transacts on EV. Fees and OID
+ * sit in USES and increase the sponsor check; debt is raised at FACE value (net-of-OID
+ * sources are a flagged error — DR-2 Item 1); rollover reduces the sponsor's cash check.
+ * Sponsor equity is the PLUG, so sources ≡ uses by construction (invariant §14.1).
+ *
+ * No imports from lib/engine (boundary test).
+ */
+
+import type { DealAssumptions, DealFacts, RevolverAssumption, SourcesUses, TermTrancheAssumption, TrancheSize } from './types';
+
+/** §16 single-driver sizing: x_ebitda × FY EBITDA (sizing ALWAYS uses FY — §11) or amount. */
+export function trancheSize(size: TrancheSize, fyEbitda: number): number {
+  if (size.x_ebitda !== undefined) return size.x_ebitda * fyEbitda;
+  return size.amount;
+}
+
+export interface EntryDerivation {
+  enterprise_value: number;
+  entry_multiple: number;
+  /** ALWAYS FY EBITDA — leverage sizing and covenants never use NTM (SPEC §11, C-14). */
+  entry_ebitda_for_sizing: number;
+  /** The valuation-basis EBITDA the multiple applies to (FY, or the §9-symmetric NTM proxy). */
+  entry_ebitda_for_valuation: number;
+}
+
+/**
+ * §2/§16 entry: single-driver rule — the other side is derived. NTM valuation basis uses
+ * the §9 proxy pattern (fy_ebitda × (1 + growth[0])); goldens are FY (NTM golden-uncovered,
+ * flagged in SPEC §9).
+ */
+export function deriveEntry(
+  facts: Pick<DealFacts, 'fy_ebitda'>,
+  assumptions: Pick<DealAssumptions, 'entry' | 'operations'>,
+): EntryDerivation {
+  const { entry } = assumptions;
+  const fy = facts.fy_ebitda;
+  if (fy <= 0) throw new RangeError('sourcesUses: fy_ebitda must be > 0 to derive entry');
+  const valuationEbitda = entry.basis === 'fy' ? fy : fy * (1 + assumptions.operations.growth[0]);
+  let ev: number;
+  let multiple: number;
+  if (entry.driver === 'multiple') {
+    if (entry.entry_multiple === null) throw new RangeError('sourcesUses: entry_multiple required when driver = multiple');
+    multiple = entry.entry_multiple;
+    ev = multiple * valuationEbitda;
+  } else {
+    if (entry.enterprise_value === null) throw new RangeError('sourcesUses: enterprise_value required when driver = ev');
+    ev = entry.enterprise_value;
+    multiple = ev / valuationEbitda;
+  }
+  return {
+    enterprise_value: ev,
+    entry_multiple: multiple,
+    entry_ebitda_for_sizing: fy,
+    entry_ebitda_for_valuation: valuationEbitda,
+  };
+}
+
+export interface SizedStructure {
+  /** Term tranches with resolved par (FACE) amounts, §16 order preserved. */
+  terms: { assumption: TermTrancheAssumption; par: number; oid_amount: number }[];
+  revolver: { assumption: RevolverAssumption; commitment: number } | null;
+  total_par: number;
+  /** Financing-fee base: total commitments INCLUDING the undrawn revolver (§2, DR-2 flag). */
+  total_commitments: number;
+  oid_total: number;
+}
+
+export function sizeStructure(
+  structure: DealAssumptions['structure'],
+  fyEbitda: number,
+): SizedStructure {
+  const revolvers = structure.tranches.filter((t): t is RevolverAssumption => t.type === 'revolver');
+  if (revolvers.length > 1) throw new RangeError('sourcesUses: at most ONE revolver per deal (§16)');
+  const terms = structure.tranches
+    .filter((t): t is TermTrancheAssumption => t.type !== 'revolver')
+    .map((assumption) => {
+      const par = trancheSize(assumption.size, fyEbitda);
+      if (par < 0) throw new RangeError(`sourcesUses: ${assumption.name} par must be ≥ 0`);
+      return { assumption, par, oid_amount: par * assumption.oid_pct };
+    });
+  const revolver = revolvers.length
+    ? { assumption: revolvers[0], commitment: trancheSize(revolvers[0].commitment, fyEbitda) }
+    : null;
+  const totalPar = terms.reduce((s, t) => s + t.par, 0);
+  return {
+    terms,
+    revolver,
+    total_par: totalPar,
+    total_commitments: totalPar + (revolver?.commitment ?? 0),
+    oid_total: terms.reduce((s, t) => s + t.oid_amount, 0),
+  };
+}
+
+/**
+ * §2 S&U. Uses: EV + transaction costs + financing fees (on TOTAL commitments) + OID
+ * (funded at close, capitalized) + cash to balance sheet (= min_cash floor). Sources:
+ * debt at par + rollover + sponsor plug. Solvency (sponsor > 0) is checked by the §16
+ * coherence gate, not here — this module never blocks, it computes.
+ */
+export function buildSourcesUses(
+  entry: EntryDerivation,
+  sized: SizedStructure,
+  assumptions: Pick<DealAssumptions, 'fees' | 'structure' | 'rollover_equity'>,
+): SourcesUses {
+  const transactionCosts = assumptions.fees.transaction_pct_of_ev * entry.enterprise_value;
+  const financingFees = assumptions.fees.financing_pct_of_commitments * sized.total_commitments;
+  const cashToBs = assumptions.structure.min_cash;
+  const totalUses =
+    entry.enterprise_value + transactionCosts + financingFees + sized.oid_total + cashToBs;
+  const sponsorEquity = totalUses - sized.total_par - assumptions.rollover_equity;
+  return {
+    enterprise_value: entry.enterprise_value,
+    transaction_costs: transactionCosts,
+    financing_fees: financingFees,
+    oid_funded: sized.oid_total,
+    cash_to_balance_sheet: cashToBs,
+    total_uses: totalUses,
+    debt_at_par: sized.terms.map((t) => ({ name: t.assumption.name, amount: t.par })),
+    rollover_equity: assumptions.rollover_equity,
+    sponsor_equity: sponsorEquity,
+    total_sources: sized.total_par + assumptions.rollover_equity + sponsorEquity,
+  };
+}

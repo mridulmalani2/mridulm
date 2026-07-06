@@ -1,0 +1,91 @@
+/**
+ * engine2/sequence.ts — the FIRST END-TO-END run (Phase C5 gate, PHASE_C build order #5).
+ *
+ * No injection anywhere: runCore consumes only the SPEC §17 facts/assumptions and must
+ * reproduce every golden block it owns — operating, tax, tranche schedules, revolver,
+ * waterfall, balance sheet (t0-anchored) — at FULL precision against the 2dp fixtures
+ * (±$0.0075 per line, the §15 golden tolerance + display rounding). This is the §15
+ * integration tolerance applied module-complete; exit/returns/credit/bridge follow in
+ * C6–C9.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { runCore } from '../lib/engine2/sequence';
+import { GOLDEN_DEALS as DEALS } from './fixtures/engine2-golden-deals';
+
+const ROOT = join(__dirname, '..');
+const load = (n: string) => JSON.parse(readFileSync(join(ROOT, 'tests/goldens', n, 'expected.json'), 'utf8'));
+const TOL = 0.0075;
+
+function assertBlockMatches(actual: Record<string, unknown>[], fixture: Record<string, unknown>[], label: string, tol = TOL) {
+  expect(actual.length, `${label} length`).toBe(fixture.length);
+  for (let i = 0; i < fixture.length; i++) {
+    for (const key of Object.keys(fixture[i])) {
+      const f = fixture[i][key];
+      const a = (actual[i] as Record<string, unknown>)[key];
+      if (typeof f === 'number') {
+        expect(typeof a, `${label}[${i}].${key} present`).toBe('number');
+        expect(Math.abs((a as number) - f), `${label}[${i}].${key}`).toBeLessThan(tol);
+      } else if (typeof f === 'boolean') {
+        expect(a, `${label}[${i}].${key}`).toBe(f);
+      }
+    }
+  }
+}
+
+describe('runCore — first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
+  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5']) {
+    it(`${golden}: operating, tax, tranches, revolver, waterfall, balance sheet`, () => {
+      const g = load(golden);
+      const core = runCore(DEALS[golden].facts, DEALS[golden].assumptions);
+
+      // derived + S&U
+      expect(Math.abs(core.derived.enterprise_value - g.derived.enterprise_value)).toBeLessThan(TOL);
+      expect(Math.abs(core.derived.sponsor_equity - g.derived.sponsor_equity)).toBeLessThan(TOL);
+      expect(Math.abs(core.derived.total_debt_at_par - g.derived.total_debt_at_par)).toBeLessThan(TOL);
+      expect(Math.abs(core.sources_uses.total_uses - g.sources_uses.total_uses)).toBeLessThan(TOL);
+
+      // per-year blocks — every numeric column in the fixture
+      assertBlockMatches(core.operating as unknown as Record<string, unknown>[], g.operating, `${golden} operating`);
+      // fixture tax rows carry s163j_carryforward_open (not in TaxYear) — compare shared keys
+      const taxFixture = g.tax.map((r: Record<string, unknown>) => {
+        const { s163j_carryforward_open: _open, ...rest } = r;
+        return rest;
+      });
+      assertBlockMatches(core.tax as unknown as Record<string, unknown>[], taxFixture, `${golden} tax`);
+      const trancheNames = Object.keys(g.tranches);
+      expect(core.tranches).toHaveLength(trancheNames.length);
+      for (let k = 0; k < trancheNames.length; k++) {
+        assertBlockMatches(
+          core.tranches[k] as unknown as Record<string, unknown>[],
+          g.tranches[core.tranches[k][0]?.name ?? trancheNames[k]],
+          `${golden} tranche ${trancheNames[k]}`,
+        );
+      }
+      if (g.revolver) {
+        expect(core.revolver).not.toBeNull();
+        assertBlockMatches(core.revolver! as unknown as Record<string, unknown>[], g.revolver, `${golden} revolver`);
+      } else {
+        expect(core.revolver).toBeNull();
+      }
+      assertBlockMatches(core.waterfall as unknown as Record<string, unknown>[], g.waterfall, `${golden} waterfall`);
+      assertBlockMatches(core.balance_sheet as unknown as Record<string, unknown>[], g.balance_sheet, `${golden} balance sheet`);
+
+      // §14.2 at full precision: BS closes to machine epsilon, not just fixture tolerance
+      for (const row of core.balance_sheet) expect(Math.abs(row.check)).toBeLessThan(1e-9);
+      // exit write-off matches the golden ExitBlock line
+      expect(Math.abs(core.exit_writeoff - g.exit.unamortized_fees_written_off)).toBeLessThan(TOL);
+      // §9 payoff carried for C6: par + accrued PIK + drawn revolver
+      const payoff = core.final_debt_state.term_balances.reduce((a, b) => a + b, 0) + core.final_debt_state.revolver_drawn;
+      expect(Math.abs(payoff - g.exit.debt_payoff_at_par_plus_pik)).toBeLessThan(TOL);
+      // unlevered interim flows match the committed stream (§9 fee-membership table)
+      const cfs: number[] = g.returns.unlevered.cashflows;
+      for (let t = 0; t < core.unlevered_fcf.length - 1; t++) {
+        expect(Math.abs(core.unlevered_fcf[t] - cfs[t + 1]), `${golden} UFCF Y${t + 1}`).toBeLessThan(TOL);
+      }
+      const exitUfcf = cfs[cfs.length - 1] - (g.exit.exit_ev - g.exit.exit_fees);
+      expect(Math.abs(core.unlevered_fcf[core.unlevered_fcf.length - 1] - exitUfcf), `${golden} UFCF exit year`).toBeLessThan(0.015);
+    });
+  }
+});
