@@ -1,0 +1,35 @@
+line,Y1,Y2,Y3,Y4,Y5
+revenue,315.0,327.6,340.7,350.93,361.45
+ebitda_adj,94.5,98.28,102.21,105.28,108.44
+da,12.6,13.1,13.63,14.04,14.46
+ebit,81.9,85.18,88.58,91.24,93.98
+maint_capex,11.03,11.47,11.92,12.28,12.65
+growth_capex,0.0,0.0,0.0,0.0,0.0
+delta_nwc,1.56,1.31,1.36,1.06,1.1
+fcf_pre_debt,68.73,71.79,74.65,77.22,80.27
+tax.ati,94.5,98.28,102.21,105.28,108.44
+tax.capped_interest_pool,38.41,37.91,36.74,35.14,33.21
+tax.uncapped_deductions,0.83,0.83,0.83,0.83,3.76
+tax.deductible_capped_interest,28.35,29.48,30.66,31.58,32.53
+tax.s163j_carryforward_end,10.06,18.48,24.56,28.11,28.79
+tax.taxable_before_nol,52.72,54.86,57.09,58.83,57.69
+tax.acquired_nol_used,0.0,0.0,0.0,0.0,0.0
+tax.postclose_nol_used,0.0,0.0,0.0,0.0,0.0
+tax.nol_banked,0.0,0.0,0.0,0.0,0.0
+tax.cash_tax,13.18,13.72,14.27,14.71,14.42
+Senior.beginning_balance,270.0,239.82,198.55,148.63,91.07
+Senior.cash_interest,21.87,19.43,16.08,12.04,7.38
+Senior.pik_accrual,0.0,0.0,0.0,0.0,0.0
+Senior.mandatory_amort,13.5,13.5,13.5,13.5,13.5
+Senior.sweep_repayment,16.68,27.77,36.42,44.05,51.72
+Senior.ending_balance,239.82,198.55,148.63,91.07,25.85
+PIK Note.beginning_balance,135.0,151.2,169.34,189.67,212.43
+PIK Note.cash_interest,0.0,0.0,0.0,0.0,0.0
+PIK Note.pik_accrual,16.2,18.14,20.32,22.76,25.49
+PIK Note.mandatory_amort,0.0,0.0,0.0,0.0,0.0
+PIK Note.sweep_repayment,0.0,0.0,0.0,0.0,0.0
+PIK Note.ending_balance,151.2,169.34,189.67,212.43,237.92
+wf.opening_cash,8.0,24.68,35.77,44.42,52.05
+wf.sweep_pool,33.36,55.54,72.84,88.11,103.44
+wf.sweep_applied_total,16.68,27.77,36.42,44.05,51.72
+wf.closing_cash,24.68,35.77,44.42,52.05,59.72

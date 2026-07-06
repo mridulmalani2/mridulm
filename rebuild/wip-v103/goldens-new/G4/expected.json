@@ -1,0 +1,415 @@
+{
+ "balance_sheet": [
+  {
+   "cash": 3.0,
+   "check": 0.0,
+   "debt_at_par": 42.0,
+   "deferred_financing_costs": 1.68,
+   "equity": 48.36,
+   "goodwill": 7.68,
+   "operating_nwc": 18.0,
+   "ppe": 60.0,
+   "total_assets": 90.36
+  },
+  {
+   "cash": 4.88,
+   "check": -0.0,
+   "debt_at_par": 39.7,
+   "deferred_financing_costs": 1.44,
+   "equity": 46.55,
+   "goodwill": 7.68,
+   "operating_nwc": 18.36,
+   "ppe": 53.88,
+   "total_assets": 86.24
+  },
+  {
+   "cash": 7.85,
+   "check": 0.0,
+   "debt_at_par": 34.42,
+   "deferred_financing_costs": 1.2,
+   "equity": 48.8,
+   "goodwill": 7.68,
+   "operating_nwc": 18.91,
+   "ppe": 47.58,
+   "total_assets": 83.22
+  },
+  {
+   "cash": 11.52,
+   "check": -0.0,
+   "debt_at_par": 25.48,
+   "deferred_financing_costs": 0.96,
+   "equity": 55.37,
+   "goodwill": 7.68,
+   "operating_nwc": 19.67,
+   "ppe": 41.02,
+   "total_assets": 80.85
+  },
+  {
+   "cash": 15.61,
+   "check": -0.0,
+   "debt_at_par": 12.45,
+   "deferred_financing_costs": 0.72,
+   "equity": 66.34,
+   "goodwill": 7.68,
+   "operating_nwc": 20.65,
+   "ppe": 34.14,
+   "total_assets": 78.79
+  },
+  {
+   "cash": 25.74,
+   "check": -0.0,
+   "debt_at_par": 0.0,
+   "deferred_financing_costs": 0.0,
+   "equity": 82.01,
+   "goodwill": 7.68,
+   "operating_nwc": 21.68,
+   "ppe": 26.91,
+   "total_assets": 82.01
+  }
+ ],
+ "credit": [],
+ "derived": {
+  "enterprise_value": 84.0,
+  "entry_net_leverage_fy": 3.5,
+  "sponsor_equity": 48.36,
+  "total_debt_at_par": 42.0
+ },
+ "exit": {
+  "cash_at_exit": 25.74,
+  "debt_payoff_at_par_plus_pik": 0.0,
+  "exit_ebitda_basis_value": 38.55,
+  "exit_equity_pre_mip_total": 291.52,
+  "exit_ev": 269.83,
+  "exit_fees": 4.05,
+  "mip_payout": 0.0,
+  "monitoring_termination": 0.0,
+  "rollover_share": 0.0,
+  "sponsor_share": 291.52,
+  "unamortized_fees_written_off": 0.48
+ },
+ "operating": [
+  {
+   "da": 14.28,
+   "delta_nwc": 0.36,
+   "ebit": 2.04,
+   "ebitda": 16.32,
+   "ebitda_adj": 16.32,
+   "fcf_pre_debt": 7.8,
+   "financing_fee_amortization": 0.09,
+   "growth_capex": 0.0,
+   "maint_capex": 8.16,
+   "margin": 0.08,
+   "nwc_balance": 18.36,
+   "oid_amortization": 0.15,
+   "revenue": 204.0
+  },
+  {
+   "da": 14.71,
+   "delta_nwc": 0.55,
+   "ebit": 6.3,
+   "ebitda": 21.01,
+   "ebitda_adj": 21.01,
+   "fcf_pre_debt": 11.66,
+   "financing_fee_amortization": 0.09,
+   "growth_capex": 0.0,
+   "maint_capex": 8.4,
+   "margin": 0.1,
+   "nwc_balance": 18.91,
+   "oid_amortization": 0.15,
+   "revenue": 210.12
+  },
+  {
+   "da": 15.3,
+   "delta_nwc": 0.76,
+   "ebit": 10.93,
+   "ebitda": 26.22,
+   "ebitda_adj": 26.22,
+   "fcf_pre_debt": 15.57,
+   "financing_fee_amortization": 0.09,
+   "growth_capex": 0.0,
+   "maint_capex": 8.74,
+   "margin": 0.12,
+   "nwc_balance": 19.67,
+   "oid_amortization": 0.15,
+   "revenue": 218.52
+  },
+  {
+   "da": 16.06,
+   "delta_nwc": 0.98,
+   "ebit": 16.06,
+   "ebitda": 32.12,
+   "ebitda_adj": 32.12,
+   "fcf_pre_debt": 19.3,
+   "financing_fee_amortization": 0.09,
+   "growth_capex": 0.0,
+   "maint_capex": 9.18,
+   "margin": 0.14,
+   "nwc_balance": 20.65,
+   "oid_amortization": 0.15,
+   "revenue": 229.45
+  },
+  {
+   "da": 16.86,
+   "delta_nwc": 1.03,
+   "ebit": 21.68,
+   "ebitda": 38.55,
+   "ebitda_adj": 38.55,
+   "fcf_pre_debt": 23.66,
+   "financing_fee_amortization": 0.09,
+   "growth_capex": 0.0,
+   "maint_capex": 9.64,
+   "margin": 0.16,
+   "nwc_balance": 21.68,
+   "oid_amortization": 0.15,
+   "revenue": 240.92
+  }
+ ],
+ "returns": {
+  "pre_promote": {
+   "cashflows": [
+    -48.36,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    291.52
+   ],
+   "irr": 0.432311,
+   "moic": 6.0282
+  },
+  "sponsor_net": {
+   "cashflows": [
+    -48.36,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    291.52
+   ],
+   "irr": 0.432311,
+   "moic": 6.0282
+  },
+  "unlevered": {
+   "cashflows": [
+    -85.68,
+    7.49,
+    11.11,
+    14.74,
+    18.7,
+    288.99
+   ],
+   "irr": 0.357346,
+   "moic": 3.9804
+  }
+ },
+ "revolver": null,
+ "sources_uses": {
+  "cash_to_balance_sheet": 3.0,
+  "debt_at_par": [
+   {
+    "amount": 42.0,
+    "name": "Unitranche"
+   }
+  ],
+  "enterprise_value": 84.0,
+  "financing_fees": 0.63,
+  "oid_funded": 1.05,
+  "sponsor_equity": 48.36,
+  "total_sources": 90.36,
+  "total_uses": 90.36,
+  "transaction_costs": 1.68
+ },
+ "tax": [
+  {
+   "acquired_nol_end": 40.0,
+   "acquired_nol_used": 0.0,
+   "ati": 16.32,
+   "capped_interest_pool": 3.76,
+   "cash_tax": 0.0,
+   "deductible_capped_interest": 3.76,
+   "nol_banked": 1.81,
+   "postclose_nol_end": 1.81,
+   "postclose_nol_used": 0.0,
+   "s163j_carryforward_end": 0.0,
+   "s163j_carryforward_open": 0.0,
+   "taxable_before_nol": -1.81,
+   "uncapped_deductions": 0.09
+  },
+  {
+   "acquired_nol_end": 37.88,
+   "acquired_nol_used": 2.12,
+   "ati": 21.01,
+   "capped_interest_pool": 3.56,
+   "cash_tax": 0.4,
+   "deductible_capped_interest": 3.56,
+   "nol_banked": 0.0,
+   "postclose_nol_end": 1.81,
+   "postclose_nol_used": 0.0,
+   "s163j_carryforward_end": 0.0,
+   "s163j_carryforward_open": 0.0,
+   "taxable_before_nol": 2.65,
+   "uncapped_deductions": 0.09
+  },
+  {
+   "acquired_nol_end": 34.88,
+   "acquired_nol_used": 3.0,
+   "ati": 26.22,
+   "capped_interest_pool": 3.11,
+   "cash_tax": 1.16,
+   "deductible_capped_interest": 3.11,
+   "nol_banked": 0.0,
+   "postclose_nol_end": 0.0,
+   "postclose_nol_used": 1.81,
+   "s163j_carryforward_end": 0.0,
+   "s163j_carryforward_open": 0.0,
+   "taxable_before_nol": 7.73,
+   "uncapped_deductions": 0.09
+  },
+  {
+   "acquired_nol_end": 31.88,
+   "acquired_nol_used": 3.0,
+   "ati": 32.12,
+   "capped_interest_pool": 2.34,
+   "cash_tax": 2.66,
+   "deductible_capped_interest": 2.34,
+   "nol_banked": 0.0,
+   "postclose_nol_end": 0.0,
+   "postclose_nol_used": 0.0,
+   "s163j_carryforward_end": 0.0,
+   "s163j_carryforward_open": 0.0,
+   "taxable_before_nol": 13.63,
+   "uncapped_deductions": 0.09
+  },
+  {
+   "acquired_nol_end": 28.88,
+   "acquired_nol_used": 3.0,
+   "ati": 38.55,
+   "capped_interest_pool": 1.22,
+   "cash_tax": 4.22,
+   "deductible_capped_interest": 1.22,
+   "nol_banked": 0.0,
+   "postclose_nol_end": 0.0,
+   "postclose_nol_used": 0.0,
+   "s163j_carryforward_end": 0.0,
+   "s163j_carryforward_open": 0.0,
+   "taxable_before_nol": 19.89,
+   "uncapped_deductions": 0.57
+  }
+ ],
+ "tranches": {
+  "Unitranche": [
+   {
+    "beginning_balance": 42.0,
+    "cash_interest": 3.61,
+    "ending_balance": 39.7,
+    "mandatory_amort": 0.42,
+    "pik_accrual": 0.0,
+    "sweep_repayment": 1.88
+   },
+   {
+    "beginning_balance": 39.7,
+    "cash_interest": 3.41,
+    "ending_balance": 34.42,
+    "mandatory_amort": 0.42,
+    "pik_accrual": 0.0,
+    "sweep_repayment": 4.85
+   },
+   {
+    "beginning_balance": 34.42,
+    "cash_interest": 2.96,
+    "ending_balance": 25.48,
+    "mandatory_amort": 0.42,
+    "pik_accrual": 0.0,
+    "sweep_repayment": 8.52
+   },
+   {
+    "beginning_balance": 25.48,
+    "cash_interest": 2.19,
+    "ending_balance": 12.45,
+    "mandatory_amort": 0.42,
+    "pik_accrual": 0.0,
+    "sweep_repayment": 12.61
+   },
+   {
+    "beginning_balance": 12.45,
+    "cash_interest": 1.07,
+    "ending_balance": 0.0,
+    "mandatory_amort": 0.42,
+    "pik_accrual": 0.0,
+    "sweep_repayment": 12.03
+   }
+  ]
+ },
+ "waterfall": [
+  {
+   "cash_floor_breach": false,
+   "cash_interest_total": 3.61,
+   "closing_cash": 4.88,
+   "commitment_fees": 0.0,
+   "fcf_pre_debt": 7.8,
+   "mandatory_amort_total": 0.42,
+   "opening_cash": 3.0,
+   "revolver_draw": 0.0,
+   "revolver_repayment": 0.0,
+   "sweep_applied_total": 1.88,
+   "sweep_pct_applied": 0.5,
+   "sweep_pool": 3.77
+  },
+  {
+   "cash_floor_breach": false,
+   "cash_interest_total": 3.41,
+   "closing_cash": 7.85,
+   "commitment_fees": 0.0,
+   "fcf_pre_debt": 11.66,
+   "mandatory_amort_total": 0.42,
+   "opening_cash": 4.88,
+   "revolver_draw": 0.0,
+   "revolver_repayment": 0.0,
+   "sweep_applied_total": 4.85,
+   "sweep_pct_applied": 0.5,
+   "sweep_pool": 9.71
+  },
+  {
+   "cash_floor_breach": false,
+   "cash_interest_total": 2.96,
+   "closing_cash": 11.52,
+   "commitment_fees": 0.0,
+   "fcf_pre_debt": 15.57,
+   "mandatory_amort_total": 0.42,
+   "opening_cash": 7.85,
+   "revolver_draw": 0.0,
+   "revolver_repayment": 0.0,
+   "sweep_applied_total": 8.52,
+   "sweep_pct_applied": 0.5,
+   "sweep_pool": 17.04
+  },
+  {
+   "cash_floor_breach": false,
+   "cash_interest_total": 2.19,
+   "closing_cash": 15.61,
+   "commitment_fees": 0.0,
+   "fcf_pre_debt": 19.3,
+   "mandatory_amort_total": 0.42,
+   "opening_cash": 11.52,
+   "revolver_draw": 0.0,
+   "revolver_repayment": 0.0,
+   "sweep_applied_total": 12.61,
+   "sweep_pct_applied": 0.5,
+   "sweep_pool": 25.21
+  },
+  {
+   "cash_floor_breach": false,
+   "cash_interest_total": 1.07,
+   "closing_cash": 25.74,
+   "commitment_fees": 0.0,
+   "fcf_pre_debt": 23.66,
+   "mandatory_amort_total": 0.42,
+   "opening_cash": 15.61,
+   "revolver_draw": 0.0,
+   "revolver_repayment": 0.0,
+   "sweep_applied_total": 12.03,
+   "sweep_pct_applied": 0.5,
+   "sweep_pool": 34.77
+  }
+ ]
+}
