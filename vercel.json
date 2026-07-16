@@ -8,7 +8,7 @@
           "value": "^(mridulm|mridulm-mriduls-projects-2c4774ae|mridulm-git-main-mriduls-projects-2c4774ae)\\.vercel\\.app$"
         }
       ],
-      "destination": "https://mridulmalani.com/:path*",
+      "destination": "https://www.mridulmalani.com/:path*",
       "permanent": true
     }
   ],
