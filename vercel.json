@@ -1,4 +1,17 @@
 {
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "^(mridulm|mridulm-mriduls-projects-2c4774ae|mridulm-git-main-mriduls-projects-2c4774ae)\\.vercel\\.app$"
+        }
+      ],
+      "destination": "https://www.mridulmalani.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/).*)",
