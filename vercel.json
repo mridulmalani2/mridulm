@@ -5,7 +5,7 @@
       "has": [
         {
           "type": "host",
-          "value": "^.*\\.vercel\\.app$"
+          "value": "^(mridulm|mridulm-mriduls-projects-2c4774ae|mridulm-git-main-mriduls-projects-2c4774ae)\\.vercel\\.app$"
         }
       ],
       "destination": "https://mridulmalani.com/:path*",
