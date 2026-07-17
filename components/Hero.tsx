@@ -23,48 +23,66 @@ const AshokaChakra: React.FC<{ className?: string }> = ({ className = '' }) => (
 );
 
 /**
- * Full-bleed hero backdrop: the page divides diagonally — the Indian tricolour
- * (horizontal saffron/white/green, with the Ashoka Chakra in the white band)
- * holds the left, the French tricolour (vertical blue/white/red) holds the
- * right, meeting in a soft luminous seam. Everything is kept feather-light so
- * the content stays crisp; a white halo guards legibility at the centre.
+ * Full-bleed hero backdrop. The page is split by a single diagonal running
+ * corner to corner — top-right down to bottom-left. The Indian tricolour
+ * (horizontal saffron/white/green, Ashoka Chakra in the white band) holds the
+ * upper-left of that line; the French tricolour (vertical blue/white/red)
+ * holds the lower-right. Both are feather-light and dissolve into a soft seam.
+ *
+ * The masks use the `to bottom right` corner keyword deliberately: CSS's
+ * magic-corner rule puts the transition band exactly through the other two
+ * corners (top-right and bottom-left), so the seam tracks the real diagonal at
+ * any aspect ratio rather than a fixed angle.
+ *
  * Pure CSS; image swap option documented in docs/hero-image-prompt.md.
  */
 const FlagDiagonalBackdrop: React.FC = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none bg-canvas" aria-hidden="true">
-    {/* India — horizontal tricolour filling the left of the diagonal */}
+    {/* India — horizontal tricolour, upper-left of the diagonal. Bands read
+        down the full left edge, which sits entirely inside this half. */}
     <div
       className="absolute inset-0"
       style={{
         background:
-          'linear-gradient(to bottom, rgba(255,153,71,0.34) 0%, rgba(255,166,85,0.26) 28%, rgba(255,255,255,0.55) 38%, rgba(255,255,255,0.55) 56%, rgba(101,192,132,0.24) 68%, rgba(96,190,128,0.32) 100%)',
-        WebkitMaskImage: 'linear-gradient(108deg, black 40%, transparent 60%)',
-        maskImage: 'linear-gradient(108deg, black 40%, transparent 60%)',
+          'linear-gradient(to bottom, rgba(255,150,64,0.44) 0%, rgba(255,163,82,0.34) 22%, rgba(255,255,255,0.40) 38%, rgba(255,255,255,0.40) 50%, rgba(101,192,132,0.36) 64%, rgba(90,187,124,0.34) 82%, rgba(90,187,124,0) 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom right, black 36%, transparent 66%)',
+        maskImage: 'linear-gradient(to bottom right, black 36%, transparent 66%)',
       }}
     />
 
-    {/* Ashoka Chakra — resting in the white band of the Indian half */}
-    <div className="absolute left-[4%] top-[35%] h-24 w-24 text-[#26428B] opacity-[0.15] md:left-[11%] md:top-[38%] md:h-44 md:w-44">
+    {/* Ashoka Chakra — softened with a blur and a radial fade so it dissolves
+        into the wash like everything else, rather than reading as an object. */}
+    <div
+      className="absolute left-[6%] top-[36%] h-28 w-28 text-[#2A4A9B] opacity-[0.13] md:left-[12%] md:top-[40%] md:h-44 md:w-44"
+      style={{
+        filter: 'blur(1.2px)',
+        WebkitMaskImage: 'radial-gradient(circle at center, black 52%, transparent 84%)',
+        maskImage: 'radial-gradient(circle at center, black 52%, transparent 84%)',
+      }}
+    >
       <AshokaChakra className="h-full w-full" />
     </div>
 
-    {/* France — vertical tricolour filling the right of the diagonal */}
+    {/* France — vertical tricolour, lower-right of the diagonal. Bands are
+        packed into the right-hand side so all three clear the seam and the
+        centre halo (at full width the blue fell under both and vanished). */}
     <div
       className="absolute inset-0"
       style={{
         background:
-          'linear-gradient(to right, rgba(96,168,255,0.36) 0%, rgba(112,178,255,0.30) 52%, rgba(255,255,255,0.55) 61%, rgba(255,255,255,0.55) 71%, rgba(255,124,150,0.24) 82%, rgba(255,110,140,0.34) 100%)',
-        WebkitMaskImage: 'linear-gradient(108deg, transparent 40%, black 60%)',
-        maskImage: 'linear-gradient(108deg, transparent 40%, black 60%)',
+          'linear-gradient(to right, rgba(74,150,255,0) 20%, rgba(74,150,255,0.44) 46%, rgba(96,168,255,0.38) 58%, rgba(255,255,255,0.40) 70%, rgba(255,255,255,0.40) 79%, rgba(255,120,148,0.34) 90%, rgba(255,102,134,0.46) 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom right, transparent 36%, black 66%)',
+        maskImage: 'linear-gradient(to bottom right, transparent 36%, black 66%)',
       }}
     />
 
-    {/* White halo so the name/quote sit on near-white */}
+    {/* Legibility halo — tight enough to protect the name/quote without
+        washing the flags out of the surrounding thirds. */}
     <div
       className="absolute inset-0"
       style={{
         background:
-          'radial-gradient(42rem 32rem at 50% 46%, rgba(253,252,250,0.72), rgba(253,252,250,0.30) 55%, transparent 78%)',
+          'radial-gradient(30rem 20rem at 50% 52%, rgba(253,252,250,0.66), rgba(253,252,250,0.24) 58%, transparent 80%)',
       }}
     />
 
