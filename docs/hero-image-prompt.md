@@ -1,11 +1,12 @@
 # Hero background — image-generation prompt
 
-The hero currently ships a **pure-CSS** backdrop (`FlagCornersBackdrop` in
-[`components/Hero.tsx`](../components/Hero.tsx)): a clean white canvas with the
-Indian tricolour dissolving out of the top-left corner and the French tricolour
-out of the top-right. Nothing is blocked on an image. If you'd rather use a
-generated illustration, produce one with the prompt below and drop it in — it's
-a one-line swap.
+The hero currently ships a **pure-CSS** backdrop (`FlagDiagonalBackdrop` in
+[`components/Hero.tsx`](../components/Hero.tsx)): the page divides diagonally,
+with the Indian tricolour (plus a soft Ashoka Chakra) filling the left and the
+French tricolour filling the right, both feather-light and meeting in a
+luminous seam. Nothing is blocked on an image. If you'd rather use a generated
+illustration, produce one with the prompt below and drop it in — it's a
+one-line swap.
 
 ## How to swap it in
 
@@ -20,17 +21,16 @@ a one-line swap.
 
 ## The prompt
 
-> A wide, minimal, luxurious background illustration on a **clean warm-white
-> (#FDFCFA) canvas**. In the **top-left corner only**, the Indian flag —
-> soft pastel **saffron**, **white**, and gentle **green** horizontal bands —
-> dissolves diagonally into the white background like watercolour mist, heavily
-> blurred, with no hard edges. In the **top-right corner only**, the French
-> flag — pastel **blue**, **white**, and soft **rose-red** vertical bands —
-> dissolves the same way, mirroring the left corner. The entire center and
-> bottom two-thirds of the image stay **pure clean white** with generous
-> negative space. Elegant, editorial, fashionable, dreamy. No literal flag
-> shapes, no fabric, no poles, no text, no figures. Subtle film grain.
-> 3:2 landscape.
+> A wide, minimal, luxurious background illustration on a **warm near-white
+> (#FDFCFA) canvas**, divided **diagonally** with a soft luminous seam. The
+> **left half** is the Indian flag as watercolour mist — extremely pale
+> horizontal bands of **saffron**, **white**, and **green**, with a very
+> faint navy **Ashoka Chakra** (24-spoke wheel) resting in the white band.
+> The **right half** is the French flag the same way — extremely pale
+> vertical bands of **blue**, **white**, and **rose-red**. Both flags fill
+> their halves edge-to-edge but stay feather-light, almost white in the
+> centre so dark text remains readable. Elegant, editorial, dreamy. No
+> fabric, no poles, no text, no figures. Subtle film grain. 3:2 landscape.
 
 ## Guardrails
 

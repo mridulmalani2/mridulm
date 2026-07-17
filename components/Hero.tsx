@@ -1,44 +1,75 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
+/** The 24-spoke Ashoka Chakra, drawn minimally. Colour via currentColor. */
+const AshokaChakra: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg viewBox="0 0 200 200" className={className} aria-hidden="true">
+    <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" strokeWidth="7" />
+    <circle cx="100" cy="100" r="11" fill="currentColor" />
+    {Array.from({ length: 24 }, (_, i) => (
+      <line
+        key={i}
+        x1="100"
+        y1="100"
+        x2="100"
+        y2="13"
+        stroke="currentColor"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        transform={`rotate(${i * 15} 100 100)`}
+      />
+    ))}
+  </svg>
+);
+
 /**
- * Clean white hero backdrop. The Indian tricolour (saffron/white/green) melts
- * out of the top-left corner and the French tricolour (blue/white/red) out of
- * the top-right — soft pastel bands, heavily blurred and radially masked so
- * both dissolve into the canvas. Pure CSS; swap in a generated image later if
- * desired (see docs/hero-image-prompt.md).
+ * Full-bleed hero backdrop: the page divides diagonally — the Indian tricolour
+ * (horizontal saffron/white/green, with the Ashoka Chakra in the white band)
+ * holds the left, the French tricolour (vertical blue/white/red) holds the
+ * right, meeting in a soft luminous seam. Everything is kept feather-light so
+ * the content stays crisp; a white halo guards legibility at the centre.
+ * Pure CSS; image swap option documented in docs/hero-image-prompt.md.
  */
-const FlagCornersBackdrop: React.FC = () => (
+const FlagDiagonalBackdrop: React.FC = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none bg-canvas" aria-hidden="true">
-    {/* India — horizontal saffron/white/green, dissolving out of the top-left.
-        The tricolour fades via its own gradient tail plus a generous radial
-        mask, so all three bands stay legible before melting into white. */}
+    {/* India — horizontal tricolour filling the left of the diagonal */}
     <div
-      className="absolute left-0 top-0 h-[10rem] w-[9rem] md:h-[22rem] md:w-[20rem]"
+      className="absolute inset-0"
       style={{
         background:
-          'linear-gradient(to bottom, rgba(255,153,71,0.62) 0%, rgba(255,166,85,0.58) 30%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.85) 46%, rgba(101,192,132,0.52) 56%, rgba(96,190,128,0.50) 78%, rgba(96,190,128,0) 94%)',
-        WebkitMaskImage:
-          'radial-gradient(140% 120% at 0% 0%, black 38%, rgba(0,0,0,0.5) 68%, transparent 98%)',
-        maskImage:
-          'radial-gradient(140% 120% at 0% 0%, black 38%, rgba(0,0,0,0.5) 68%, transparent 98%)',
-        filter: 'blur(14px)',
+          'linear-gradient(to bottom, rgba(255,153,71,0.34) 0%, rgba(255,166,85,0.26) 28%, rgba(255,255,255,0.55) 38%, rgba(255,255,255,0.55) 56%, rgba(101,192,132,0.24) 68%, rgba(96,190,128,0.32) 100%)',
+        WebkitMaskImage: 'linear-gradient(108deg, black 40%, transparent 60%)',
+        maskImage: 'linear-gradient(108deg, black 40%, transparent 60%)',
       }}
     />
 
-    {/* France — vertical blue/white/red, dissolving out of the top-right */}
+    {/* Ashoka Chakra — resting in the white band of the Indian half */}
+    <div className="absolute left-[4%] top-[35%] h-24 w-24 text-[#26428B] opacity-[0.15] md:left-[11%] md:top-[38%] md:h-44 md:w-44">
+      <AshokaChakra className="h-full w-full" />
+    </div>
+
+    {/* France — vertical tricolour filling the right of the diagonal */}
     <div
-      className="absolute right-0 top-0 h-[10rem] w-[11rem] md:h-[22rem] md:w-[28rem]"
+      className="absolute inset-0"
       style={{
         background:
-          'linear-gradient(to left, rgba(255,110,140,0.58) 0%, rgba(255,124,150,0.52) 26%, rgba(255,255,255,0.92) 40%, rgba(255,255,255,0.92) 56%, rgba(108,175,255,0.55) 68%, rgba(96,168,255,0.52) 84%, rgba(96,168,255,0) 100%)',
-        WebkitMaskImage:
-          'radial-gradient(150% 150% at 100% 0%, black 40%, rgba(0,0,0,0.5) 70%, transparent 100%)',
-        maskImage:
-          'radial-gradient(150% 150% at 100% 0%, black 40%, rgba(0,0,0,0.5) 70%, transparent 100%)',
-        filter: 'blur(12px)',
+          'linear-gradient(to right, rgba(96,168,255,0.36) 0%, rgba(112,178,255,0.30) 52%, rgba(255,255,255,0.55) 61%, rgba(255,255,255,0.55) 71%, rgba(255,124,150,0.24) 82%, rgba(255,110,140,0.34) 100%)',
+        WebkitMaskImage: 'linear-gradient(108deg, transparent 40%, black 60%)',
+        maskImage: 'linear-gradient(108deg, transparent 40%, black 60%)',
       }}
     />
+
+    {/* White halo so the name/quote sit on near-white */}
+    <div
+      className="absolute inset-0"
+      style={{
+        background:
+          'radial-gradient(42rem 32rem at 50% 46%, rgba(253,252,250,0.72), rgba(253,252,250,0.30) 55%, transparent 78%)',
+      }}
+    />
+
+    {/* Fade into the page below the fold */}
+    <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-canvas" />
   </div>
 );
 
@@ -54,7 +85,7 @@ const Hero: React.FC = () => {
 
   return (
     <div className="relative w-full min-h-screen px-6 pt-28 pb-12 flex flex-col items-center justify-center">
-      <FlagCornersBackdrop />
+      <FlagDiagonalBackdrop />
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}
