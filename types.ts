@@ -1,11 +1,20 @@
 
+export type ProjectCategory = 'finance' | 'path-ideas' | 'hobby';
+
 export interface Project {
-  name: string;
-  story: string;
-  imageUrl: string;
-  highlightImageUrl?: string;
-  link?: string;
+  title: string;        // display name (not the bare domain)
+  domain?: string;      // e.g. "experienceindia.me" — shown as a subtle label
+  story: string;        // one-line description
+  link?: string;        // external URL (omit or "#" if none)
   tags?: string[];
+  category: ProjectCategory;
+}
+
+export interface ProjectSection {
+  id: ProjectCategory;
+  eyebrow: string;      // small label above the section title
+  title: string;        // section heading (e.g. "Finance")
+  intro: string;        // Mridul's short intro to the section
 }
 
 export interface Album {

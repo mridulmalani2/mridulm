@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --spacing-unit: clamp(0.75rem, 2vw, 1.5rem);
+  --container-max-width: 1280px;
+}
+
+body {
+  background-color: #fdfcfa; /* canvas */
+  color: #1a1a22; /* ink */
+  margin: 0;
+  overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide scrollbars (visual choice retained from the original design) */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.text-fluid-title {
+  font-size: clamp(2.5rem, 12vw, 9rem);
+  line-height: 0.9;
+}
+.text-fluid-h2 {
+  font-size: clamp(2.25rem, 8vw, 6rem);
+  line-height: 1.1;
+}
+.text-fluid-body {
+  font-size: clamp(0.9rem, 2vw, 1.25rem);
+}
+
+.page-container {
+  width: 100%;
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding-left: var(--spacing-unit);
+  padding-right: var(--spacing-unit);
+}
+
+.section-v-padding {
+  padding-top: clamp(4rem, 12vh, 12rem);
+  padding-bottom: clamp(4rem, 12vh, 12rem);
+}
+
+.perspective-main {
+  perspective: 2000px;
+}
+
+/* Radial gradient helper — feeds Tailwind's from-/via-/to- into --tw-gradient-stops.
+   (The old rule read --tw-gradient-via, which v3 never sets, so it painted nothing.) */
+.bg-gradient-radial {
+  background-image: radial-gradient(ellipse at center, var(--tw-gradient-stops));
+}
+
+/* Focus indicators — saturated indigo reads on both the light homepage and the
+   dark deal-engine surface. */
+*:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+.sr-only.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Trace Graph — entry point highlight when trace mode is active (deal engine) */
+.traceable--active {
+  cursor: pointer;
+  border-bottom: 2px solid rgba(204, 0, 0, 0.55);
+  padding-bottom: 1px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.traceable--active:hover {
+  background: rgba(204, 0, 0, 0.07);
+  border-bottom-color: rgba(204, 0, 0, 0.9);
+  border-radius: 2px;
+}
+
+/* Respect reduced-motion globally: neutralize transitions/animations for users
+   who ask for it. Component-level motion (framer-motion) is gated separately. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -11,11 +11,10 @@ export const CHAPTERS: ChapterData[] = [
 ];
 
 /**
- * INSTRUCTIONS:
- * 1. Create a Google Sheet.
- * 2. Add headers: project_name, oneliner_summary, image_url, source_url, tags
- * 3. File > Share > Publish to web > [Tab Name] > CSV
- * 4. Replace the URLs below.
+ * Photo-gallery albums are still published from a Google Sheet (see Hobbies).
+ * Projects now live in the repo at data/projects.ts.
+ *
+ * To update albums: File > Share > Publish to web > [Tab Name] > CSV, then
+ * replace the URL below.
  */
-export const PROJECTS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSS-4NRxymgQHZkQzSHwuurnG4K4jf2WolE4aRWXRB8U7d66aYz1i_4PYefOozG_nGaL3mXyEhawqAo/pub?gid=0&single=true&output=csv";
 export const ALBUMS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSS-4NRxymgQHZkQzSHwuurnG4K4jf2WolE4aRWXRB8U7d66aYz1i_4PYefOozG_nGaL3mXyEhawqAo/pub?gid=175842780&single=true&output=csv";

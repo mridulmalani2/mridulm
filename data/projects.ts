@@ -1,38 +1,102 @@
-import { Project } from '../types';
+import { Project, ProjectSection } from '../types';
 
-export const PROJECTS: Project[] = [
+/**
+ * Projects now live here in the repo (previously a live Google Sheet).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *  MRIDUL — this is the file to edit:
+ *   • Move a project between sections by changing its `category`.
+ *   • The three section `intro` paragraphs below are PLACEHOLDERS — rewrite
+ *     them in your own voice (they're marked TODO).
+ *   • `title` is what shows on the card; `domain` is the little URL label.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+export const PROJECT_SECTIONS: ProjectSection[] = [
   {
-    name: "Experience India",
-    story: "A cultural hub for international students in Paris to explore Indian culture, movies, music, and events.",
-    imageUrl: "/images/projects/experience-india.jpg",
-    link: "https://experienceindia.me",
-    tags: ["Cultural Platform", "Web Development"],
+    id: 'finance',
+    eyebrow: 'Corporate finance & markets',
+    title: 'Finance',
+    // TODO(Mridul): replace with your own intro.
+    intro:
+      'Where finance stops being theory. Each of these began as a real problem — a capital-budgeting call, a valuation, a workflow a team actually needed — and became a tool I built to solve it.',
   },
   {
-    name: "HEC Investment Club",
-    story: "Leading partnerships and investor relations for one of Europe's premier student-run investment clubs.",
-    imageUrl: "/images/projects/hec-investment.jpg",
-    tags: ["Finance", "Leadership"],
+    id: 'path-ideas',
+    eyebrow: 'Ventures & product bets',
+    title: 'Path Ideas',
+    // TODO(Mridul): replace with your own intro.
+    intro:
+      'Ideas I couldn’t stop thinking about, so I built them. Some are live, some are experiments — all were attempts to turn a hunch into something real people could use.',
   },
   {
-    name: "Startup Due Diligence",
-    story: "Comprehensive financial analysis and due diligence frameworks for early-stage startups in the MSME ecosystem.",
-    imageUrl: "/images/projects/due-diligence.jpg",
-    tags: ["Venture Capital", "Analysis"],
+    id: 'hobby',
+    eyebrow: 'For the joy of it',
+    title: 'Hobby Coding',
+    // TODO(Mridul): replace with your own intro.
+    intro:
+      'The stuff I build for fun — small, quick, and usually because someone I love needed it. Like a card game my family plays by our own rules, from three time zones away.',
   },
 ];
 
-export const ALBUMS = [
+export const PROJECTS: Project[] = [
+  // ── Finance ──────────────────────────────────────────────────────────────
   {
-    name: "Paris",
-    coverImageUrl: "/images/albums/paris-cover.jpg",
-    images: ["/images/albums/paris-1.jpg", "/images/albums/paris-2.jpg"],
-    footerText: "Exploring the city of lights",
+    title: 'Capital Budgeting Tool',
+    domain: 'Reliance Industries',
+    story:
+      'A macro-coded capital-budgeting model I built during my internship at Reliance Industries for CBG-plant investment projections.',
+    link: 'https://www.linkedin.com/posts/mridulmalani_greenenergy-ril-investment-activity-7086587422154588161-I_pp',
+    tags: ['Corporate Finance', 'RIL', 'Sustainability'],
+    category: 'finance',
   },
   {
-    name: "India",
-    coverImageUrl: "/images/albums/india-cover.jpg",
-    images: ["/images/albums/india-1.jpg", "/images/albums/india-2.jpg"],
-    footerText: "Home and heritage",
+    title: 'Quant Aptitude Platform',
+    domain: 'dnastrat.vercel.app',
+    story:
+      'An MVP testing platform built for D+A Strategies as part of a proposed go-to-market strategy — adaptive assessment for quant trading aptitude.',
+    link: 'https://dnastrat.vercel.app/',
+    tags: ['Adaptive Testing', 'Quant', 'GTM'],
+    category: 'finance',
+  },
+  {
+    title: 'Donna AI',
+    domain: 'donna2-iota.vercel.app',
+    story:
+      'An MVP of Donna, a GenAI assistant for wealth managers, built during my HEC Academy engagement with Capgemini and Meeschaert.',
+    link: 'https://donna2-iota.vercel.app/aboutdonna',
+    tags: ['GenAI', 'Wealth Management', 'Agents'],
+    category: 'finance',
+  },
+
+  // ── Path Ideas ───────────────────────────────────────────────────────────
+  {
+    title: 'Experience India',
+    domain: 'experienceindia.me',
+    story:
+      'A cultural hub for international students in Paris to explore Indian movies, music, events and happenings — my "step zero" passion project.',
+    link: 'https://experienceindia.me/',
+    tags: ['Passion Project', '#India', 'Community'],
+    category: 'path-ideas',
+  },
+  {
+    title: 'TourWiseCo',
+    domain: 'tourwiseco.com',
+    story:
+      'Authentic travel, reimagined — meet students who are both native to your home culture and locals of the city you’re visiting.',
+    link: 'https://www.tourwiseco.com/',
+    tags: ['Venture No. 2', 'Travel', 'Marketplace'],
+    category: 'path-ideas',
+  },
+
+  // ── Hobby Coding ─────────────────────────────────────────────────────────
+  {
+    title: 'Judgement with Family',
+    domain: 'judgementwfam.tech',
+    story:
+      'A little app for my mom, grandparents and me to play our favourite card game — with our own family rules — while I’m abroad.',
+    link: 'https://judgementwfam.tech/',
+    tags: ['Card Games', 'Family', 'Weekend Build'],
+    category: 'hobby',
   },
 ];

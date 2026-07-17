@@ -19,23 +19,23 @@
     <meta name="keywords" content="Mridul Malani, HEC Paris, Finance, Corporate Finance, Private Markets, Investment Banking, Portfolio">
     <meta name="author" content="Mridul Malani">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://mridulm.vercel.app/">
+    <link rel="canonical" href="https://www.mridulmalani.com/">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://mridulm.vercel.app/">
+    <meta property="og:url" content="https://www.mridulmalani.com/">
     <meta property="og:title" content="Mridul Malani | Corporate Finance and Private Markets">
     <meta property="og:description" content="HEC Paris MiM candidate specializing in corporate finance, private markets, and startup investments.">
-    <meta property="og:image" content="https://mridulm.vercel.app/og-image.png">
+    <meta property="og:image" content="https://www.mridulmalani.com/og-image.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="https://mridulm.vercel.app/">
+    <meta name="twitter:url" content="https://www.mridulmalani.com/">
     <meta name="twitter:title" content="Mridul Malani | Corporate Finance and Private Markets">
     <meta name="twitter:description" content="HEC Paris MiM candidate specializing in corporate finance, private markets, and startup investments.">
-    <meta name="twitter:image" content="https://mridulm.vercel.app/og-image.png">
+    <meta name="twitter:image" content="https://www.mridulmalani.com/og-image.jpg">
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -47,7 +47,7 @@
       "@context": "https://schema.org",
       "@type": "Person",
       "name": "Mridul Malani",
-      "url": "https://mridulm.vercel.app",
+      "url": "https://www.mridulmalani.com",
       "jobTitle": "Corporate Finance and Private Markets Professional",
       "alumniOf": [
         {"@type": "Organization", "name": "HEC Paris"},
@@ -60,126 +60,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Montserrat:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        *, *::before, *::after {
-            box-sizing: border-box;
-        }
-
-        :root {
-            --spacing-unit: clamp(0.75rem, 2vw, 1.5rem);
-            --container-max-width: 1280px;
-        }
-
-        body {
-            background-color: #050505;
-            color: #ffffff;
-            margin: 0;
-            overflow-x: hidden;
-            font-family: 'Inter', sans-serif;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        .font-playfair { font-family: 'Playfair Display', serif; }
-        .font-montserrat { font-family: 'Montserrat', sans-serif; }
-        .font-lora { font-family: 'Lora', serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-
-        ::-webkit-scrollbar {
-            display: none;
-        }
-        * {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-
-        .text-fluid-title {
-            font-size: clamp(2.5rem, 12vw, 9rem);
-            line-height: 0.9;
-        }
-        .text-fluid-h2 {
-            font-size: clamp(2.25rem, 8vw, 6rem);
-            line-height: 1.1;
-        }
-        .text-fluid-body {
-            font-size: clamp(0.9rem, 2vw, 1.25rem);
-        }
-
-        .page-container {
-            width: 100%;
-            max-width: var(--container-max-width);
-            margin: 0 auto;
-            padding-left: var(--spacing-unit);
-            padding-right: var(--spacing-unit);
-        }
-
-        .section-v-padding {
-            padding-top: clamp(4rem, 12vh, 12rem);
-            padding-bottom: clamp(4rem, 12vh, 12rem);
-        }
-
-        .perspective-main {
-            perspective: 2000px;
-        }
-
-        /* Radial gradient background */
-        .bg-gradient-radial {
-            background: radial-gradient(ellipse at center, var(--tw-gradient-from) 0%, var(--tw-gradient-via) 40%, var(--tw-gradient-to) 100%);
-        }
-
-        /* Focus indicators */
-        *:focus-visible {
-            outline: 2px solid #f59e0b;
-            outline-offset: 2px;
-        }
-
-        button:focus-visible,
-        a:focus-visible {
-            outline: 2px solid #f59e0b;
-            outline-offset: 2px;
-            border-radius: 4px;
-        }
-
-        /* Screen reader only utility */
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border-width: 0;
-        }
-        .sr-only.focus\:not-sr-only:focus {
-            position: static;
-            width: auto;
-            height: auto;
-            padding: inherit;
-            margin: inherit;
-            overflow: visible;
-            clip: auto;
-            white-space: normal;
-        }
-
-        /* Trace Graph — entry point highlight when trace mode is active */
-        .traceable--active {
-            cursor: pointer;
-            border-bottom: 2px solid rgba(204,0,0,0.55);
-            padding-bottom: 1px;
-            transition: background 0.12s, border-color 0.12s;
-        }
-        .traceable--active:hover {
-            background: rgba(204,0,0,0.07);
-            border-bottom-color: rgba(204,0,0,0.9);
-            border-radius: 2px;
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,600&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Montserrat:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Google Tag Manager (noscript) -->
