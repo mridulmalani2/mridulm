@@ -8,6 +8,8 @@ export interface Project {
   link?: string;        // external URL (omit or "#" if none)
   tags?: string[];
   category: ProjectCategory;
+  /** Full project board in public/projects. Omit to fall back to a text card. */
+  image?: string;
 }
 
 export interface ProjectSection {

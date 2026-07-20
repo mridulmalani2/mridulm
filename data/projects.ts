@@ -49,15 +49,26 @@ export const PROJECT_SECTIONS: ProjectSection[] = [
 ];
 
 export const PROJECTS: Project[] = [
-  // ── Finance ──────────────────────────────────────────────────────────────
+  // ── 01 Finance ───────────────────────────────────────────────────────────
   {
-    title: 'Capital Budgeting Tool',
+    title: 'Capital Budgeting Excel Module',
     domain: 'Reliance Industries',
     story:
-      'A macro-coded capital-budgeting model I built during my internship at Reliance Industries for CBG-plant investment projections.',
+      'An automated capital-budgeting tool built in Excel with VBA macros and dynamic dashboards — NPV, IRR, ROIC, payback — to streamline investment evaluation.',
     link: 'https://www.linkedin.com/posts/mridulmalani_greenenergy-ril-investment-activity-7086587422154588161-I_pp',
-    tags: ['Corporate Finance', 'RIL', 'Sustainability'],
+    tags: ['Excel', 'VBA Macros', 'Financial Modeling'],
     category: 'finance',
+    image: '/projects/capital-budgeting.jpg',
+  },
+  {
+    title: 'Donna',
+    domain: 'donna2-iota.vercel.app',
+    story:
+      'An intelligence layer for modern finance: it sits above existing systems, connects them, and turns fragmented data into contextual, actionable clarity.',
+    link: 'https://donna2-iota.vercel.app/aboutdonna',
+    tags: ['Next.js', 'TypeScript', 'GenAI'],
+    category: 'finance',
+    image: '/projects/donna.jpg',
   },
   {
     title: 'Quant Aptitude Platform',
@@ -67,45 +78,60 @@ export const PROJECTS: Project[] = [
     link: 'https://dnastrat.vercel.app/',
     tags: ['Adaptive Testing', 'Quant', 'GTM'],
     category: 'finance',
-  },
-  {
-    title: 'Donna AI',
-    domain: 'donna2-iota.vercel.app',
-    story:
-      'An MVP of Donna, a GenAI assistant for wealth managers, built during my HEC Academy engagement with Capgemini and Meeschaert.',
-    link: 'https://donna2-iota.vercel.app/aboutdonna',
-    tags: ['GenAI', 'Wealth Management', 'Agents'],
-    category: 'finance',
+    // no board yet — renders the text fallback card
   },
 
-  // ── Path Ideas ───────────────────────────────────────────────────────────
-  {
-    title: 'Experience India',
-    domain: 'experienceindia.me',
-    story:
-      'A cultural hub for international students in Paris to explore Indian movies, music, events and happenings — my "step zero" passion project.',
-    link: 'https://experienceindia.me/',
-    tags: ['Passion Project', '#India', 'Community'],
-    category: 'path-ideas',
-  },
+  // ── 02 Parked Ideas ──────────────────────────────────────────────────────
   {
     title: 'TourWiseCo',
     domain: 'tourwiseco.com',
     story:
-      'Authentic travel, reimagined — meet students who are both native to your home culture and locals of the city you’re visiting.',
+      'A marketplace connecting travellers with verified local university students, to unlock authentic experiences in every city.',
     link: 'https://www.tourwiseco.com/',
-    tags: ['Venture No. 2', 'Travel', 'Marketplace'],
+    tags: ['Next.js', 'Tailwind', 'Supabase'],
     category: 'path-ideas',
+    image: '/projects/tourwiseco.jpg',
+  },
+  {
+    title: 'Experience India',
+    domain: 'experienceindia.me',
+    story:
+      'A cultural hub for international students to explore India’s news, movies, food, events and everything in between.',
+    link: 'https://experienceindia.me/',
+    tags: ['Next.js', 'TypeScript', 'Supabase'],
+    category: 'path-ideas',
+    image: '/projects/experience-india.jpg',
+  },
+  {
+    title: 'The Map',
+    domain: 'themap.stationf.vercel.app',
+    story:
+      'A private network connecting trusted freelancers and in-house talent for fast, domain-specific help — without hiring or pitching. Built for Station F.',
+    link: 'https://themap.stationf.vercel.app/',
+    tags: ['Next.js', 'TypeScript', 'Station F'],
+    category: 'path-ideas',
+    image: '/projects/the-map.jpg',
   },
 
-  // ── Hobby Coding ─────────────────────────────────────────────────────────
+  // ── 03 Hobby ─────────────────────────────────────────────────────────────
   {
-    title: 'Judgement with Family',
-    domain: 'judgementwfam.tech',
+    title: 'Judgment faislo',
+    domain: 'judgment-game.vercel.app',
     story:
-      'A little app for my mom, grandparents and me to play our favourite card game — with our own family rules — while I’m abroad.',
-    link: 'https://judgementwfam.tech/',
-    tags: ['Card Games', 'Family', 'Weekend Build'],
+      'The classic Kaach-Paani card game rebuilt for the digital age — real-time multiplayer with live rounds, trick prediction, in English or Hindi.',
+    link: 'https://judgment-game.vercel.app/',
+    tags: ['Next.js', 'Socket.io', 'Multiplayer'],
     category: 'hobby',
+    image: '/projects/judgment-faislo.jpg',
+  },
+  {
+    title: 'Judgment Game Rules',
+    domain: 'judgment-game.vercel.app',
+    story:
+      'An interactive rules guide for the trick-taking card game — bidding, trump suits, scoring and constraints, explained with clarity.',
+    link: 'https://judgment-game.vercel.app/',
+    tags: ['Next.js', 'TypeScript', 'Tailwind'],
+    category: 'hobby',
+    image: '/projects/judgment-rules.jpg',
   },
 ];

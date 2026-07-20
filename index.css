@@ -112,6 +112,23 @@ a:focus-visible {
   border-radius: 2px;
 }
 
+/* Parallelogram crop for the project-section boards.
+
+   clip-path rather than skew: a skew would distort the artwork and need the
+   image counter-skewed and scaled to cover, which crops the board's edge text.
+   Clipping leaves the image untouched and only cuts the silhouette.
+
+   Note box-shadow is clipped away by clip-path, so the raised look comes from
+   a drop-shadow filter on the parent, which follows the clipped shape. */
+.parallelogram {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+@media (min-width: 768px) {
+  .parallelogram {
+    clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%);
+  }
+}
+
 /* Landing-page ticker — seamless marquee.
 
    The track repeats its item group N times and shifts by exactly one group

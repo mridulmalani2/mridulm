@@ -89,9 +89,15 @@ const Projects: React.FC = () => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {/* dealt as a fanned deck on desktop, plain stack on mobile */}
+              <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-0 md:px-6">
                 {openProjects.map((project, i) => (
-                  <ProjectCard key={project.title} project={project} index={i} />
+                  <ProjectCard
+                    key={project.title}
+                    project={project}
+                    index={i}
+                    total={openProjects.length}
+                  />
                 ))}
               </div>
             </div>

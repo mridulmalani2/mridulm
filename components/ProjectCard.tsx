@@ -1,135 +1,109 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Project, ProjectCategory } from '../types';
-import {
-  ArrowUpRight,
-  Calculator,
-  LineChart,
-  Bot,
-  Globe,
-  Plane,
-  Gamepad2,
-  TrendingUp,
-  Compass,
-  Sparkles,
-  type LucideIcon,
-} from 'lucide-react';
-
-// One deep, serious accent per category — not a pastel gradient. Category is
-// signalled by a single tone on the icon, the rule and a faint tonal wash, in
-// the same graph-paper language as the hero.
-const CATEGORY_ART: Record<ProjectCategory, { accent: string; icon: LucideIcon }> = {
-  finance: { accent: '#2F4B7C', icon: TrendingUp }, // deep navy
-  'path-ideas': { accent: '#A25600', icon: Compass }, // deep saffron (brand)
-  hobby: { accent: '#1F6F5C', icon: Sparkles }, // deep teal
-};
-
-// Same lattice as the hero backdrop, at a tighter pitch for the card scale.
-const CARD_GRID =
-  'linear-gradient(to right, rgba(26,26,34,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(26,26,34,0.05) 1px, transparent 1px)';
-
-const ICON_BY_TITLE: Record<string, LucideIcon> = {
-  'Capital Budgeting Tool': Calculator,
-  'Quant Aptitude Platform': LineChart,
-  'Donna AI': Bot,
-  'Experience India': Globe,
-  TourWiseCo: Plane,
-  'Judgement with Family': Gamepad2,
-};
+import { Project } from '../types';
+import { ArrowUpRight } from 'lucide-react';
 
 interface ProjectCardProps {
   project: Project;
   index: number;
+  /** Total in this section — drives the fan so the spread stays centred. */
+  total: number;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, index }) => {
-  const art = CATEGORY_ART[project.category];
-  const Icon = ICON_BY_TITLE[project.title] ?? art.icon;
+/**
+ * A project board, dealt into a fanned deck.
+ *
+ * Cards overlap and tilt away from centre like a hand of cards; hovering one
+ * straightens it, lifts it and brings it to the front. The overlap and tilt
+ * are desktop-only — stacked on a phone they'd just obscure each other.
+ *
+ * Each board carries its own copy as pixels, so the title and story are
+ * supplied as the accessible name rather than relying on the image.
+ */
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, total }) => {
   const hasLink = !!project.link && project.link !== '#';
+  // fan out from the centre: leftmost leans left, rightmost leans right
+  const mid = (total - 1) / 2;
+  const offset = index - mid;
+  const tilt = total > 1 ? offset * 2.4 : 0;
+  const lift = Math.abs(offset) * 6;
 
-  const handleClick = () => {
-    if (hasLink) window.open(project.link, '_blank', 'noopener,noreferrer');
-  };
+  const Wrapper = hasLink ? 'a' : 'div';
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
+    <motion.div
+      initial={{ opacity: 0, y: 26 }}
       whileInView={{ opacity: 1, y: 0 }}
-      transition={{ delay: (index % 3) * 0.08, duration: 0.5 }}
-      viewport={{ once: true, amount: 0.2 }}
-      whileHover={hasLink ? { y: -6 } : undefined}
-      onClick={handleClick}
-      role={hasLink ? 'link' : undefined}
-      tabIndex={hasLink ? 0 : undefined}
-      onKeyDown={(e) => {
-        if (hasLink && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          handleClick();
-        }
-      }}
-      aria-label={hasLink ? `${project.title} — open project` : project.title}
-      className={`group flex flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-sm transition-shadow duration-300 ${
-        hasLink ? 'cursor-pointer hover:shadow-xl' : ''
-      }`}
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ delay: index * 0.08, duration: 0.5 }}
+      // `!z-50` is deliberate: the base z-index is an inline style (it varies
+      // per card), and inline styles beat plain classes — without !important
+      // the hovered card would scale up *behind* its neighbour.
+      className="group relative flex-1 md:-ml-[5%] md:first:ml-0 md:hover:!z-50"
+      style={{ zIndex: index }}
     >
-      {/* Header: graph paper, a single accent tone, no gradient */}
-      <div className="relative h-36 overflow-hidden border-b border-ink/10 bg-canvas">
+      <Wrapper
+        {...(hasLink
+          ? { href: project.link, target: '_blank', rel: 'noopener noreferrer' }
+          : {})}
+        aria-label={`${project.title} — ${project.story}`}
+        className="block focus-visible:outline-none"
+      >
+        {/* The fan is desktop-only. Driving it through CSS variables keeps it
+            responsive — an inline transform would tilt the cards on mobile
+            too, where they stack without overlap and a lean just reads as a
+            mistake. Both rest and hover set `transform` outright rather than
+            mixing with Tailwind's rotate/scale vars, which would fight it. */}
         <div
-          className="absolute inset-0"
-          style={{ backgroundImage: CARD_GRID, backgroundSize: '28px 28px' }}
-        />
-        {/* faint tonal wash so categories stay distinguishable at a glance */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `radial-gradient(130% 110% at 12% 0%, ${art.accent}1A, transparent 68%)`,
-          }}
-        />
-        {/* accent rule along the top edge */}
-        <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: art.accent }} />
-        {/* Large watermark icon */}
-        <Icon
-          className="absolute -bottom-7 -left-5"
-          style={{ color: `${art.accent}1F` }}
-          size={128}
-          strokeWidth={1.25}
-          aria-hidden="true"
-        />
-        {/* Icon chip */}
-        <div className="absolute left-5 top-6 flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-ink/10">
-          <Icon style={{ color: art.accent }} size={20} strokeWidth={2} aria-hidden="true" />
-        </div>
-        {hasLink && (
-          <div className="absolute right-4 top-6 flex h-9 w-9 items-center justify-center rounded-full bg-white opacity-0 -translate-y-1 shadow-sm ring-1 ring-ink/10 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-            <ArrowUpRight className="text-ink" size={16} />
+          className="relative origin-bottom transition-all duration-500 ease-out md:[transform:rotate(var(--tilt))_translateY(var(--lift))] md:group-hover:[transform:rotate(0deg)_translateY(0)_scale(1.05)]"
+          style={
+            {
+              '--tilt': `${tilt}deg`,
+              '--lift': `${lift}px`,
+            } as React.CSSProperties
+          }
+        >
+          {/* the board itself */}
+          <div className="overflow-hidden rounded-xl shadow-[0_16px_34px_-20px_rgba(26,26,34,0.5)] ring-1 ring-ink/10 transition-shadow duration-500 group-hover:shadow-[0_30px_60px_-24px_rgba(26,26,34,0.55)]">
+            {project.image ? (
+              <img
+                src={project.image}
+                alt={`${project.title} — ${project.story}`}
+                className="block w-full"
+                loading="lazy"
+              />
+            ) : (
+              // no board supplied yet — a text card in the same proportions so
+              // the deck stays even rather than showing a gap
+              <div className="flex aspect-[3/4] flex-col justify-end bg-[#15151C] p-6">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+                  {project.domain}
+                </span>
+                <h4 className="mt-2 font-display text-2xl font-bold text-white">{project.title}</h4>
+                <p className="mt-3 text-sm leading-relaxed text-white/60">{project.story}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {project.tags?.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full border border-white/15 px-2.5 py-1 font-montserrat text-[9px] font-semibold uppercase tracking-wider text-white/55"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Body */}
-      <div className="flex flex-1 flex-col p-6">
-        {project.domain && (
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted mb-2">
-            {project.domain}
-          </span>
-        )}
-        <h4 className="font-display text-xl font-bold text-ink leading-tight mb-2">
-          {project.title}
-        </h4>
-        <p className="text-sm text-muted leading-relaxed mb-5">{project.story}</p>
-
-        <div className="mt-auto flex flex-wrap gap-2">
-          {project.tags?.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-ink/10 bg-canvas px-2.5 py-1 font-montserrat text-[10px] font-semibold uppercase tracking-wider text-muted"
-            >
-              {tag}
+          {/* open affordance */}
+          {hasLink && (
+            <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-ink opacity-0 shadow-sm backdrop-blur-sm transition-all duration-300 group-hover:opacity-100">
+              <ArrowUpRight size={16} />
             </span>
-          ))}
+          )}
         </div>
-      </div>
-    </motion.article>
+      </Wrapper>
+    </motion.div>
   );
 };
 
