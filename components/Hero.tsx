@@ -1,81 +1,156 @@
-import React, { useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import React, { useEffect, useRef } from 'react';
+import {
+  motion,
+  useReducedMotion,
+  useMotionValue,
+  useSpring,
+  useMotionTemplate,
+} from 'framer-motion';
 import LogoTicker from './LogoTicker';
 
 /**
- * Optional Paris skyline wash along the bottom of the hero. Renders only if
- * public/hero-skyline.png exists — if it's absent the layer removes itself and
- * the aurora alone still reads as finished. See docs/hero-image-prompt.md.
+ * Hero backdrop — "quiet ambition".
+ *
+ * Three ideas, no decoration:
+ *  1. A fine graph-paper lattice — the visual grammar of terminals, models and
+ *     spreadsheets. Precision, not ornament.
+ *  2. Dawn light rising off the horizon line: warm at the top, clean below.
+ *     Elevation and open sky rather than colour for colour's sake.
+ *  3. A warm glow that tracks the cursor and locally lifts the grid, so the
+ *     page responds to you and rewards moving through it.
+ *
+ * Near-monochrome by design: the ticker and the name accent are the only
+ * places colour is spent.
  */
-const SkylineLayer: React.FC = () => {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
+const HeroBackdrop: React.FC = () => {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Start far off-canvas so nothing glows until the pointer actually arrives.
+  const px = useMotionValue(-2000);
+  const py = useMotionValue(-2000);
+  const sx = useSpring(px, { stiffness: 55, damping: 18, mass: 0.6 });
+  const sy = useSpring(py, { stiffness: 55, damping: 18, mass: 0.6 });
+
+  useEffect(() => {
+    // Skip entirely for reduced-motion and for touch devices, where there is
+    // no hover state to reward and the listener would just cost battery.
+    if (reduce) return;
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+
+    const el = ref.current;
+    if (!el) return;
+
+    let entered = false;
+
+    const onMove = (e: PointerEvent) => {
+      // Coordinates must be relative to the backdrop, not the viewport, or the
+      // glow drifts out of alignment as soon as the page scrolls.
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+
+      if (!entered) {
+        // First sighting: snap the spring to the pointer. Without this it
+        // eases all the way from the parked off-canvas position, so the glow
+        // visibly flies in from the corner on the first mouse move.
+        entered = true;
+        sx.jump(x);
+        sy.jump(y);
+      }
+      px.set(x);
+      py.set(y);
+    };
+    const onLeave = () => {
+      entered = false;
+      px.set(-2000);
+      py.set(-2000);
+      sx.jump(-2000);
+      sy.jump(-2000);
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    document.addEventListener('pointerleave', onLeave);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerleave', onLeave);
+    };
+  }, [reduce, px, py, sx, sy]);
+
+  const glow = useMotionTemplate`radial-gradient(28rem 28rem at ${sx}px ${sy}px, rgba(255,163,66,0.30), rgba(255,181,107,0.11) 42%, transparent 72%)`;
+  const gridReveal = useMotionTemplate`radial-gradient(21rem 21rem at ${sx}px ${sy}px, black 0%, rgba(0,0,0,0.45) 45%, transparent 72%)`;
+
+  // Base lattice sits just at the edge of perception; the cursor layer uses a
+  // stronger one so the grid visibly firms up under the pointer.
+  const GRID =
+    'linear-gradient(to right, rgba(26,26,34,0.055) 1px, transparent 1px), linear-gradient(to bottom, rgba(26,26,34,0.055) 1px, transparent 1px)';
+  const GRID_LIT =
+    'linear-gradient(to right, rgba(26,26,34,0.115) 1px, transparent 1px), linear-gradient(to bottom, rgba(26,26,34,0.115) 1px, transparent 1px)';
+
   return (
-    <img
-      src="/hero-skyline.png"
-      alt=""
-      onError={() => setFailed(true)}
-      className="pointer-events-none absolute inset-x-0 bottom-0 h-[46vh] w-full object-cover object-bottom opacity-[0.14]"
-      style={{
-        // fade upward so the skyline emerges from the page rather than sitting on it
-        WebkitMaskImage: 'linear-gradient(to top, black 4%, rgba(0,0,0,0.55) 45%, transparent 88%)',
-        maskImage: 'linear-gradient(to top, black 4%, rgba(0,0,0,0.55) 45%, transparent 88%)',
-      }}
-    />
+    <div
+      ref={ref}
+      className="absolute inset-0 overflow-hidden pointer-events-none bg-canvas"
+      aria-hidden="true"
+    >
+      {/* Dawn light off the horizon — one warm hue, top-weighted */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(to bottom, rgba(255,214,168,0.30) 0%, rgba(255,232,205,0.14) 22%, rgba(253,252,250,0) 52%)',
+        }}
+      />
+      {/* the horizon itself: a wide, very low glow */}
+      <div
+        className="absolute -top-[38%] left-1/2 h-[75vh] w-[130vw] -translate-x-1/2 rounded-[50%] opacity-70 blur-[80px]"
+        style={{
+          background:
+            'radial-gradient(closest-side, rgba(255,196,133,0.34), rgba(255,220,180,0.10) 55%, transparent)',
+        }}
+      />
+
+      {/* Graph-paper lattice, faded out behind the type so nothing competes */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: GRID,
+          backgroundSize: '64px 64px',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 78% 62% at 50% 44%, transparent 22%, rgba(0,0,0,0.5) 58%, black 88%)',
+          maskImage:
+            'radial-gradient(ellipse 78% 62% at 50% 44%, transparent 22%, rgba(0,0,0,0.5) 58%, black 88%)',
+        }}
+      />
+
+      {/* Cursor: a brighter patch of grid, revealed only near the pointer */}
+      {!reduce && (
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: GRID_LIT,
+            backgroundSize: '64px 64px',
+            WebkitMaskImage: gridReveal,
+            maskImage: gridReveal,
+          }}
+        />
+      )}
+
+      {/* Cursor: the warm light itself */}
+      {!reduce && <motion.div className="absolute inset-0" style={{ background: glow }} />}
+
+      {/* Legibility veil so the name and quote always sit on near-white */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(36rem 24rem at 50% 46%, rgba(253,252,250,0.86), rgba(253,252,250,0.40) 56%, transparent 80%)',
+        }}
+      />
+    </div>
   );
 };
-
-/**
- * Hero backdrop: a minimal aurora. Three very large, very soft pastel blooms
- * drifting slowly on near-white — enough colour to feel considered, never
- * enough to compete with the type. The ticker below is the page's real colour
- * moment, so this stays deliberately quiet.
- *
- * Pure CSS; image swap option documented in docs/hero-image-prompt.md.
- */
-const AuroraBackdrop: React.FC = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none bg-canvas" aria-hidden="true">
-    {/* warm bloom, upper left */}
-    <div
-      className="absolute -left-[15%] -top-[25%] h-[70vh] w-[70vw] rounded-full opacity-70 blur-[90px]"
-      style={{
-        background:
-          'radial-gradient(closest-side, rgba(255,181,107,0.55), rgba(255,229,128,0.22), transparent)',
-        animation: 'aurora-a 34s ease-in-out infinite',
-      }}
-    />
-    {/* cool bloom, upper right */}
-    <div
-      className="absolute -right-[18%] -top-[18%] h-[65vh] w-[62vw] rounded-full opacity-70 blur-[90px]"
-      style={{
-        background:
-          'radial-gradient(closest-side, rgba(142,197,255,0.50), rgba(185,167,255,0.24), transparent)',
-        animation: 'aurora-b 42s ease-in-out infinite',
-      }}
-    />
-    {/* soft rose, lower centre-left — anchors the composition */}
-    <div
-      className="absolute -bottom-[28%] left-[8%] h-[60vh] w-[65vw] rounded-full opacity-60 blur-[100px]"
-      style={{
-        background:
-          'radial-gradient(closest-side, rgba(255,159,182,0.42), rgba(127,230,196,0.20), transparent)',
-        animation: 'aurora-c 38s ease-in-out infinite',
-      }}
-    />
-
-    {/* Paris skyline, if supplied — sits under the veil so text stays crisp */}
-    <SkylineLayer />
-
-    {/* Legibility veil so the name and quote always sit on near-white */}
-    <div
-      className="absolute inset-0"
-      style={{
-        background:
-          'radial-gradient(38rem 26rem at 50% 46%, rgba(253,252,250,0.80), rgba(253,252,250,0.35) 58%, transparent 82%)',
-      }}
-    />
-  </div>
-);
 
 const NAME = ['Mridul', 'Malani'];
 
@@ -89,7 +164,7 @@ const Hero: React.FC = () => {
 
   return (
     <div className="relative flex w-full min-h-screen flex-col overflow-hidden">
-      <AuroraBackdrop />
+      <HeroBackdrop />
 
       {/* Content takes the free space and centres inside it; the ticker keeps
           its natural height at the bottom of the fold. */}

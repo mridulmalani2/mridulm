@@ -112,36 +112,6 @@ a:focus-visible {
   border-radius: 2px;
 }
 
-/* Hero aurora — very slow, wide drifts. Long durations and small deltas keep
-   it feeling like light moving rather than anything animating. */
-@keyframes aurora-a {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(4%, -3%, 0) scale(1.12);
-  }
-}
-@keyframes aurora-b {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1.06);
-  }
-  50% {
-    transform: translate3d(-5%, 4%, 0) scale(1);
-  }
-}
-@keyframes aurora-c {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(3%, 5%, 0) scale(1.1);
-  }
-}
-
 /* Landing-page ticker — seamless marquee. The track renders its items twice,
    so translating by exactly -50% lands the second copy where the first began
    and the loop is invisible. */
