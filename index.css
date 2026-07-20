@@ -112,20 +112,25 @@ a:focus-visible {
   border-radius: 2px;
 }
 
-/* Landing-page ticker — seamless marquee. The track renders its items twice,
-   so translating by exactly -50% lands the second copy where the first began
-   and the loop is invisible. */
+/* Landing-page ticker — seamless marquee.
+
+   The track repeats its item group N times and shifts by exactly one group
+   width, so group 2 lands where group 1 began and the seam is invisible.
+   N is computed at runtime (see LogoTicker) because a fixed 2 copies only
+   works when a single group is already wider than the viewport — otherwise
+   the row runs out mid-loop and leaves a visible gap. --ticker-shift carries
+   the resulting -100/N%. */
 @keyframes ticker-scroll-left {
   from {
     transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translate3d(-50%, 0, 0);
+    transform: translate3d(var(--ticker-shift, -50%), 0, 0);
   }
 }
 @keyframes ticker-scroll-right {
   from {
-    transform: translate3d(-50%, 0, 0);
+    transform: translate3d(var(--ticker-shift, -50%), 0, 0);
   }
   to {
     transform: translate3d(0, 0, 0);
