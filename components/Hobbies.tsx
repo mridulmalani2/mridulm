@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Album } from '../types';
 import { fetchAlbums } from '../services/csvService';
 import { ChevronLeft, Maximize2 } from 'lucide-react';
-import { BasketballMotif } from './AmbientMotifs';
 
 const Hobbies: React.FC = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -58,8 +57,6 @@ const Hobbies: React.FC = () => {
             >
               {/* Header */}
               <div className="mb-20 relative">
-                {/* Ambient motif — the basketball, floating beside the heading */}
-                <BasketballMotif className="right-0 -top-8 h-16 w-16 md:right-10 md:-top-2 md:h-28 md:w-28" />
                 <motion.div
                   initial={{ opacity: 0, x: -30 }}
                   whileInView={{ opacity: 1, x: 0 }}

@@ -70,40 +70,6 @@ export const FinanceMotif: React.FC<{ className?: string }> = ({ className = '' 
   </div>
 );
 
-/* ── Basketball — pastel ball with seams, floats and bounces on hover ────── */
-
-export const BasketballMotif: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <motion.div
-    aria-hidden="true"
-    className={`absolute ${className}`}
-    animate={{ y: [0, -8, 0] }}
-    transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-    whileHover={{ scale: 1.12, rotate: 10 }}
-  >
-    <div
-      className="absolute -inset-4 rounded-full opacity-60 blur-2xl"
-      style={{ background: 'radial-gradient(closest-side, rgba(255,181,107,0.5), transparent)' }}
-    />
-    {/* ball body as CSS so no SVG gradient defs are needed */}
-    <div
-      className="relative h-full w-full rounded-full"
-      style={{
-        background: 'radial-gradient(circle at 35% 30%, #FFD2A3, #F9A55C 75%)',
-        boxShadow: '0 10px 24px -12px rgba(162,86,0,0.45)',
-      }}
-    >
-      <svg viewBox="0 0 96 96" className="absolute inset-0 h-full w-full">
-        <g fill="none" stroke="rgba(162,86,0,0.35)" strokeWidth="2.5">
-          <path d="M2 48 H94" />
-          <path d="M48 2 V94" />
-          <path d="M15 15 C 36 34, 36 62, 15 81" />
-          <path d="M81 15 C 60 34, 60 62, 81 81" />
-        </g>
-      </svg>
-    </div>
-  </motion.div>
-);
-
 /* ── Travel — dashed flight path with a paper plane (Contact, 404) ───────── */
 
 export const TravelMotif: React.FC<{ className?: string }> = ({ className = '' }) => (

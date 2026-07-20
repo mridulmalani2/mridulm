@@ -1,88 +1,51 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-
-/** The 24-spoke Ashoka Chakra, drawn minimally. Colour via currentColor. */
-const AshokaChakra: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <svg viewBox="0 0 200 200" className={className} aria-hidden="true">
-    <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" strokeWidth="7" />
-    <circle cx="100" cy="100" r="11" fill="currentColor" />
-    {Array.from({ length: 24 }, (_, i) => (
-      <line
-        key={i}
-        x1="100"
-        y1="100"
-        x2="100"
-        y2="13"
-        stroke="currentColor"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        transform={`rotate(${i * 15} 100 100)`}
-      />
-    ))}
-  </svg>
-);
+import LogoTicker from './LogoTicker';
 
 /**
- * Full-bleed hero backdrop. The page is split by a single diagonal running
- * corner to corner — top-right down to bottom-left. The Indian tricolour
- * (horizontal saffron/white/green, Ashoka Chakra in the white band) holds the
- * upper-left of that line; the French tricolour (vertical blue/white/red)
- * holds the lower-right. Both are feather-light and dissolve into a soft seam.
- *
- * The masks use the `to bottom right` corner keyword deliberately: CSS's
- * magic-corner rule puts the transition band exactly through the other two
- * corners (top-right and bottom-left), so the seam tracks the real diagonal at
- * any aspect ratio rather than a fixed angle.
+ * Hero backdrop: a minimal aurora. Three very large, very soft pastel blooms
+ * drifting slowly on near-white — enough colour to feel considered, never
+ * enough to compete with the type. The ticker below is the page's real colour
+ * moment, so this stays deliberately quiet.
  *
  * Pure CSS; image swap option documented in docs/hero-image-prompt.md.
  */
-const FlagDiagonalBackdrop: React.FC = () => (
+const AuroraBackdrop: React.FC = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none bg-canvas" aria-hidden="true">
-    {/* India — horizontal tricolour, upper-left of the diagonal. Bands read
-        down the full left edge, which sits entirely inside this half. */}
+    {/* warm bloom, upper left */}
     <div
-      className="absolute inset-0"
+      className="absolute -left-[15%] -top-[25%] h-[70vh] w-[70vw] rounded-full opacity-70 blur-[90px]"
       style={{
         background:
-          'linear-gradient(to bottom, rgba(255,150,64,0.44) 0%, rgba(255,163,82,0.34) 22%, rgba(255,255,255,0.40) 38%, rgba(255,255,255,0.40) 50%, rgba(101,192,132,0.36) 64%, rgba(90,187,124,0.34) 82%, rgba(90,187,124,0) 100%)',
-        WebkitMaskImage: 'linear-gradient(to bottom right, black 36%, transparent 66%)',
-        maskImage: 'linear-gradient(to bottom right, black 36%, transparent 66%)',
+          'radial-gradient(closest-side, rgba(255,181,107,0.55), rgba(255,229,128,0.22), transparent)',
+        animation: 'aurora-a 34s ease-in-out infinite',
+      }}
+    />
+    {/* cool bloom, upper right */}
+    <div
+      className="absolute -right-[18%] -top-[18%] h-[65vh] w-[62vw] rounded-full opacity-70 blur-[90px]"
+      style={{
+        background:
+          'radial-gradient(closest-side, rgba(142,197,255,0.50), rgba(185,167,255,0.24), transparent)',
+        animation: 'aurora-b 42s ease-in-out infinite',
+      }}
+    />
+    {/* soft rose, lower centre-left — anchors the composition */}
+    <div
+      className="absolute -bottom-[28%] left-[8%] h-[60vh] w-[65vw] rounded-full opacity-60 blur-[100px]"
+      style={{
+        background:
+          'radial-gradient(closest-side, rgba(255,159,182,0.42), rgba(127,230,196,0.20), transparent)',
+        animation: 'aurora-c 38s ease-in-out infinite',
       }}
     />
 
-    {/* Ashoka Chakra — softened with a blur and a radial fade so it dissolves
-        into the wash like everything else, rather than reading as an object. */}
-    <div
-      className="absolute left-[6%] top-[36%] h-28 w-28 text-[#2A4A9B] opacity-[0.13] md:left-[12%] md:top-[40%] md:h-44 md:w-44"
-      style={{
-        filter: 'blur(1.2px)',
-        WebkitMaskImage: 'radial-gradient(circle at center, black 52%, transparent 84%)',
-        maskImage: 'radial-gradient(circle at center, black 52%, transparent 84%)',
-      }}
-    >
-      <AshokaChakra className="h-full w-full" />
-    </div>
-
-    {/* France — vertical tricolour, lower-right of the diagonal. Bands are
-        packed into the right-hand side so all three clear the seam and the
-        centre halo (at full width the blue fell under both and vanished). */}
+    {/* Legibility veil so the name and quote always sit on near-white */}
     <div
       className="absolute inset-0"
       style={{
         background:
-          'linear-gradient(to right, rgba(74,150,255,0) 20%, rgba(74,150,255,0.44) 46%, rgba(96,168,255,0.38) 58%, rgba(255,255,255,0.40) 70%, rgba(255,255,255,0.40) 79%, rgba(255,120,148,0.34) 90%, rgba(255,102,134,0.46) 100%)',
-        WebkitMaskImage: 'linear-gradient(to bottom right, transparent 36%, black 66%)',
-        maskImage: 'linear-gradient(to bottom right, transparent 36%, black 66%)',
-      }}
-    />
-
-    {/* Legibility halo — tight enough to protect the name/quote without
-        washing the flags out of the surrounding thirds. */}
-    <div
-      className="absolute inset-0"
-      style={{
-        background:
-          'radial-gradient(30rem 20rem at 50% 52%, rgba(253,252,250,0.66), rgba(253,252,250,0.24) 58%, transparent 80%)',
+          'radial-gradient(38rem 26rem at 50% 46%, rgba(253,252,250,0.80), rgba(253,252,250,0.35) 58%, transparent 82%)',
       }}
     />
 
@@ -102,14 +65,16 @@ const Hero: React.FC = () => {
   let charIndex = -1;
 
   return (
-    <div className="relative w-full min-h-screen px-6 pt-28 pb-12 flex flex-col items-center justify-center">
-      <FlagDiagonalBackdrop />
+    <div className="relative flex w-full min-h-screen flex-col overflow-hidden">
+      <AuroraBackdrop />
 
+      {/* Content takes the free space and centres inside it; the ticker keeps
+          its natural height at the bottom of the fold. */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="relative z-10 text-center flex flex-col items-center max-w-4xl"
+        className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pt-20 pb-4 text-center"
       >
         {/* Profile image — larger, framed for the light canvas */}
         <div className="relative mb-6 md:mb-8">
@@ -121,7 +86,7 @@ const Hero: React.FC = () => {
             }}
             aria-hidden="true"
           />
-          <div className="relative w-40 h-40 md:w-48 md:h-48 rounded-full overflow-hidden ring-4 ring-white shadow-[0_20px_60px_-15px_rgba(26,26,34,0.35)]">
+          <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden ring-4 ring-white shadow-[0_20px_60px_-15px_rgba(26,26,34,0.35)]">
             <img
               src="/mridul-photo.jpeg"
               alt="Mridul Malani"
@@ -194,7 +159,7 @@ const Hero: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.85, duration: 0.6 }}
-          className="font-display italic text-ink/80 text-lg md:text-2xl max-w-2xl leading-relaxed mb-8"
+          className="font-display italic text-ink/80 text-lg md:text-2xl max-w-2xl leading-relaxed mb-6"
         >
           I learn by building, and I build by doing. Currently at the intersection of finance, technology and entrepreneurship.
         </motion.p>
@@ -219,6 +184,16 @@ const Hero: React.FC = () => {
             Get in Touch
           </a>
         </motion.div>
+      </motion.div>
+
+      {/* Where I've been, and what I'm into */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2, duration: 0.8 }}
+        className="relative z-10 pb-8"
+      >
+        <LogoTicker />
       </motion.div>
     </div>
   );
