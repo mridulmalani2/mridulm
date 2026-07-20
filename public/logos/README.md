@@ -1,35 +1,38 @@
 # Logo assets for the landing-page ticker
 
-Drop the files here with **these exact names** and they appear automatically —
-no code change needed:
+These are wired up in [`data/ticker.ts`](../../data/ticker.ts) — each entry's
+`logo:` field points at a file here.
 
-| File | Shows as |
+| File | Ticker symbol |
 |---|---|
-| `hec-paris.png` | HEC |
+| `HEC.png` | HEC |
 | `reliance.png` | RIL |
-| `indiamart.png` | IMART |
-| `chanakya.png` | CWC |
-| `earlyseed.png` | ESV |
-| `ashoka.png` | ASHOKA |
-| `infoedge-cfe.png` | CFE |
-| `global-healthx.png` | GHX |
-| `mantra-launchspace.png` | MANTRA |
-| `india-france.png` | IN·FR |
+| `IM.png` | IMART |
+| `chanakya.webp` | CWC |
+| `early.png` | ESV |
+| `AU.png` | ASHOKA |
+| `cfe.png` | CFE |
+| `globalhealthx.png` | GHX |
+| `mls.png` | MANTRA |
+| `indfra-crop.png` | IN·FR |
 
-Prefer **SVG** if you have it — just change the extension in
-[`data/ticker.ts`](../../data/ticker.ts) to match (e.g. `/logos/hec-paris.svg`).
+## Swapping or adding one
 
-## Guidelines
+1. Drop the file in this folder.
+2. Update that entry's `logo:` path in `data/ticker.ts`.
 
-- **Transparent background** preferred; each logo sits in a white chip on the
-  dark tape, so a white background also works.
-- Rendered at **24px tall**, auto width, capped at 92px. Supply ~2–3× that
-  (roughly 300×150) so it stays sharp on retina.
-- **Crop tight** — trim surrounding whitespace, or the logo will look small
-  next to the others.
-- Use the company's official **press-kit / brand-page** asset where possible.
-- The `india-france.png` entry is the crossed-flags image; a tightly cropped
-  version of just the two flags works best at this size.
+Filenames are **case-sensitive** in production, so `HEC.png` ≠ `hec.png`.
 
-Until a file exists — or if a name doesn't match — that tile falls back to its
-monogram, so a missing logo never renders as a broken image.
+## Notes
+
+- Each logo renders inside a white chip at **max 24px tall / 84px wide**,
+  scaled to fit — so both tall lockups and very wide wordmarks work without
+  distortion.
+- **Crop tight.** Surrounding whitespace makes a logo look shrunken next to
+  the others. `indfra-crop.png` is the crossed-flags photo cropped to just the
+  flags (the uncropped original had so much background it read as a smudge at
+  this size).
+- If a path is wrong or a file is missing, that entry shows **no chip at all**
+  — just its symbol. It never renders a broken image. Note this can't rely on
+  `onError`: the SPA rewrite answers missing files with `index.html` and a
+  200, so the check is on whether the image actually decoded.

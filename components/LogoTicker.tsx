@@ -57,10 +57,13 @@ const Quote: React.FC<{ item: TickerCompany }> = ({ item }) => {
             logoOk ? 'flex' : 'hidden'
           }`}
         >
+          {/* bound BOTH axes: these logos range from an 8.6:1 wordmark
+              (Chanakya) to a stacked lockup (Reliance), so scale-to-fit keeps
+              every mark inside the same chip without distorting any of them */}
           <img
             src={item.logo}
             alt=""
-            className="h-6 w-auto max-w-[92px] object-contain"
+            className="max-h-6 max-w-[84px] object-contain"
             onLoad={(e) => {
               if (e.currentTarget.naturalWidth > 0) setLogoOk(true);
             }}

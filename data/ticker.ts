@@ -2,18 +2,11 @@
  * Landing-page ticker content.
  *
  * ─────────────────────────────────────────────────────────────────────────
- *  MRIDUL — the logo files go in  public/logos/  with these exact names:
+ *  MRIDUL — logos live in public/logos/ and are wired up below. To swap one,
+ *  drop the new file in that folder and update its `logo:` path here.
  *
- *      hec-paris.png          reliance.png         indiamart.png
- *      chanakya.png           earlyseed.png        ashoka.png
- *      infoedge-cfe.png       global-healthx.png   mantra-launchspace.png
- *      india-france.png
- *
- *  SVG is better than PNG if you have it — just change the extension here to
- *  match. Transparent background preferred; the tile sits on white either way.
- *
- *  Until a file exists (or if a path is wrong) the tile shows its monogram
- *  instead, so a missing logo never renders as a broken image.
+ *  If a path is wrong or the file is missing, that entry simply shows no logo
+ *  chip (just the symbol) rather than a broken image — see LogoTicker.
  *
  *  Order below = display order. Biggest / most finance-relevant names first.
  * ─────────────────────────────────────────────────────────────────────────
@@ -45,7 +38,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'25–27",
     status: 'current',
     mark: 'HEC',
-    logo: '/logos/hec-paris.png',
+    logo: '/logos/HEC.png',
   },
   {
     symbol: 'RIL',
@@ -61,7 +54,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'24",
     status: 'past',
     mark: 'IM',
-    logo: '/logos/indiamart.png',
+    logo: '/logos/IM.png',
   },
   {
     symbol: 'CWC',
@@ -69,7 +62,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'24",
     status: 'past',
     mark: 'CW',
-    logo: '/logos/chanakya.png',
+    logo: '/logos/chanakya.webp',
   },
   {
     symbol: 'ESV',
@@ -77,7 +70,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'23–24",
     status: 'past',
     mark: 'ES',
-    logo: '/logos/earlyseed.png',
+    logo: '/logos/early.png',
   },
   {
     symbol: 'ASHOKA',
@@ -85,7 +78,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'22–25",
     status: 'past',
     mark: 'AU',
-    logo: '/logos/ashoka.png',
+    logo: '/logos/AU.png',
   },
   {
     symbol: 'CFE',
@@ -93,7 +86,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'23–25",
     status: 'past',
     mark: 'CFE',
-    logo: '/logos/infoedge-cfe.png',
+    logo: '/logos/cfe.png',
   },
   {
     symbol: 'GHX',
@@ -101,7 +94,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'25",
     status: 'past',
     mark: 'GHX',
-    logo: '/logos/global-healthx.png',
+    logo: '/logos/globalhealthx.png',
   },
   {
     symbol: 'MANTRA',
@@ -109,7 +102,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: "'24–25",
     status: 'past',
     mark: 'ML',
-    logo: '/logos/mantra-launchspace.png',
+    logo: '/logos/mls.png',
   },
   {
     symbol: 'IN·FR',
@@ -117,7 +110,7 @@ export const TICKER_COMPANIES: TickerCompany[] = [
     period: 'HOME',
     status: 'current',
     mark: '🇮🇳',
-    logo: '/logos/india-france.png',
+    logo: '/logos/indfra-crop.png',
   },
 ];
 
