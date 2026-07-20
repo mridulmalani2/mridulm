@@ -15,25 +15,34 @@ import { Project, ProjectSection } from '../types';
 export const PROJECT_SECTIONS: ProjectSection[] = [
   {
     id: 'finance',
-    eyebrow: 'Corporate finance & markets',
+    index: '01',
     title: 'Finance',
-    // TODO(Mridul): replace with your own intro.
+    blurb: 'Projects exploring finance with clarity and rigor.',
+    tagline: 'Models, data, decisions.',
+    accent: '#3F5347', // deep sage
+    tint: '#F2F2EE',
     intro:
-      'Where finance stops being theory. Each of these began as a real problem — a capital-budgeting call, a valuation, a workflow a team actually needed — and became a tool I built to solve it.',
+      'Each of these began as a real problem — a capital-budgeting call, a valuation, a workflow a team actually needed — and became a tool I built to solve it.',
   },
   {
     id: 'path-ideas',
-    eyebrow: 'Ventures & product bets',
-    title: 'Path Ideas',
-    // TODO(Mridul): replace with your own intro.
+    index: '02',
+    title: 'Parked Ideas',
+    blurb: 'Thoughtful experiments in progress. Not live, but not forgotten.',
+    tagline: 'Concepts · MVPs · Future potential',
+    accent: '#55396F', // deep violet
+    tint: '#F3F1F5',
     intro:
-      'Ideas I couldn’t stop thinking about, so I built them. Some are live, some are experiments — all were attempts to turn a hunch into something real people could use.',
+      'Ideas I couldn’t stop thinking about, so I built them. Some are live, some are still experiments — all were attempts to turn a hunch into something real people could use.',
   },
   {
     id: 'hobby',
-    eyebrow: 'For the joy of it',
-    title: 'Hobby Coding',
-    // TODO(Mridul): replace with your own intro.
+    index: '03',
+    title: 'Hobby',
+    blurb: 'Passion projects. Built for joy & growth.',
+    tagline: 'Curiosity. Expression. Exploration.',
+    accent: '#B0503A', // terracotta
+    tint: '#F6EFEC',
     intro:
       'The stuff I build for fun — small, quick, and usually because someone I love needed it. Like a card game my family plays by our own rules, from three time zones away.',
   },

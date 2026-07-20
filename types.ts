@@ -12,9 +12,13 @@ export interface Project {
 
 export interface ProjectSection {
   id: ProjectCategory;
-  eyebrow: string;      // small label above the section title
-  title: string;        // section heading (e.g. "Finance")
-  intro: string;        // Mridul's short intro to the section
+  index: string;        // '01' — sits top-left of the card
+  title: string;        // card heading (e.g. "Finance")
+  blurb: string;        // two or three short lines under the rule
+  tagline: string;      // letterspaced caps along the card foot
+  accent: string;       // the card's single colour
+  tint: string;         // very faint background wash
+  intro: string;        // longer intro, shown in the panel once opened
 }
 
 export interface Album {
