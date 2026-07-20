@@ -3,11 +3,11 @@ import { ChevronDown } from 'lucide-react';
 import { Project, ProjectSection as ProjectSectionData, ProjectCategory } from '../types';
 import ProjectCard from './ProjectCard';
 
-// Section accent gradients, matching the card art per category.
-const SECTION_GRADIENT: Record<ProjectCategory, string> = {
-  finance: 'linear-gradient(135deg, #8EC5FF, #B9A7FF)',
-  'path-ideas': 'linear-gradient(135deg, #FFB56B, #FFE580)',
-  hobby: 'linear-gradient(135deg, #7FE6C4, #FF9FB6)',
+// One solid accent per category, matching the card headers.
+const SECTION_ACCENT: Record<ProjectCategory, string> = {
+  finance: '#2F4B7C',
+  'path-ideas': '#A25600',
+  hobby: '#1F6F5C',
 };
 
 interface ProjectSectionProps {
@@ -31,7 +31,7 @@ const ProjectSectionView: React.FC<ProjectSectionProps> = ({ section, projects, 
         <div className="flex items-center gap-4 md:gap-5">
           <span
             className="hidden h-12 w-12 shrink-0 rounded-2xl shadow-sm sm:block"
-            style={{ background: SECTION_GRADIENT[section.id] }}
+            style={{ background: SECTION_ACCENT[section.id] }}
             aria-hidden="true"
           />
           <div>

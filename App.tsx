@@ -32,7 +32,7 @@ const App: React.FC = () => {
   return (
     <MotionConfig reducedMotion="user">
     <div
-      className={`relative min-h-screen ${isDealEngine ? 'bg-[#080b11]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-lilac/40 selection:text-ink' : 'bg-black'}`}
+      className={`relative min-h-screen ${isDealEngine ? 'bg-[#080b11]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-ink/10 selection:text-ink' : 'bg-black'}`}
     >
       {/* Skip to main content link */}
       <a
@@ -47,7 +47,7 @@ const App: React.FC = () => {
       {/* Progress bar */}
       {!isDealEngine && (
         <motion.div
-          className={`fixed top-0 left-0 right-0 h-0.5 origin-left z-[150] ${isResearchArticles ? 'bg-[#CC0000]' : isLight ? 'bg-gradient-to-r from-saffron via-rose to-sky' : 'bg-amber-500'}`}
+          className={`fixed top-0 left-0 right-0 h-0.5 origin-left z-[150] ${isResearchArticles ? 'bg-[#CC0000]' : isLight ? 'bg-[#A25600]' : 'bg-amber-500'}`}
           style={{ scaleX }}
         />
       )}

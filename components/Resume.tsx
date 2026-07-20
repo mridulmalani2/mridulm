@@ -211,7 +211,7 @@ const Resume: React.FC = () => {
           <div className="flex-1 h-px bg-ink/10 relative" role="progressbar" aria-label="Timeline scroll progress">
             <motion.div
               style={{ scaleX: scrollXProgress }}
-              className="absolute inset-0 h-full bg-gradient-to-r from-saffron via-rose to-sky origin-left"
+              className="absolute inset-0 h-full bg-[#A25600] origin-left"
             />
             {/* Car motif — drives toward "Past" as the timeline is explored */}
             <motion.div style={{ left: carX }} className="absolute -top-3.5 pointer-events-none" aria-hidden="true">

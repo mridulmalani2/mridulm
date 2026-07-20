@@ -176,15 +176,17 @@ const Hero: React.FC = () => {
       >
         {/* Profile image — larger, framed for the light canvas */}
         <div className="relative mb-6 md:mb-8">
+          {/* A neutral lift rather than a colour halo — the portrait should sit
+              on the page, not glow. */}
           <div
-            className="absolute -inset-3 rounded-full opacity-70 blur-2xl"
+            className="absolute -inset-6 rounded-full blur-2xl"
             style={{
               background:
-                'conic-gradient(from 210deg, #FFB56B, #7FE6C4, #8EC5FF, #FF9FB6, #FFB56B)',
+                'radial-gradient(closest-side, rgba(26,26,34,0.10), transparent 72%)',
             }}
             aria-hidden="true"
           />
-          <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden ring-4 ring-white shadow-[0_20px_60px_-15px_rgba(26,26,34,0.35)]">
+          <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden ring-1 ring-ink/10 shadow-[0_18px_45px_-18px_rgba(26,26,34,0.45)]">
             <img
               src="/mridul-photo.jpeg"
               alt="Mridul Malani"

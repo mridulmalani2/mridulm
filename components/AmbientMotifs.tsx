@@ -18,23 +18,22 @@ import { Send } from 'lucide-react';
 
 export const FinanceMotif: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div aria-hidden="true" className={`pointer-events-none absolute ${className}`}>
-    {/* soft wash behind the line, echoing the flag-corner language */}
+    {/* faint tonal wash, single hue — no pastel blend */}
     <div
-      className="absolute -inset-10 opacity-60 blur-2xl"
+      className="absolute -inset-10 opacity-50 blur-2xl"
       style={{
-        background:
-          'radial-gradient(closest-side, rgba(142,197,255,0.35), rgba(185,167,255,0.18), transparent)',
+        background: 'radial-gradient(closest-side, rgba(47,75,124,0.16), transparent 72%)',
       }}
     />
     <svg viewBox="0 0 320 180" className="relative h-auto w-full">
       <defs>
         <linearGradient id="fin-line" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="#8EC5FF" />
-          <stop offset="1" stopColor="#B9A7FF" />
+          <stop offset="0" stopColor="#2F4B7C" stopOpacity="0.45" />
+          <stop offset="1" stopColor="#2F4B7C" stopOpacity="0.9" />
         </linearGradient>
         <linearGradient id="fin-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="rgba(142,197,255,0.30)" />
-          <stop offset="1" stopColor="rgba(142,197,255,0)" />
+          <stop offset="0" stopColor="rgba(47,75,124,0.16)" />
+          <stop offset="1" stopColor="rgba(47,75,124,0)" />
         </linearGradient>
       </defs>
       <motion.path
@@ -59,8 +58,8 @@ export const FinanceMotif: React.FC<{ className?: string }> = ({ className = '' 
       <motion.circle
         cx="312"
         cy="22"
-        r="6"
-        fill="#B9A7FF"
+        r="5.5"
+        fill="#2F4B7C"
         initial={{ scale: 0, opacity: 0 }}
         whileInView={{ scale: 1, opacity: 1 }}
         viewport={{ once: true, amount: 0.5 }}
