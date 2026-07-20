@@ -1,6 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import LogoTicker from './LogoTicker';
+
+/**
+ * Optional Paris skyline wash along the bottom of the hero. Renders only if
+ * public/hero-skyline.png exists — if it's absent the layer removes itself and
+ * the aurora alone still reads as finished. See docs/hero-image-prompt.md.
+ */
+const SkylineLayer: React.FC = () => {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src="/hero-skyline.png"
+      alt=""
+      onError={() => setFailed(true)}
+      className="pointer-events-none absolute inset-x-0 bottom-0 h-[46vh] w-full object-cover object-bottom opacity-[0.14]"
+      style={{
+        // fade upward so the skyline emerges from the page rather than sitting on it
+        WebkitMaskImage: 'linear-gradient(to top, black 4%, rgba(0,0,0,0.55) 45%, transparent 88%)',
+        maskImage: 'linear-gradient(to top, black 4%, rgba(0,0,0,0.55) 45%, transparent 88%)',
+      }}
+    />
+  );
+};
 
 /**
  * Hero backdrop: a minimal aurora. Three very large, very soft pastel blooms
@@ -40,6 +63,9 @@ const AuroraBackdrop: React.FC = () => (
       }}
     />
 
+    {/* Paris skyline, if supplied — sits under the veil so text stays crisp */}
+    <SkylineLayer />
+
     {/* Legibility veil so the name and quote always sit on near-white */}
     <div
       className="absolute inset-0"
@@ -48,9 +74,6 @@ const AuroraBackdrop: React.FC = () => (
           'radial-gradient(38rem 26rem at 50% 46%, rgba(253,252,250,0.80), rgba(253,252,250,0.35) 58%, transparent 82%)',
       }}
     />
-
-    {/* Fade into the page below the fold */}
-    <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-canvas" />
   </div>
 );
 
@@ -191,7 +214,7 @@ const Hero: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2, duration: 0.8 }}
-        className="relative z-10 pb-8"
+        className="relative z-10"
       >
         <LogoTicker />
       </motion.div>

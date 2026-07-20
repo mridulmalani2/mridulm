@@ -2,47 +2,131 @@
  * Landing-page ticker content.
  *
  * ─────────────────────────────────────────────────────────────────────────
- *  MRIDUL — to add a real logo:
- *   1. Drop the file in  public/logos/   (SVG preferred, else transparent PNG)
- *   2. Set  logo: '/logos/reliance.svg'  on that entry below
- *  Until then each tile renders a clean monogram, and if a logo path 404s the
- *  tile falls back to the monogram automatically — so nothing ever breaks.
+ *  MRIDUL — the logo files go in  public/logos/  with these exact names:
  *
- *  Prefer official press-kit / brand-page assets over web grabs: they're the
- *  versions companies publish for exactly this use, and they look sharper.
+ *      hec-paris.png          reliance.png         indiamart.png
+ *      chanakya.png           earlyseed.png        ashoka.png
+ *      infoedge-cfe.png       global-healthx.png   mantra-launchspace.png
+ *      india-france.png
+ *
+ *  SVG is better than PNG if you have it — just change the extension here to
+ *  match. Transparent background preferred; the tile sits on white either way.
+ *
+ *  Until a file exists (or if a path is wrong) the tile shows its monogram
+ *  instead, so a missing logo never renders as a broken image.
+ *
+ *  Order below = display order. Biggest / most finance-relevant names first.
  * ─────────────────────────────────────────────────────────────────────────
  */
 
 export interface TickerCompany {
+  /** Short mono symbol, ticker-style. */
+  symbol: string;
+  /** Full name — used for the tooltip/aria label. */
   name: string;
-  mark: string; // monogram shown until a logo is supplied
-  note: string; // small line under the name (role or context)
-  tint: string; // pastel accent for the monogram chip
-  logo?: string; // e.g. '/logos/reliance.svg'
+  /** Years, shown as the "quote" value. */
+  period: string;
+  /** `current` gets the green up-tick, `past` a neutral mark. */
+  status: 'current' | 'past';
+  /** Monogram fallback until a logo is dropped in. */
+  mark: string;
+  logo?: string;
 }
 
 export interface TickerInterest {
   label: string;
   icon: 'car' | 'plane' | 'basketball' | 'cricket' | 'markets' | 'film' | 'code' | 'coffee';
-  tint: string;
 }
 
 export const TICKER_COMPANIES: TickerCompany[] = [
-  { name: 'HEC Paris', mark: 'HEC', note: 'MiM · International Finance', tint: '#8EC5FF' },
-  { name: 'Reliance Industries', mark: 'RIL', note: 'FC&A · Green Energy', tint: '#FFB56B' },
-  { name: 'IndiaMART', mark: 'IM', note: 'Corporate Strategy', tint: '#7FE6C4' },
-  { name: 'Chanakya Wealth', mark: 'CW', note: 'Portfolio Management', tint: '#B9A7FF' },
-  { name: 'Global HealthX', mark: 'GHX', note: 'Accelerator & Fund', tint: '#FF9FB6' },
-  { name: 'Earlyseed Ventures', mark: 'ES', note: 'Deal Sourcing', tint: '#FFE580' },
-  { name: 'Ashoka University', mark: 'AU', note: 'B.Sc. Economics & Finance', tint: '#8EC5FF' },
+  {
+    symbol: 'HEC',
+    name: 'HEC Paris',
+    period: "'25–27",
+    status: 'current',
+    mark: 'HEC',
+    logo: '/logos/hec-paris.png',
+  },
+  {
+    symbol: 'RIL',
+    name: 'Reliance Industries',
+    period: "'23",
+    status: 'past',
+    mark: 'RIL',
+    logo: '/logos/reliance.png',
+  },
+  {
+    symbol: 'IMART',
+    name: 'IndiaMART InterMESH',
+    period: "'24",
+    status: 'past',
+    mark: 'IM',
+    logo: '/logos/indiamart.png',
+  },
+  {
+    symbol: 'CWC',
+    name: 'Chanakya Wealth Creation',
+    period: "'24",
+    status: 'past',
+    mark: 'CW',
+    logo: '/logos/chanakya.png',
+  },
+  {
+    symbol: 'ESV',
+    name: 'Earlyseed Ventures',
+    period: "'23–24",
+    status: 'past',
+    mark: 'ES',
+    logo: '/logos/earlyseed.png',
+  },
+  {
+    symbol: 'ASHOKA',
+    name: 'Ashoka University',
+    period: "'22–25",
+    status: 'past',
+    mark: 'AU',
+    logo: '/logos/ashoka.png',
+  },
+  {
+    symbol: 'CFE',
+    name: 'InfoEdge Centre for Entrepreneurship',
+    period: "'23–25",
+    status: 'past',
+    mark: 'CFE',
+    logo: '/logos/infoedge-cfe.png',
+  },
+  {
+    symbol: 'GHX',
+    name: 'Global HealthX',
+    period: "'25",
+    status: 'past',
+    mark: 'GHX',
+    logo: '/logos/global-healthx.png',
+  },
+  {
+    symbol: 'MANTRA',
+    name: 'Mantra Launchspace',
+    period: "'24–25",
+    status: 'past',
+    mark: 'ML',
+    logo: '/logos/mantra-launchspace.png',
+  },
+  {
+    symbol: 'IN·FR',
+    name: 'India × France',
+    period: 'HOME',
+    status: 'current',
+    mark: '🇮🇳',
+    logo: '/logos/india-france.png',
+  },
 ];
 
 export const TICKER_INTERESTS: TickerInterest[] = [
-  { label: 'Cars', icon: 'car', tint: '#FFB56B' },
-  { label: 'Travel', icon: 'plane', tint: '#8EC5FF' },
-  { label: 'Basketball', icon: 'basketball', tint: '#FF9FB6' },
-  { label: 'Cricket', icon: 'cricket', tint: '#7FE6C4' },
-  { label: 'Markets', icon: 'markets', tint: '#B9A7FF' },
-  { label: 'Cinema', icon: 'film', tint: '#FFE580' },
-  { label: 'Vibe coding', icon: 'code', tint: '#8EC5FF' },
+  { label: 'Markets', icon: 'markets' },
+  { label: 'Cars', icon: 'car' },
+  { label: 'Travel', icon: 'plane' },
+  { label: 'Basketball', icon: 'basketball' },
+  { label: 'Cricket', icon: 'cricket' },
+  { label: 'Cinema', icon: 'film' },
+  { label: 'Vibe coding', icon: 'code' },
 ];

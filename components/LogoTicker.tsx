@@ -34,79 +34,84 @@ const ICONS: Record<TickerInterest['icon'], React.FC<{ className?: string }>> = 
   coffee: Coffee,
 };
 
-/* ── tiles ───────────────────────────────────────────────────────────────── */
+/* ── one quote on the tape ───────────────────────────────────────────────── */
 
-const CompanyTile: React.FC<{ item: TickerCompany }> = ({ item }) => {
-  // Fall back to the monogram if a logo path is missing or fails to load, so a
-  // wrong filename degrades quietly instead of showing a broken image.
-  const [logoFailed, setLogoFailed] = useState(false);
-  const showLogo = !!item.logo && !logoFailed;
+const Quote: React.FC<{ item: TickerCompany }> = ({ item }) => {
+  // Opt-in rather than opt-out: the chip stays hidden until an image actually
+  // decodes. A missing file can't be detected by onError alone — the SPA
+  // rewrite serves index.html with a 200, so the request "succeeds" and only
+  // fails at decode time. Gating on a real naturalWidth handles every case:
+  // missing file, typo'd name, or corrupt image all just stay hidden.
+  const [logoOk, setLogoOk] = useState(false);
+  const isCurrent = item.status === 'current';
 
   return (
-    <div className="mx-2.5 flex w-[15.5rem] shrink-0 items-center gap-3.5 rounded-2xl border border-ink/10 bg-white/85 px-4 py-3.5 shadow-[0_10px_24px_-18px_rgba(26,26,34,0.55)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-ink/20 hover:shadow-[0_16px_30px_-16px_rgba(26,26,34,0.5)]">
-      <span
-        className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl font-montserrat text-[11px] font-black tracking-tight text-ink"
-        style={showLogo ? undefined : { background: `${item.tint}40` }}
-      >
-        {showLogo ? (
+    <div className="flex shrink-0 items-center gap-3 px-5" title={item.name}>
+      {/* logo sits in a white chip — how financial tickers show marks, and it
+          keeps dark wordmarks (Chanakya, Earlyseed) legible on the dark tape.
+          Until one loads we show no chip at all, rather than the monogram,
+          which would just repeat the symbol sitting right next to it. */}
+      {item.logo && (
+        <span
+          className={`h-8 shrink-0 items-center justify-center rounded bg-white px-2 ${
+            logoOk ? 'flex' : 'hidden'
+          }`}
+        >
           <img
             src={item.logo}
             alt=""
-            className="h-full w-full object-contain p-1"
-            loading="lazy"
-            onError={() => setLogoFailed(true)}
+            className="h-6 w-auto max-w-[92px] object-contain"
+            onLoad={(e) => {
+              if (e.currentTarget.naturalWidth > 0) setLogoOk(true);
+            }}
+            onError={() => setLogoOk(false)}
           />
-        ) : (
-          item.mark
-        )}
+        </span>
+      )}
+
+      <span className="font-mono text-[13px] font-bold uppercase tracking-[0.12em] text-white/95">
+        {item.symbol}
       </span>
-      <span className="min-w-0">
-        <span className="block truncate font-display text-[15px] font-bold leading-tight text-ink">
-          {item.name}
-        </span>
-        <span className="block truncate font-montserrat text-[10px] uppercase tracking-wider text-muted">
-          {item.note}
-        </span>
+
+      <span
+        className={`flex items-center gap-1 font-mono text-[12px] tracking-wider ${
+          isCurrent ? 'text-[#5BD6A8]' : 'text-white/45'
+        }`}
+      >
+        {isCurrent && <span aria-hidden="true">▲</span>}
+        {item.period}
       </span>
     </div>
   );
 };
 
-const InterestTile: React.FC<{ item: TickerInterest }> = ({ item }) => {
+const Divider: React.FC = () => (
+  <span className="h-6 w-px shrink-0 self-center bg-white/12" aria-hidden="true" />
+);
+
+const InterestQuote: React.FC<{ item: TickerInterest }> = ({ item }) => {
   const Icon = ICONS[item.icon];
   return (
-    <div
-      className="mx-2 flex shrink-0 items-center gap-2.5 rounded-full border border-ink/10 px-4 py-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/20"
-      style={{ background: `${item.tint}26` }}
-    >
-      <Icon className="h-4 w-4 shrink-0 text-ink/70" />
-      <span className="whitespace-nowrap font-montserrat text-[11px] font-bold uppercase tracking-wider text-ink/80">
+    <span className="flex shrink-0 items-center gap-2 px-4">
+      <Icon className="h-3.5 w-3.5 text-white/35" />
+      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
         {item.label}
       </span>
-    </div>
+    </span>
   );
 };
 
-/* ── the band ────────────────────────────────────────────────────────────── */
+/* ── the tape ────────────────────────────────────────────────────────────── */
 
-interface RowProps {
+const Row: React.FC<{
   direction: 'left' | 'right';
   duration: number;
+  className?: string;
   children: React.ReactNode;
-}
-
-const Row: React.FC<RowProps> = ({ direction, duration, children }) => (
-  <div
-    className="ticker-row relative flex overflow-hidden"
-    style={{
-      // fade both ends into the page so items enter and leave, never pop
-      WebkitMaskImage:
-        'linear-gradient(to right, transparent, black 8%, black 92%, transparent)',
-      maskImage: 'linear-gradient(to right, transparent, black 8%, black 92%, transparent)',
-    }}
-  >
+}> = ({ direction, duration, className = '', children }) => (
+  <div className={`ticker-row relative flex overflow-hidden ${className}`}>
     <div
-      className="ticker-track flex w-max"
+      className="ticker-track flex w-max items-center"
       style={{
         animationName: direction === 'left' ? 'ticker-scroll-left' : 'ticker-scroll-right',
         animationDuration: `${duration}s`,
@@ -120,26 +125,40 @@ const Row: React.FC<RowProps> = ({ direction, duration, children }) => (
 );
 
 const LogoTicker: React.FC = () => {
-  const companies = TICKER_COMPANIES.map((c) => <CompanyTile key={c.name} item={c} />);
-  const interests = TICKER_INTERESTS.map((i) => <InterestTile key={i.label} item={i} />);
+  const quotes = TICKER_COMPANIES.map((c) => (
+    <React.Fragment key={c.symbol}>
+      <Quote item={c} />
+      <Divider />
+    </React.Fragment>
+  ));
+
+  const interests = TICKER_INTERESTS.map((i) => <InterestQuote key={i.label} item={i} />);
 
   return (
-    <div className="relative w-full select-none" aria-hidden="true">
-      {/* A whisper of perspective so the band reads as a physical conveyor
-          rather than flat text scrolling past. */}
-      <div style={{ perspective: '900px' }}>
-        <div
-          className="flex flex-col gap-3"
-          style={{ transform: 'rotateX(7deg)', transformStyle: 'preserve-3d' }}
-        >
-          <Row direction="left" duration={46}>
-            {companies}
-          </Row>
-          <Row direction="right" duration={38}>
-            {interests}
-          </Row>
-        </div>
-      </div>
+    <div
+      className="relative w-full select-none border-y border-white/10 bg-[#15151C] shadow-[0_-10px_40px_-20px_rgba(26,26,34,0.5)]"
+      aria-hidden="true"
+    >
+      {/* main tape — where I've been */}
+      <Row direction="left" duration={52} className="py-3">
+        {quotes}
+      </Row>
+
+      {/* secondary tape — what I'm into, deliberately quieter */}
+      <Row direction="right" duration={44} className="border-t border-white/[0.07] py-2">
+        {interests}
+      </Row>
+
+      {/* soften both ends in the tape's own colour so items fade rather than
+          hard-clip at the edges */}
+      <div
+        className="pointer-events-none absolute inset-y-0 left-0 w-16"
+        style={{ background: 'linear-gradient(to right, #15151C, transparent)' }}
+      />
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 w-16"
+        style={{ background: 'linear-gradient(to left, #15151C, transparent)' }}
+      />
     </div>
   );
 };

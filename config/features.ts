@@ -15,7 +15,6 @@ export const SHOW_RESEARCH = false;
 // VideoStory.tsx stays on disk, ready to re-mount. Flip to true to restore.
 export const SHOW_VIDEO_STORY = false;
 
-// The deal-engine toolkit lives at /deal-engine. While Research is hidden
-// (it was the only in-UI link to the toolkit), this surfaces a direct nav
-// entry so the toolkit stays reachable. Set false to make it URL-only.
-export const SHOW_DEAL_ENGINE_NAV = true;
+// The deal-engine toolkit lives at /deal-engine. Hidden from the navbar for
+// now — the route still resolves by direct URL. Flip to true to surface it.
+export const SHOW_DEAL_ENGINE_NAV = false;
