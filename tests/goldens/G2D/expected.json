@@ -78,13 +78,13 @@
   "cash_at_exit": 30.65,
   "debt_payoff_at_par_plus_pik": 168.72,
   "exit_ebitda_basis_value": 123.82,
-  "exit_equity_pre_mip_total": 898.62,
-  "exit_ev": 1052.47,
+  "exit_equity_pre_mip_total": 898.6,
+  "exit_ev": 1052.46,
   "exit_fees": 15.79,
   "mip_payout": 0.0,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
-  "sponsor_share": 898.62,
+  "sponsor_share": 898.6,
   "unamortized_fees_written_off": 1.89
  },
  "operating": [
@@ -172,9 +172,9 @@
     0.0,
     0.0,
     0.0,
-    898.62
+    898.6
    ],
-   "irr": 0.088815,
+   "irr": 0.088811,
    "moic": 1.5303
   },
   "sponsor_net": {
@@ -184,9 +184,9 @@
     0.0,
     0.0,
     0.0,
-    898.62
+    898.6
    ],
-   "irr": 0.088815,
+   "irr": 0.088811,
    "moic": 1.5303
   },
   "unlevered": {
@@ -196,9 +196,9 @@
     75.74,
     77.68,
     79.23,
-    1117.14
+    1117.13
    ],
-   "irr": 0.080753,
+   "irr": 0.080751,
    "moic": 1.4091
   }
  },

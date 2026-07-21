@@ -201,8 +201,10 @@ function sum(xs: number[]): number {
 }
 
 function validate(input: WaterfallYearIn): void {
+  // Opening cash may be NEGATIVE: §3 step 6 post-breach semantics [v1.0.3] — a breach
+  // year closes below the floor (possibly < 0) and subsequent years run on the inherited
+  // opening cash with the block-severity flag carried by the engine's coherence layer.
   assertFinite(input.opening_cash, 'opening_cash');
-  assertNonNegative(input.opening_cash, 'opening_cash');
   assertFinite(input.fcf_pre_debt, 'fcf_pre_debt'); // may be negative
   assertNonNegative(input.min_cash, 'min_cash');
   assertFinite(input.sweep_pct, 'sweep_pct');

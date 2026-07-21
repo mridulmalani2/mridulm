@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.0 (SIGNED, Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.0.3 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -83,7 +83,13 @@ cash = opening_cash + FCF_pre_debt                    (FCF_pre_debt from §7 —
                     each application capped at that tranche's outstanding balance;
                     unapplied sweepable (all sweepable debt retired) stays in cash
 6. + revolver draw: if cash < min_cash, draw min(shortfall, undrawn commitment);
-     if still short → cash floor breach flag (§14.6), never negative cash
+     if still short → cash floor breach flag (§14.6). Post-breach semantics [v1.0.3]:
+     the year closes below the floor with the flag set; closing cash MAY be negative;
+     conservation (§14.3) is never clamped. Every subsequent year runs with the
+     inherited (possibly negative) opening cash and carries a block-severity
+     `cash_floor_breach` coherence flag; the run's outputs render with the insolvency
+     warning. ("Never negative cash" described the draw-to-floor design goal, not a
+     clamp — a deep enough hole is reported, not hidden.)
 7. (v2: distributions, subject to trap; voluntary prepayments credited against the ECF
     requirement — a real-agreement nuance deferred with the distributions feature, DR-1 Item 2)
 closing_cash = cash
@@ -100,6 +106,9 @@ the premium applies only to repricing/refinancing (a v2 feature). **Disclosed v1
 mandatory prepayments, and a change-of-control 101 put can bind at exit; v1 ignores both,
 stated on the assumptions page, with re-entry via the Phase G call-protection/refinancing
 module. HY make-whole likewise enters only with Phase G refinancing.
+**v1 structural constraint [v1.0.3]:** every term-tranche maturity must exceed
+`hold_years` (no balloon repayment or refinancing inside the hold until the Phase G
+refinancing module). Violation is an input-gate rejection, not a computed default.
 
 ## §4 Interest & rates [CONFIRMED DR-1 — kept as disclosed minority convention]
 
@@ -180,10 +189,20 @@ uncapped deds    = financing-fee amortization + commitment fees
                           acquired_cap_pct × taxable_before_NOL)
                     : 0
    postclose_used = min(postclose_NOL,
-                        max(0, 0.80 × taxable_before_NOL − (arose_pre_2018 ? 0 : acquired_used)))
-                    (post-close NOLs are post-2017 by construction: 80% aggregate cap
-                     shared with a post-2017 acquired layer; a pre-2018 acquired layer
-                     has its own 100% cap and does not consume the 80% headroom)
+                        max(0, 0.80 × (taxable_before_NOL
+                                       − (arose_pre_2018 ? acquired_used : 0))
+                               − (arose_pre_2018 ? 0 : acquired_used)))
+                    (post-close NOLs are post-2017 by construction. Post-2017 acquired
+                     layer: shared 80% aggregate cap on the FULL base. Pre-2018 acquired
+                     layer: its own 100% cap; the post-close 80% cap then applies to the
+                     RESIDUAL income after the pre-2018 layer — IRC §172(a)(2)(B)(ii)
+                     computes the 80% base as income after pre-2018 NOL usage.
+                     [CORRECTED v1.0.3 — the v1.0 form put the 80% cap on the full base
+                     alongside an unreduced 100% layer, so aggregate usage could exceed
+                     taxable income, silently burning post-close NOLs for zero benefit
+                     and overtaxing later years. Aggregate usage ≤ taxable income now
+                     holds in both branches by construction. Golden-uncovered: every
+                     golden runs arose_pre_2018 = false; fixtures unchanged.])
    §382 applies ONLY to the acquired pool; post-close NOLs are unrestricted [DECIDED].
    The §382 limit is STATIC per year (unused limitation carryforward omitted —
    conservative, disclosed). Basis: target (loss corporation) equity value immediately
@@ -228,7 +247,11 @@ AP = DPO/365 × COGS; **COGS proxy = revenue × (1 − EBITDA margin)** (disclos
   maturity; an UNCAPPED ordinary deduction (Treas. Reg. §1.163(j)-1(b)(22)).
 Both: remaining balance **written off on full early retirement** (non-cash; year-N tax
 treatment per §6 uncapped line); both flow to the interest line for book EBIT, never D&A
-(DR-2 Item 1 flag); both added back in FCF.
+(DR-2 Item 1 flag); both added back in FCF. **Early-retirement timing [v1.0.3]:** the
+BOOK write-off lands in the retirement year; the TAX deduction enters the FOLLOWING
+year's uncapped pool (§5 strict sequentiality — retirement is only known post-waterfall,
+after that year's tax is computed). If retirement occurs in year N it merges into the
+exit-year deduction (§9).
 `FCF_pre_debt = EBITDA_adj − cash tax − capex − ΔNWC` (D&A and fee amortization non-cash;
 cash tax single-sourced from the §6 computation — mirror invariant §14.16).
 
@@ -262,7 +285,9 @@ termination.** (Closing cash conveys — equivalently EV − NET debt at exit; t
 the net-debt sentence now agree literally.) **Exit advisory fees = fees_pct × exit EV.**
 The ANNUAL monitoring fee is dropped in year N; the accelerated-NPV termination payment
 replaces it (a real exit Use — DR-2 Item 5; no double count). NTM exit basis uses
-growth[N−1] as the year-N+1 proxy (NTM is golden-uncovered — flagged). The year-N §6 run
+growth[N−1] as the year-N+1 proxy (NTM is golden-uncovered — flagged). **Entry NTM basis
+[v1.0.3]:** entry valuation under `basis: 'ntm'` uses fy_ebitda × (1 + growth[0]) — the
+mirror of the exit-side proxy (symmetry; golden-uncovered, disclosed). The year-N §6 run
 includes the retirement-triggered unamortized-fee write-off as an UNCAPPED deduction.
 
 **Naming [CONFIRMED DR-2 Item 2]:** the pre-carry series is labelled **"pre-promote IRR"**
@@ -322,11 +347,20 @@ fields rendered on the debt-schedule footer. Covenant suggestions
 
 Bridge reconciles to **pre-promote total equity Δ** — DR-2 verbatim: "reconcile to
 pre-promote equity first (management incentive is a distribution of value, not a source of
-it)." Bars: ΔEBITDA at entry multiple + Δmultiple on exit EBITDA + net-debt paydown +
-**interaction (explicit bar)** [CONFIRMED — DR-2/DR-5 name the explicit cross-term bar the
-rigorous school; the common alternative silently folds it into the multiple bar via formula
-choice]. Then a walk-down: − entry costs − monitoring leakage − MIP = sponsor net Δ.
-Identity exact by construction and tested (§14.9). Also rendered on a MOIC basis: each bar ÷
+it)." **Bar arithmetic [v1.0.3 — pinned; the bars could not reconcile exactly as first
+drafted]:** the four bars decompose the FRICTIONLESS pre-promote delta (EV − net debt at
+both ends, before all fees/costs): growth bar = M₀ × ΔB; multiple bar = ΔM × B₀;
+**interaction = ΔM × ΔB (explicit bar)** [CONFIRMED — DR-2/DR-5 name the explicit
+cross-term bar the rigorous school; the "Δmultiple on exit EBITDA" form folds the cross
+term into the multiple bar by construction and is this section's rejected alternative];
+paydown = ND₀ − ND₁, where ND₀ = par − funded min cash and ND₁ = payoff − closing cash.
+Walk-down from the bar sum: − entry costs (transaction + financing fees + OID) − exit
+costs (exit advisory fees + monitoring termination) − MIP − rollover Δ (rollover exit
+share − rollover contributed) = sponsor net Δ. The ANNUAL monitoring leakage is embedded
+in the paydown bar via cash (never double-counted in the walk-down); the walk-down's
+monitoring item is the termination component within exit costs, with the annual drag
+shown as a memo from `gp_fee_income`. Both identities exact by construction and tested
+(§14.9). Also rendered on a MOIC basis: each bar ÷
 **entry (pre-promote total) equity** [CONFIRMED DR-5 Item 4, Mosaic MOIC Decomp — corrected
 v0.96 from ÷ sponsor equity, which is inconsistent whenever rollover exists; the sponsor-net
 walk-down may separately be shown ÷ sponsor equity, labelled as such]. EBITDA bridge: entry →
@@ -363,7 +397,9 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
 7. Sensitivity center cell ≡ base; scenario with empty delta-set ≡ base (always).
 8. **Operating-downside delta-set ⇒ sponsor IRR ≤ base** (domain: deltas restricted to
    growth↓/margin↓/exit multiple↓).
-9. Bridge: Σ bars + interaction ≡ pre-promote equity Δ, exact; walk-down ≡ sponsor net Δ (always).
+9. Bridge (two exact identities, §12): growth + multiple + interaction + paydown ≡
+   frictionless pre-promote Δ (EV − ND at both ends); bar sum − entry costs − exit costs
+   − MIP − rollover Δ ≡ sponsor net Δ (always).
 10. Sponsor MOIC ≡ sponsor inflows / outflow (always).
 11. IRR↑ in exit multiple (domain: exit equity > 0 across tested range).
 12. Leverage↑ ⇒ IRR↑ (domain: frictionless config only — zero fees/OID, bullet cash-pay debt,
@@ -390,8 +426,9 @@ listing every material simplification matter-of-factly as a scope choice, each p
 why it is immaterial or conservative: annual periods; beginning-balance interest
 (conservative); day-count basis per tranche (Actual/360 understatement ~1.0–1.4% of
 interest); static rates; constant tax rate; period-end flows; exit = entry multiple;
-static §382 limit (unused-limitation carryforward omitted, conservative); NOLs consumed in
-full when the minimum-tax floor binds (no credit carryforward); acquired §163(j)
+static §382 limit (unused-limitation carryforward omitted, conservative); NOL usage is
+not optimized across years — consumed in full per §6.3 even when the minimum-tax floor
+binds or the current-year benefit is nil (no credit carryforward); acquired §163(j)
 carryforwards out of scope; exit-year fee write-off deducted UNCAPPED; PP&E rolls
 mechanically and may go negative (warned); post-2025 OBBBA §163(j) sub-changes out of
 scope. Framing:
@@ -409,6 +446,7 @@ is editable). Class rules (master plan Part 2): a missing fact is MISSING, never
 suggestion always names its basis (history / cited convention / template / AI); REQUIRED
 fields gate Build; the single-driver rule governs entry (multiple XOR EV). Money in millions
 of deal currency; rates as decimal fractions; per-year arrays 0-indexed over `hold_years`.
+Structural gate [v1.0.3]: term-tranche maturity > `hold_years` (§3) is validated at Build.
 The coherence gate (`check.ts`) is a post-run check over ModelOutput from the SAME `runModel`
 call — never a second calculation path (architecture-review finding, 2026-07-04).
 
@@ -504,6 +542,7 @@ Floor-breach itself (revolver exhausted) is covered by a kernel fixture, not a g
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.0.3 | 2026-07-21 | Phase B2/C build pass. (1) **Goldens corrected** — spec_calc.py read the r2-ROUNDED recorded display EBITDA_adj for the §9 exit block (intermediate rounding, violating §15); re-derived at full precision. Only exit blocks + return streams move (≤ $0.04m, ≤ 0.23bp measured); G1's closed-form values and every per-year schedule are byte-unchanged. (2) **§3 step 6 post-breach semantics pinned**: the breach year closes below the floor (closing cash may be negative), conservation §14.3 never clamped, subsequent years run on the inherited opening cash and carry a block-severity `cash_floor_breach` flag ("never negative cash" described the draw-to-floor goal, not a clamp); kernel opening-cash assert relaxed to allow continuation. (3) **v1 structural constraint**: term-tranche maturity > hold_years (input-gate rejection; balloon/refi is Phase G). (4) **§7 early-retirement write-off timing pinned**: book write-off in the retirement year; TAX deduction enters the FOLLOWING year's uncapped pool (§5 sequentiality); year-N retirement merges into the exit-year deduction. (5) **§12 bridge arithmetic pinned** (bars could not reconcile exactly as drafted): four bars decompose the FRICTIONLESS pre-promote delta (EV − ND both ends) — growth M₀ΔB, multiple bar ΔM×B₀ (rigorous school; on-exit-EBITDA form folds the cross term and is the rejected alternative), interaction ΔM×ΔB, paydown ND₀−ND₁ (ND₀ = par − funded min cash, ND₁ = payoff − closing cash); walk-down − entry costs − exit costs (advisory + monitoring termination) − MIP − rollover Δ = sponsor net Δ; §14.9 restated as the two exact identities; types.ts ValueBridge.walkdown gains `exit_costs`, `multiple_change_on_exit_ebitda` renamed `multiple_change_bar` (naming contradicted the explicit-interaction convention); annual monitoring leakage embedded in the paydown bar via cash, termination component in exit costs, annual drag a memo from gp_fee_income. (6) **§9 entry-NTM basis pinned by symmetry**: entry `basis: 'ntm'` = fy_ebitda × (1 + growth[0]) (golden-uncovered, disclosed). (7) **§6.3 pre-2018 aggregate bound CORRECTED** [B2 adversarial review, 2 independent lenses]: the 80% post-close cap now applies to the residual income after a pre-2018 acquired layer (IRC §172(a)(2)(B)(ii)); previously aggregate usage could exceed taxable income, burning post-close NOLs for zero benefit; aggregate ≤ taxable now holds in both branches; golden-uncovered, fixtures unchanged. §15 assumptions line extended: NOL usage is not optimized across years. | B2/C build (PR #69 review + comment); goldens re-derived + independently re-adjudicated (DERIVATION.md) |
 | v1.0.2 | 2026-07-05 | Adjudication pass (2 independent derivers, 167 lines, ZERO mismatches — goldens signed gospel). Ambiguities they resolved now stated explicitly: §17 golden defaults (ati_pct 30%, min_rate 0, rollover 0); §4 commitment fee on BEGINNING-of-year undrawn; §7 NWC[0] reading. Noted: fixtures store 2dp display values (±0.005 boundary artifacts are display precision, not engine values); BS merges DFC + unamortized OID into one line | Adjudication `wf_01aabc2d` |
 | v1.0.1 | 2026-07-05 | Phase B derivation: G1 IRR check value corrected to 6.3622% (closed form, was a 0.4bp hand-approximation error); all 22 §17 asserts verified against the committed reference derivation (tests/goldens/, scripts/goldens/spec_calc.py) | Phase B1 |
 | **v1.0** | 2026-07-05 | **Phase A3 review round applied (3 lenses, 47 findings) and SIGNED under the owner's standing decision authority.** §6 rewritten as a fully determined state machine: two NOL pools (acquired: §382 + layer cap, consumed first; post-close: banked losses, 80% cap, §382-free), explicit loss branch, negative-ATI floor, ATI = EBITDA_adj, §163(j) carryforward post-close-only with defined roll-forward, capped pool (cash + PIK + OID amort) split from UNCAPPED deductions (financing-fee amort + commitment fees + exit write-off — Treas. Reg. §1.163(j)-1(b)(22)); §382 basis corrected to EV in the CFDF frame (the v0.96 sponsor+rollover gloss was wrong). §7: margin-trajectory formula, NWC days formulas + COGS proxy, split OID/fee amortization with pro-rata allocation. §8: explicit PP&E roll. §9: exit-equity formula includes closing cash (matches G1); exit-fee base = exit EV; exit-year monitoring fee drop rule. §13: typed field-level deltas; scenario waterfall block. §14: mirror invariants (16) + committed-scenario invariant (17). §17 goldens re-derived after recomputation falsified three committed asserts: G3 PIK payoff 237.9161 (was misrounded), G3 §163(j) binds EVERY year / never releases (tested as such), G3 hurdle 1.5x (2.0x promote was out of the money), G4 rebuilt (D&A 7%) to produce a genuine Y1 tax loss + floor/§382 binds with §163(j) explicitly non-binding, per-golden net-PP&E facts (PP&E stays positive), G2 gains revolver maturity + committed downside scenario G2-D, NEW G5 forces the revolver draw/repay cycle. types.ts restructured to match (discriminated tranche unions, RevolverYear schedule, two NOL pools, ScenarioDeltas, sensitivity base anchors, ExitBlock cash line, GP-fee-income memo, indexing contract). | A3 review `wf_a8ea0357`; ledger C-19/C-20 |

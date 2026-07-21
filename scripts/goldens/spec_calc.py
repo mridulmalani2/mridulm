@@ -125,11 +125,14 @@ def run(golden):
     prev_nwc = nwc0
     ufcf_stream = []          # unlevered (§9): interim UFCF inflows
     u_acq, u_post = (a["tax"]["nol"]["acquired_opening"] if acq_usable else 0.0), 0.0  # unlevered NOL state
+    ebitda_adj_full = None    # full-precision exit-year EBITDA_adj (§15: no intermediate rounding)
 
     for t in range(N):
         exit_year = (t == N - 1)
         rev_ = revenue[t]; m = margins[t]
         ebitda = rev_ * m; ebitda_adj = ebitda  # monitoring null (§7)
+        if t == N - 1:
+            ebitda_adj_full = ebitda_adj
         da = a["operations"]["da_pct_revenue"] * rev_
         ebit = ebitda_adj - da
         mcap = a["operations"]["maint_capex_pct_revenue"] * rev_
@@ -184,7 +187,12 @@ def run(golden):
             cap_pct = 1.0 if a["tax"]["nol"]["arose_pre_2018"] else 0.8
             lim382 = a["tax"]["nol"]["s382_annual_limit"]
             acq_used = min(acq_nol, lim382 if lim382 is not None else 1e18, cap_pct * taxable) if acq_usable else 0.0
-            post_used = min(post_nol, max(0.0, 0.8 * taxable - (0.0 if a["tax"]["nol"]["arose_pre_2018"] else acq_used)))
+            # §6.3 [v1.0.3]: after a pre-2018 acquired layer the 80% cap applies to the
+            # RESIDUAL income (IRC §172(a)(2)(B)(ii)); post-2017 layers share 80% of the
+            # full base. Aggregate usage ≤ taxable in both branches. Golden-inert (all
+            # goldens run arose_pre_2018 = False).
+            pre18 = a["tax"]["nol"]["arose_pre_2018"]
+            post_used = min(post_nol, max(0.0, 0.8 * (taxable - (acq_used if pre18 else 0.0)) - (0.0 if pre18 else acq_used)))
             acq_nol -= acq_used; post_nol -= post_used
             tax = max(a["tax"]["rate"] * (taxable - acq_used - post_used), a["tax"]["minimum_rate"] * taxable)
         cf163_open = cf163; cf163 = cf_new
@@ -292,13 +300,16 @@ def run(golden):
             cap_pct = 1.0 if a["tax"]["nol"]["arose_pre_2018"] else 0.8
             lim382 = a["tax"]["nol"]["s382_annual_limit"]
             ua = min(u_acq, lim382 if lim382 is not None else 1e18, cap_pct * u_taxable) if acq_usable else 0.0
-            up = min(u_post, max(0.0, 0.8 * u_taxable - (0.0 if a["tax"]["nol"]["arose_pre_2018"] else ua)))
+            # §6.3 [v1.0.3] residual base after a pre-2018 layer (mirrors the levered path)
+            pre18_u = a["tax"]["nol"]["arose_pre_2018"]
+            up = min(u_post, max(0.0, 0.8 * (u_taxable - (ua if pre18_u else 0.0)) - (0.0 if pre18_u else ua)))
             u_acq -= ua; u_post -= up
             u_tax = max(a["tax"]["rate"] * (u_taxable - ua - up), a["tax"]["minimum_rate"] * u_taxable)
         ufcf_stream.append(ebitda - u_tax - (mcap + gcap) - dnwc)
 
-    # §9 exit
-    exit_ebitda = out["operating"][-1]["ebitda_adj"]
+    # §9 exit — FULL-precision basis (v1.0.3 correction: reading the r2-recorded
+    # display value was an intermediate rounding, violating §15)
+    exit_ebitda = ebitda_adj_full
     exit_ev = a["exit"]["multiple"] * exit_ebitda
     payoff = sum(bal.values()) + drawn
     exit_fees = a["exit"]["fees_pct"] * exit_ev
