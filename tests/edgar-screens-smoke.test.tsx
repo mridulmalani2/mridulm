@@ -62,6 +62,22 @@ describe('AssumptionsReview SSR', () => {
     expect(html).toContain('MISSING');             // the red badge
     expect(html).toContain('— enter value —');     // the empty-input placeholder (no guessed number)
   });
+
+  it('shows N/C (not a placeholder-derived number) for implied returns when an input is MISSING', () => {
+    const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
+    const sparse = { ...raw, ebitda_margin: null, ltm_ebitda: null };   // margin missing → EV + returns tainted
+    const { state, provenance } = draftModelFromHistoricals(sparse, { dealName: raw.entityName });
+    holder.state = {
+      modelState: state, provenanceMap: provenance, rawHistoricals: sparse, sourceFilings: [],
+      editAssumption: noop, aiSuggestAssumptions: noop, isSuggesting: false,
+      buildModelFromDraft: noop, setStartScreen: noop, error: null, apiKey: null,
+    };
+    const html = renderToStaticMarkup(React.createElement(AssumptionsReview));
+    expect(html).toContain('N/C');                              // implied returns suppressed
+    expect(html).toContain('fill MISSING inputs to compute');   // the cue
+    // The fabricated EV (multiple × revenue × 0.2 placeholder) must not be shown in the implied line.
+    expect(html).not.toContain(`EV ${'$'}${state.entry.enterprise_value.toFixed(0)}m`);
+  });
 });
 
 describe('SourceScreen SSR', () => {

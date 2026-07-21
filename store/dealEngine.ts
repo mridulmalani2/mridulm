@@ -25,6 +25,7 @@ import { getEsefFilings, getEsefReport } from '../lib/edgar/esef';
 import { mapIfrsReport } from '../lib/edgar/mapIfrs';
 import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
 import type { RawHistoricals, ProvenanceMap, Provenance } from '../lib/edgar/types';
+import { isMissing } from '../lib/edgar/missing';
 
 // ── LBO Financial Sanity Check ──────────────────────────────────────────
 // Derived from first principles:
@@ -886,8 +887,17 @@ Be specific. Use the company name to infer business type and calibrate according
       const config = buildProviderConfig(aiProvider, apiKey);
       const revM = modelState.revenue.base_revenue.toFixed(0);
       const marM = (modelState.margins.base_ebitda_margin * 100).toFixed(1);
+      // Only state a factual figure to the AI if the filing actually provided it — never feed a
+      // 'missing' placeholder (e.g. the 0.2 EBITDA-margin default) as an "extracted fact", which
+      // would anchor the AI's assumptions on a fabricated number.
+      const facts: string[] = [];
+      if (!isMissing(provenanceMap, 'revenue.base_revenue')) facts.push(`LTM revenue ${revM}M ${modelState.currency}`);
+      if (!isMissing(provenanceMap, 'margins.base_ebitda_margin')) facts.push(`EBITDA margin ${marM}%`);
+      const factsLine = facts.length
+        ? `Extracted facts (do NOT change these): ${facts.join(', ')}.`
+        : `No factual figures are confirmed yet — base your assumptions on sector norms, not on any stated figure.`;
       const message = `Set realistic FORWARD LBO assumptions for ${modelState.deal_name} (${modelState.sector}).
-Extracted facts (do NOT change these): LTM revenue ${revM}M ${modelState.currency}, EBITDA margin ${marM}%.
+${factsLine}
 Update ONLY these forward assumptions, each as the noted unit, citing sector comps in your rationale:
 - revenue.growth_rates: 5-year array of DECIMAL growth rates (0.08 = 8%). PE range 0.03–0.20; never > 0.50.
 - margins.target_ebitda_margin: DECIMAL exit margin after the hold.
