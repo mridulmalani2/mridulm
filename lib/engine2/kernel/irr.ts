@@ -52,26 +52,36 @@ export function midYearTimes(flowCount: number): number[] {
 /**
  * IRR of a t0-anchored stream (times default to 0..n−1; pass `midYearTimes(n)` for the §1
  * display option). Returns null when undefined: fewer than 2 flows, no sign change, or no
- * root in (−1, 10]. With multiple sign changes the root found in the bracket is returned
- * (golden streams have exactly one sign change).
+ * SIGN-CHANGING root in (−0.9999, 10] (a bracketing method cannot see even-multiplicity
+ * tangential roots, and the search floor is −0.9999, not −1 — total-loss streams with
+ * IRR ∈ (−1, −0.9999) render N/A). With multiple sign changes the root found in the
+ * bracket is returned (golden streams have exactly one sign change).
  */
 export function irr(cashflows: number[], times?: number[]): number | null {
   if (cashflows.length < 2) return null;
   const hasPos = cashflows.some((c) => c > 0);
   const hasNeg = cashflows.some((c) => c < 0);
   if (!hasPos || !hasNeg) return null;
+  const scale = cashflows.reduce((s, c) => s + Math.abs(c), 0);
+  // Below any economic magnitude (units are $m) the npvTol floor would accept the Newton
+  // seed unsolved — silent plausible-looking garbage. N/A instead.
+  if (scale < 1e-6) return null;
 
   const f = (r: number) => npv(r, cashflows, times);
   // |NPV| convergence tolerance scaled to flow magnitude (a fixed absolute tolerance is
   // unreachable in float64 for large flows); far inside the ±0.1bp golden tolerance (§15).
-  const npvTol = 1e-12 * Math.max(1, cashflows.reduce((s, c) => s + Math.abs(c), 0));
+  const npvTol = 1e-12 * Math.max(1, scale);
   let lo = RATE_LO;
   let hi = RATE_HI;
   let fLo = f(lo);
   let fHi = f(hi);
+  // Extreme times can overflow the discounting at an endpoint into Inf − Inf = NaN; a NaN
+  // endpoint corrupts every sign test below (the march lands on RATE_HI, not a root), so
+  // it is N/A, not a solve. A ±Inf endpoint keeps a usable sign and still solves.
+  if (Number.isNaN(fLo) || Number.isNaN(fHi)) return null;
   if (fLo === 0) return lo;
   if (fHi === 0) return hi;
-  if (fLo * fHi > 0) return null; // no root in the economic range
+  if (fLo * fHi > 0) return null; // no sign-changing root in the economic range
 
   // Newton–Raphson from a neutral start, constrained to the bracket; every evaluation
   // tightens the bracket so the bisection fallback always converges.

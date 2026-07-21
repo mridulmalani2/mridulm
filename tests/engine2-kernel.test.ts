@@ -184,6 +184,23 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     );
   });
 
+  it('numerics guards (2026-07-21 review): sub-economic magnitudes and NaN bracket endpoints are N/A — never the unsolved Newton seed or a bracket edge', () => {
+    // Σ|cf| ≲ 1e-11 used to satisfy the npvTol floor AT the 10% Newton seed unsolved
+    expect(irr([-1e-13, 2e-13])).toBeNull();
+    expect(irr([-1e-160, 2e-160])).toBeNull();
+    // t ≥ ~77 at the −0.9999 endpoint overflows into Inf − Inf = NaN for mixed-sign flows;
+    // the NaN passed every sign test and the march returned RATE_HI (1000%) as an "IRR"
+    expect(irr([-1, 1, -1, 1], [0, 77, 78, 79])).toBeNull();
+    // a ±Inf endpoint keeps a usable sign and must STILL solve: −1 + 2(1+r)^−77 = 0
+    const inf = irr([-1, 2], [0, 77]);
+    expect(inf).not.toBeNull();
+    expect(inf!).toBeCloseTo(Math.pow(2, 1 / 77) - 1, 10);
+    // economic magnitudes are unaffected by the scale guard ($0.001m scale)
+    const small = irr([-0.001, 0.0013]);
+    expect(small).not.toBeNull();
+    expect(small!).toBeCloseTo(0.3, 6);
+  });
+
   it('N/A semantics (§11/§15): no sign change, degenerate or empty streams ⇒ null, never a sentinel', () => {
     expect(irr([])).toBeNull();
     expect(irr([-100])).toBeNull();
@@ -287,7 +304,25 @@ describe('kernel/waterfall — SPEC §3', () => {
     fc.assert(
       fc.property(waterfallArb, (input) => {
         const out = waterfallYear(input);
-        expect(out.sweepable).toBeCloseTo(input.sweep_pct * out.sweep_pool, 9);
+        // recompute the pool FROM INPUTS (steps 1–4 re-derived) so this property stands
+        // alone — an output-vs-output check would pass a self-consistently wrong pool
+        // (2026-07-21 review, robustness note #5)
+        const interest =
+          input.tranches.reduce((a, t) => a + t.cash_interest, 0) +
+          (input.revolver?.cash_interest ?? 0);
+        const mandatory = input.tranches.reduce(
+          (a, t) => a + Math.min(t.scheduled_amort, Math.max(0, t.outstanding)),
+          0,
+        );
+        const afterStep3 =
+          input.opening_cash + input.fcf_pre_debt - interest -
+          (input.revolver?.commitment_fee ?? 0) - mandatory;
+        const repay = input.revolver
+          ? Math.min(input.revolver.beginning_drawn, Math.max(0, afterStep3 - input.min_cash))
+          : 0;
+        const expectedPool = Math.max(0, afterStep3 - repay - input.min_cash);
+        expect(out.sweep_pool).toBeCloseTo(expectedPool, 9);
+        expect(out.sweepable).toBeCloseTo(input.sweep_pct * expectedPool, 9);
         expect(out.sweep_applied_total).toBeLessThanOrEqual(out.sweepable + 1e-9);
         for (let i = 0; i < input.tranches.length; i++) {
           if (!input.tranches[i].sweep_participates) expect(out.tranches[i].sweep_repayment).toBe(0);
@@ -310,10 +345,62 @@ describe('kernel/waterfall — SPEC §3', () => {
               // senior tier saturated before junior j saw any cash
               expect(out.tranches[i].sweep_repayment).toBeCloseTo(capacity(i), 6);
             }
+            // WITHIN a tier the split is pro-rata by capacity: cross-multiplied
+            // proportionality (a sequential-fill mutant passed the old assertion —
+            // 2026-07-21 review, surviving mutation #2)
+            if (
+              i !== j &&
+              input.tranches[i].sweep_priority === input.tranches[j].sweep_priority
+            ) {
+              const lhs = out.tranches[i].sweep_repayment * capacity(j);
+              const rhs = out.tranches[j].sweep_repayment * capacity(i);
+              const scale = Math.max(1, capacity(i) * capacity(j));
+              expect(Math.abs(lhs - rhs)).toBeLessThanOrEqual(1e-9 * scale);
+            }
           }
         }
       }),
     );
+  });
+
+  it('§3.5 multi-tier + intra-tier pro-rata (directed): tier 1 pair splits 2:1 to capacity, the remainder cascades to tier 2 — hand-computed', () => {
+    // pool = 0 + 190 − 0 − 0 − 0 = 190 above the 10 floor → 180; sweepable = 0.5 × 180 = 90.
+    // Tier 1 capacity 40 + 20 = 60 < 90 → both retire EXACTLY; tier 2 gets 90 − 60 = 30 of 100.
+    const out = waterfallYear({
+      opening_cash: 0,
+      fcf_pre_debt: 190,
+      min_cash: 10,
+      sweep_pct: 0.5,
+      tranches: [
+        { name: 'A', outstanding: 40, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+        { name: 'B', outstanding: 20, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+        { name: 'C', outstanding: 100, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 2 },
+      ],
+      revolver: null,
+    });
+    expect(out.sweep_pool).toBeCloseTo(180, 12);
+    expect(out.sweepable).toBeCloseTo(90, 12);
+    expect(out.tranches[0].sweep_repayment).toBe(40); // exact retirement, no ulp residue
+    expect(out.tranches[1].sweep_repayment).toBe(20);
+    expect(out.tranches[2].sweep_repayment).toBeCloseTo(30, 12);
+    expect(out.tranches[0].ending_outstanding).toBe(0);
+    expect(out.tranches[1].ending_outstanding).toBe(0);
+    expect(out.tranches[2].ending_outstanding).toBeCloseTo(70, 12);
+    expect(out.sweep_applied_total).toBeCloseTo(90, 12);
+    // partial-tier pro-rata: same tier-1 pair, sweepable 30 < capacity 60 → 20/10 split
+    const partial = waterfallYear({
+      opening_cash: 0,
+      fcf_pre_debt: 70,
+      min_cash: 10,
+      sweep_pct: 0.5,
+      tranches: [
+        { name: 'A', outstanding: 40, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+        { name: 'B', outstanding: 20, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+      ],
+      revolver: null,
+    });
+    expect(partial.tranches[0].sweep_repayment).toBeCloseTo(20, 12);
+    expect(partial.tranches[1].sweep_repayment).toBeCloseTo(10, 12);
   });
 
   it('§3.4 revolver repaid FIRST, ahead of the sweep (DR-1 Item 2/3): a partially repaid revolver ⇒ zero sweep pool. Domain: revolver present', () => {
@@ -342,6 +429,138 @@ describe('kernel/waterfall — SPEC §3', () => {
         }
         // draw and voluntary repayment never both happen (repay-first ordering)
         if (out.revolver_draw > 1e-9) expect(out.sweep_applied_total).toBeLessThanOrEqual(1e-9);
+      }),
+    );
+  });
+});
+
+// ── waterfall ulp-exactness regressions (numerics review 2026-07-21) ─────────
+// Both defects were 1-ulp float overshoots invisible to golden fixtures (state is
+// re-injected per year there, never composed year-over-year): a fully swept tier could
+// end microscopically NEGATIVE and a fully drawn revolver could end microscopically
+// ABOVE the commitment — either poisons the next year's validator (§14.5 / drawn ≤
+// commitment) with a RangeError.
+
+describe('kernel/waterfall — ulp exactness (full retirement / full draw compose year-over-year)', () => {
+  it('a tier retired by the sweep ends at EXACTLY 0 and re-injects without throwing (trigger: outstanding 108.18633402746718)', () => {
+    const y1 = waterfallYear({
+      opening_cash: 500,
+      fcf_pre_debt: 0,
+      min_cash: 0,
+      sweep_pct: 1,
+      tranches: [
+        { name: 'TLB', outstanding: 108.18633402746718, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+      ],
+      revolver: null,
+    });
+    expect(y1.tranches[0].ending_outstanding).toBe(0); // exact, not ≈
+    // composition: feeding the ending balance forward must not throw
+    const y2 = waterfallYear({
+      opening_cash: y1.closing_cash,
+      fcf_pre_debt: 10,
+      min_cash: 0,
+      sweep_pct: 1,
+      tranches: [
+        { name: 'TLB', outstanding: y1.tranches[0].ending_outstanding, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+      ],
+      revolver: null,
+    });
+    expect(y2.tranches[0].ending_outstanding).toBe(0);
+  });
+
+  it('a two-tranche tier fully retired pro-rata ends both at EXACTLY 0 (trigger: tier total 450.89465099210724)', () => {
+    const a = 450.89465099210724 * 0.37;
+    const b = 450.89465099210724 - a;
+    const out = waterfallYear({
+      opening_cash: 2000,
+      fcf_pre_debt: 0,
+      min_cash: 0,
+      sweep_pct: 1,
+      tranches: [
+        { name: 'A', outstanding: a, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+        { name: 'B', outstanding: b, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
+      ],
+      revolver: null,
+    });
+    expect(out.tranches[0].ending_outstanding).toBe(0);
+    expect(out.tranches[1].ending_outstanding).toBe(0);
+  });
+
+  it('property: whenever the sweep can retire a whole tier, every tranche in it ends exactly ≥ 0 and re-injection never throws. Domain: 1–3 same-tier tranches, ample cash', () => {
+    fc.assert(
+      fc.property(
+        fc.array(money(1e-3, 500), { minLength: 1, maxLength: 3 }),
+        (balances) => {
+          const out = waterfallYear({
+            opening_cash: balances.reduce((s, x) => s + x, 0) * 2 + 10,
+            fcf_pre_debt: 0,
+            min_cash: 0,
+            sweep_pct: 1,
+            tranches: balances.map((outstanding, k) => ({
+              name: `T${k}`,
+              outstanding,
+              scheduled_amort: 0,
+              cash_interest: 0,
+              sweep_participates: true,
+              sweep_priority: 1,
+            })),
+            revolver: null,
+          });
+          for (const t of out.tranches) {
+            expect(t.ending_outstanding).toBeGreaterThanOrEqual(0); // EXACT bound — no epsilon
+            // re-injection is the real invariant (the validator throws on any negative)
+            waterfallYear({
+              opening_cash: 0,
+              fcf_pre_debt: 0,
+              min_cash: 0,
+              sweep_pct: 0,
+              tranches: [{ name: t.name, outstanding: t.ending_outstanding, scheduled_amort: 0, cash_interest: 0, sweep_participates: false, sweep_priority: 1 }],
+              revolver: null,
+            });
+          }
+        },
+      ),
+    );
+  });
+
+  it('a full revolver draw lands EXACTLY on the commitment and re-injects (trigger: commitment 54.1944762289961, drawn 20.550056167494116)', () => {
+    const commitment = 54.1944762289961;
+    const y1 = waterfallYear({
+      opening_cash: 5,
+      fcf_pre_debt: -500,
+      min_cash: 5,
+      sweep_pct: 0,
+      tranches: [],
+      revolver: { beginning_drawn: 20.550056167494116, commitment, cash_interest: 0, commitment_fee: 0 },
+    });
+    expect(y1.revolver_ending_drawn).toBe(commitment); // exact, not ≈
+    expect(y1.cash_floor_breach).toBe(true);
+    // composition (with a solvent opening — the post-breach opening-cash relaxation is a
+    // separate v1.0.3 item): drawn === commitment must satisfy the validator
+    const y2 = waterfallYear({
+      opening_cash: 100,
+      fcf_pre_debt: 0,
+      min_cash: 5,
+      sweep_pct: 0,
+      tranches: [],
+      revolver: { beginning_drawn: y1.revolver_ending_drawn, commitment, cash_interest: 0, commitment_fee: 0 },
+    });
+    expect(y2.revolver_ending_drawn).toBeLessThanOrEqual(commitment);
+  });
+
+  it('property: revolver ending drawn NEVER exceeds the commitment (exact bound) and always re-injects. Domain: any revolver config', () => {
+    fc.assert(
+      fc.property(waterfallArb, (input) => {
+        fc.pre(input.revolver !== null);
+        const out = waterfallYear(input);
+        expect(out.revolver_ending_drawn).toBeLessThanOrEqual(input.revolver!.commitment); // no epsilon
+        if (out.closing_cash >= 0) {
+          waterfallYear({
+            ...input,
+            opening_cash: out.closing_cash,
+            revolver: { ...input.revolver!, beginning_drawn: out.revolver_ending_drawn },
+          });
+        }
       }),
     );
   });
@@ -387,11 +606,34 @@ describe('kernel/taxstate — SPEC §6', () => {
         } else {
           const available = y.capped_interest_pool + s.s163j_carryforward;
           expect(out.deductible_capped_interest).toBeLessThanOrEqual(Math.max(0, p.ati_pct * y.ati) + 1e-12);
+          // the negative-ATI floor: the deduction can never go NEGATIVE (a negative
+          // "deduction" would silently RAISE taxable income — 2026-07-21 review, surviving
+          // mutation #1)
+          expect(out.deductible_capped_interest).toBeGreaterThanOrEqual(0);
           expect(out.deductible_capped_interest + out.s163j_carryforward_end).toBeCloseTo(available, 9);
           expect(out.s163j_carryforward_end).toBeGreaterThanOrEqual(0);
         }
       }),
     );
+  });
+
+  it('§6.1 negative-ATI floor (directed): ati ≤ 0 with §163(j) applying ⇒ ZERO deduction and the whole pool carries forward', () => {
+    const p: KernelTaxPolicy = {
+      rate: 0.25,
+      interest_deductible: true,
+      s163j_applies: true,
+      ati_pct: 0.3,
+      acquired_usable: false,
+      arose_pre_2018: false,
+      s382_annual_limit: null,
+      minimum_rate: 0,
+    };
+    const s = { acquired_nol: 0, postclose_nol: 0, s163j_carryforward: 12.5 };
+    for (const ati of [0, -1e-9, -50, -300]) {
+      const out = taxYear(p, s, { ebit: -10, ati, capped_interest_pool: 40, uncapped_deductions: 5 });
+      expect(out.deductible_capped_interest).toBe(0);
+      expect(out.s163j_carryforward_end).toBeCloseTo(40 + 12.5, 12);
+    }
   });
 
   it('§6.2 loss branch: taxable ≤ 0 ⇒ zero tax, zero NOL usage, the loss banks into the post-close pool. Domain: any valid config', () => {
@@ -440,6 +682,32 @@ describe('kernel/taxstate — SPEC §6', () => {
         } else {
           expect(out.acquired_nol_used + out.postclose_nol_used).toBeLessThanOrEqual(0.8 * taxable + 1e-9);
         }
+      }),
+    );
+  });
+
+  it('§6.3 layer cap binds WITHOUT a §382 mask (directed: s382 = null): acquired usage = min(pool, cap_pct × taxable). Domain: profitable, usable, post-2017', () => {
+    // policyArb draws a non-null s382 ~5/6 of the time and it almost always binds below the
+    // 80% layer cap, masking it — dropping the layer cap survived 0/8 seeded property runs
+    // (2026-07-21 review, robustness note #4). Pin the cap with the mask removed.
+    fc.assert(
+      fc.property(taxStateArb, taxYearArb, (s, y) => {
+        const p: KernelTaxPolicy = {
+          rate: 0.25,
+          interest_deductible: true,
+          s163j_applies: false,
+          ati_pct: 0.3,
+          acquired_usable: true,
+          arose_pre_2018: false,
+          s382_annual_limit: null,
+          minimum_rate: 0,
+        };
+        const out = taxYear(p, s, y);
+        fc.pre(out.taxable_before_nol > 0);
+        expect(out.acquired_nol_used).toBeCloseTo(
+          Math.min(s.acquired_nol, 0.8 * out.taxable_before_nol),
+          9,
+        );
       }),
     );
   });

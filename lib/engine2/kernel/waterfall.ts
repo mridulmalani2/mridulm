@@ -18,7 +18,8 @@
  *      balance); applied by tranche sweep priority asc, pro-rata within a tier, capped at
  *      each tranche's remaining outstanding; unapplied sweepable stays in cash
  *   6. + revolver draw if cash < min_cash, capped at undrawn commitment; if still short →
- *      floor-breach flag (§14.4/§14.6), never negative cash
+ *      floor-breach flag (§14.4/§14.6); closing cash stays below the floor (and can be
+ *      negative for a deep enough hole) — conservation (§14.3) is never clamped
  */
 
 import { capAtOutstanding } from './amort';
@@ -136,7 +137,15 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
     const tierCapacity = sum(tier.map(({ i }) => capacities[i]));
     if (tierCapacity <= 0) continue;
     const alloc = Math.min(remaining, tierCapacity);
-    for (const { i } of tier) sweeps[i] = (alloc * capacities[i]) / tierCapacity;
+    for (const { i } of tier) {
+      // Full tier retirement assigns each capacity EXACTLY (the pro-rata quotient can
+      // overshoot capacity by 1 ulp → negative ending balance → §14.5 violation and a
+      // next-year validator throw); partial allocations clamp for the same reason.
+      sweeps[i] =
+        alloc === tierCapacity
+          ? capacities[i]
+          : Math.min((alloc * capacities[i]) / tierCapacity, capacities[i]);
+    }
     remaining -= alloc;
   }
   const sweepAppliedTotal = sum(sweeps);
@@ -148,9 +157,18 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
   // rendering/blocking is the engine's coherence layer (Phase C check.ts).
   let draw = 0;
   if (revolver && cash < min_cash - DRAW_EPS) {
-    draw = Math.min(min_cash - cash, revolver.commitment - drawn);
+    const need = min_cash - cash;
+    const headroom = revolver.commitment - drawn;
+    if (need >= headroom) {
+      // Full-draw arm: set drawn to the commitment EXACTLY (drawn + (commitment − drawn)
+      // can overshoot the commitment by 1 ulp → next-year validator throw).
+      draw = headroom;
+      drawn = revolver.commitment;
+    } else {
+      draw = need;
+      drawn += draw;
+    }
     cash += draw;
-    drawn += draw;
   }
   const breach = cash < min_cash - BREACH_EPS;
 
