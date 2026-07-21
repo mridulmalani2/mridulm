@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
-import { motion, useScroll } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { MapPin, Calendar, Briefcase, GraduationCap, ArrowRight, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CarGlyph } from './AmbientMotifs';
 
 interface TimelineEvent {
   company: string;
@@ -101,59 +102,67 @@ const timelineData: TimelineEvent[] = ([
 ] as TimelineEvent[]).sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
 
 const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event, index }) => {
+  const isEducation = event.type === 'education';
   return (
     <article
       className="flex-shrink-0 w-[85vw] sm:w-[420px] md:w-[480px] px-4 snap-center relative group"
       aria-label={`${event.company} - ${event.role}`}
     >
       {/* Horizontal Connector */}
-      <div className="absolute top-[50%] left-0 w-full h-px bg-white/5 group-hover:bg-amber-500/20 transition-all duration-700 pointer-events-none" />
-      <div className="absolute top-[50%] left-0 -translate-y-1/2 w-4 h-4 rounded-full bg-black border border-white/20 z-20 group-hover:bg-amber-500 group-hover:scale-125 transition-all duration-500 pointer-events-none" />
+      <div className="absolute top-[50%] left-0 w-full h-px bg-ink/10 group-hover:bg-[#A25600]/30 transition-all duration-500 pointer-events-none" />
+      <div className="absolute top-[50%] left-0 -translate-y-1/2 w-4 h-4 rounded-full bg-white border border-ink/20 z-20 group-hover:bg-saffron group-hover:border-saffron group-hover:scale-125 transition-all duration-500 pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.1, duration: 0.8 }}
+        transition={{ delay: index * 0.1, duration: 0.7 }}
         viewport={{ once: true }}
-        className="relative bg-neutral-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 md:p-12 flex flex-col gap-8 hover:bg-neutral-800/60 hover:border-amber-500/20 transition-all duration-500 h-full min-h-[480px] shadow-2xl"
+        className="relative bg-white border border-ink/10 rounded-[2rem] p-8 md:p-12 flex flex-col gap-8 hover:border-ink/20 transition-all duration-300 h-full min-h-[480px] shadow-sm hover:shadow-xl"
       >
         <div className="flex justify-between items-start">
-          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border ${event.type === 'education' ? 'text-purple-300 border-purple-500/20 bg-purple-500/5' : 'text-amber-500 border-amber-500/20 bg-amber-500/5'}`}>
+          <span
+            className="px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border text-ink"
+            style={
+              isEducation
+                ? { borderColor: 'rgba(147,124,246,0.7)', background: 'rgba(185,167,255,0.22)' }
+                : { borderColor: 'rgba(232,142,50,0.7)', background: 'rgba(255,181,107,0.28)' }
+            }
+          >
             {event.type}
           </span>
-          <div className="text-white/40 group-hover:text-amber-500/60 transition-colors" aria-hidden="true">
-            {event.type === 'education' ? <GraduationCap size={22} /> : <Briefcase size={22} />}
+          <div className="text-muted" aria-hidden="true">
+            {isEducation ? <GraduationCap size={22} /> : <Briefcase size={22} />}
           </div>
         </div>
 
         <div className="space-y-3">
-          <h4 className="font-playfair text-3xl sm:text-4xl text-white italic leading-tight">
+          <h4 className="font-display text-3xl sm:text-4xl font-bold text-ink leading-tight">
             {event.company}
           </h4>
-          <p className="font-montserrat text-amber-500 text-[10px] font-black tracking-widest uppercase flex items-center gap-3">
-            <Zap size={12} className="opacity-60" aria-hidden="true" />
+          <p className="font-montserrat text-[#A25600] text-[10px] font-black tracking-widest uppercase flex items-center gap-3">
+            <Zap size={12} className="opacity-70" aria-hidden="true" />
             {event.role}
           </p>
         </div>
 
-        <div className="flex-1 space-y-5 pt-8 border-t border-white/5">
+        <div className="flex-1 space-y-5 pt-8 border-t border-ink/10">
           {event.description.map((desc, i) => (
             <div key={i} className="flex gap-4">
-              <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-amber-500/50 shrink-0" aria-hidden="true" />
-              <p className="text-white/60 font-montserrat text-xs sm:text-sm leading-relaxed font-normal">
+              <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-saffron shrink-0" aria-hidden="true" />
+              <p className="text-muted font-montserrat text-xs sm:text-sm leading-relaxed font-normal">
                 {desc}
               </p>
             </div>
           ))}
         </div>
 
-        <div className="pt-8 border-t border-white/5 grid grid-cols-2 gap-4 mt-auto">
-          <div className="flex items-center gap-3 text-white/50 text-[10px] font-black tracking-widest uppercase">
-            <MapPin size={14} className="text-amber-500/50" aria-hidden="true" />
+        <div className="pt-8 border-t border-ink/10 grid grid-cols-2 gap-4 mt-auto">
+          <div className="flex items-center gap-3 text-muted text-[10px] font-black tracking-widest uppercase">
+            <MapPin size={14} className="text-[#A25600]" aria-hidden="true" />
             {event.location}
           </div>
-          <div className="flex items-center gap-3 text-white/50 text-[10px] font-black tracking-widest uppercase justify-end">
-            <Calendar size={14} className="text-amber-500/50" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-muted text-[10px] font-black tracking-widest uppercase justify-end">
+            <Calendar size={14} className="text-[#A25600]" aria-hidden="true" />
             {event.period}
           </div>
         </div>
@@ -165,6 +174,8 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
 const Resume: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollXProgress } = useScroll({ container: containerRef });
+  // The car motif drives along the timeline track as the cards are scrolled.
+  const carX = useTransform(scrollXProgress, [0, 1], ['1%', '99%']);
 
   const scrollLeft = () => {
     containerRef.current?.scrollBy({ left: -400, behavior: 'smooth' });
@@ -175,20 +186,20 @@ const Resume: React.FC = () => {
   };
 
   return (
-    <div className="w-full section-v-padding flex flex-col justify-center overflow-hidden bg-black">
+    <div className="w-full section-v-padding flex flex-col justify-center overflow-hidden">
       <div className="page-container mb-16 md:mb-24 text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1 }}
+          transition={{ duration: 0.8 }}
           viewport={{ once: true }}
-          className="space-y-8"
+          className="space-y-6"
         >
-          <h2 className="font-montserrat text-amber-500 text-[10px] tracking-widest font-black uppercase inline-block border-b border-amber-500/20 pb-4">
+          <h2 className="font-montserrat text-[#A25600] text-[11px] tracking-widest font-bold uppercase inline-block border-b border-[#A25600]/30 pb-4">
             Career Timeline
           </h2>
-          <h3 className="font-playfair text-fluid-h2 italic text-white leading-tight">
-            Education & <br className="hidden sm:block"/> Professional Journey
+          <h3 className="font-display text-4xl md:text-6xl font-black text-ink leading-tight">
+            Education &amp; <br className="hidden sm:block"/> Professional Journey
           </h3>
         </motion.div>
       </div>
@@ -196,31 +207,37 @@ const Resume: React.FC = () => {
       <div className="relative">
         {/* Timeline Header - Adaptive Progress */}
         <div className="page-container mb-12 md:mb-16 flex items-center gap-8 md:gap-12">
-          <span className="font-montserrat text-[10px] font-black tracking-widest text-amber-500 uppercase shrink-0">PRESENT</span>
-          <div className="flex-1 h-px bg-white/5 relative overflow-hidden" role="progressbar" aria-label="Timeline scroll progress">
+          <span className="font-montserrat text-[10px] font-black tracking-widest text-[#A25600] uppercase shrink-0">Present</span>
+          <div className="flex-1 h-px bg-ink/10 relative" role="progressbar" aria-label="Timeline scroll progress">
             <motion.div
               style={{ scaleX: scrollXProgress }}
-              className="absolute inset-0 h-full bg-amber-500 origin-left"
+              className="absolute inset-0 h-full bg-[#A25600] origin-left"
             />
+            {/* Car motif — drives toward "Past" as the timeline is explored */}
+            <motion.div style={{ left: carX }} className="absolute -top-3.5 pointer-events-none" aria-hidden="true">
+              <span className="block -translate-x-1/2 text-ink/60">
+                <CarGlyph className="h-3.5 w-auto" />
+              </span>
+            </motion.div>
           </div>
-          <span className="font-montserrat text-[10px] font-black tracking-widest text-white/40 uppercase shrink-0">PAST</span>
+          <span className="font-montserrat text-[10px] font-black tracking-widest text-muted uppercase shrink-0">Past</span>
         </div>
 
         {/* Navigation Arrows - Desktop */}
         <button
           onClick={scrollLeft}
-          className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-black/80 border border-white/10 rounded-full items-center justify-center hover:border-amber-500 transition-colors"
+          className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white border border-ink/10 rounded-full items-center justify-center shadow-sm hover:border-ink/30 transition-colors"
           aria-label="Scroll timeline left"
         >
-          <ChevronLeft className="text-white" size={20} />
+          <ChevronLeft className="text-ink" size={20} />
         </button>
 
         <button
           onClick={scrollRight}
-          className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-black/80 border border-white/10 rounded-full items-center justify-center hover:border-amber-500 transition-colors"
+          className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white border border-ink/10 rounded-full items-center justify-center shadow-sm hover:border-ink/30 transition-colors"
           aria-label="Scroll timeline right"
         >
-          <ChevronRight className="text-white" size={20} />
+          <ChevronRight className="text-ink" size={20} />
         </button>
 
         {/* Scrollable Timeline */}
@@ -229,7 +246,7 @@ const Resume: React.FC = () => {
           role="region"
           aria-label="Career timeline"
           tabIndex={0}
-          className="flex overflow-x-auto pb-16 pt-10 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="flex overflow-x-auto pb-16 pt-10 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
         >
           {timelineData.map((event, i) => (
             <TimelineCard key={`${event.company}-${i}`} event={event} index={i} />
@@ -238,9 +255,9 @@ const Resume: React.FC = () => {
         </div>
 
         <div className="mt-8 flex justify-center lg:hidden">
-          <div className="flex items-center gap-4 bg-white/5 px-6 py-2.5 rounded-full border border-white/10">
-            <span className="font-montserrat text-[8px] tracking-widest text-white/60 uppercase font-black">Swipe to explore</span>
-            <ArrowRight size={14} className="text-amber-500" />
+          <div className="flex items-center gap-4 bg-ink/[0.04] px-6 py-2.5 rounded-full border border-ink/10">
+            <span className="font-montserrat text-[10px] tracking-widest text-muted uppercase font-black">Swipe to explore</span>
+            <ArrowRight size={14} className="text-[#A25600]" />
           </div>
         </div>
       </div>

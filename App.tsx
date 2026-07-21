@@ -1,15 +1,19 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Background from './components/Background';
 import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
-import ResearchLanding from './pages/ResearchLanding';
-import ResearchIndex from './pages/ResearchIndex';
-import ResearchArticle from './pages/ResearchArticle';
-import NewsletterIndex from './pages/NewsletterIndex';
-import NewsletterArticle from './pages/NewsletterArticle';
-import DealEngine from './pages/DealEngine';
-import { motion, useScroll, useSpring } from 'framer-motion';
+import NotFound from './pages/NotFound';
+import { motion, useScroll, useSpring, MotionConfig } from 'framer-motion';
+
+// Secondary routes are code-split so the homepage payload no longer ships the
+// deal engine (exceljs, recharts, the LBO engine) or the research surfaces.
+const ResearchLanding = React.lazy(() => import('./pages/ResearchLanding'));
+const ResearchIndex = React.lazy(() => import('./pages/ResearchIndex'));
+const ResearchArticle = React.lazy(() => import('./pages/ResearchArticle'));
+const NewsletterIndex = React.lazy(() => import('./pages/NewsletterIndex'));
+const NewsletterArticle = React.lazy(() => import('./pages/NewsletterArticle'));
+const DealEngine = React.lazy(() => import('./pages/DealEngine'));
 
 const App: React.FC = () => {
   const { scrollYProgress } = useScroll();
@@ -22,13 +26,13 @@ const App: React.FC = () => {
   const isResearch = location.pathname.startsWith('/research');
   const isResearchArticles = location.pathname.startsWith('/research/reports') || location.pathname.startsWith('/research/newsletter');
   const isDealEngine = location.pathname.startsWith('/deal-engine') || location.pathname.startsWith('/research/toolkit');
+  // The home page (and anything that isn't research/deal-engine) uses the light theme.
+  const isLight = !isResearch && !isResearchArticles && !isDealEngine;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className={`relative min-h-screen ${isDealEngine ? 'bg-[#080b11]' : isResearchArticles ? 'bg-[#F9F9F7]' : 'selection:bg-amber-500 selection:text-black bg-black'}`}
+    <MotionConfig reducedMotion="user">
+    <div
+      className={`relative min-h-screen ${isDealEngine ? 'bg-[#080b11]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-ink/10 selection:text-ink' : 'bg-black'}`}
     >
       {/* Skip to main content link */}
       <a
@@ -43,7 +47,7 @@ const App: React.FC = () => {
       {/* Progress bar */}
       {!isDealEngine && (
         <motion.div
-          className={`fixed top-0 left-0 right-0 h-0.5 origin-left z-[150] ${isResearchArticles ? 'bg-[#CC0000]' : 'bg-amber-500'}`}
+          className={`fixed top-0 left-0 right-0 h-0.5 origin-left z-[150] ${isResearchArticles ? 'bg-[#CC0000]' : isLight ? 'bg-[#A25600]' : 'bg-amber-500'}`}
           style={{ scaleX }}
         />
       )}
@@ -54,19 +58,23 @@ const App: React.FC = () => {
         </header>
       )}
 
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/deal-engine" element={<DealEngine />} />
-        <Route path="/research/toolkit" element={<DealEngine />} />
-        <Route path="/research" element={<ResearchLanding />} />
-        <Route path="/research/reports" element={<ResearchIndex />} />
-        <Route path="/research/reports/:slug" element={<ResearchArticle />} />
-        <Route path="/research/newsletter" element={<NewsletterIndex />} />
-        <Route path="/research/newsletter/:slug" element={<NewsletterArticle />} />
-      </Routes>
+      <Suspense fallback={<div className="min-h-screen" aria-hidden="true" />}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/deal-engine" element={<DealEngine />} />
+          <Route path="/research/toolkit" element={<DealEngine />} />
+          <Route path="/research" element={<ResearchLanding />} />
+          <Route path="/research/reports" element={<ResearchIndex />} />
+          <Route path="/research/reports/:slug" element={<ResearchArticle />} />
+          <Route path="/research/newsletter" element={<NewsletterIndex />} />
+          <Route path="/research/newsletter/:slug" element={<NewsletterArticle />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
 
-      {!isResearchArticles && !isDealEngine && <div className="fixed inset-0 pointer-events-none z-[100] ring-1 ring-white/5" />}
-    </motion.div>
+      {!isResearchArticles && !isDealEngine && <div className={`fixed inset-0 pointer-events-none z-[100] ring-1 ${isLight ? 'ring-ink/[0.04]' : 'ring-white/5'}`} />}
+    </div>
+    </MotionConfig>
   );
 };
 
