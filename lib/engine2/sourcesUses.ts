@@ -84,6 +84,16 @@ export function sizeStructure(
   const revolver = revolvers.length
     ? { assumption: revolvers[0], commitment: trancheSize(revolvers[0].commitment, fyEbitda) }
     : null;
+  if (revolver && revolver.commitment < 0) {
+    throw new RangeError('sourcesUses: revolver commitment must be ≥ 0 (it feeds the §2 fee base)');
+  }
+  // v1 input gate (C2 review F1): a revolver drawn at close would put interest-bearing
+  // debt on the opening BS whose proceeds never entered §2 sources (the goodwill plug
+  // would silently absorb it) — types.ts pins v1 drawn_at_close = 0; enforce it here,
+  // same pattern as the v1.0.3 maturity gate.
+  if (revolver && revolver.assumption.drawn_at_close !== 0) {
+    throw new RangeError('sourcesUses: drawn_at_close must be 0 in v1 (§2 has no drawn-revolver source line)');
+  }
   const totalPar = terms.reduce((s, t) => s + t.par, 0);
   return {
     terms,

@@ -307,6 +307,39 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
     );
   });
 
+  it('[v1.0.3] entry-NTM basis (C2 review F2): valuation EBITDA = fy × (1 + growth[0]); sizing stays FY under NTM', () => {
+    const facts = { fy_ebitda: 100 };
+    const ops = { growth: [0.08, 0.05, 0.05, 0.05, 0.05] } as OperationsAssumption;
+    const ntm = deriveEntry(facts, {
+      entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'ntm', hold_years: 5 },
+      operations: ops,
+    });
+    // §9 [v1.0.3] symmetry: growth[0], NOT growth[N−1]
+    expect(ntm.entry_ebitda_for_valuation).toBeCloseTo(108, 12);
+    expect(ntm.enterprise_value).toBeCloseTo(9 * 108, 12);
+    // §11: sizing ALWAYS uses FY even when the valuation basis is NTM
+    expect(ntm.entry_ebitda_for_sizing).toBe(100);
+    // EV-driver round-trip under NTM: implied multiple divides by the NTM EBITDA
+    const byEv = deriveEntry(facts, {
+      entry: { driver: 'ev', entry_multiple: null, enterprise_value: 972, basis: 'ntm', hold_years: 5 },
+      operations: ops,
+    });
+    expect(byEv.entry_multiple).toBeCloseTo(9, 12);
+    expect(byEv.entry_ebitda_for_sizing).toBe(100);
+  });
+
+  it('v1 input gates (C2 review F1/F4): drawn_at_close ≠ 0 and negative revolver commitment are rejected', () => {
+    const rcf = (drawn: number, commitment = 10): TrancheAssumption => ({
+      name: 'RCF', type: 'revolver', commitment: { amount: commitment }, pricing: { kind: 'fixed', rate: 0.07 },
+      commitment_fee: 0.005, maturity_years: 6, drawn_at_close: drawn,
+    });
+    // §2 has no drawn-revolver source line — proceeds would vanish into the goodwill plug
+    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).toThrow(/drawn_at_close/);
+    expect(() => sizeStructure({ tranches: [rcf(0, -3)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).toThrow(/commitment/);
+    // drawn_at_close = 0 stays valid
+    expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).not.toThrow();
+  });
+
   it('guards: two revolvers, non-positive EBITDA, and missing driver values all throw', () => {
     const rcf = (name: string): TrancheAssumption => ({
       name, type: 'revolver', commitment: { amount: 10 }, pricing: { kind: 'fixed', rate: 0.07 },
