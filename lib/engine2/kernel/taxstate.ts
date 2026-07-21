@@ -12,8 +12,9 @@
  *      loss into the post-close pool, zero tax, no NOL usage (§6.2).
  *   3. NOL usage — TWO pools, acquired first: acquired capped by §382 (static annual
  *      limit) and its layer cap (pre-2018 ⇒ 100%, else 80%); post-close capped by the 80%
- *      aggregate (shared with a post-2017 acquired layer; a pre-2018 acquired layer does
- *      not consume the 80% headroom) (§6.3).
+ *      aggregate — shared with a post-2017 acquired layer on the full base; after a
+ *      pre-2018 acquired layer the 80% applies to the RESIDUAL income (IRC
+ *      §172(a)(2)(B)(ii); aggregate usage ≤ taxable in both branches) (§6.3 [v1.0.3]).
  *   4. cash tax = max(rate × (taxable − used), min_rate × PRE-NOL taxable); NOL usage is
  *      consumed in full even when the floor binds (§6.4).
  *
@@ -130,9 +131,19 @@ export function taxYear(
         acquiredCapPct * taxable,
       )
     : 0;
+  // Post-2017 acquired layer: shared 80% aggregate cap on the FULL base. Pre-2018
+  // acquired layer: 100% cap of its own, and the post-close 80% cap applies to the
+  // RESIDUAL income after it — IRC §172(a)(2)(B)(ii) computes the 80% base as income
+  // after pre-2018 NOL usage [CORRECTED v1.0.3: the v1.0 form let aggregate usage
+  // exceed taxable income, burning post-close NOLs for zero benefit]. Aggregate
+  // usage ≤ taxable income holds in both branches by construction.
   const postcloseUsed = Math.min(
     state.postclose_nol,
-    Math.max(0, 0.8 * taxable - (policy.arose_pre_2018 ? 0 : acquiredUsed)),
+    Math.max(
+      0,
+      0.8 * (taxable - (policy.arose_pre_2018 ? acquiredUsed : 0)) -
+        (policy.arose_pre_2018 ? 0 : acquiredUsed),
+    ),
   );
 
   // ── §6.4 cash tax with the minimum floor on the PRE-NOL base ──

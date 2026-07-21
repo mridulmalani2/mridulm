@@ -564,6 +564,45 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       }),
     );
   });
+
+  it('§3.6 [v1.0.3] post-breach continuation: a negative closing cash re-injects as next year opening — conservation stays exact, the flag persists until cured', () => {
+    // Y1: 5 + (−50) = −45; commitment 10 fully drawn → closing −35, breach.
+    const y1 = waterfallYear({
+      opening_cash: 5,
+      fcf_pre_debt: -50,
+      min_cash: 5,
+      sweep_pct: 0,
+      tranches: [],
+      revolver: { beginning_drawn: 0, commitment: 10, cash_interest: 0, commitment_fee: 0 },
+    });
+    expect(y1.closing_cash).toBeCloseTo(-35, 12);
+    expect(y1.cash_floor_breach).toBe(true);
+    // Y2 runs on the inherited NEGATIVE opening cash (pre-v1.0.3 the kernel threw here;
+    // the reference derivation computes it — B2 spec-review F2)
+    const y2 = waterfallYear({
+      opening_cash: y1.closing_cash,
+      fcf_pre_debt: 10,
+      min_cash: 5,
+      sweep_pct: 0,
+      tranches: [],
+      revolver: { beginning_drawn: y1.revolver_ending_drawn, commitment: 10, cash_interest: 0, commitment_fee: 0 },
+    });
+    expect(y2.closing_cash).toBeCloseTo(-25, 12); // conservation: −35 + 10, nothing clamped
+    expect(y2.cash_floor_breach).toBe(true); // still under the floor, commitment exhausted
+    expect(y2.sweep_pool).toBe(0); // no pool below the floor
+    // Y3 cures: enough FCF to clear the hole and the floor
+    const y3 = waterfallYear({
+      opening_cash: y2.closing_cash,
+      fcf_pre_debt: 40,
+      min_cash: 5,
+      sweep_pct: 0,
+      tranches: [],
+      revolver: { beginning_drawn: y2.revolver_ending_drawn, commitment: 10, cash_interest: 0, commitment_fee: 0 },
+    });
+    expect(y3.closing_cash).toBeCloseTo(5, 12); // 15 above the hole − 10 revolver repay
+    expect(y3.revolver_ending_drawn).toBe(0);
+    expect(y3.cash_floor_breach).toBe(false);
+  });
 });
 
 // ── taxstate (SPEC §6) ────────────────────────────────────────────────────────
@@ -684,6 +723,52 @@ describe('kernel/taxstate — SPEC §6', () => {
         }
       }),
     );
+  });
+
+  it('§6.3 [v1.0.3] aggregate bound: acquired + post-close usage NEVER exceeds taxable income — in BOTH pre-2018 and post-2017 branches. Domain: profitable years', () => {
+    fc.assert(
+      fc.property(policyArb, taxStateArb, taxYearArb, (p, s, y) => {
+        const out = taxYear(p, s, y);
+        fc.pre(out.taxable_before_nol > 0);
+        expect(out.acquired_nol_used + out.postclose_nol_used).toBeLessThanOrEqual(
+          out.taxable_before_nol + 1e-9,
+        );
+        expect(out.regular_tax).toBeGreaterThanOrEqual(-1e-12); // no negative pre-clamp tax
+      }),
+    );
+  });
+
+  it('§6.3 [v1.0.3] pre-2018 residual base (directed, the review trigger): taxable 100, pools 100/100 ⇒ acquired 100, post-close 0, tax 0, post-close pool PRESERVED', () => {
+    const p: KernelTaxPolicy = {
+      rate: 0.25,
+      interest_deductible: true,
+      s163j_applies: false,
+      ati_pct: 0.3,
+      acquired_usable: true,
+      arose_pre_2018: true,
+      s382_annual_limit: null,
+      minimum_rate: 0,
+    };
+    const out = taxYear(
+      p,
+      { acquired_nol: 100, postclose_nol: 100, s163j_carryforward: 0 },
+      { ebit: 100, ati: 100, capped_interest_pool: 0, uncapped_deductions: 0 },
+    );
+    expect(out.taxable_before_nol).toBe(100);
+    expect(out.acquired_nol_used).toBe(100);
+    expect(out.postclose_nol_used).toBe(0); // 0.8 × (100 − 100) — NOT 0.8 × 100
+    expect(out.regular_tax).toBe(0);
+    expect(out.cash_tax).toBe(0);
+    expect(out.state_end.postclose_nol).toBe(100); // preserved for later years, not burned
+    // partial pre-2018 layer: taxable 100, acquired 40 ⇒ post-close capped at 0.8 × 60 = 48
+    const partial = taxYear(
+      p,
+      { acquired_nol: 40, postclose_nol: 100, s163j_carryforward: 0 },
+      { ebit: 100, ati: 100, capped_interest_pool: 0, uncapped_deductions: 0 },
+    );
+    expect(partial.acquired_nol_used).toBe(40);
+    expect(partial.postclose_nol_used).toBeCloseTo(48, 12);
+    expect(partial.acquired_nol_used + partial.postclose_nol_used).toBeLessThanOrEqual(100);
   });
 
   it('§6.3 layer cap binds WITHOUT a §382 mask (directed: s382 = null): acquired usage = min(pool, cap_pct × taxable). Domain: profitable, usable, post-2017', () => {

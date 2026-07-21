@@ -366,14 +366,32 @@ export interface ReturnStreams {
 
 export interface ValueBridge {
   entry_equity_pre_promote_total: number;
+  /** M₀ × ΔB (SPEC §12 [v1.0.3] — bars decompose the frictionless EV − ND delta). */
   ebitda_growth_at_entry_multiple: number;
-  multiple_change_on_exit_ebitda: number;
+  /** ΔM × B₀ — the rigorous-school multiple bar; the cross term is NOT folded in
+   *  (renamed from `multiple_change_on_exit_ebitda`, which named the rejected form). */
+  multiple_change_bar: number;
+  /** ND₀ − ND₁ (ND₀ = par − funded min cash; ND₁ = payoff − closing cash). */
   net_debt_paydown: number;
-  interaction: number; // explicit bar (SPEC §12)
+  interaction: number; // ΔM × ΔB — explicit bar (SPEC §12)
   exit_equity_pre_promote_total: number;
-  /** Walk-down to sponsor net: − entry costs − monitoring leakage − MIP (SPEC §12). */
-  walkdown: { entry_costs: number; monitoring_leakage: number; mip: number; sponsor_net_delta: number };
-  reconciliation_residual: number; // must be ~0 — invariant §14.9
+  /**
+   * Walk-down from the bar sum to sponsor net (SPEC §12 [v1.0.3]): − entry costs
+   * (transaction + financing fees + OID) − exit costs (exit advisory fees + monitoring
+   * termination) − MIP − rollover Δ (rollover exit share − contributed).
+   * `monitoring_leakage` is a MEMO: the termination component inside `exit_costs` plus
+   * the annual drag (from gp_fee_income) — it is NOT an additional subtraction (the
+   * annual drag reaches the bridge through cash in the paydown bar).
+   */
+  walkdown: {
+    entry_costs: number;
+    exit_costs: number;
+    monitoring_leakage: number;
+    mip: number;
+    rollover_delta: number;
+    sponsor_net_delta: number;
+  };
+  reconciliation_residual: number; // must be ~0 — invariant §14.9 (both identities)
 }
 
 export interface CoherenceFlag {
