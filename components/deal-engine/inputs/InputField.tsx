@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import ProvenanceBadge from './ProvenanceBadge';
+import { pctToDisplay, displayToPct } from '../../../lib/formatters';
 import type { Provenance } from '../../../lib/edgar/types';
 
 interface InputFieldProps {
@@ -31,22 +32,40 @@ const InputField: React.FC<InputFieldProps> = ({
   // shown) with a MISSING badge. Editing it flips the source to 'user' (store.updateField), after
   // which it displays normally — the same invariant the assumptions-review Row enforces.
   const isMissing = provenance?.source === 'missing';
-  const [localVal, setLocalVal] = useState(isMissing ? '' : String(value));
+  // Percent boundary: store holds decimal fractions (0.3478); a "%"-suffixed number field
+  // displays and edits in percent units (34.78). The conversion lives here and in the
+  // assumptions-review Row — nowhere else.
+  const isPercent = suffix === '%' && type === 'number';
+  const toDisplay = (v: number | string): string =>
+    isPercent && typeof v === 'number' ? pctToDisplay(v) : String(v);
+  const [localVal, setLocalVal] = useState(isMissing ? '' : toDisplay(value));
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    setLocalVal(isMissing ? '' : String(value));
-  }, [value, isMissing]);
+    if (isMissing) { setLocalVal(''); return; }
+    // Precision guard: if the text on screen already parses to the store value, leave it
+    // alone — resyncing through pctToDisplay's 2dp render would silently truncate what the
+    // user typed (e.g. "4.375" → store 0.04375 → snap-back "4.38"). Only external changes
+    // (AI-suggest, load, derived recompute) rewrite the field.
+    if (type === 'number' && typeof value === 'number') {
+      const cur = isPercent ? displayToPct(localVal) : parseFloat(localVal);
+      if (cur != null && !isNaN(cur) &&
+          Math.abs(cur - value) <= 1e-12 * Math.max(1, Math.abs(value))) return;
+    }
+    setLocalVal(toDisplay(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, isMissing, isPercent]);
 
   const handleChange = useCallback((newVal: string) => {
     setLocalVal(newVal);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      const parsed = type === 'number' ? parseFloat(newVal) : newVal;
-      if (type === 'number' && isNaN(parsed as number)) return;
+      if (type !== 'number') { updateField(path, newVal); return; }
+      const parsed = isPercent ? displayToPct(newVal) : parseFloat(newVal);
+      if (parsed == null || isNaN(parsed)) return;
       updateField(path, parsed);
     }, 400);
-  }, [path, type, updateField]);
+  }, [path, type, isPercent, updateField]);
 
   const displayVal = readOnly && formatter && typeof value === 'number'
     ? formatter(value)

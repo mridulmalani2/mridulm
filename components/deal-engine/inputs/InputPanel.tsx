@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import InputField from './InputField';
+import { fmtNumber } from '../../../lib/formatters';
 
 const SECTORS = [
   'Technology', 'Healthcare', 'Industrials', 'Consumer',
@@ -193,11 +194,11 @@ const InputPanel: React.FC = () => {
         {driver === 'multiple' ? (
           <>
             <InputField label="Entry EBITDA Multiple" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" warning={entryMultWarn} provenance={prov['entry.entry_ebitda_multiple']} />
-            <InputField label="Enterprise Value (derived)" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => v.toFixed(1)} readOnly />
+            <InputField label="Enterprise Value (derived)" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => fmtNumber(v)} readOnly />
           </>
         ) : (
           <>
-            <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => v.toFixed(1)} provenance={prov['entry.enterprise_value']} />
+            <InputField label="Enterprise Value" path="entry.enterprise_value" value={ms.entry.enterprise_value} suffix={`${csym}m`} formatter={(v) => fmtNumber(v)} provenance={prov['entry.enterprise_value']} />
             <InputField label="Entry Multiple (derived)" path="entry.entry_ebitda_multiple" value={ms.entry.entry_ebitda_multiple} suffix="x" formatter={(v) => v.toFixed(2)} readOnly />
           </>
         )}

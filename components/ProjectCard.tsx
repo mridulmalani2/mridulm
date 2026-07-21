@@ -1,73 +1,108 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Project } from '../types';
-import { ExternalLink } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 
 interface ProjectCardProps {
   project: Project;
   index: number;
+  /** Total in this section — drives the fan so the spread stays centred. */
+  total: number;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, index }) => {
-  const handleClick = () => {
-    if (project.link) {
-      window.open(project.link, '_blank', 'noopener,noreferrer');
-    }
-  };
+/**
+ * A project board, dealt into a fanned deck.
+ *
+ * Cards overlap and tilt away from centre like a hand of cards; hovering one
+ * straightens it, lifts it and brings it to the front. The overlap and tilt
+ * are desktop-only — stacked on a phone they'd just obscure each other.
+ *
+ * Each board carries its own copy as pixels, so the title and story are
+ * supplied as the accessible name rather than relying on the image.
+ */
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, total }) => {
+  const hasLink = !!project.link && project.link !== '#';
+  // fan out from the centre: leftmost leans left, rightmost leans right
+  const mid = (total - 1) / 2;
+  const offset = index - mid;
+  const tilt = total > 1 ? offset * 2.4 : 0;
+  const lift = Math.abs(offset) * 6;
+
+  const Wrapper = hasLink ? 'a' : 'div';
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+    <motion.div
+      initial={{ opacity: 0, y: 26 }}
       whileInView={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, duration: 0.8 }}
-      viewport={{ once: true }}
-      whileHover={{ scale: 1.02 }}
-      onClick={handleClick}
-      className="relative group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm aspect-[4/5]"
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ delay: index * 0.08, duration: 0.5 }}
+      // `!z-50` is deliberate: the base z-index is an inline style (it varies
+      // per card), and inline styles beat plain classes — without !important
+      // the hovered card would scale up *behind* its neighbour.
+      className="group relative flex-1 md:-ml-[5%] md:first:ml-0 md:hover:!z-50"
+      style={{ zIndex: index }}
     >
-      {/* Background Image - Grayscale removed per user request */}
-      <img
-        src={project.imageUrl}
-        alt={project.name}
-        loading="lazy"
-        decoding="async"
-        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-1000 group-hover:scale-110"
-      />
-      
-      {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-8 flex flex-col justify-end">
-        
-        {/* Tags Container */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {project.tags?.map((tag, i) => (
-            <span 
-              key={i} 
-              className="px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[9px] font-montserrat font-bold text-amber-500/80 tracking-widest uppercase"
-            >
-              {tag}
+      <Wrapper
+        {...(hasLink
+          ? { href: project.link, target: '_blank', rel: 'noopener noreferrer' }
+          : {})}
+        aria-label={`${project.title} — ${project.story}`}
+        className="block focus-visible:outline-none"
+      >
+        {/* The fan is desktop-only. Driving it through CSS variables keeps it
+            responsive — an inline transform would tilt the cards on mobile
+            too, where they stack without overlap and a lean just reads as a
+            mistake. Both rest and hover set `transform` outright rather than
+            mixing with Tailwind's rotate/scale vars, which would fight it. */}
+        <div
+          className="relative origin-bottom transition-all duration-500 ease-out md:[transform:rotate(var(--tilt))_translateY(var(--lift))] md:group-hover:[transform:rotate(0deg)_translateY(0)_scale(1.05)]"
+          style={
+            {
+              '--tilt': `${tilt}deg`,
+              '--lift': `${lift}px`,
+            } as React.CSSProperties
+          }
+        >
+          {/* the board itself */}
+          <div className="overflow-hidden rounded-xl shadow-[0_16px_34px_-20px_rgba(26,26,34,0.5)] ring-1 ring-ink/10 transition-shadow duration-500 group-hover:shadow-[0_30px_60px_-24px_rgba(26,26,34,0.55)]">
+            {project.image ? (
+              <img
+                src={project.image}
+                alt={`${project.title} — ${project.story}`}
+                className="block w-full"
+                loading="lazy"
+              />
+            ) : (
+              // no board supplied yet — a text card in the same proportions so
+              // the deck stays even rather than showing a gap
+              <div className="flex aspect-[3/4] flex-col justify-end bg-[#15151C] p-6">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+                  {project.domain}
+                </span>
+                <h4 className="mt-2 font-display text-2xl font-bold text-white">{project.title}</h4>
+                <p className="mt-3 text-sm leading-relaxed text-white/60">{project.story}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {project.tags?.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full border border-white/15 px-2.5 py-1 font-montserrat text-[9px] font-semibold uppercase tracking-wider text-white/55"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* open affordance */}
+          {hasLink && (
+            <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-ink opacity-0 shadow-sm backdrop-blur-sm transition-all duration-300 group-hover:opacity-100">
+              <ArrowUpRight size={16} />
             </span>
-          ))}
+          )}
         </div>
-
-        <h3 className="font-playfair text-3xl md:text-4xl italic mb-3 text-white group-hover:text-amber-500 transition-colors duration-500">
-          {project.name}
-        </h3>
-        
-        <p className="text-white/70 text-sm font-montserrat font-light leading-relaxed line-clamp-3 mb-6">
-          {project.story}
-        </p>
-
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-          <span className="font-montserrat text-[10px] tracking-[0.3em] font-bold text-amber-500 uppercase">
-            EXPLORE
-          </span>
-          <ExternalLink size={12} className="text-amber-500" />
-        </div>
-      </div>
-
-      {/* Subtle Frame Glow */}
-      <div className="absolute inset-0 border border-amber-500/0 group-hover:border-amber-500/20 transition-all duration-700 pointer-events-none rounded-2xl" />
+      </Wrapper>
     </motion.div>
   );
 };

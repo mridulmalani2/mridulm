@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { csym } from '../../../lib/engine/utils';
+import { fmtNumber } from '../../../lib/formatters';
 
 const BalanceSheetTable: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
@@ -12,7 +13,7 @@ const BalanceSheetTable: React.FC = () => {
   const m = ms.margins;
   const daysNwcOn = m.nwc_dso != null || m.nwc_dio != null || m.nwc_dpo != null;
 
-  const num = (v: number) => (v < 0 ? `(${Math.abs(v).toFixed(1)})` : v.toFixed(1));
+  const num = (v: number) => (v < 0 ? `(${fmtNumber(Math.abs(v))})` : fmtNumber(v));
 
   const headerStyle: React.CSSProperties = {
     color: 'rgba(17,17,17,0.4)', borderBottom: '1px solid rgba(17,17,17,0.1)',

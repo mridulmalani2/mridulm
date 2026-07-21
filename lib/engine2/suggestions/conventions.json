@@ -1,0 +1,150 @@
+{
+  "_meta": {
+    "description": "SUGGESTED (convention) values for DealAssumptions. Extracted from the Phase A deep-research pass (rebuild/research/DR-1..5-results.md). Every research-extracted value carries its citation and as-of date; values NOT covered by the research are explicitly marked notCoveredByResearch and carry a convention basis instead. Values are suggestions with a declared basis — never silent defaults.",
+    "extractedFrom": ["DR-1", "DR-2", "DR-3", "DR-4", "DR-5"],
+    "extractedOn": "2026-07-05",
+    "verificationPass": "2 adversarial verifiers applied 2026-07-05 (SPEC changelog v0.96)",
+    "staleness": {
+      "defaultStaleAfterMonths": 12,
+      "perCategoryStaleAfterMonths": { "pricing": 3, "leverage": 3, "equityContribution": 3 },
+      "note": "DR-4 Rec 3: spreads, base rate, and equity contribution are the most time-sensitive inputs — refresh quarterly from PitchBook LCD weekly/quarterly wraps and GF Data quarterly reports."
+    },
+    "thresholdTriggers": [
+      "If 3M SOFR falls sustainably below ~3.5%: raise leverage suggestions toward 5.5-6.0x (large-cap) / 4.5-5.0x (MM) and lower equity contribution below 45% (DR-4 Rec 4)",
+      "If new-issue spreads widen >50bps from current levels: raise pricing suggestions and lower leverage (DR-4 Rec 4)",
+      "If BSL cov-lite share moves materially off ~90%: revisit the covenant presets (DR-4 Rec 4)"
+    ],
+    "segmentation": "Values are segment-aware: largeCap (BSL, EV > ~$1B) vs middleMarket (direct lending). The template picker selects the segment; individual values remain editable with badges."
+  },
+  "deal": {
+    "holdPeriodYears": {
+      "suggested": 5,
+      "basis": "OWNER-decided 2026-07-05: 5 years (practitioner underwriting convention — underwriting hold, not realized hold). The UI shows a context line: realized median holds at exit are ~7yr (Bain GPE Report 2026; PitchBook 7.1yr median for 2023 exits), which DR-4 Rec 2 preferred.",
+      "citation": "owner decision; context: Bain GPE Report 2026 (Feb 2026), PitchBook via LCD",
+      "asOf": "2026-02"
+    },
+    "exitMultiple": {
+      "suggested": "= entry multiple (flat)",
+      "basis": "Industry best practice; multiple expansion 'usually an unjustifiable assumption'. Downside cases haircut 0.5-1.0x; upside +1.0-2.0x.",
+      "citation": "Wall Street Prep; Macabacus; CT Acquisitions (DR-4 Cat.7)",
+      "asOf": "2025-12"
+    },
+    "valuationBasis": { "suggested": "FY (LTM deferred)", "basis": "Extraction is FY-anchored (PHASE_D D3); staleness badge shown", "citation": "internal — SPEC §9/D3", "asOf": "2026-07" }
+  },
+  "entryMultiples": {
+    "usBuyoutOverall": { "value": 12.0, "citation": "PitchBook 2025 Annual US PE Breakdown (US buyout EV/EBITDA)", "asOf": "2025-12" },
+    "bslFundedLbo": { "value": 11.2, "citation": "PitchBook LCD via 2025 US PE Breakdown", "asOf": "2025-12" },
+    "middleMarket10to500": { "value": 7.2, "citation": "GF Data Q4 2025 M&A Report (ACG, Feb 2026)", "asOf": "2025-12" },
+    "mm10to25": { "value": 5.9, "citation": "GF Data through Q3 2025", "asOf": "2025-09" },
+    "mm100to250": { "value": 10.0, "citation": "GF Data / Forvis Mazars", "asOf": "2025-12" },
+    "sectorMedians_CAVEAT": {
+      "note": "NA+Europe combined, PE+corporate blended, NOT strictly buyout-entry multiples; text-vs-table conflicts flagged in DR-4 — verify against primary PitchBook PDF before UI display (verifyBeforeDisplay=true).",
+      "verifyBeforeDisplay": true,
+      "values": { "technology": 12.5, "healthcare": 12.8, "financialServices": 10.3, "businessConsumerServices": 8.2, "industrialsMaterials": 8.9, "energy": 7.4 },
+      "citation": "PitchBook Q2 2025 Global M&A Report (via CLFI)",
+      "asOf": "2025-06"
+    },
+    "usVsEuropeSpread": { "note": "European buyout multiples ~0.5-2.0 turns below US (PE-led US 12.8x vs Europe 11.2x)", "citation": "PitchBook Q2 2025 Global M&A Report", "asOf": "2025-06" }
+  },
+  "leverage": {
+    "largeCap": {
+      "totalDebtToEbitda": { "value": 5.0, "range": [4.7, 5.2], "citation": "PitchBook LCD US LBO Debt Quarterly (FY2025; down from 5.9x 2022 peak)", "asOf": "2025-12" },
+      "firstLienToEbitda": { "value": 4.9, "range": [4.6, 4.9], "citation": "PitchBook LCD LBO Update (record first-lien reliance; second-lien negligible ~0.14x)", "asOf": "2024-12" },
+      "equityContributionPct": { "value": 0.46, "range": [0.44, 0.51], "citation": "PitchBook LCD 'From peak to pivot' (51.1% 2023 peak easing to 46% 2025; 41% 2011-2021 norm)", "asOf": "2025-12" }
+    },
+    "middleMarket": {
+      "totalDebtToEbitda": { "value": 4.0, "range": [3.7, 4.0], "citation": "GF Data via GulfStar (H1 2025)", "asOf": "2025-06" },
+      "seniorDebtToEbitda": { "value": 3.1, "citation": "GF Data via GulfStar", "asOf": "2025-06" },
+      "equityContributionPct": { "value": 0.50, "range": [0.50, 0.52], "citation": "Ropes & Gray US PE Market Recap citing LCD (Q1 2025)", "asOf": "2025-03" }
+    },
+    "interestCoverageContext": { "note": "BSL LBO interest coverage hit record-low ~2.3x in 2024 — coherence-gate band informed by this", "citation": "PitchBook LCD", "asOf": "2024-12" }
+  },
+  "pricing": {
+    "baseRate": { "termSofr3m": 0.036, "note": "Overnight SOFR 3.66% / 90-day avg ~3.64% as of Jul 1 2026; refresh quarterly — v2 wires FRED", "citation": "Federal Reserve Bank of New York via DR-4", "asOf": "2026-07" },
+    "tlbSpreadBps": {
+      "value": 375,
+      "range": [350, 425],
+      "note": "DR-4 INTERNAL CONFLICT recorded: Cat.2 sourced Data Dive figure = S+350-425 for B/B-flat (midpoint 375, B-minus ~427) vs DR-4's own TL;DR/Rec-1 headline of S+450-475. 375 chosen as the index-sourced cohort figure; Q1 2026 widening of 25-50bps flagged — revisit toward ~425 on refresh.",
+      "citation": "PitchBook LCD Data Dive (mid-2025); conflict + widening per DR-4 TL;DR/Caveats",
+      "asOf": "2025-06"
+    },
+    "sofrFloor": { "value": 0.0, "range": [0.0, 0.0075], "note": "0% standard on top credits; 0.50% appears; 0.75-1.00% legacy/private-credit only. Formula: max(base, floor) + spread", "citation": "PitchBook LCD; DR-1 Item 4", "asOf": "2025-12" },
+    "tlbOidPct": { "value": 0.005, "range": [0.005, 0.01], "note": "OID 99.0-99.5 large-cap", "citation": "PitchBook LCD Data Dive", "asOf": "2025-12" },
+    "unitrancheSpreadBps": { "value": 500, "range": [425, 575], "note": "UMM S+425-475; core MM +50-100bps; median PE-backed private-credit deal S+475 (Q4 2025)", "citation": "Capstone Partners Winter 2025; PitchBook LCD", "asOf": "2025-12" },
+    "unitrancheOidPct": { "value": 0.025, "range": [0.02, 0.03], "citation": "Private Equity Bro / CT Acquisitions", "asOf": "2025-12" },
+    "mezzanine": { "cashCouponPct": 0.10, "pikCouponPct": 0.03, "allInIrrTarget": [0.12, 0.20], "warrantsNote": "standard mezz equity kicker (warrants, 2-8%, up to 5-20% of equity — DR-4 Cat.2) NOT modeled in v1; deferred to Phase G sweet-equity/strip module", "citation": "CAIA L1 2024-25 curriculum; CT Acquisitions 2026; GF Data sub-debt avg 12.1% (H1 2025)", "asOf": "2026-01" },
+    "revolverCommitmentFeeBps": { "value": 50, "notCoveredByResearch": true, "basis": "Common convention level — the Phase A research established only the MECHANIC (fee = fixed rate x undrawn, DR-1 Items 3/8), not a level. Treat as an un-researched convention pending a sourced data point.", "asOf": null }
+  },
+  "sweep": {
+    "basePreset": { "sweepPct": 0.50, "note": "The 50% LEVEL is research-confirmed; running it FLAT (no step-downs) is a SPEC [DECIDED] v1 simplification — DR-4's recommended base includes step-downs to 25%/0%", "citation": "LSTA cash sweep market data via CT Acquisitions", "asOf": "2025-12" },
+    "lenderFriendlyPreset": { "grid": [{ "aboveLeverage": 4.5, "sweepPct": 0.75 }, { "aboveLeverage": 3.5, "sweepPct": 0.50 }, { "aboveLeverage": 0, "sweepPct": 0.0 }], "note": "Alternative grids exist (75/50/25, 50/25/0 — Cummings Law per DR-1)", "citation": "LSTA via CT Acquisitions", "asOf": "2025-12" }
+  },
+  "amortization": {
+    "tlbUsPctPerYear": { "value": 0.01, "note": "1%/yr of ORIGINAL face, bullet at maturity; European TLB frequently 0% (full bullet)", "citation": "White & Case Debt Explorer; LSTA; DR-1 Item 7", "asOf": "2025-12" },
+    "tlaPctPerYear": { "value": 0.075, "range": [0.05, 0.25], "citation": "White & Case; Ryan O'Connell (teaching range)", "asOf": "2025-12" },
+    "notesSecondLienMezz": { "value": 0.0, "note": "bullet", "citation": "DR-1 Item 7", "asOf": "2025-12" }
+  },
+  "covenants": {
+    "bslPreset": { "type": "cov-lite", "covLiteShareNewIssue": 0.93, "springing": { "revolverDrawTrigger": 0.40, "testType": "first-lien net leverage, RCF-only, typically no step-downs" }, "citation": "S&P Global via WSP; Paul Weiss; Latham (35-40% trigger); Proskauer (Nov 2025)", "asOf": "2025-11" },
+    "middleMarketPreset": { "type": "maintenance", "ebitdaHeadroomToBaseCase": [0.30, 0.35], "note": "set covenant levels at 30-35% EBITDA cushion vs base case — this replaces the old engine's self-breaching absolute defaults", "citation": "Latham; Proskauer/Lexology", "asOf": "2024-12" }
+  },
+  "fees": {
+    "buySideAdvisoryPctOfEv": { "value": 0.02, "range": [0.015, 0.025], "citation": "S&P Global LCD via CT Acquisitions", "asOf": "2025-12" },
+    "financingFeePctOfDebt": { "value": 0.015, "range": [0.01, 0.02], "note": "base includes total commitments INCLUDING undrawn revolver (SPEC §2; DR-2 Item 1 flags the forgotten revolver fee)", "citation": "Syndicated-loan arrangement fee convention (DR-4 Cat.6)", "asOf": "2025-12" },
+    "monitoringFee": { "suggested": "OFF", "note": "declining practice, increasingly 100% LP-offset; absence is a legitimate default", "citation": "Preqin/Dechert; Winston & Strawn; ILPA principles", "asOf": "2025-12" }
+  },
+  "mip": {
+    "poolPctOfFdEquity": { "value": 0.15, "range": [0.10, 0.20], "citation": "Private Equity Toolkit; Macabacus (US promote pool — undated practitioner sources per DR-2)", "asOf": null },
+    "hurdleMoic": { "value": 2.0, "range": [2.0, 3.0], "note": "hurdle-type statistic: ~2/3 of plans MOIC-only (Goodwin Mar 2024); the 2.0-3.0x LEVEL range is from practitioner sources", "citation": "level: Macabacus / A Simple Model (via DR-2); type statistic: Goodwin Incentive Equity (Mar 2024)", "asOf": "2024-03" },
+    "sweetEquityContext": { "note": "UK/EU sweet equity (16% avg of ordinaries, 12% shareholder-debt coupon, ratchets on 55% of deals — Travers Smith 2025) is a SEPARATE Phase G instrument, never blended with the promote", "citation": "Travers Smith PE Market Insights 2025", "asOf": "2025-12" }
+  },
+  "tax": {
+    "section163j": { "atiBasisDefault": "EBITDA", "atiPct": 0.30, "appliesDefault": true, "note": "OBBBA (P.L. 119-21, Jul 2025): EBITDA-based ATI permanent for TY beginning after 12/31/2024; EBIT toggle for earlier fiscal years; section_163j_applies=false expresses the small-business exception (<$31M avg gross receipts, TY2025)", "citation": "OBBBA; IRS FS-2025-09; DR-3 Item 1", "asOf": "2026-07" },
+    "section382": { "ltterPct": 0.0358, "basisNote": "annual limit = TARGET (loss corporation) equity value immediately before the ownership change x LTTER — the purchase equity value (EV − net debt at close, sponsor + rollover), NOT the sponsor-only check. Static per-year limit is a disclosed conservative simplification (real unused limitation carries forward). Refresh LTTER monthly from IRS AFR rulings.", "citation": "IRC §382(f); Rev. Rul. 2025-24 Table 3 (Dec 2025); DR-3 Item 2", "asOf": "2025-12" },
+    "acquiredNolUsable": { "suggested": false, "note": "target NOLs generally do not survive sponsor structures (asset / 338(h)(10) / 336(e)); enabling turns on the 382 limit", "citation": "DR-3 Item 3; Macabacus", "asOf": "2026-07" },
+    "nolLimitPctPost2017": { "value": 0.80, "note": "100% (no cap) for the pre-2018 layer — flag `nol_arose_pre_2018`", "citation": "IRC 172 (TCJA, unchanged by OBBBA)", "asOf": "2026-07" }
+  },
+  "presentation": {
+    "sensitivityGrid": { "size": "5x5", "paired": "IRR + MOIC", "banding": { "greenAboveIrr": 0.20, "yellowAboveIrr": 0.15 }, "citation": "R&P house style; WSP (20% PE minimum); Ryan O'Connell banding", "asOf": "2025-12" },
+    "summaryPanelOrder": { "order": ["purchasePriceAndMultiples", "sourcesAndUses", "returns (IRR+MOIC together)", "capitalization (x-EBITDA cumulative + % of cap)", "creditStatistics", "fcfPanel"], "consumedBy": "the exportable one-pager / memo skeleton (R&P Transaction Summary Page). The on-screen Summary tab is a dashboard VARIANT (hero returns first) — divergence documented in PHASE_E_UI E2.", "citation": "Rosenbaum & Pearl Transaction Summary Page (Ch.5)", "asOf": "2025-12" }
+  },
+  "templates": [
+    {
+      "id": "large-cap-bsl",
+      "name": "Large-cap BSL: TLB + revolver, cov-lite",
+      "basis": "PitchBook LCD new-issue norms (leverage/pricing FY2025; first-lien share FY2024). Revolver sizing (0.75x) and revolver spread are convention choices not covered by the Phase A research.",
+      "tranches": [
+        { "name": "Term Loan B", "type": "senior", "sizeXEbitda": 4.9, "rateType": "floating", "spreadBps": 375, "floorPct": 0.0, "oidPct": 0.005, "amortPctPerYear": 0.01, "sweepParticipation": true, "sweepPriority": 1 },
+        { "name": "Revolver (undrawn)", "type": "revolver", "commitmentXEbitda": 0.75, "spreadBps": 350, "commitmentFeeBps": 50, "drawnAtClose": 0, "notCoveredByResearch": ["commitmentXEbitda", "spreadBps", "commitmentFeeBps"] }
+      ],
+      "totalLeverageXEbitda": 5.0, "sweepPreset": "lenderFriendlyPreset", "covenantPreset": "bslPreset",
+      "callProtectionNote": "101 soft call ~6mo, sweeps/mandatory exempt (DR-1) — legitimately ignorable in v1",
+      "citation": "PitchBook LCD; LSTA; Paul Weiss/Latham", "asOf": "2025-12"
+    },
+    {
+      "id": "mm-unitranche",
+      "name": "Middle market: unitranche + revolver, maintenance covenants",
+      "basis": "GF Data / Capstone FY2025 direct-lending norms. Unitranche amortization (1%/yr) and revolver sizing are convention choices not covered by the Phase A research.",
+      "tranches": [
+        { "name": "Unitranche", "type": "unitranche", "sizeXEbitda": 4.0, "rateType": "floating", "spreadBps": 500, "floorPct": 0.0075, "oidPct": 0.025, "amortPctPerYear": 0.01, "sweepParticipation": true, "sweepPriority": 1, "notCoveredByResearch": ["amortPctPerYear"] },
+        { "name": "Revolver (undrawn)", "type": "revolver", "commitmentXEbitda": 0.5, "spreadBps": 475, "commitmentFeeBps": 50, "drawnAtClose": 0, "notCoveredByResearch": ["commitmentXEbitda", "spreadBps", "commitmentFeeBps"] }
+      ],
+      "totalLeverageXEbitda": 4.0, "sweepPreset": "basePreset", "covenantPreset": "middleMarketPreset",
+      "callProtectionNote": "Private credit typically carries 102/101 HARD call (voluntary + certain mandatory prepayments — DR-1/Sidley); v1 ignores it as a DISCLOSED limitation (SPEC §3), Phase G re-entry",
+      "citation": "GF Data via GulfStar; Capstone Winter 2025", "asOf": "2025-12"
+    },
+    {
+      "id": "mm-senior-mezz",
+      "name": "Middle market: senior + mezzanine (PIK component)",
+      "basis": "Senior 3.1x per GF Data; mezz sized 0.9x so TOTAL matches the GF-supported 4.0x MM average (template construction, not a GF figure). Mezz pricing per CAIA/CT.",
+      "tranches": [
+        { "name": "Senior Term Loan", "type": "senior", "sizeXEbitda": 3.1, "rateType": "floating", "spreadBps": 475, "floorPct": 0.0075, "oidPct": 0.02, "amortPctPerYear": 0.05, "sweepParticipation": true, "sweepPriority": 1 },
+        { "name": "Mezzanine Note", "type": "pik_note", "sizeXEbitda": 0.9, "rateType": "fixed", "cashCouponPct": 0.10, "pikCouponPct": 0.03, "amortPctPerYear": 0.0, "sweepParticipation": false, "note": "warrants/equity kicker not modeled in v1 (see pricing.mezzanine.warrantsNote)" },
+        { "name": "Revolver (undrawn)", "type": "revolver", "commitmentXEbitda": 0.5, "spreadBps": 475, "commitmentFeeBps": 50, "drawnAtClose": 0, "notCoveredByResearch": ["commitmentXEbitda", "spreadBps", "commitmentFeeBps"] }
+      ],
+      "totalLeverageXEbitda": 4.0, "sweepPreset": "basePreset", "covenantPreset": "middleMarketPreset",
+      "callProtectionNote": "Private credit typically carries 102/101 HARD call; v1 ignores it as a DISCLOSED limitation (SPEC §3), Phase G re-entry",
+      "citation": "GF Data; CAIA L1; CT Acquisitions 2026", "asOf": "2026-01"
+    }
+  ]
+}

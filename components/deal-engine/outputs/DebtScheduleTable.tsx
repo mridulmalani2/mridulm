@@ -3,6 +3,7 @@ import { useDealEngineStore } from '../../../store/dealEngine';
 import { oidAmortByYear } from '../../../lib/engine/oid';
 import { attachTraceTarget } from '../TraceGraph/attachTraceTarget';
 import { useTraceGraphContext } from '../TraceGraph/TraceGraphContext';
+import { fmtNumber } from '../../../lib/formatters';
 
 const DebtScheduleTable: React.FC = () => {
   const ms = useDealEngineStore((s) => s.modelState);
@@ -44,20 +45,20 @@ const DebtScheduleTable: React.FC = () => {
                 <tr>
                   <td className="py-1 px-2 text-[10px]" style={{ color: 'rgba(17,17,17,0.4)' }}>Beg Bal</td>
                   {sched.map((y, i) => (
-                    <td key={i} className="text-right py-1 px-2" style={{ color: '#111111' }}>{y.beginning_balance.toFixed(1)}</td>
+                    <td key={i} className="text-right py-1 px-2" style={{ color: '#111111' }}>{fmtNumber(y.beginning_balance)}</td>
                   ))}
                 </tr>
                 <tr style={{ background: 'rgba(17,17,17,0.02)' }}>
                   <td className="py-1 px-2 text-[10px]" style={{ color: 'rgba(17,17,17,0.4)' }}>Interest</td>
                   {sched.map((y, i) => (
-                    <td key={i} className="text-right py-1 px-2" style={{ color: '#b91c1c' }}>({y.cash_interest.toFixed(1)})</td>
+                    <td key={i} className="text-right py-1 px-2" style={{ color: '#b91c1c' }}>({fmtNumber(y.cash_interest)})</td>
                   ))}
                 </tr>
                 {sched.some((y) => y.pik_accrual > 0) && (
                   <tr>
                     <td className="py-1 px-2 text-[10px]" style={{ color: 'rgba(17,17,17,0.4)' }}>PIK</td>
                     {sched.map((y, i) => (
-                      <td key={i} className="text-right py-1 px-2" style={{ color: '#b45309' }}>{y.pik_accrual.toFixed(1)}</td>
+                      <td key={i} className="text-right py-1 px-2" style={{ color: '#b45309' }}>{fmtNumber(y.pik_accrual)}</td>
                     ))}
                   </tr>
                 )}
@@ -74,7 +75,7 @@ const DebtScheduleTable: React.FC = () => {
                 <tr style={{ background: 'rgba(17,17,17,0.02)' }}>
                   <td className="py-1 px-2 text-[10px]" style={{ color: 'rgba(17,17,17,0.4)' }}>Repayment</td>
                   {sched.map((y, i) => (
-                    <td key={i} className="text-right py-1 px-2" style={{ color: '#111111' }}>({y.total_repayment.toFixed(1)})</td>
+                    <td key={i} className="text-right py-1 px-2" style={{ color: '#111111' }}>({fmtNumber(y.total_repayment)})</td>
                   ))}
                 </tr>
                 <tr>
@@ -83,9 +84,9 @@ const DebtScheduleTable: React.FC = () => {
                     <td key={i} className="text-right py-1 px-2 font-semibold" style={{ color: '#111111' }}>
                       {i === hp - 1 && tIdx === ds.tranche_schedules.length - 1 ? (
                         <span {...attachTraceTarget('debt_schedule.total_debt_at_exit', traceModeActive, onOpenCard)}>
-                          {y.ending_balance.toFixed(1)}
+                          {fmtNumber(y.ending_balance)}
                         </span>
-                      ) : y.ending_balance.toFixed(1)}
+                      ) : fmtNumber(y.ending_balance)}
                     </td>
                   ))}
                 </tr>
@@ -123,7 +124,7 @@ const DebtScheduleTable: React.FC = () => {
                 <td className="py-1.5 px-2 font-medium text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.4)' }}>Refi Premium</td>
                 {Array.from({ length: hp }, (_, i) => (
                   <td key={i} className="text-right py-1.5 px-2" style={{ color: (refiPremium[i] ?? 0) > 0 ? '#b91c1c' : 'rgba(17,17,17,0.25)' }}>
-                    {(refiPremium[i] ?? 0) > 0 ? `(${refiPremium[i].toFixed(1)})` : '—'}
+                    {(refiPremium[i] ?? 0) > 0 ? `(${fmtNumber(refiPremium[i])})` : '—'}
                   </td>
                 ))}
               </tr>
@@ -133,7 +134,7 @@ const DebtScheduleTable: React.FC = () => {
                 <td className="py-1.5 px-2 font-medium text-[10px] tracking-wider uppercase" style={{ color: 'rgba(17,17,17,0.4)' }}>OID Amort</td>
                 {oidAmort.map((v, i) => (
                   <td key={i} className="text-right py-1.5 px-2" style={{ color: v > 0 ? '#b45309' : 'rgba(17,17,17,0.25)' }}>
-                    {v > 0 ? v.toFixed(2) : '—'}
+                    {v > 0 ? fmtNumber(v, 2) : '—'}
                   </td>
                 ))}
               </tr>

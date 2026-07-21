@@ -6,6 +6,7 @@ import type {
 } from '../dealEngineTypes';
 import { oidAmortFromSchedule, oidTotal } from './oid';
 import { generateSensitivityTable } from './scenarios';
+import { SHOW_LEGACY_OUTPUTS } from '../legacyOutputs';
 
 let ExcelJS: typeof import('exceljs') | null = null;
 
@@ -292,7 +293,8 @@ export async function buildExcel(state: ModelState): Promise<Blob> {
     buildScenariosSheet(wb, state, ccy);
   }
   buildRiskSheet(wb, state, ccy, hp);
-  if (state.fragility) {
+  // PHASE 0: fragility sheet gated with the hidden UI tab (DIFF_LEDGER L-1) — the workbook must not contradict the screen.
+  if (SHOW_LEGACY_OUTPUTS && state.fragility) {
     buildFragilitySheet(wb, state, ccy);
   }
 
@@ -417,8 +419,9 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
     row += 2;
   }
 
-  // Reality check verdict
+  // Reality check verdict (legacy output — gated, DIFF_LEDGER L-3)
   const rc = state.exit_reality_check;
+  if (SHOW_LEGACY_OUTPUTS) {
   ws.mergeCells(row, 2, row, 3);
   ws.getCell(row, 2).value = 'EXIT REALITY CHECK';
   ws.getCell(row, 2).font = F_SECTION;
@@ -427,9 +430,10 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
   ws.getCell(row, 4).fill = verdictBg(rc.verdict);
   ws.getCell(row, 4).alignment = { horizontal: 'center' };
   row += 1;
+  } // end SHOW_LEGACY_OUTPUTS (cover reality-check verdict)
 
-  // Fragility classification (if computed)
-  if (state.fragility) {
+  // Fragility classification (legacy output — gated, DIFF_LEDGER L-1)
+  if (SHOW_LEGACY_OUTPUTS && state.fragility) {
     const fr = state.fragility;
     ws.mergeCells(row, 2, row, 3);
     ws.getCell(row, 2).value = 'STRESS CLASSIFICATION';
@@ -540,8 +544,8 @@ function buildCoverSheet(wb: WB, state: ModelState, ccy: string) {
     ['Cash Flow & Debt', 'Free cash flow build and tranche-level debt schedule'],
     ['Returns', 'IRR, MOIC, value creation bridge, EBITDA waterfall'],
     ['Scenarios', 'Bull / Base / Downside / Severe Downside scenario comparison (if generated)'],
-    ['Risk', 'Exit reality check, credit analysis, covenant headroom, ECF'],
-    ['Stress Testing', 'Fragility analysis — individual & combined stress scenarios'],
+    ['Risk', 'Credit analysis, covenant headroom, recovery waterfall, ECF'],
+    ...(SHOW_LEGACY_OUTPUTS ? ([['Stress Testing', 'Fragility analysis — individual & combined stress scenarios']] as [string, string][]) : []),
   ];
   for (let i = 0; i < sheets.length; i++) {
     const [sheet, desc] = sheets[i];
@@ -1933,7 +1937,8 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
   ws.getCell(row, 1).border = THICK_BOTTOM;
   row += 2;
 
-  // Verdict banner
+  // Verdict banner + exit metrics + flags: legacy reality-check surfaces, gated (DIFF_LEDGER L-3)
+  if (SHOW_LEGACY_OUTPUTS) {
   ws.mergeCells(row, 1, row, 4);
   ws.getCell(row, 1).value = `EXIT REALITY CHECK: ${rc.verdict.toUpperCase()}`;
   ws.getCell(row, 1).font = { ...F_WHITE_LG, color: { argb: WHITE } };
@@ -1985,6 +1990,7 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
     }
     row++;
   }
+  } // end SHOW_LEGACY_OUTPUTS (risk-sheet reality-check block)
 
   // Credit analysis detail
   if (ca.metrics_by_year.length) {
@@ -2042,7 +2048,7 @@ function buildRiskSheet(wb: WB, state: ModelState, ccy: string, hp: number) {
     row++;
 
     // Covenant headroom — all three covenants
-    const cov = state.credit_covenants ?? { leverage_covenant: 6.0, dscr_covenant: 1.15, fccr_covenant: 1.10 };
+    const cov = state.credit_covenants ?? { leverage_covenant: 6.0, dscr_covenant: 1.10, fccr_covenant: 1.15 }; // PHASE 0: aligned
     if (ca.covenant_headroom_by_year.length) {
       row = writeSectionHeader(ws, row, `COVENANT HEADROOM (Leverage ≤${cov.leverage_covenant.toFixed(1)}x | DSCR ≥${cov.dscr_covenant.toFixed(2)}x | FCCR ≥${cov.fccr_covenant.toFixed(2)}x)`, hp + 1);
       ws.getCell(row, 1).value = '';

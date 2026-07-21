@@ -1,89 +1,93 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Linkedin, Mail, ArrowUp, X } from 'lucide-react';
+import { TravelMotif } from './AmbientMotifs';
 
 const Contact: React.FC = () => {
   const [showEmailPopup, setShowEmailPopup] = useState(false);
+  const year = new Date().getFullYear();
 
   return (
     <div className="w-full page-container section-v-padding flex flex-col items-center justify-center text-center relative">
+      {/* Ambient motif — the travel thread: a flight path arcing toward the corner */}
+      <TravelMotif className="left-1/2 top-14 w-72 -translate-x-1/2 opacity-90 md:top-10 md:w-[26rem]" />
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         whileInView={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 1.5 }}
+        transition={{ duration: 1 }}
         viewport={{ once: true }}
-        className="space-y-12 md:space-y-16 max-w-2xl"
+        className="space-y-8 md:space-y-10 max-w-2xl relative z-10"
       >
-        <h2 className="font-montserrat text-amber-500/60 tracking-widest text-[10px] md:text-xs font-black uppercase">LET'S CONNECT</h2>
-        <h3 className="font-playfair text-fluid-h2 italic text-white/95">Thank You!</h3>
+        <h2 className="font-montserrat text-[#A25600] tracking-[0.2em] text-[11px] md:text-xs font-bold uppercase">Get in touch</h2>
+        <h3 className="font-display text-5xl md:text-7xl font-black text-ink">Let's connect.</h3>
 
-        <p className="font-playfair italic text-base md:text-2xl text-white/60 leading-relaxed">
+        <p className="font-display italic text-lg md:text-2xl text-muted leading-relaxed">
           Interested in working together or just want to say hello?
           <br className="hidden sm:block" /> I'd love to hear from you.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-8 md:gap-12 pt-12">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10 pt-6">
           <a
             href="https://in.linkedin.com/in/mridulmalani"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-4 group border-b border-white/10 pb-2 hover:border-amber-500 transition-all duration-500 min-h-[48px]"
+            className="flex items-center gap-3 group border-b border-ink/15 pb-2 hover:border-[#A25600] transition-all duration-300 min-h-[48px]"
             aria-label="Connect on LinkedIn"
           >
-            <Linkedin size={20} className="text-white/60 group-hover:text-amber-500 transition-colors" />
-            <span className="font-montserrat text-[10px] tracking-widest font-black uppercase text-white/60 group-hover:text-white">LINKEDIN</span>
+            <Linkedin size={20} className="text-muted group-hover:text-[#A25600] transition-colors" />
+            <span className="font-montserrat text-[11px] tracking-widest font-bold uppercase text-muted group-hover:text-ink">LinkedIn</span>
           </a>
           <button
             onClick={() => setShowEmailPopup(true)}
-            className="flex items-center gap-4 group border-b border-white/10 pb-2 hover:border-amber-500 transition-all duration-500 min-h-[48px]"
+            className="flex items-center gap-3 group border-b border-ink/15 pb-2 hover:border-[#A25600] transition-all duration-300 min-h-[48px]"
             aria-label="Show email address"
           >
-            <Mail size={20} className="text-white/60 group-hover:text-amber-500 transition-colors" />
-            <span className="font-montserrat text-[10px] tracking-widest font-black uppercase text-white/60 group-hover:text-white">EMAIL ME</span>
+            <Mail size={20} className="text-muted group-hover:text-[#A25600] transition-colors" />
+            <span className="font-montserrat text-[11px] tracking-widest font-bold uppercase text-muted group-hover:text-ink">Email me</span>
           </button>
         </div>
       </motion.div>
 
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className="absolute bottom-16 cursor-pointer flex flex-col items-center gap-4 opacity-60 hover:opacity-100 transition-all duration-500 group min-h-[48px]"
+        className="absolute bottom-16 cursor-pointer flex flex-col items-center gap-3 text-muted hover:text-ink transition-all duration-300 group min-h-[48px]"
         aria-label="Back to top"
       >
-        <ArrowUp size={24} className="text-amber-500 group-hover:-translate-y-2 transition-transform" />
-        <span className="font-montserrat text-[9px] tracking-widest uppercase font-black text-white/60">Back to Top</span>
+        <ArrowUp size={22} className="text-[#A25600] group-hover:-translate-y-1 transition-transform" />
+        <span className="font-montserrat text-[10px] tracking-widest uppercase font-bold">Back to top</span>
       </button>
 
       <div className="absolute bottom-6 left-0 right-0 text-center px-6">
-        <p className="text-[9px] text-white/40 font-montserrat tracking-widest uppercase font-black">
-          © 2025 Mridul Malani
+        <p className="text-[11px] text-muted font-montserrat tracking-widest uppercase font-semibold">
+          © {year} Mridul Malani
         </p>
       </div>
 
       {/* Email Popup */}
       {showEmailPopup && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm"
           onClick={() => setShowEmailPopup(false)}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-zinc-900 border border-amber-500/20 rounded-lg p-8 max-w-md mx-4 relative"
+            className="bg-white border border-ink/10 rounded-2xl p-8 max-w-md mx-4 relative shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setShowEmailPopup(false)}
-              className="absolute top-4 right-4 text-white/60 hover:text-amber-500 transition-colors"
+              className="absolute top-4 right-4 text-muted hover:text-ink transition-colors"
               aria-label="Close popup"
             >
               <X size={24} />
             </button>
-            <p className="text-white/90 text-lg text-center mt-2">
+            <p className="text-ink text-lg text-center mt-2">
               You can reach me at<br />
               <a
                 href="mailto:mridul.malani@alumni.ashoka.edu.in"
-                className="text-amber-500 hover:text-amber-400 transition-colors font-montserrat mt-2 inline-block"
+                className="text-[#A25600] hover:underline transition-colors font-montserrat mt-2 inline-block"
               >
                 mridul.malani@alumni.ashoka.edu.in
               </a>

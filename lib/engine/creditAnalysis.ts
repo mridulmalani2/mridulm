@@ -12,7 +12,7 @@ import type {
 // DSCR/FCCR raised to reflect typical bank-arranged LBO terms — 1.15x DSCR was
 // too aggressive and understated covenant tightness across the whole model.
 const DEFAULT_LEVERAGE_COV = 6.0;
-const DEFAULT_DSCR_COV = 1.25;
+const DEFAULT_DSCR_COV = 1.10; // PHASE 0: aligned with createDefaultModelState (DIFF_LEDGER L-2/L-7)
 const DEFAULT_FCCR_COV = 1.15;
 
 // First-lien / senior tranche types for the senior-leverage metric
