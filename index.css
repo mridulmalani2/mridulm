@@ -52,6 +52,24 @@ body {
   padding-bottom: clamp(4rem, 12vh, 12rem);
 }
 
+/* Home page — full-viewport "pages".
+
+   Each home section is one screen tall and its content is centred, so a scroll
+   from one section lands on the whole of the next rather than partway into it.
+   Snapping is proximity (not mandatory) so an expanded section taller than the
+   viewport — an opened project gallery, say — can still be scrolled through
+   without the snap fighting the momentum. Scoped to the home route via the
+   `snap-home` class HomePage puts on <html>, so other routes scroll normally. */
+html.snap-home {
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.snap-home {
+    scroll-snap-type: none;
+  }
+}
+
 .perspective-main {
   perspective: 2000px;
 }

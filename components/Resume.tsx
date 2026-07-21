@@ -117,7 +117,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.1, duration: 0.7 }}
         viewport={{ once: true }}
-        className="relative bg-white border border-ink/10 rounded-[2rem] p-8 md:p-12 flex flex-col gap-8 hover:border-ink/20 transition-all duration-300 h-full min-h-[480px] shadow-sm hover:shadow-xl"
+        className="relative bg-white border border-ink/10 rounded-[1.75rem] p-5 md:p-7 flex flex-col gap-3.5 hover:border-ink/20 transition-all duration-300 h-full min-h-[340px] shadow-sm hover:shadow-xl"
       >
         <div className="flex justify-between items-start">
           <span
@@ -136,7 +136,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         </div>
 
         <div className="space-y-3">
-          <h4 className="font-display text-3xl sm:text-4xl font-bold text-ink leading-tight">
+          <h4 className="font-display text-2xl sm:text-3xl font-bold text-ink leading-tight">
             {event.company}
           </h4>
           <p className="font-montserrat text-[#A25600] text-[10px] font-black tracking-widest uppercase flex items-center gap-3">
@@ -145,7 +145,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
           </p>
         </div>
 
-        <div className="flex-1 space-y-5 pt-8 border-t border-ink/10">
+        <div className="flex-1 space-y-3 pt-4 border-t border-ink/10">
           {event.description.map((desc, i) => (
             <div key={i} className="flex gap-4">
               <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-saffron shrink-0" aria-hidden="true" />
@@ -156,7 +156,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
           ))}
         </div>
 
-        <div className="pt-8 border-t border-ink/10 grid grid-cols-2 gap-4 mt-auto">
+        <div className="pt-4 border-t border-ink/10 grid grid-cols-2 gap-4 mt-auto">
           <div className="flex items-center gap-3 text-muted text-[10px] font-black tracking-widest uppercase">
             <MapPin size={14} className="text-[#A25600]" aria-hidden="true" />
             {event.location}
@@ -186,27 +186,27 @@ const Resume: React.FC = () => {
   };
 
   return (
-    <div className="w-full section-v-padding flex flex-col justify-center overflow-hidden">
-      <div className="page-container mb-16 md:mb-24 text-center">
+    <div className="w-full flex flex-col justify-center overflow-hidden py-8">
+      <div className="page-container mb-6 md:mb-7 text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
-          className="space-y-6"
+          className="space-y-3"
         >
-          <h2 className="font-montserrat text-[#A25600] text-[11px] tracking-widest font-bold uppercase inline-block border-b border-[#A25600]/30 pb-4">
+          <h2 className="font-montserrat text-[#A25600] text-[11px] tracking-widest font-bold uppercase inline-block border-b border-[#A25600]/30 pb-2">
             Career Timeline
           </h2>
-          <h3 className="font-display text-4xl md:text-6xl font-black text-ink leading-tight">
-            Education &amp; <br className="hidden sm:block"/> Professional Journey
+          <h3 className="font-display text-3xl md:text-4xl font-black text-ink leading-tight">
+            Education &amp; Professional Journey
           </h3>
         </motion.div>
       </div>
 
       <div className="relative">
         {/* Timeline Header - Adaptive Progress */}
-        <div className="page-container mb-12 md:mb-16 flex items-center gap-8 md:gap-12">
+        <div className="page-container mb-6 md:mb-7 flex items-center gap-8 md:gap-12">
           <span className="font-montserrat text-[10px] font-black tracking-widest text-[#A25600] uppercase shrink-0">Present</span>
           <div className="flex-1 h-px bg-ink/10 relative" role="progressbar" aria-label="Timeline scroll progress">
             <motion.div
@@ -246,7 +246,7 @@ const Resume: React.FC = () => {
           role="region"
           aria-label="Career timeline"
           tabIndex={0}
-          className="flex overflow-x-auto pb-16 pt-10 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+          className="flex overflow-x-auto pb-6 pt-4 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
         >
           {timelineData.map((event, i) => (
             <TimelineCard key={`${event.company}-${i}`} event={event} index={i} />

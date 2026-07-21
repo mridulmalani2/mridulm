@@ -163,7 +163,7 @@ const Hero: React.FC = () => {
   let charIndex = -1;
 
   return (
-    <div className="relative flex w-full min-h-screen flex-col overflow-hidden">
+    <div className="relative flex w-full min-h-[100svh] flex-col overflow-hidden">
       <HeroBackdrop />
 
       {/* Content takes the free space and centres inside it; the ticker keeps

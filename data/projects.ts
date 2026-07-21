@@ -87,7 +87,7 @@ export const PROJECTS: Project[] = [
     link: 'https://dnastrat.vercel.app/',
     tags: ['Adaptive Testing', 'Quant', 'GTM'],
     category: 'finance',
-    // board image coming — renders the styled placeholder until then
+    image: '/projects/dnastrat.png',
     status: 'mvp',
     detail:
       'An adaptive assessment platform for quant-trading aptitude, built as an MVP for D+A Strategies as part of a proposed go-to-market strategy — the test adjusts to the candidate as they answer, so ability gets measured faster and with fewer questions.',
@@ -99,7 +99,7 @@ export const PROJECTS: Project[] = [
       'AI automation for M&A advisory — automating the repetitive, judgment-light parts of deal execution so the team’s time goes where judgment matters.',
     tags: ['AI Automation', 'M&A', 'Workflow'],
     category: 'finance',
-    // board image coming — renders the styled placeholder until then
+    image: '/projects/automation.png',
     status: 'building',
     detail:
       'Built during my summer internship: AI automation for an M&A advisory workflow. The idea is simple — deal execution is full of repetitive, judgment-light work, and automating it gives the team its hours back for the parts where judgment actually matters.',

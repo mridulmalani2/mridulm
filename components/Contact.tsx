@@ -8,7 +8,7 @@ const Contact: React.FC = () => {
   const year = new Date().getFullYear();
 
   return (
-    <div className="w-full page-container section-v-padding flex flex-col items-center justify-center text-center relative">
+    <div className="w-full page-container min-h-[100svh] py-24 flex flex-col items-center justify-center text-center relative">
       {/* Ambient motif — the travel thread: a flight path arcing toward the corner */}
       <TravelMotif className="left-1/2 top-14 w-72 -translate-x-1/2 opacity-90 md:top-10 md:w-[26rem]" />
       <motion.div

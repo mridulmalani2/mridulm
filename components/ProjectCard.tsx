@@ -10,6 +10,12 @@ interface ProjectCardProps {
   accent: string;
   /** Open the detail popup for this project (cards never redirect). */
   onOpen: (project: Project) => void;
+  /**
+   * Fixed pixel height (laptop fit layout). When set, the card is sized by
+   * height and its width follows the 3:4 ratio; when absent it fills its
+   * grid cell's width (mobile).
+   */
+  heightPx?: number;
 }
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -35,7 +41,7 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 /** The frame every card fills — one ratio, so the gallery is always even. */
 const CARD_ASPECT = 3 / 4;
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpen }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpen, heightPx }) => {
   const prefersReduced = useReducedMotion();
   const tiltRef = useRef<HTMLDivElement>(null);
   // Boards are 3:4; if a future one isn't, letterbox it rather than crop its
@@ -71,19 +77,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
       animate={{ opacity: 1, y: 0, rotate: 0 }}
       exit={prefersReduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.97 }}
       transition={{ delay: 0.08 + index * 0.07, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      className={heightPx ? 'h-full' : 'w-full'}
+      style={heightPx ? { height: heightPx } : undefined}
     >
       <button
         type="button"
         onClick={() => onOpen(project)}
         aria-label={`${project.title} — ${project.story}`}
         aria-haspopup="dialog"
-        className="group block w-full text-left focus-visible:outline-none"
+        className={`group block text-left focus-visible:outline-none ${heightPx ? 'h-full' : 'w-full'}`}
       >
         <div
           ref={tiltRef}
           onMouseMove={handleMove}
           onMouseLeave={handleLeave}
-          className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink shadow-[0_16px_34px_-20px_rgba(26,26,34,0.5)] ring-1 ring-ink/10 transition-[transform,box-shadow] duration-300 ease-out group-hover:shadow-[0_30px_60px_-22px_var(--glow)] motion-reduce:!transform-none"
+          className={`relative aspect-[3/4] overflow-hidden rounded-xl bg-ink shadow-[0_16px_34px_-20px_rgba(26,26,34,0.5)] ring-1 ring-ink/10 transition-[transform,box-shadow] duration-300 ease-out group-hover:shadow-[0_30px_60px_-22px_var(--glow)] motion-reduce:!transform-none ${heightPx ? 'h-full w-auto' : 'w-full'}`}
           style={{ '--glow': `${accent}66` } as React.CSSProperties}
         >
           {project.image ? (
