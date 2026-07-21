@@ -1,24 +1,24 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Send } from 'lucide-react';
 
 /**
- * Ambient "passion motifs" — soft, blurred, pastel art in the same visual
+ * Ambient "passion motifs" - soft, blurred, pastel art in the same visual
  * language as the hero's flag corners. Each one hints at a part of who Mridul
  * is (finance, cars, basketball, travel) and lives behind a section heading.
  *
  * Ground rules, so they add character without turning gimmicky:
  *  • decorative only: aria-hidden, no tab stops, (almost) no pointer events
- *  • pastel + blur + dissolve — never saturated blocks
+ *  • pastel + blur + dissolve - never saturated blocks
  *  • motion is gentle and respects prefers-reduced-motion via the app-level
  *    MotionConfig (transform animations are dropped automatically)
  */
 
-/* ── Finance — an ascending pastel chart line (Projects) ─────────────────── */
+/* ── Finance - an ascending pastel chart line (Projects) ─────────────────── */
 
 export const FinanceMotif: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div aria-hidden="true" className={`pointer-events-none absolute ${className}`}>
-    {/* faint tonal wash, single hue — no pastel blend */}
+    {/* faint tonal wash, single hue - no pastel blend */}
     <div
       className="absolute -inset-10 opacity-50 blur-2xl"
       style={{
@@ -69,13 +69,13 @@ export const FinanceMotif: React.FC<{ className?: string }> = ({ className = '' 
   </div>
 );
 
-/* ── Travel — dashed flight path with a paper plane (Contact, 404) ───────── */
+/* ── Travel - dashed flight path with a paper plane (Contact, 404) ───────── */
 
 export const TravelMotif: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div aria-hidden="true" className={`pointer-events-none absolute ${className}`}>
     <div className="relative">
       <svg viewBox="0 0 360 160" className="h-auto w-full">
-        {/* dotted trail — faded in rather than "drawn": framer's pathLength
+        {/* dotted trail - faded in rather than "drawn": framer's pathLength
             animation overwrites stroke-dasharray, which would erase the dots */}
         <motion.path
           d="M12 140 C 90 152, 150 96, 200 72 S 300 40, 330 26"
@@ -109,18 +109,79 @@ export const TravelMotif: React.FC<{ className?: string }> = ({ className = '' }
   </div>
 );
 
-/* ── Car — a small silhouette that rides the career-timeline track ────────
-   Colour comes from currentColor so callers set it with a text-* class. */
+/* ── Car - a sleek coupe that rides the career-timeline track ─────────────
+   A low grand-tourer silhouette with a glass greenhouse, a headlight, a warm
+   under-glow and wheels that actually spin as it drives, plus a short speed
+   trail streaming off the tail. Body colour comes from currentColor so callers
+   set it with a text-* class; the accent is the saffron the timeline uses.
+   Wheels hold still for reduced-motion. */
 
-export const CarGlyph: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <svg viewBox="0 0 64 26" className={className} aria-hidden="true">
-    <path
-      d="M3 19 C 5 13, 11 12, 17 11 C 22 5.5, 30 4.5, 37 6 C 43 7, 46 9, 49 11.5 C 55 12.5, 60 15, 61 18.5 L 61 20 L 3 20 Z"
-      fill="currentColor"
-    />
-    <circle cx="15" cy="20" r="4.5" fill="currentColor" />
-    <circle cx="47" cy="20" r="4.5" fill="currentColor" />
-    <circle cx="15" cy="20" r="1.6" fill="#FDFCFA" />
-    <circle cx="47" cy="20" r="1.6" fill="#FDFCFA" />
-  </svg>
+const SpinWheel: React.FC<{ cx: number; cy: number; reduce: boolean | null }> = ({
+  cx,
+  cy,
+  reduce,
+}) => (
+  <g transform={`translate(${cx} ${cy})`}>
+    <circle r="5.6" fill="currentColor" />
+    <circle r="3.5" fill="#FDFCFA" />
+    <motion.g
+      animate={reduce ? undefined : { rotate: 360 }}
+      transition={{ repeat: Infinity, duration: 0.7, ease: 'linear' }}
+      style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+    >
+      <rect x="-0.55" y="-3.3" width="1.1" height="6.6" rx="0.55" fill="currentColor" />
+      <rect x="-3.3" y="-0.55" width="6.6" height="1.1" rx="0.55" fill="currentColor" />
+      <rect x="-0.55" y="-3.3" width="1.1" height="6.6" rx="0.55" fill="currentColor" transform="rotate(45)" />
+      <rect x="-0.55" y="-3.3" width="1.1" height="6.6" rx="0.55" fill="currentColor" transform="rotate(-45)" />
+    </motion.g>
+    <circle r="1.15" fill="currentColor" />
+  </g>
 );
+
+export const CarGlyph: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const reduce = useReducedMotion();
+  return (
+    <svg viewBox="0 0 92 34" className={className} aria-hidden="true">
+      {/* speed trail streaming off the tail */}
+      {!reduce && (
+        <g stroke="#E8873A" strokeLinecap="round">
+          {[
+            { y: 15, w: 10, o: 0.5, d: 0 },
+            { y: 20, w: 14, o: 0.35, d: 0.15 },
+            { y: 25, w: 8, o: 0.28, d: 0.3 },
+          ].map((l, i) => (
+            <motion.line
+              key={i}
+              x1={2}
+              x2={2 + l.w}
+              y1={l.y}
+              y2={l.y}
+              strokeWidth="1.4"
+              strokeOpacity={l.o}
+              animate={{ x: [-3, -9], opacity: [l.o, 0] }}
+              transition={{ repeat: Infinity, duration: 0.6, ease: 'easeOut', delay: l.d }}
+            />
+          ))}
+        </g>
+      )}
+
+      {/* warm under-glow */}
+      <ellipse cx="48" cy="30" rx="30" ry="3.4" fill="#FFB56B" opacity="0.35" />
+
+      {/* body - low grand-tourer profile */}
+      <path
+        d="M12 26 C 12 20, 18 18, 24 17.5 C 30 12, 40 9.5, 52 10 C 61 10.4, 68 12.6, 74 16 C 80 16.4, 85 18.4, 86 22 C 86.6 24.4, 85.5 26, 83 26 Z"
+        fill="currentColor"
+      />
+      {/* glass greenhouse */}
+      <path d="M31 16.4 C 35 12.6, 42 11, 50 11.4 L 55 16.4 Z" fill="#FFB56B" opacity="0.55" />
+      <path d="M57 16.4 L 52 11.5 C 58 12, 63 13.6, 67 16.4 Z" fill="#FFB56B" opacity="0.4" />
+      {/* headlight */}
+      <circle cx="83" cy="20.5" r="1.5" fill="#FFE580" />
+      <circle cx="83" cy="20.5" r="3" fill="#FFE580" opacity="0.3" />
+
+      <SpinWheel cx={30} cy={26} reduce={reduce} />
+      <SpinWheel cx={70} cy={26} reduce={reduce} />
+    </svg>
+  );
+};

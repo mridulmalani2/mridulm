@@ -1,6 +1,9 @@
 
 export type ProjectCategory = 'finance' | 'path-ideas' | 'hobby';
 
+/** Where the project stands — drives the status chip and link treatment. */
+export type ProjectStatus = 'live' | 'mvp' | 'parked' | 'building';
+
 export interface Project {
   title: string;        // display name (not the bare domain)
   domain?: string;      // e.g. "experienceindia.me" — shown as a subtle label
@@ -10,6 +13,11 @@ export interface Project {
   category: ProjectCategory;
   /** Full project board in public/projects. Omit to fall back to a text card. */
   image?: string;
+  status?: ProjectStatus;
+  /** Longer paragraph for the popup. Falls back to `story` when absent. */
+  detail?: string;
+  /** One or two lines of honest context — why it's parked, what's in motion. */
+  statusNote?: string;
 }
 
 export interface ProjectSection {

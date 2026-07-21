@@ -33,18 +33,18 @@ const Hobbies: React.FC = () => {
 
   if (isLoading) {
     return (
-      <section id="hobbies" className="min-h-screen py-32 px-6 flex items-center justify-center">
+      <div className="w-full px-6 py-16 flex items-center justify-center">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {[1, 2, 3].map(i => (
             <div key={i} className="w-64 h-80 bg-ink/5 animate-pulse rounded-2xl" />
           ))}
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <div id="hobbies" className="min-h-screen py-32 px-6 text-ink relative transition-all duration-700">
+    <div className="w-full px-6 py-12 text-ink relative transition-all duration-700">
       <div className="max-w-7xl mx-auto">
         <AnimatePresence mode="wait">
           {!selectedAlbum ? (
@@ -56,7 +56,7 @@ const Hobbies: React.FC = () => {
               transition={{ duration: 0.6 }}
             >
               {/* Header */}
-              <div className="mb-20 relative">
+              <div className="mb-10 relative">
                 <motion.div
                   initial={{ opacity: 0, x: -30 }}
                   whileInView={{ opacity: 1, x: 0 }}
@@ -70,7 +70,7 @@ const Hobbies: React.FC = () => {
               </div>
 
               {/* Album Stacks Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-12">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-10 gap-x-8">
                 {displayedAlbums.map((album, i) => (
                   <motion.div
                     key={`${album.name}-${i}`}
@@ -85,7 +85,7 @@ const Hobbies: React.FC = () => {
                     aria-label={`View ${album.name} album with ${album.images.length} images`}
                     onKeyDown={(e) => e.key === 'Enter' && openAlbum(album)}
                   >
-                    <div className="relative w-full max-w-sm aspect-[4/5] mb-8">
+                    <div className="relative w-full max-w-[17rem] aspect-[4/5] mb-4">
                       {/* Stack Visuals */}
                       <div className="absolute inset-0 bg-ink/5 border border-ink/10 rounded-2xl translate-y-4 -rotate-2 scale-[0.98] transition-transform duration-700 group-hover:translate-y-6 group-hover:-rotate-4" />
                       <div className="absolute inset-0 bg-ink/5 border border-ink/10 rounded-2xl translate-y-2 rotate-1 scale-[0.99] transition-transform duration-700 group-hover:translate-y-3 group-hover:rotate-2" />
@@ -122,7 +122,7 @@ const Hobbies: React.FC = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8 }}
                   viewport={{ once: true }}
-                  className="mt-20 flex justify-center"
+                  className="mt-10 flex justify-center"
                 >
                   <button
                     onClick={() => setShowAll(true)}

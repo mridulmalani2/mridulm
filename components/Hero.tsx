@@ -9,10 +9,10 @@ import {
 import LogoTicker from './LogoTicker';
 
 /**
- * Hero backdrop — "quiet ambition".
+ * Hero backdrop - "quiet ambition".
  *
  * Three ideas, no decoration:
- *  1. A fine graph-paper lattice — the visual grammar of terminals, models and
+ *  1. A fine graph-paper lattice - the visual grammar of terminals, models and
  *     spreadsheets. Precision, not ornament.
  *  2. Dawn light rising off the horizon line: warm at the top, clean below.
  *     Elevation and open sky rather than colour for colour's sake.
@@ -94,7 +94,7 @@ const HeroBackdrop: React.FC = () => {
       className="absolute inset-0 overflow-hidden pointer-events-none bg-canvas"
       aria-hidden="true"
     >
-      {/* Dawn light off the horizon — one warm hue, top-weighted */}
+      {/* Dawn light off the horizon - one warm hue, top-weighted */}
       <div
         className="absolute inset-0"
         style={{
@@ -163,7 +163,7 @@ const Hero: React.FC = () => {
   let charIndex = -1;
 
   return (
-    <div className="relative flex w-full min-h-screen flex-col overflow-hidden">
+    <div className="relative flex w-full min-h-[100svh] flex-col overflow-hidden">
       <HeroBackdrop />
 
       {/* Content takes the free space and centres inside it; the ticker keeps
@@ -174,9 +174,9 @@ const Hero: React.FC = () => {
         transition={{ duration: 0.8 }}
         className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pt-20 pb-4 text-center"
       >
-        {/* Profile image — larger, framed for the light canvas */}
+        {/* Profile image - larger, framed for the light canvas */}
         <div className="relative mb-6 md:mb-8">
-          {/* A neutral lift rather than a colour halo — the portrait should sit
+          {/* A neutral lift rather than a colour halo - the portrait should sit
               on the page, not glow. */}
           <div
             className="absolute -inset-6 rounded-full blur-2xl"
@@ -196,7 +196,7 @@ const Hero: React.FC = () => {
           </div>
         </div>
 
-        {/* Name — 3D per-character entrance */}
+        {/* Name - 3D per-character entrance */}
         <h1
           aria-label="Mridul Malani"
           className="font-display font-black tracking-tight text-ink mb-5 leading-[0.95]"

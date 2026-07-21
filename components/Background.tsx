@@ -2,7 +2,7 @@ import React from 'react';
 
 /**
  * Full-page base for the light theme: clean canvas with a whisper of grain.
- * Deliberately plain — the only colour on the landing page comes from the two
+ * Deliberately plain - the only colour on the landing page comes from the two
  * flag corners in the Hero, so the rest of the site stays crisp white.
  */
 const Background: React.FC = () => {

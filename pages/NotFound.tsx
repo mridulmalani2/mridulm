@@ -7,7 +7,7 @@ const NotFound: React.FC = () => {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center">
-      {/* A plane slightly off course — fitting for a lost page */}
+      {/* A plane slightly off course - fitting for a lost page */}
       <TravelMotif className="right-10 top-28 hidden w-64 md:block" />
       <p className="mb-4 font-montserrat text-xs font-bold uppercase tracking-[0.25em] text-[#A25600]">
         Error 404
