@@ -55,7 +55,13 @@ export interface TaxYearInputs {
   /** UNCAPPED ordinary deduction (§6.1/§7). */
   financing_fee_amortization: number;
   commitment_fees: number;
-  /** Unamortized OID + financing fees written off on retirement — exit year, or a full early retirement (§6.2/§7/§9). 0 otherwise. */
+  /**
+   * Unamortized OID + financing fees written off on retirement (§6.2/§7/§9). 0 otherwise.
+   * TIMING [v1.0.3 §7]: the TAX deduction for a FULL EARLY retirement in year t belongs in
+   * year t+1's input (book write-off stays in year t; §5 sequentiality — retirement is only
+   * known post-waterfall). A year-N retirement merges into the exit-year deduction, which
+   * IS passed in year N. The caller owns this placement.
+   */
   retirement_writeoff: number;
 }
 
@@ -125,7 +131,11 @@ export function runUnleveredTaxYear(
 ): UnleveredTaxYearResult {
   const out = taxYear(
     { ...toKernelPolicy(tax), s163j_applies: false },
-    state,
+    // Zero the §163(j) carryforward defensively (C3 review): with s163j_applies false the
+    // kernel RELEASES any incoming carryforward in full — an interest-shield leak into the
+    // unlevered stream (DR-2 Item 6's #1 flagged error) if a caller ever crossed the
+    // levered state in. The documented chain keeps it 0; this makes the guarantee real.
+    { ...state, s163j_carryforward: 0 },
     { ebit: y.ebitda - y.da, ati: 0, capped_interest_pool: 0, uncapped_deductions: 0 },
   );
   return {
