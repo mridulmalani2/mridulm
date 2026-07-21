@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { Project, ProjectStatus } from '../types';
@@ -32,9 +32,21 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
  * button. A board-less project renders an accent placeholder in the same
  * proportions, keeping the gallery even until its image lands.
  */
+/** The frame every card fills — one ratio, so the gallery is always even. */
+const CARD_ASPECT = 3 / 4;
+
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpen }) => {
   const prefersReduced = useReducedMotion();
   const tiltRef = useRef<HTMLDivElement>(null);
+  // Boards are 3:4; if a future one isn't, letterbox it rather than crop its
+  // baked-in text — the frame size never changes, so the grid stays uniform.
+  const [fit, setFit] = useState<'cover' | 'contain'>('cover');
+  const onImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const ratio = img.naturalWidth / img.naturalHeight;
+    setFit(Math.abs(ratio - CARD_ASPECT) > 0.02 ? 'contain' : 'cover');
+  };
 
   // Pointer-tracking tilt, written straight to the element so React never
   // re-renders on mousemove. Fine-pointer + motion-ok users only.
@@ -71,7 +83,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
           ref={tiltRef}
           onMouseMove={handleMove}
           onMouseLeave={handleLeave}
-          className="relative overflow-hidden rounded-xl shadow-[0_16px_34px_-20px_rgba(26,26,34,0.5)] ring-1 ring-ink/10 transition-[transform,box-shadow] duration-300 ease-out group-hover:shadow-[0_30px_60px_-22px_var(--glow)] motion-reduce:!transform-none"
+          className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink shadow-[0_16px_34px_-20px_rgba(26,26,34,0.5)] ring-1 ring-ink/10 transition-[transform,box-shadow] duration-300 ease-out group-hover:shadow-[0_30px_60px_-22px_var(--glow)] motion-reduce:!transform-none"
           style={{ '--glow': `${accent}66` } as React.CSSProperties}
         >
           {project.image ? (
@@ -79,7 +91,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
               <img
                 src={project.image}
                 alt={`${project.title} — ${project.story}`}
-                className="block w-full transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:!transform-none"
+                onLoad={onImgLoad}
+                className={`absolute inset-0 h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:!transform-none ${
+                  fit === 'cover' ? 'object-cover object-top' : 'object-contain'
+                }`}
                 loading="lazy"
               />
               {/* hover scrim — surfaces the title + status over the board */}
@@ -96,10 +111,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
               </div>
             </>
           ) : (
-            // board still in the shop — an accent field in the same
-            // proportions, so the gallery stays even until the image lands
+            // board still in the shop — an accent field filling the same
+            // frame, so the gallery stays even until the image lands
             <div
-              className="relative flex aspect-[3/4] flex-col justify-between p-6"
+              className="absolute inset-0 flex flex-col justify-between p-6"
               style={{
                 background: `linear-gradient(150deg, ${accent} 0%, ${accent}CC 55%, ${accent}99 100%)`,
               }}
