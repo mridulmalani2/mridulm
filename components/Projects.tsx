@@ -12,7 +12,7 @@ const GAP = 16;
 
 /**
  * Given the box the gallery may occupy, find the card height that fits all
- * `n` cards the largest — trying every row count and keeping the roomiest
+ * `n` cards the largest - trying every row count and keeping the roomiest
  * arrangement. Cards stay 3:4, so a taller card is a bigger card. Returns the
  * chosen height and the columns that go with it, so the row can be width-capped
  * to exactly that many (and any short last row centres cleanly).
@@ -31,10 +31,10 @@ function fitLayout(n: number, W: number, H: number) {
 }
 
 /**
- * "Things I've built" — a single stage with two states.
+ * "Things I've built" - a single stage with two states.
  *
  * Overview shows the three section boards. Picking one dissolves the trio in
- * place and the section's project gallery fades in where they stood — no panel
+ * place and the section's project gallery fades in where they stood - no panel
  * unfolding below, no page jump. On a laptop the gallery sizes its cards to fit
  * the whole set on one screen (a clean, count-aware arrangement rather than a
  * grid that spills); on a phone it falls back to a scrollable two-up grid.
@@ -61,9 +61,12 @@ const Projects: React.FC = () => {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  // Measure the gallery box and derive the card size that fits every card.
-  // A callback ref (not useRef) so measurement fires when the node actually
-  // mounts — AnimatePresence mode="wait" delays that past the state change.
+  // Derive the card size that fits every card. Width comes from the gallery
+  // box (a callback ref, not useRef, so it fires when AnimatePresence actually
+  // mounts the node); height comes from the viewport minus a reserve for the
+  // navbar, the panel header and the margins, so the panel hugs its content and
+  // sits centred with clear room above and below rather than a fixed slab.
+  const HEIGHT_RESERVE = 360;
   const [galleryEl, setGalleryEl] = useState<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState<{ cardH: number; cols: number } | null>(null);
   useEffect(() => {
@@ -73,8 +76,8 @@ const Projects: React.FC = () => {
     }
     const measure = () => {
       const W = galleryEl.clientWidth;
-      const H = galleryEl.clientHeight;
-      if (W > 0 && H > 0) setLayout(fitLayout(openProjects.length, W, H));
+      const H = Math.max(window.innerHeight - HEIGHT_RESERVE, 260);
+      if (W > 0) setLayout(fitLayout(openProjects.length, W, H));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -96,8 +99,8 @@ const Projects: React.FC = () => {
 
   return (
     <div className="page-container relative w-full py-6">
-      {/* Section header — steps aside when a section is open so the gallery
-          gets the whole viewport (its own "01 — Finance" header keeps context). */}
+      {/* Section header - steps aside when a section is open so the gallery
+          gets the whole viewport (its own "01 - Finance" header keeps context). */}
       <AnimatePresence initial={false}>
         {!openSection && (
           <motion.header
@@ -114,14 +117,14 @@ const Projects: React.FC = () => {
               Things I've <span className="text-[#A25600]">built</span>
             </h2>
             <p className="mt-3 text-base text-muted md:text-lg">
-              Three kinds of work — the finance tools, the ideas still cooking, and the things
+              Three kinds of work - the finance tools, the ideas still cooking, and the things
               I make for the joy of it. Pick one to see what's inside.
             </p>
           </motion.header>
         )}
       </AnimatePresence>
 
-      {/* The stage — boards and gallery trade places here.
+      {/* The stage - boards and gallery trade places here.
           min-height keeps the page from jumping during the hand-off. */}
       <div className="relative min-h-[360px]">
         <AnimatePresence mode="wait" initial={false}>
@@ -159,13 +162,13 @@ const Projects: React.FC = () => {
               animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
               exit={stageExit}
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto flex h-[82vh] w-full max-w-5xl flex-col rounded-2xl p-5 md:p-6"
+              className="mx-auto w-full max-w-5xl rounded-2xl p-5 md:p-7"
               style={{
                 background: `linear-gradient(165deg, ${openSection.accent}14 0%, ${openSection.tint}99 45%, transparent 100%)`,
                 boxShadow: `inset 0 0 0 1px ${openSection.accent}1F`,
               }}
             >
-              <div className="mb-5 flex shrink-0 flex-wrap items-start justify-between gap-4">
+              <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <div className="max-w-3xl">
                   <button
                     onClick={() => setOpenId(null)}
@@ -178,7 +181,7 @@ const Projects: React.FC = () => {
                       className="font-montserrat text-[11px] font-bold uppercase tracking-[0.2em]"
                       style={{ color: openSection.accent }}
                     >
-                      {openSection.index} — {openSection.title}
+                      {openSection.index} - {openSection.title}
                     </span>
                     <p className="mt-2 font-display text-base italic leading-relaxed text-ink/75 md:text-lg">
                       {openSection.intro}
@@ -194,11 +197,11 @@ const Projects: React.FC = () => {
               </div>
 
               {isWide ? (
-                /* Laptop: cards sized so the whole set fits this box, rows
-                   centred (a short last row too). */
-                <div ref={setGalleryEl} className="relative min-h-0 flex-1">
+                /* Laptop: cards sized from the viewport budget so the whole set
+                   fits, the panel hugs them, and short last rows stay centred. */
+                <div ref={setGalleryEl} className="w-full">
                   <div
-                    className="mx-auto flex h-full flex-wrap items-center justify-center content-center"
+                    className="mx-auto flex flex-wrap items-center justify-center"
                     style={{ maxWidth: rowMaxW || undefined, gap: GAP }}
                   >
                     {layout &&
@@ -216,7 +219,7 @@ const Projects: React.FC = () => {
                 </div>
               ) : (
                 /* Phone: a clean two-up grid that scrolls if the set is large. */
-                <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-y-auto pr-0.5">
+                <div className="grid grid-cols-2 gap-4">
                   {openProjects.map((project, i) => (
                     <ProjectCard
                       key={project.title}

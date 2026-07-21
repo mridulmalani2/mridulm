@@ -18,7 +18,7 @@ const STATUS_META: Record<ProjectStatus, { label: string; dotClass: string }> = 
 };
 
 /**
- * The project popup — opens instead of redirecting.
+ * The project popup - opens instead of redirecting.
  *
  * Warm-canvas cousin of the deal engine's MemoModal: blurred cream backdrop,
  * click-outside and Esc to close, scroll locked underneath. The board image
@@ -80,7 +80,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, section, onClose }
         </button>
 
         <div className="overflow-y-auto">
-          {/* Hero — the board itself, or its accent stand-in */}
+          {/* Hero - the board itself, or its accent stand-in */}
           {project.image ? (
             <img
               src={project.image}
@@ -95,7 +95,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, section, onClose }
               }}
             >
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/70">
-                {section.index} — {section.title}
+                {section.index} - {section.title}
               </span>
             </div>
           )}

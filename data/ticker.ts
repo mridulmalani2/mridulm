@@ -2,11 +2,11 @@
  * Landing-page ticker content.
  *
  * ─────────────────────────────────────────────────────────────────────────
- *  MRIDUL — logos live in public/logos/ and are wired up below. To swap one,
+ *  MRIDUL - logos live in public/logos/ and are wired up below. To swap one,
  *  drop the new file in that folder and update its `logo:` path here.
  *
  *  If a path is wrong or the file is missing, that entry simply shows no logo
- *  chip (just the symbol) rather than a broken image — see LogoTicker.
+ *  chip (just the symbol) rather than a broken image - see LogoTicker.
  *
  *  Order below = display order. Biggest / most finance-relevant names first.
  * ─────────────────────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@
 export interface TickerCompany {
   /** Short mono symbol, ticker-style. */
   symbol: string;
-  /** Full name — used for the tooltip/aria label. */
+  /** Full name - used for the tooltip/aria label. */
   name: string;
   /** Years, shown as the "quote" value. */
   period: string;

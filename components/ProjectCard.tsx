@@ -6,7 +6,7 @@ import { Project, ProjectStatus } from '../types';
 interface ProjectCardProps {
   project: Project;
   index: number;
-  /** Section accent — drives the hover glow and the placeholder field. */
+  /** Section accent - drives the hover glow and the placeholder field. */
   accent: string;
   /** Open the detail popup for this project (cards never redirect). */
   onOpen: (project: Project) => void;
@@ -28,7 +28,7 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 /**
  * A project tile in the depth gallery.
  *
- * Enters with a stagger — a small deal-tilt that settles flat, a nod to a hand
+ * Enters with a stagger - a small deal-tilt that settles flat, a nod to a hand
  * of cards without the old fan's overlap problems. Hover lifts it, deepens the
  * shadow into the section's accent, and tilts gently toward the pointer
  * (skipped for touch and reduced-motion users). Click opens the popup; the
@@ -38,14 +38,14 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
  * button. A board-less project renders an accent placeholder in the same
  * proportions, keeping the gallery even until its image lands.
  */
-/** The frame every card fills — one ratio, so the gallery is always even. */
+/** The frame every card fills - one ratio, so the gallery is always even. */
 const CARD_ASPECT = 3 / 4;
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpen, heightPx }) => {
   const prefersReduced = useReducedMotion();
   const tiltRef = useRef<HTMLDivElement>(null);
   // Boards are 3:4; if a future one isn't, letterbox it rather than crop its
-  // baked-in text — the frame size never changes, so the grid stays uniform.
+  // baked-in text - the frame size never changes, so the grid stays uniform.
   const [fit, setFit] = useState<'cover' | 'contain'>('cover');
   const onImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -83,7 +83,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
       <button
         type="button"
         onClick={() => onOpen(project)}
-        aria-label={`${project.title} — ${project.story}`}
+        aria-label={`${project.title} - ${project.story}`}
         aria-haspopup="dialog"
         className={`group block text-left focus-visible:outline-none ${heightPx ? 'h-full' : 'w-full'}`}
       >
@@ -98,14 +98,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
             <>
               <img
                 src={project.image}
-                alt={`${project.title} — ${project.story}`}
+                alt={`${project.title} - ${project.story}`}
                 onLoad={onImgLoad}
                 className={`absolute inset-0 h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:!transform-none ${
                   fit === 'cover' ? 'object-cover object-top' : 'object-contain'
                 }`}
                 loading="lazy"
               />
-              {/* hover scrim — surfaces the title + status over the board */}
+              {/* hover scrim - surfaces the title + status over the board */}
               <div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-ink/75 via-ink/10 to-transparent p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100">
                 {statusLabel && (
                   <span className="mb-2 self-start rounded-full bg-white/85 px-2.5 py-1 font-montserrat text-[9px] font-bold uppercase tracking-[0.16em] text-ink backdrop-blur-sm">
@@ -119,7 +119,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
               </div>
             </>
           ) : (
-            // board still in the shop — an accent field filling the same
+            // board still in the shop - an accent field filling the same
             // frame, so the gallery stays even until the image lands
             <div
               className="absolute inset-0 flex flex-col justify-between p-6"
@@ -127,7 +127,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, index, accent, onOpe
                 background: `linear-gradient(150deg, ${accent} 0%, ${accent}CC 55%, ${accent}99 100%)`,
               }}
             >
-              {/* faint drafting grid — reads as "board coming", not "broken" */}
+              {/* faint drafting grid - reads as "board coming", not "broken" */}
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.14]"
                 style={{

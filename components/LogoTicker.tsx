@@ -41,7 +41,7 @@ const Quote: React.FC<{ item: TickerCompany; onLogoShown?: () => void }> = ({
   onLogoShown,
 }) => {
   // Opt-in rather than opt-out: the chip stays hidden until an image actually
-  // decodes. A missing file can't be detected by onError alone — the SPA
+  // decodes. A missing file can't be detected by onError alone - the SPA
   // rewrite serves index.html with a 200, so the request "succeeds" and only
   // fails at decode time. Gating on a real naturalWidth handles every case:
   // missing file, typo'd name, or corrupt image all just stay hidden.
@@ -49,7 +49,7 @@ const Quote: React.FC<{ item: TickerCompany; onLogoShown?: () => void }> = ({
   const isCurrent = item.status === 'current';
 
   // Tell the row once the chip is actually laid out. Measuring on the image's
-  // own load event is too early — the chip only becomes visible after React
+  // own load event is too early - the chip only becomes visible after React
   // commits this state, so the row would measure its pre-chip width.
   useEffect(() => {
     if (logoOk) onLogoShown?.();
@@ -57,7 +57,7 @@ const Quote: React.FC<{ item: TickerCompany; onLogoShown?: () => void }> = ({
 
   return (
     <div className="flex shrink-0 items-center gap-3 px-5" title={item.name}>
-      {/* logo sits in a white chip — how financial tickers show marks, and it
+      {/* logo sits in a white chip - how financial tickers show marks, and it
           keeps dark wordmarks (Chanakya, Earlyseed) legible on the dark tape.
           Until one loads we show no chip at all, rather than the monogram,
           which would just repeat the symbol sitting right next to it. */}
@@ -133,7 +133,7 @@ const Row: React.FC<{
   //
   // 1. Repeat the group enough times to always cover the viewport, plus one
   //    more to scroll into. Two copies only suffices when a single group is
-  //    already wider than the row — the interests row (~816px) is not, so on a
+  //    already wider than the row - the interests row (~816px) is not, so on a
   //    wide screen it ran out mid-loop and left a visible gap.
   //
   // 2. Shift by an exact PIXEL width, not a percentage. The track is a flex
@@ -157,7 +157,7 @@ const Row: React.FC<{
 
     // Re-measure on any later size change (fonts settling, viewport resize).
     // Note this can't be the only safety net: ResizeObserver callbacks are
-    // delivered with the frame loop, which is throttled in background tabs —
+    // delivered with the frame loop, which is throttled in background tabs -
     // hence the explicit remeasureKey below.
     const ro = new ResizeObserver(measure);
     if (groupRef.current) ro.observe(groupRef.current);
@@ -231,12 +231,12 @@ const LogoTicker: React.FC = () => {
       className="relative w-full select-none border-y border-white/10 bg-[#15151C] shadow-[0_-10px_40px_-20px_rgba(26,26,34,0.5)]"
       aria-hidden="true"
     >
-      {/* main tape — where I've been */}
+      {/* main tape - where I've been */}
       <Row direction="left" duration={52} className="py-3" remeasureKey={logosShown}>
         {quotes}
       </Row>
 
-      {/* secondary tape — what I'm into, deliberately quieter */}
+      {/* secondary tape - what I'm into, deliberately quieter */}
       <Row direction="right" duration={44} className="border-t border-white/[0.07] py-2">
         {interests}
       </Row>

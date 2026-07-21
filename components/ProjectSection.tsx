@@ -11,12 +11,12 @@ interface ProjectSectionProps {
 /**
  * A section board, cropped to a parallelogram.
  *
- * The artwork is the supplied board image, untouched — the slant comes from a
+ * The artwork is the supplied board image, untouched - the slant comes from a
  * clip-path on the frame rather than a skew, so nothing is distorted and the
  * board's own edge text stays inside the crop. The raise is a drop-shadow
  * filter on the wrapper, because clip-path would clip a box-shadow away.
  *
- * Picking a board dissolves the trio and brings that section's gallery in —
+ * Picking a board dissolves the trio and brings that section's gallery in -
  * so the hover states here lean into "enter": lift, an accent-tinted glow,
  * and an explicit Enter hint alongside the project count.
  *
@@ -26,7 +26,7 @@ interface ProjectSectionProps {
 const ProjectSectionCard: React.FC<ProjectSectionProps> = ({ section, count, onOpen }) => (
   <button
     onClick={onOpen}
-    aria-label={`${section.title} — ${section.blurb} (${count} ${count === 1 ? 'project' : 'projects'})`}
+    aria-label={`${section.title} - ${section.blurb} (${count} ${count === 1 ? 'project' : 'projects'})`}
     className="group block w-full text-left focus-visible:outline-none"
   >
     <div
@@ -51,7 +51,7 @@ const ProjectSectionCard: React.FC<ProjectSectionProps> = ({ section, count, onO
           }}
         />
 
-        {/* The board is a finished design — it already carries its own tagline
+        {/* The board is a finished design - it already carries its own tagline
             and arrow along the foot. So the additions stay in the empty
             top-right corner: the count, joined on hover by the enter hint. */}
         <span

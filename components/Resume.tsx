@@ -117,7 +117,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.1, duration: 0.7 }}
         viewport={{ once: true }}
-        className="relative bg-white border border-ink/10 rounded-[1.75rem] p-5 md:p-7 flex flex-col gap-3.5 hover:border-ink/20 transition-all duration-300 h-full min-h-[340px] shadow-sm hover:shadow-xl"
+        className="relative bg-white border border-ink/10 rounded-[1.75rem] p-5 md:p-7 flex flex-col gap-3.5 hover:border-ink/20 transition-all duration-300 min-h-[280px] shadow-sm hover:shadow-xl"
       >
         <div className="flex justify-between items-start">
           <span
@@ -145,7 +145,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
           </p>
         </div>
 
-        <div className="flex-1 space-y-3 pt-4 border-t border-ink/10">
+        <div className="space-y-3 pt-4 border-t border-ink/10">
           {event.description.map((desc, i) => (
             <div key={i} className="flex gap-4">
               <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-saffron shrink-0" aria-hidden="true" />
@@ -156,7 +156,7 @@ const TimelineCard: React.FC<{ event: TimelineEvent; index: number }> = ({ event
           ))}
         </div>
 
-        <div className="pt-4 border-t border-ink/10 grid grid-cols-2 gap-4 mt-auto">
+        <div className="pt-4 border-t border-ink/10 grid grid-cols-2 gap-4">
           <div className="flex items-center gap-3 text-muted text-[10px] font-black tracking-widest uppercase">
             <MapPin size={14} className="text-[#A25600]" aria-hidden="true" />
             {event.location}
@@ -213,10 +213,10 @@ const Resume: React.FC = () => {
               style={{ scaleX: scrollXProgress }}
               className="absolute inset-0 h-full bg-[#A25600] origin-left"
             />
-            {/* Car motif — drives toward "Past" as the timeline is explored */}
-            <motion.div style={{ left: carX }} className="absolute -top-3.5 pointer-events-none" aria-hidden="true">
-              <span className="block -translate-x-1/2 text-ink/60">
-                <CarGlyph className="h-3.5 w-auto" />
+            {/* Car motif - drives toward "Past" as the timeline is explored */}
+            <motion.div style={{ left: carX }} className="absolute -top-[22px] pointer-events-none" aria-hidden="true">
+              <span className="block -translate-x-1/2 text-ink/75">
+                <CarGlyph className="h-7 w-auto" />
               </span>
             </motion.div>
           </div>
@@ -246,7 +246,7 @@ const Resume: React.FC = () => {
           role="region"
           aria-label="Career timeline"
           tabIndex={0}
-          className="flex overflow-x-auto pb-6 pt-4 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+          className="flex items-center overflow-x-auto pb-6 pt-4 px-[10vw] gap-4 no-scrollbar snap-x snap-mandatory cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
         >
           {timelineData.map((event, i) => (
             <TimelineCard key={`${event.company}-${i}`} event={event} index={i} />

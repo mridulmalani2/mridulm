@@ -54,7 +54,7 @@ const Navbar: React.FC = () => {
     };
 
     if (location.pathname !== '/') {
-      // Navigate home, then retry across frames until the section mounts —
+      // Navigate home, then retry across frames until the section mounts -
       // a fixed timeout silently no-ops if the route renders slower than it.
       navigate('/');
       let frames = 0;
