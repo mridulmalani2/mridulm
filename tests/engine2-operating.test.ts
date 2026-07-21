@@ -209,6 +209,32 @@ describe('operating.ts §7 properties', () => {
     );
   });
 
+  it('§7 trajectory shapes pinned EXACTLY (C1 review): w(t) = t / √t / t² — any other monotone weight fails. Domain: base, target ∈ [1%, 60%], N ∈ [1, 12]', () => {
+    // The ordering property alone admits any monotone weight between the bounds
+    // (e.g. w(t) = t^0.7 labeled front_loaded) — pin the §7 formula itself.
+    fc.assert(
+      fc.property(pctArb, pctArb, fc.integer({ min: 1, max: 12 }), (base, target, n) => {
+        const w: Record<string, (t: number) => number> = {
+          linear: (t) => t,
+          front_loaded: (t) => Math.sqrt(t),
+          back_loaded: (t) => t * t,
+        };
+        for (const path of ['linear', 'front_loaded', 'back_loaded'] as const) {
+          const m = marginPath(base, target, path, n);
+          for (let i = 0; i < n; i++) {
+            const expected = base + (target - base) * (w[path](i + 1) / w[path](n));
+            expect(m[i]).toBeCloseTo(expected, 12);
+          }
+        }
+      }),
+    );
+    // one hand-computed spot check per shape (base 10% → target 22%, N = 4):
+    // linear Y1 = 10 + 12×(1/4) = 13; front Y1 = 10 + 12×(1/2) = 16; back Y1 = 10 + 12×(1/16) = 10.75
+    expect(marginPath(0.10, 0.22, 'linear', 4)[0]).toBeCloseTo(0.13, 12);
+    expect(marginPath(0.10, 0.22, 'front_loaded', 4)[0]).toBeCloseTo(0.16, 12);
+    expect(marginPath(0.10, 0.22, 'back_loaded', 4)[0]).toBeCloseTo(0.1075, 12);
+  });
+
   it('revenue compounding: rev[t] = fy × Π(1+g); flat growth ⇒ flat revenue. Domain: g ∈ [−20%, +30%]', () => {
     fc.assert(
       fc.property(
