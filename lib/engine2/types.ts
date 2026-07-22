@@ -400,6 +400,7 @@ export interface CoherenceFlag {
     | 'entry_multiple_vs_trading'
     | 'basis_mismatch'
     | 'implausible_days'
+    | 'ppe_seeded_at_zero'
     | 'cash_floor_breach'
     | 'negative_ppe'
     | 'negative_sponsor_equity';
