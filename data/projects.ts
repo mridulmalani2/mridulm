@@ -167,4 +167,17 @@ export const PROJECTS: Project[] = [
     detail:
       'The family Kaach-Paani card game, rebuilt for the web so we can keep playing from three time zones apart - real-time multiplayer with live rounds and trick prediction, in English or Hindi. Built for love of the game, by our own house rules.',
   },
+  {
+    title: 'Simple Thinking',
+    domain: 'simplethinking.co',
+    story:
+      'A live network study on how far an idea can travel on trust alone - generate a link, pass it to people you trust, and watch it spread in real time.',
+    link: 'https://simplethinking.co',
+    tags: ['Network Study', 'Trust Graph', 'Real-time'],
+    category: 'hobby',
+    image: '/projects/simplet.png',
+    status: 'live',
+    detail:
+      'A live experiment in how ideas move through networks of people who genuinely trust each other: you generate a personal link, forward it to friends, and watch a professor’s idea - built around a book - spread across the network in real time, with prizes along the way. It’s my professor’s study; I built the site and helped shape how the study and its tracking work.',
+  },
 ];
