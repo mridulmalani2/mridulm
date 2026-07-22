@@ -65,7 +65,7 @@ describe('AssumptionsReview SSR', () => {
 
   it('shows N/C (not a placeholder-derived number) for implied returns when an input is MISSING', () => {
     const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
-    const sparse = { ...raw, ebitda_margin: null, ltm_ebitda: null };   // margin missing → EV + returns tainted
+    const sparse = { ...raw, ebitda_margin: null, fy_ebitda: null };   // margin missing → EV + returns tainted
     const { state, provenance } = draftModelFromHistoricals(sparse, { dealName: raw.entityName });
     holder.state = {
       modelState: state, provenanceMap: provenance, rawHistoricals: sparse, sourceFilings: [],

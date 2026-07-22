@@ -17,8 +17,8 @@ describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
   const r = mapIfrsReport(report, { entityName: 'Europa Manufacturing SA', reportUrl: 'https://filings.xbrl.org/x/view' });
 
   it('maps the face-statement IFRS concepts, scaled to millions', () => {
-    expect(r.ltm_revenue?.value).toBeCloseTo(1200, 6);      // 1.2bn → 1200m (NOT the 500 segment)
-    expect(r.ltm_ebitda?.value).toBeCloseTo(240, 6);        // 180 operating profit + 60 D&A
+    expect(r.fy_revenue?.value).toBeCloseTo(1200, 6);      // 1.2bn → 1200m (NOT the 500 segment)
+    expect(r.fy_ebitda?.value).toBeCloseTo(240, 6);        // 180 operating profit + 60 D&A
     expect(r.ebitda_margin?.value).toBeCloseTo(0.20, 6);
     expect(r.da?.value).toBeCloseTo(60, 6);
     expect(r.da_pct_revenue?.value).toBeCloseTo(0.05, 6);
@@ -38,14 +38,14 @@ describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
   });
 
   it('excludes dimensional (segment) facts — uses the consolidated total', () => {
-    expect(r.ltm_revenue?.value).not.toBeCloseTo(500, 3);   // the segment member fact is ignored
-    expect(r.ltm_revenue?.value).not.toBeCloseTo(1700, 3);  // and not double-counted
+    expect(r.fy_revenue?.value).not.toBeCloseTo(500, 3);   // the segment member fact is ignored
+    expect(r.fy_revenue?.value).not.toBeCloseTo(1700, 3);  // and not double-counted
   });
 
   it("tags provenance 'esef' with the IFRS concept + a filing link", () => {
-    expect(r.ltm_revenue?.provenance.source).toBe('esef');
-    expect(r.ltm_revenue?.provenance.tag).toBe('ifrs-full:Revenue');
-    expect(r.ltm_revenue?.provenance.url).toContain('filings.xbrl.org');
+    expect(r.fy_revenue?.provenance.source).toBe('esef');
+    expect(r.fy_revenue?.provenance.tag).toBe('ifrs-full:Revenue');
+    expect(r.fy_revenue?.provenance.url).toContain('filings.xbrl.org');
     expect(r.gaps).toEqual([]);
   });
 });
@@ -77,7 +77,7 @@ describe('mapIfrsReport — deep extraction (notes / extension / dimensional)', 
   it('recovers D&A from the cash-flow-statement adjustment line (expanded ifrs-full chain)', () => {
     expect(ext.da?.value).toBeCloseTo(50, 6);
     expect(ext.da?.provenance.tag).toBe('ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense');
-    expect(ext.ltm_ebitda?.value).toBeCloseTo(200, 6);     // 150 operating profit + 50 D&A
+    expect(ext.fy_ebitda?.value).toBeCloseTo(200, 6);     // 150 operating profit + 50 D&A
   });
 
   it('recovers net debt from an issuer extension tag, rejecting the trap ratio sibling', () => {
@@ -185,7 +185,7 @@ describe('mapIfrsReport — adversarial-review regressions', () => {
     const r = mapIfrsReport(report({ ...anchor,
       rou: f('company:DepreciationAndAmortisationOfRightOfUseAssets', 30_000_000, DUR) }));
     expect(r.da).toBeNull();
-    expect(r.gaps).toEqual(expect.arrayContaining(['D&A %', 'LTM EBITDA']));
+    expect(r.gaps).toEqual(expect.arrayContaining(['D&A %', 'FY EBITDA']));
   });
 
   it('roll-up with TWO total-like members (subtotal + group total) is ambiguous → gap, not a wrong total', () => {
@@ -235,10 +235,10 @@ describe('mapIfrsReport — realistic ESEF sparsity (notes often untagged)', () 
       },
     };
     const r = mapIfrsReport(sparse, { statutoryTaxRate: 0.25 });
-    expect(r.ltm_revenue?.value).toBeCloseTo(900, 6);
-    expect(r.ltm_ebitda).toBeNull();                        // no D&A → EBITDA is a gap, not a guess
+    expect(r.fy_revenue?.value).toBeCloseTo(900, 6);
+    expect(r.fy_ebitda).toBeNull();                        // no D&A → EBITDA is a gap, not a guess
     expect(r.net_debt).toBeNull();
-    expect(r.gaps).toEqual(expect.arrayContaining(['LTM EBITDA', 'D&A %', 'Net debt at entry', 'NWC %']));
+    expect(r.gaps).toEqual(expect.arrayContaining(['FY EBITDA', 'D&A %', 'Net debt at entry', 'NWC %']));
     expect(r.effective_tax_rate?.value).toBeCloseTo(0.25, 9);
     expect(r.effective_tax_rate?.provenance.source).toBe('default');
   });

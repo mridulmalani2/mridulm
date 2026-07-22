@@ -52,8 +52,8 @@ export interface RawHistoricals {
   /** 'FY' (latest annual) or 'LTM' (trailing four quarters) — how flow figures were assembled. */
   basis: 'FY' | 'LTM';
 
-  ltm_revenue: SourcedValue | null;          // revenue (£m/$m)
-  ltm_ebitda: SourcedValue | null;           // EBITDA = operating income + D&A
+  fy_revenue: SourcedValue | null;          // revenue (£m/$m)
+  fy_ebitda: SourcedValue | null;           // EBITDA = operating income + D&A
   ebitda_margin: SourcedValue | null;        // EBITDA / revenue (decimal)
   da: SourcedValue | null;                   // depreciation & amortisation (£m/$m)
   da_pct_revenue: SourcedValue | null;       // D&A / revenue (decimal)
@@ -71,6 +71,18 @@ export interface RawHistoricals {
   /** Field labels that could NOT be derived from filings — surfaced on Screen 2 for the user
    *  to fill in (provenance then becomes 'user'). Never silently defaulted. */
   gaps: string[];
+
+  /** D1 multi-year annual history (lib/edgar/history.ts): per-period alias resolution,
+   *  restatement dedup (latest filed wins, >1% noted), END-date keying, stubs excluded.
+   *  Per-cell gaps stay gaps; derived series exist only where every component resolves. */
+  history?: {
+    revenue: import('./history').HistorySeries;
+    operating_income: import('./history').HistorySeries;
+    da: import('./history').HistorySeries;
+    capex: import('./history').HistorySeries;
+    /** operating income + D&A, only at ends where BOTH resolve (no fake totals). */
+    ebitda: import('./history').HistorySeries;
+  };
 }
 
 /** fieldPath → provenance, surfaced as source badges across the assumptions review + model. */

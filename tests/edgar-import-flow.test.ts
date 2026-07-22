@@ -58,7 +58,7 @@ describe('store import → review → build sequence', () => {
     const s = useDealEngineStore.getState();
     expect(s.startScreen).toBe('assumptions');
     expect(s.modelState).not.toBeNull();
-    expect(s.rawHistoricals?.ltm_revenue?.value).toBeCloseTo(1250, 6);
+    expect(s.rawHistoricals?.fy_revenue?.value).toBeCloseTo(1250, 6);
     expect(s.modelState!.returns.irr).not.toBeUndefined(); // draft is live (already recalc'd)
     expect(s.provenanceMap['revenue.base_revenue'].source).toBe('edgar');
   });

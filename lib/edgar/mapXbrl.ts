@@ -15,6 +15,7 @@
 
 import type { CompanyFacts, XbrlConcept, XbrlFactValue } from './client';
 import type { RawHistoricals, SourcedValue, Provenance } from './types';
+import { buildAnnualSeries, deriveSeries } from './history';
 
 const ANNUAL_FORMS = new Set(['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']);
 
@@ -217,9 +218,9 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
 
   // ── Revenue (strictly at the anchor) ──
   const revenue = rawDuration(REVENUE_TAGS, anchorEnd);
-  const ltm_revenue = revenue ? sv(revenue.value, revenue.prov) : null;
-  if (!ltm_revenue) gaps.push('LTM revenue');
-  const revenueVal = ltm_revenue?.value ?? 0;
+  const fy_revenue = revenue ? sv(revenue.value, revenue.prov) : null;
+  if (!fy_revenue) gaps.push('FY revenue');
+  const revenueVal = fy_revenue?.value ?? 0;
 
   // ── EBITDA = Operating income + D&A ──
   const opinc = rawDuration(OPERATING_INCOME_TAGS, anchorEnd);
@@ -237,19 +238,19 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     }
   }
   const da = daRaw ? sv(daRaw.value, daRaw.prov) : null;
-  let ltm_ebitda: SourcedValue | null = null;
+  let fy_ebitda: SourcedValue | null = null;
   if (opinc && daRaw) {
-    ltm_ebitda = sv(opinc.value + daRaw.value, {
+    fy_ebitda = sv(opinc.value + daRaw.value, {
       source: 'edgar',
       detail: `OperatingIncomeLoss + ${daRaw.tag} · FY${anchorFy ?? '—'} · 10-K`,
       tag: 'derived:EBITDA', taxonomy: 'us-gaap', unit: opinc.prov.unit, fy: anchorFy, period: anchorEnd,
       url: opinc.prov.url,
     });
   } else {
-    gaps.push('LTM EBITDA');
+    gaps.push('FY EBITDA');
   }
-  const ebitda_margin = ltm_ebitda && revenueVal > 0
-    ? sv(ltm_ebitda.value / revenueVal, { source: 'edgar', detail: 'EBITDA ÷ revenue (derived)', tag: 'derived:EBITDAmargin', period: anchorEnd, fy: anchorFy, url: ltm_ebitda.provenance.url })
+  const ebitda_margin = fy_ebitda && revenueVal > 0
+    ? sv(fy_ebitda.value / revenueVal, { source: 'edgar', detail: 'EBITDA ÷ revenue (derived)', tag: 'derived:EBITDAmargin', period: anchorEnd, fy: anchorFy, url: fy_ebitda.provenance.url })
     : null;
 
   const da_pct = da && revenueVal > 0
@@ -370,15 +371,37 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     ? { value: 0, provenance: { source: 'edgar', detail: `SIC: ${opts.sicDescription}` } }
     : null;
 
+  // ── D1 multi-year history (per-period alias resolution; see lib/edgar/history.ts) ──
+  const seriesOpts = { kind: 'duration' as const, unitScale: scale, unit: anchor?.unit };
+  const revenueSeries = buildAnnualSeries(facts, 'revenue', REVENUE_TAGS, seriesOpts);
+  const opincSeries = buildAnnualSeries(facts, 'operating_income', OPERATING_INCOME_TAGS, seriesOpts);
+  let daSeries = buildAnnualSeries(facts, 'da', DA_TAGS, seriesOpts);
+  if (!daSeries.points.length) {
+    // per-period component reconstruction: BOTH required at each end (no fake totals)
+    const depSeries = buildAnnualSeries(facts, 'depreciation', DEPRECIATION_TAGS, seriesOpts);
+    const amortSeries = buildAnnualSeries(facts, 'amortization', AMORTIZATION_TAGS, seriesOpts);
+    daSeries = deriveSeries('da', [depSeries, amortSeries], ([d, a]) => d + a);
+  }
+  const capexSeries = buildAnnualSeries(facts, 'capex', CAPEX_TAGS, seriesOpts);
+  const ebitdaSeries = deriveSeries('ebitda', [opincSeries, daSeries], ([oi, d]) => oi + d);
+  const history = {
+    revenue: revenueSeries,
+    operating_income: opincSeries,
+    da: daSeries,
+    capex: capexSeries,
+    ebitda: ebitdaSeries,
+  };
+
   return {
+    history,
     entityName: facts.entityName ?? 'Unknown',
     cik10,
     currency: opts.currency ?? detectedCcy ?? 'USD',
     fiscalYear: anchorFy,
     periodEnd: anchorEnd,
     basis: 'FY',
-    ltm_revenue,
-    ltm_ebitda,
+    fy_revenue,
+    fy_ebitda,
     ebitda_margin,
     da,
     da_pct_revenue: da_pct,
