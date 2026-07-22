@@ -74,6 +74,17 @@ export function sizeStructure(
 ): SizedStructure {
   const revolvers = structure.tranches.filter((t): t is RevolverAssumption => t.type === 'revolver');
   if (revolvers.length > 1) throw new RangeError('sourcesUses: at most ONE revolver per deal (§16)');
+  // Tranche names must be unique (C5 review): retirement reporting and the write-off
+  // schedules are name-keyed — duplicates mis-attribute early-retirement write-offs
+  // (wrong tranche's OID written off, the retired one keeps amortizing). Same input-gate
+  // family as drawn_at_close and maturity > hold.
+  const names = new Set<string>();
+  for (const t of structure.tranches) {
+    if (names.has(t.name)) {
+      throw new RangeError(`sourcesUses: duplicate tranche name "${t.name}" — names key the §7 write-off schedules and retirement reporting`);
+    }
+    names.add(t.name);
+  }
   const terms = structure.tranches
     .filter((t): t is TermTrancheAssumption => t.type !== 'revolver')
     .map((assumption) => {

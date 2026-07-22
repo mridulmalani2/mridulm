@@ -340,6 +340,19 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
     expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).not.toThrow();
   });
 
+  it('v1 input gate (C5 review): duplicate tranche names are rejected — they key the write-off schedules and retirement reporting', () => {
+    const term = (name: string): TrancheAssumption => ({
+      name, type: 'senior', size: { amount: 50 }, pricing: { kind: 'fixed', rate: 0.08 },
+      amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.01, sweep: { participates: true, priority: 1 },
+    });
+    expect(() =>
+      sizeStructure({ tranches: [term('TL'), term('TL')], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100),
+    ).toThrow(/duplicate tranche name/);
+    expect(() =>
+      sizeStructure({ tranches: [term('TLA'), term('TLB')], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100),
+    ).not.toThrow();
+  });
+
   it('guards: two revolvers, non-positive EBITDA, and missing driver values all throw', () => {
     const rcf = (name: string): TrancheAssumption => ({
       name, type: 'revolver', commitment: { amount: 10 }, pricing: { kind: 'fixed', rate: 0.07 },

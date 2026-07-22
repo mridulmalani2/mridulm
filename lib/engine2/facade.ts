@@ -9,8 +9,8 @@
  * enforces the §14.16 single-source mirrors by construction (each block reads the same
  * upstream object, never a recomputation).
  *
- * NOTE (v1.0.3 pending): ModelOutput.bridge is typed via Engine2ValueBridge until the
- * amendment PR lands the walkdown.exit_costs / multiple_change_bar contract in types.ts.
+ * ModelOutput.bridge is the canonical types.ts ValueBridge (the v1.0.3 contract);
+ * Engine2ValueBridge survives only as a deprecated alias.
  *
  * No imports from lib/engine (boundary test).
  */

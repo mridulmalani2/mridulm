@@ -11,8 +11,10 @@
  *
  * Sensitivity grids are full re-runs too; ENTRY-side axes (entry_multiple, leverage) DO
  * re-price entry — they are entry variables; operating axes (exit_multiple, growth,
- * margin) run entry-frozen like scenarios — the freeze applies ONLY when no entry-side
- * axis is on the grid (an entry axis fully determines entry for its cells). Axis
+ * margin) run entry-frozen like scenarios. In a MIXED grid the cell's entry is derived
+ * from base assumptions + the ENTRY-side axis values ALONE, then frozen — an operating
+ * co-axis must never reach entry pricing (§13; under an NTM entry basis a growth delta
+ * would otherwise move the §9 valuation proxy — C9 review F1, the L-1 pattern). Axis
  * semantics: growth is a per-year SHIFT vs the base path (delta in decimal points —
  * an absolute flat-growth axis would be inconsistent with a non-flat base path and
  * break §14.11 monotonicity across the base row; center = 0); margin sets
@@ -25,6 +27,7 @@
  */
 
 import { runModel, type Engine2ModelOutput } from './facade';
+import { deriveEntry } from './sourcesUses';
 import type {
   DealAssumptions,
   DealFacts,
@@ -154,11 +157,20 @@ export function buildSensitivityGrid(
       }
       const withRow = applyAxis(facts, baseAssumptions, spec.row_axis, spec.row_values[r]);
       const withBoth = applyAxis(facts, withRow, spec.col_axis, spec.col_values[c]);
-      // §13: operating axes run ENTRY-FROZEN — but only when no entry-side axis owns entry
+      // §13: operating axes run ENTRY-FROZEN. With an entry-side axis on the grid, the
+      // cell's entry is derived from base assumptions + the ENTRY axes ALONE and then
+      // frozen — the operating co-axis must never reach entry pricing (under an NTM
+      // basis a growth delta would move the §9 proxy: C9 review F1). withBoth keeps the
+      // leverage axis's structure re-size (operating axes never touch structure).
       const anyEntryAxis = ENTRY_SIDE_AXES.has(spec.row_axis) || ENTRY_SIDE_AXES.has(spec.col_axis);
-      const cell: DealAssumptions = anyEntryAxis
-        ? withBoth
-        : { ...withBoth, entry: frozenEntry(withBoth, base.derived.enterprise_value) };
+      let cellEv = base.derived.enterprise_value;
+      if (anyEntryAxis) {
+        let entryPricing = baseAssumptions;
+        if (ENTRY_SIDE_AXES.has(spec.row_axis)) entryPricing = applyAxis(facts, entryPricing, spec.row_axis, spec.row_values[r]);
+        if (ENTRY_SIDE_AXES.has(spec.col_axis)) entryPricing = applyAxis(facts, entryPricing, spec.col_axis, spec.col_values[c]);
+        cellEv = deriveEntry(facts, entryPricing).enterprise_value;
+      }
+      const cell: DealAssumptions = { ...withBoth, entry: frozenEntry(withBoth, cellEv) };
       const run = runModel(facts, cell);
       irrRow.push(run.returns.sponsor_net.irr);
       moicRow.push(run.returns.sponsor_net.moic);

@@ -70,6 +70,31 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
     });
   }
 
+  it('§14.9 real-wiring, full friction (C8 review coverage note): monitoring ON + rollover + MIP + NTM both ends through runModel ⇒ both bridge identities exact on the ASSEMBLED output', () => {
+    // The bridge suite's full-friction legs hand-build BridgeInputs, duplicating the
+    // facade mapping (drift-prone). Pin the identity on the real wiring: every friction
+    // live at once, asserted on runModel's own bridge block.
+    const { facts, assumptions } = GOLDEN_DEALS.G2;
+    const out = runModel(facts, {
+      ...assumptions,
+      entry: { ...assumptions.entry, basis: 'ntm' as const },
+      exit: { ...assumptions.exit, basis: 'ntm' as const },
+      rollover_equity: 60,
+      fees: {
+        ...assumptions.fees,
+        monitoring: { annual: 2, termination_years: 3, discount_rate: 0.1 },
+      },
+      mip: { pool_pct: 0.15, hurdle_moic: 1.0 },
+    });
+    expect(Math.abs(out.bridge.reconciliation_residual)).toBeLessThan(1e-9);
+    expect(out.bridge.walkdown.rollover_delta).not.toBe(0); // rollover leg genuinely live
+    expect(out.exit.mip_payout).toBeGreaterThan(0); // MIP leg live
+    expect(out.gp_fee_income).not.toBeNull(); // monitoring leg live
+    // walk-down ties to the sponsor stream exactly (§14.9 identity (b) on real wiring)
+    const sponsorDelta = out.returns.sponsor_net.cashflows[out.returns.sponsor_net.cashflows.length - 1] + out.returns.sponsor_net.cashflows[0];
+    expect(Math.abs(out.bridge.walkdown.sponsor_net_delta - sponsorDelta)).toBeLessThan(1e-9);
+  });
+
   it('coherence flags fire on engineered defects (§16 — each code reachable, right severity)', () => {
     const { facts, assumptions } = GOLDEN_DEALS.G5;
     // negative sponsor equity: par above total uses — cheap bullet debt so ONLY the
@@ -246,6 +271,50 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
     for (let r = 1; r < grid.row_values.length; r++) {
       expect(grid.irr[r][0]!, `leverage ${grid.row_values[r]}x`).toBeGreaterThan(grid.irr[r - 1][0]!);
     }
+  });
+
+  it('§13 [C9 review F1]: an operating co-axis NEVER re-prices entry in a mixed grid — NTM basis, entry axis at its base value ⇒ cell ≡ the entry-frozen scenario oracle', () => {
+    // Under entry.basis 'ntm', deriveEntry prices EV off growth[0]; a growth co-axis in a
+    // mixed grid must not reach entry pricing (the L-1 pattern — probed at ~69bp optimistic
+    // pre-fix). With the entry axis pinned AT its base value, every cell must equal the
+    // §13 scenario path (verified entry-frozen) for the same growth delta.
+    const facts = GOLDEN_DEALS.G2.facts;
+    const ntmAssumptions: DealAssumptions = {
+      ...GOLDEN_DEALS.G2.assumptions,
+      entry: { ...GOLDEN_DEALS.G2.assumptions.entry, basis: 'ntm' as const },
+    };
+    const base = runModel(facts, ntmAssumptions);
+    const growthDelta: ScenarioDeltas = {
+      operations: { growth: ntmAssumptions.operations.growth.map((g) => g - 0.02) },
+    };
+    const oracle = runScenario(facts, ntmAssumptions, base, 'downside oracle', growthDelta);
+
+    // (a) leverage × growth — leverage row fixed at the base total (4.0× FY on G2)
+    const baseLeverage =
+      base.derived.total_debt_at_par / facts.fy_ebitda;
+    const levGrid = buildSensitivityGrid(facts, ntmAssumptions, base, {
+      row_axis: 'leverage',
+      col_axis: 'growth',
+      row_values: [baseLeverage],
+      col_values: [0, -0.02],
+      base_row_index: 0,
+      base_col_index: 0,
+    });
+    expect(levGrid.irr[0][0]).toBe(base.returns.sponsor_net.irr); // center ≡ base (§14.7)
+    expect(levGrid.irr[0][1]).not.toBeNull();
+    expect(Math.abs(levGrid.irr[0][1]! - oracle.returns.sponsor_net.irr!)).toBeLessThan(1e-12);
+
+    // (b) entry_multiple × growth — multiple row fixed at the base multiple
+    const mulGrid = buildSensitivityGrid(facts, ntmAssumptions, base, {
+      row_axis: 'entry_multiple',
+      col_axis: 'growth',
+      row_values: [base.derived.entry_multiple],
+      col_values: [0, -0.02],
+      base_row_index: 0,
+      base_col_index: 0,
+    });
+    expect(mulGrid.irr[0][1]).not.toBeNull();
+    expect(Math.abs(mulGrid.irr[0][1]! - oracle.returns.sponsor_net.irr!)).toBeLessThan(1e-12);
   });
 
   it('entry-side axis re-prices entry (S&U moves); §13 sensitivity contract', () => {
