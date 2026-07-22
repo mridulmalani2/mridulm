@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.0.3 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.0.4 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -327,7 +327,11 @@ MOIC-based (~2/3 of plans MOIC-only, Goodwin 2024), typically 2.0–3.0x.
 
 ## §11 Credit metrics [DECIDED — carry over FINANCIAL_DEFINITIONS.md, with fixes]
 
-Net leverage = (gross − cash)/EBITDA_adj; senior leverage by tranche **type**, net, ≤ total;
+Net leverage = (gross − cash)/EBITDA_adj (SIGNED — net cash renders negative, never
+clamped); senior leverage by tranche **type**, net, floored at 0 (a senior stack cannot
+be "net short"), ≤ total **whenever total ≥ 0** [WORDING v1.0.4 — in the net-cash regime
+total goes negative while senior floors at 0; the unqualified inequality was inherited
+from the old engine's definitions and is arithmetically unreachable there];
 ICR = EBITDA_adj / cash interest; FCCR = (EBITDA_adj − maint capex − cash tax) / (cash
 interest + commitment fees + mandatory amort); DSCR = FCF_pre_debt / (same denominator).
 **Only scheduled service in the DSCR denominator — never discretionary sweeps** [CONFIRMED
@@ -447,6 +451,9 @@ suggestion always names its basis (history / cited convention / template / AI); 
 fields gate Build; the single-driver rule governs entry (multiple XOR EV). Money in millions
 of deal currency; rates as decimal fractions; per-year arrays 0-indexed over `hold_years`.
 Structural gate [v1.0.3]: term-tranche maturity > `hold_years` (§3) is validated at Build.
+Structural gates [v1.0.4 — stated; already enforced]: tranche NAMES are unique (they key
+the §7 write-off schedules and retirement reporting); the revolver's `drawn_at_close` = 0
+in v1 (§2 has no drawn-revolver source line).
 The coherence gate (`check.ts`) is a post-run check over ModelOutput from the SAME `runModel`
 call — never a second calculation path (architecture-review finding, 2026-07-04).
 
@@ -542,6 +549,7 @@ Floor-breach itself (revolver exhausted) is covered by a kernel fixture, not a g
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.0.4 | 2026-07-22 | **Wording only — zero numeric change (goldens regeneration byte-identical, asserted in the PR).** (1) §11 senior-leverage inequality qualified: "≤ total **whenever total ≥ 0**" + net-leverage SIGNED/senior-floored-at-0 semantics stated (the unqualified claim was inherited from FINANCIAL_DEFINITIONS and is false in the net-cash regime — C7 independent review F1). (2) §16 states the two structural gates the build already enforces: unique tranche names (they key §7 write-off schedules + retirement reporting — C5 review's mis-attribution hazard) and revolver drawn_at_close = 0 in v1 (C2 review F1). | Independent C5–C9 conformance re-review (5 agents, 2026-07-22; PR #83 carries the code/test findings) |
 | v1.0.3 | 2026-07-21 | Phase B2/C build pass. (1) **Goldens corrected** — spec_calc.py read the r2-ROUNDED recorded display EBITDA_adj for the §9 exit block (intermediate rounding, violating §15); re-derived at full precision. Only exit blocks + return streams move (≤ $0.04m, ≤ 0.23bp measured); G1's closed-form values and every per-year schedule are byte-unchanged. (2) **§3 step 6 post-breach semantics pinned**: the breach year closes below the floor (closing cash may be negative), conservation §14.3 never clamped, subsequent years run on the inherited opening cash and carry a block-severity `cash_floor_breach` flag ("never negative cash" described the draw-to-floor goal, not a clamp); kernel opening-cash assert relaxed to allow continuation. (3) **v1 structural constraint**: term-tranche maturity > hold_years (input-gate rejection; balloon/refi is Phase G). (4) **§7 early-retirement write-off timing pinned**: book write-off in the retirement year; TAX deduction enters the FOLLOWING year's uncapped pool (§5 sequentiality); year-N retirement merges into the exit-year deduction. (5) **§12 bridge arithmetic pinned** (bars could not reconcile exactly as drafted): four bars decompose the FRICTIONLESS pre-promote delta (EV − ND both ends) — growth M₀ΔB, multiple bar ΔM×B₀ (rigorous school; on-exit-EBITDA form folds the cross term and is the rejected alternative), interaction ΔM×ΔB, paydown ND₀−ND₁ (ND₀ = par − funded min cash, ND₁ = payoff − closing cash); walk-down − entry costs − exit costs (advisory + monitoring termination) − MIP − rollover Δ = sponsor net Δ; §14.9 restated as the two exact identities; types.ts ValueBridge.walkdown gains `exit_costs`, `multiple_change_on_exit_ebitda` renamed `multiple_change_bar` (naming contradicted the explicit-interaction convention); annual monitoring leakage embedded in the paydown bar via cash, termination component in exit costs, annual drag a memo from gp_fee_income. (6) **§9 entry-NTM basis pinned by symmetry**: entry `basis: 'ntm'` = fy_ebitda × (1 + growth[0]) (golden-uncovered, disclosed). (7) **§6.3 pre-2018 aggregate bound CORRECTED** [B2 adversarial review, 2 independent lenses]: the 80% post-close cap now applies to the residual income after a pre-2018 acquired layer (IRC §172(a)(2)(B)(ii)); previously aggregate usage could exceed taxable income, burning post-close NOLs for zero benefit; aggregate ≤ taxable now holds in both branches; golden-uncovered, fixtures unchanged. §15 assumptions line extended: NOL usage is not optimized across years. | B2/C build (PR #69 review + comment); goldens re-derived + independently re-adjudicated (DERIVATION.md) |
 | v1.0.2 | 2026-07-05 | Adjudication pass (2 independent derivers, 167 lines, ZERO mismatches — goldens signed gospel). Ambiguities they resolved now stated explicitly: §17 golden defaults (ati_pct 30%, min_rate 0, rollover 0); §4 commitment fee on BEGINNING-of-year undrawn; §7 NWC[0] reading. Noted: fixtures store 2dp display values (±0.005 boundary artifacts are display precision, not engine values); BS merges DFC + unamortized OID into one line | Adjudication `wf_01aabc2d` |
 | v1.0.1 | 2026-07-05 | Phase B derivation: G1 IRR check value corrected to 6.3622% (closed form, was a 0.4bp hand-approximation error); all 22 §17 asserts verified against the committed reference derivation (tests/goldens/, scripts/goldens/spec_calc.py) | Phase B1 |
