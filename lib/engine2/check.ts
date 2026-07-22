@@ -7,9 +7,9 @@
  *
  * Severities: `block` = the model's economics are broken (insolvent close, floor breach —
  * v1.0.3 post-breach semantics); `warn` = rendered warning on the exhibit (§14.6, §8).
- * The facts-anchored flags (entry_multiple_vs_trading, implausible_days) activate only
- * when the corresponding fact anchors exist (Phase D populates them; null anchors are
- * suppressed by the plausibility gates, PHASE_D D4/D5).
+ * entry_multiple_vs_trading is facts-anchored (null anchor ⇒ suppressed; Phase D
+ * populates it). implausible_days rails the ASSUMPTION days the model actually runs on
+ * (PHASE_D D2 heuristics re-checked engine-side) — deliberately not the facts' days.
  *
  * No imports from lib/engine (boundary test).
  */
@@ -18,7 +18,7 @@ import { covenantBreachYear } from './credit';
 import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, SourcesUses, WaterfallYear } from './types';
 
 export interface CoherenceInputs {
-  facts: Pick<DealFacts, 'implied_trading_ev_ebitda' | 'dso' | 'dio' | 'dpo'>;
+  facts: Pick<DealFacts, 'implied_trading_ev_ebitda'>;
   assumptions: Pick<DealAssumptions, 'entry' | 'exit' | 'operations' | 'covenants'>;
   sources_uses: SourcesUses;
   derived: { entry_multiple: number };

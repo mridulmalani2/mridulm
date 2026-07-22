@@ -13,7 +13,8 @@
  *    discretionary sweeps NEVER enter the denominator (DR-1 Item 8).
  *  - Undefined ⇒ null (N/A with reason at the UI). 9999/99-style sentinels are banned.
  *  - Covenant headroom SIGNED (breach = negative magnitude); scalar or per-year
- *    step-down schedules (`value_by_year[t] ?? scalar` — carried P2-4).
+ *    step-down schedules (an array plateaus at its LAST element for years beyond it —
+ *    engine2 semantics; the old engine's per-year-else-scalar P2-4 fallback is retired).
  *  - Springing leverage test active only in years where drawn/commitment > trigger.
  *  - Deleveraging first-class (DR-5): FCF conversion (FCF/EBITDA_adj) and cumulative
  *    paydown as % of entry debt.

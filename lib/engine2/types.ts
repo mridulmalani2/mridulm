@@ -379,9 +379,10 @@ export interface ValueBridge {
    * Walk-down from the bar sum to sponsor net (SPEC §12 [v1.0.3]): − entry costs
    * (transaction + financing fees + OID) − exit costs (exit advisory fees + monitoring
    * termination) − MIP − rollover Δ (rollover exit share − contributed).
-   * `monitoring_leakage` is a MEMO: the termination component inside `exit_costs` plus
-   * the annual drag (from gp_fee_income) — it is NOT an additional subtraction (the
-   * annual drag reaches the bridge through cash in the paydown bar).
+   * `monitoring_leakage` is a MEMO of the ANNUAL drag only (Σ annual fees, per §12
+   * "the annual drag shown as a memo from gp_fee_income") — it is NOT a subtraction:
+   * the annual drag reaches the bridge through cash inside the paydown bar, and the
+   * termination component sits inside `exit_costs`. [Doc corrected — C8/C9 review.]
    */
   walkdown: {
     entry_costs: number;
