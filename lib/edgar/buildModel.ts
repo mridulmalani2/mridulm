@@ -99,6 +99,11 @@ export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
     nol_carryforward: inp.nol && inp.nol > 0 ? sv(inp.nol, 'NOL carryforward') : null,
     sector: { value: 0, provenance: userProv('Sector') },
     gaps: [],
+    dso: null,
+    dio: null,
+    dpo: null,
+    cogs: null,
+    days_notes: [],
   };
 }
 

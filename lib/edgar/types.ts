@@ -59,8 +59,18 @@ export interface RawHistoricals {
   da_pct_revenue: SourcedValue | null;       // D&A / revenue (decimal)
   capex: SourcedValue | null;                // capital expenditure (£m/$m)
   capex_pct_revenue: SourcedValue | null;    // capex / revenue (decimal)
-  nwc: SourcedValue | null;                  // net working capital (£m/$m)
-  nwc_pct_revenue: SourcedValue | null;      // NWC / revenue (decimal)
+  /** OPERATING NWC (D2): (CA − cash − ST investments) − (CL − current debt − current
+   *  finance leases) — one definition feeding BOTH the % method and the days method.
+   *  (The old CA − CL figure embedded cash and current debt — retired.) */
+  nwc: SourcedValue | null;
+  nwc_pct_revenue: SourcedValue | null;      // operating NWC / revenue (decimal)
+  /** D2 working-capital days (365 basis) — null when gated (financial SIC, unresolved
+   *  components, bundled AP) with the reason in `days_notes`. */
+  dso: SourcedValue | null;
+  dio: SourcedValue | null;
+  dpo: SourcedValue | null;
+  cogs: SourcedValue | null;
+  days_notes: string[];
   gross_debt: SourcedValue | null;           // total borrowings (£m/$m)
   cash: SourcedValue | null;                 // cash & equivalents (£m/$m)
   net_debt: SourcedValue | null;             // gross debt − cash (£m/$m)
