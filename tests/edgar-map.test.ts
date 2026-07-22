@@ -17,8 +17,8 @@ describe('mapCompanyFacts — headline figures (Northwind FY2023, $m)', () => {
   const r = mapCompanyFacts(facts);
 
   it('scales raw absolute USD to the engine millions unit', () => {
-    expect(r.ltm_revenue?.value).toBeCloseTo(1250, 6);              // 1.25bn → 1250m
-    expect(r.ltm_ebitda?.value).toBeCloseTo(250, 6);                // 187.5 opinc + 62.5 D&A
+    expect(r.fy_revenue?.value).toBeCloseTo(1250, 6);              // 1.25bn → 1250m
+    expect(r.fy_ebitda?.value).toBeCloseTo(250, 6);                // 187.5 opinc + 62.5 D&A
     expect(r.ebitda_margin?.value).toBeCloseTo(0.20, 6);            // 250 / 1250
     expect(r.da?.value).toBeCloseTo(62.5, 6);
     expect(r.da_pct_revenue?.value).toBeCloseTo(0.05, 6);
@@ -37,20 +37,20 @@ describe('mapCompanyFacts — headline figures (Northwind FY2023, $m)', () => {
     expect(r.fiscalYear).toBe(2023);
     expect(r.periodEnd).toBe('2023-12-31');
     // All instant + flow figures carry the FY2023 period, not a mix of years.
-    expect(r.ltm_revenue?.provenance.period).toBe('2023-12-31');
+    expect(r.fy_revenue?.provenance.period).toBe('2023-12-31');
     expect(r.net_debt?.provenance.period).toBe('2023-12-31');
     expect(r.nwc?.provenance.period).toBe('2023-12-31');
   });
 
   it('records EDGAR provenance with tag, form, accession and a filing link', () => {
-    const p = r.ltm_revenue!.provenance;
+    const p = r.fy_revenue!.provenance;
     expect(p.source).toBe('edgar');
     expect(p.tag).toBe('RevenueFromContractWithCustomerExcludingAssessedTax');
     expect(p.form).toBe('10-K');
     expect(p.accession).toBe('0001000000-24-000010');
     expect(p.url).toContain('/Archives/edgar/data/1000000/000100000024000010/');
     // Derived figures cite their source tags.
-    expect(r.ltm_ebitda?.provenance.detail).toContain('OperatingIncomeLoss');
+    expect(r.fy_ebitda?.provenance.detail).toContain('OperatingIncomeLoss');
     expect(r.net_debt?.provenance.detail).toContain('Gross debt − cash');
   });
 
@@ -68,8 +68,8 @@ describe('mapCompanyFacts — alias fallback', () => {
     delete c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'];
     c.facts['us-gaap']['Revenues'] = rev; // same data under the fallback tag
     const r = mapCompanyFacts(c);
-    expect(r.ltm_revenue?.value).toBeCloseTo(1250, 6);
-    expect(r.ltm_revenue?.provenance.tag).toBe('Revenues');
+    expect(r.fy_revenue?.value).toBeCloseTo(1250, 6);
+    expect(r.fy_revenue?.provenance.tag).toBe('Revenues');
   });
 });
 
@@ -100,8 +100,8 @@ describe('mapCompanyFacts — strict fiscal-year alignment (no cross-year drift)
     c.facts['us-gaap']['OperatingIncomeLoss'].units.USD = oi.filter((f) => f.end !== '2023-12-31');
     const r = mapCompanyFacts(c);
     expect(r.fiscalYear).toBe(2023);                 // revenue still anchors FY2023
-    expect(r.ltm_ebitda).toBeNull();                 // NOT a FY2022-opinc + FY2023-D&A blend
-    expect(r.gaps).toContain('LTM EBITDA');
+    expect(r.fy_ebitda).toBeNull();                 // NOT a FY2022-opinc + FY2023-D&A blend
+    expect(r.gaps).toContain('FY EBITDA');
   });
 
   it('a partial reporting period is never imported as a full year', () => {
@@ -115,8 +115,8 @@ describe('mapCompanyFacts — strict fiscal-year alignment (no cross-year drift)
       },
     } as unknown as CompanyFacts;
     const r = mapCompanyFacts(facts);
-    expect(r.ltm_revenue).toBeNull();                // 184-day period rejected as a full year
-    expect(r.gaps).toContain('LTM revenue');
+    expect(r.fy_revenue).toBeNull();                // 184-day period rejected as a full year
+    expect(r.gaps).toContain('FY revenue');
   });
 });
 
@@ -148,7 +148,7 @@ describe('mapCompanyFacts — foreign reporting currency (Finding 5)', () => {
     c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'].units.EUR = rev;
     const r = mapCompanyFacts(c);
     expect(r.currency).toBe('EUR');
-    expect(r.ltm_revenue?.provenance.unit).toBe('EUR');
+    expect(r.fy_revenue?.provenance.unit).toBe('EUR');
   });
 });
 
@@ -163,7 +163,7 @@ describe('mapCompanyFacts — D&A reconstruction from components', () => {
     expect(r.da?.value).toBeCloseTo(62.5, 6);                 // 50 + 12.5
     expect(r.da?.provenance.tag).toBe('derived:DA');
     expect(r.da?.provenance.detail).toMatch(/Depreciation \+ AmortizationOfIntangibleAssets/);
-    expect(r.ltm_ebitda?.value).toBeCloseTo(250, 6);         // 187.5 opinc + 62.5
+    expect(r.fy_ebitda?.value).toBeCloseTo(250, 6);         // 187.5 opinc + 62.5
     expect(r.gaps).not.toContain('D&A %');
   });
   it('does NOT reconstruct from depreciation alone (would understate D&A)', () => {

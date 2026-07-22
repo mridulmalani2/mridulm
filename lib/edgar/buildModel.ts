@@ -83,8 +83,8 @@ export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
     entityName: inp.dealName,
     currency: inp.currency,
     basis: 'FY',
-    ltm_revenue: sv(rev, 'LTM revenue'),
-    ltm_ebitda: sv(rev * inp.ebitdaMargin, 'EBITDA'),
+    fy_revenue: sv(rev, 'FY revenue'),
+    fy_ebitda: sv(rev * inp.ebitdaMargin, 'EBITDA'),
     ebitda_margin: sv(inp.ebitdaMargin, 'EBITDA margin'),
     da: sv(rev * inp.daPctRevenue, 'D&A'),
     da_pct_revenue: sv(inp.daPctRevenue, 'D&A %'),
@@ -158,7 +158,7 @@ export function draftModelFromHistoricals(raw: RawHistoricals, opts: DraftOption
     else { target.set(placeholder); prov[path] = missingProv(gapLabel); if (!raw.gaps.includes(gapLabel)) raw.gaps.push(gapLabel); }
   };
 
-  setFactual('revenue.base_revenue', { set: (v) => { s.revenue.base_revenue = v; } }, raw.ltm_revenue, 'LTM revenue', 100);
+  setFactual('revenue.base_revenue', { set: (v) => { s.revenue.base_revenue = v; } }, raw.fy_revenue, 'FY revenue', 100);
   setFactual('margins.base_ebitda_margin', { set: (v) => { s.margins.base_ebitda_margin = v; } }, raw.ebitda_margin, 'EBITDA margin', 0.2);
   setFactual('margins.da_pct_revenue', { set: (v) => { s.margins.da_pct_revenue = v; } }, raw.da_pct_revenue, 'D&A %', 0.03);
   setFactual('margins.capex_pct_revenue', { set: (v) => { s.margins.capex_pct_revenue = v; } }, raw.capex_pct_revenue, 'Capex %', 0.03);

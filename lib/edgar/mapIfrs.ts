@@ -301,9 +301,9 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
 
   // ── Revenue (the anchor figure) ──
   const revHit = ifrsFlow(REVENUE);
-  const ltm_revenue = revHit ? sv(revHit.value, provHit(revHit)) : null;
-  if (!ltm_revenue) gaps.push('LTM revenue');
-  const revenueVal = ltm_revenue?.value ?? 0;
+  const fy_revenue = revHit ? sv(revHit.value, provHit(revHit)) : null;
+  if (!fy_revenue) gaps.push('FY revenue');
+  const revenueVal = fy_revenue?.value ?? 0;
   const sanity = revenueVal > 0 ? revenueVal * 50 : undefined;
 
   // ── EBITDA = operating profit + D&A ──
@@ -318,10 +318,10 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   const daHit = firstHit(() => ifrsFlow(DA), reconstructDA, () => extAt(RX_DA, false, sanity));
   const da = daHit ? sv(Math.abs(daHit.value), provHit(daHit)) : null;
   if (!da) gaps.push('D&A %');
-  let ltm_ebitda: SourcedValue | null = null;
-  if (opHit && daHit) ltm_ebitda = sv(opHit.value + Math.abs(daHit.value), derivedProv('Operating profit + D&A'));
-  else gaps.push('LTM EBITDA');
-  const ebitda_margin = ltm_ebitda && revenueVal > 0 ? sv(ltm_ebitda.value / revenueVal, derivedProv('EBITDA ÷ revenue')) : null;
+  let fy_ebitda: SourcedValue | null = null;
+  if (opHit && daHit) fy_ebitda = sv(opHit.value + Math.abs(daHit.value), derivedProv('Operating profit + D&A'));
+  else gaps.push('FY EBITDA');
+  const ebitda_margin = fy_ebitda && revenueVal > 0 ? sv(fy_ebitda.value / revenueVal, derivedProv('EBITDA ÷ revenue')) : null;
   const da_pct_revenue = da && revenueVal > 0 ? sv(da.value / revenueVal, derivedProv('D&A ÷ revenue')) : null;
 
   // ── Capex ──
@@ -438,8 +438,8 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     fiscalYear: anchorFy ?? undefined,
     periodEnd,
     basis: 'FY',
-    ltm_revenue,
-    ltm_ebitda,
+    fy_revenue,
+    fy_ebitda,
     ebitda_margin,
     da,
     da_pct_revenue,
