@@ -24,8 +24,10 @@ describe('mapCompanyFacts — headline figures (Northwind FY2023, $m)', () => {
     expect(r.da_pct_revenue?.value).toBeCloseTo(0.05, 6);
     expect(r.capex?.value).toBeCloseTo(50, 6);
     expect(r.capex_pct_revenue?.value).toBeCloseTo(0.04, 6);
-    expect(r.nwc?.value).toBeCloseTo(150, 6);                       // 400 − 250
-    expect(r.nwc_pct_revenue?.value).toBeCloseTo(0.12, 6);
+    // D2 OPERATING NWC: (CA 400 − cash 80) − (CL 250 − current debt 35) = 105 — the old
+    // CA − CL figure (150) embedded cash and current debt and is retired.
+    expect(r.nwc?.value).toBeCloseTo(105, 6);
+    expect(r.nwc_pct_revenue?.value).toBeCloseTo(105 / 1250, 6);
     expect(r.gross_debt?.value).toBeCloseTo(335, 6);               // 300 + 25 + 10
     expect(r.cash?.value).toBeCloseTo(80, 6);
     expect(r.net_debt?.value).toBeCloseTo(255, 6);                 // 335 − 80

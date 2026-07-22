@@ -941,7 +941,14 @@ Set trigger_recalculation true.`;
     // 'missing' invariant). The review screen also disables Build while any field is still 'missing'.
     const missing = Object.entries(provenanceMap).filter(([, p]) => p.source === 'missing').map(([path]) => path);
     if (missing.length) {
-      set({ error: `Confirm the ${missing.length} field(s) marked MISSING before building.` });
+      // D6: an unsupported reporting currency is its own blocking condition with its own
+      // message (a generic "confirm MISSING fields" would point at nothing fillable).
+      const ccy = provenanceMap['meta.currency_unsupported'];
+      set({
+        error: missing.includes('meta.currency_unsupported') && ccy
+          ? ccy.detail
+          : `Confirm the ${missing.length} field(s) marked MISSING before building.`,
+      });
       return;
     }
     const built = fullRecalc(modelState);

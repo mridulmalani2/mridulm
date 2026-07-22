@@ -454,5 +454,12 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     nol_carryforward: null,   // not consistently tagged in ESEF
     sector: null,
     gaps,
+    // D2 days are US-GAAP companyfacts scope for now; ESEF surfaces them as gaps with a
+    // note (IFRS component chains are a D6 follow-up). The % method still works.
+    dso: null,
+    dio: null,
+    dpo: null,
+    cogs: null,
+    days_notes: ['working-capital days not derived from ESEF (IFRS component chains pending) — % method available'],
   };
 }
