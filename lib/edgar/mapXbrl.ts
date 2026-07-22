@@ -95,9 +95,20 @@ const PRETAX_TAGS = [
   'IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic',
 ];
 const NOL_TAGS = ['OperatingLossCarryforwards'];
+// D4: GROSS interest concepts only. InterestIncomeExpenseNet and its kin are NEVER a
+// numerator (netting suppresses the cost) — absence of a gross line is a gap, not a proxy.
+const INTEREST_EXPENSE_TAGS = [
+  'InterestExpenseDebt',
+  'InterestExpense',
+  'InterestAndDebtExpense',
+  'InterestExpenseNonoperating',
+];
 
-/** Currencies the engine models — a detected XBRL unit outside this set falls back to USD. */
+/** Currencies the engine models. D6: a detected currency OUTSIDE this set surfaces as
+ *  `currency_unsupported` (a blocking badge at Build) — never a silent USD fallback. */
 const KNOWN_CURRENCIES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'INR']);
+/** Anchor units that aren't currencies at all (defensive — anchors come from monetary facts). */
+const NON_CURRENCY_ANCHOR_UNITS = new Set(['shares', 'pure', 'USD/shares']);
 
 // ── Concept / fact selection ────────────────────────────────────────────────
 
@@ -233,8 +244,14 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   const anchorEnd = anchor?.fact.end;
   const anchorFy = anchor?.fact.fy;
   // Reporting currency = the unit on the anchor fact (USD for EDGAR; EUR/GBP/… for foreign
-  // filers). Falls back to USD only when the unit isn't a currency the engine models (Finding 5).
+  // filers). D6: a real currency OUTSIDE the modelled set is a BLOCKING condition surfaced
+  // as `currency_unsupported` — never a silent USD fallback (the old behavior violated the
+  // no-silent-default invariant).
   const detectedCcy = anchor && KNOWN_CURRENCIES.has(anchor.unit) ? anchor.unit : undefined;
+  const currency_unsupported =
+    anchor && !KNOWN_CURRENCIES.has(anchor.unit) && !NON_CURRENCY_ANCHOR_UNITS.has(anchor.unit)
+      ? anchor.unit
+      : undefined;
 
   // ── Revenue (strictly at the anchor) ──
   const revenue = rawDuration(REVENUE_TAGS, anchorEnd);
@@ -402,14 +419,40 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     }
   }
 
+  // ── D1 multi-year history (per-period alias resolution; see lib/edgar/history.ts) ──
+  // Built BEFORE the debt block: D4 needs the consecutive prior year end from the
+  // revenue series for the average-debt denominator.
+  const seriesOpts = { kind: 'duration' as const, unitScale: scale, unit: anchor?.unit };
+  const revenueSeries = buildAnnualSeries(facts, 'revenue', REVENUE_TAGS, seriesOpts);
+  const opincSeries = buildAnnualSeries(facts, 'operating_income', OPERATING_INCOME_TAGS, seriesOpts);
+  let daSeries = buildAnnualSeries(facts, 'da', DA_TAGS, seriesOpts);
+  if (!daSeries.points.length) {
+    // per-period component reconstruction: BOTH required at each end (no fake totals)
+    const depSeries = buildAnnualSeries(facts, 'depreciation', DEPRECIATION_TAGS, seriesOpts);
+    const amortSeries = buildAnnualSeries(facts, 'amortization', AMORTIZATION_TAGS, seriesOpts);
+    daSeries = deriveSeries('da', [depSeries, amortSeries], ([d, a]) => d + a);
+  }
+  const capexSeries = buildAnnualSeries(facts, 'capex', CAPEX_TAGS, seriesOpts);
+  const ebitdaSeries = deriveSeries('ebitda', [opincSeries, daSeries], ([oi, d]) => oi + d);
+  const history = {
+    revenue: revenueSeries,
+    operating_income: opincSeries,
+    da: daSeries,
+    capex: capexSeries,
+    ebitda: ebitdaSeries,
+  };
+  const revenueSeriesEnds = revenueSeries.points.map((p) => p.end);
+
   // ── Net debt = (LT noncurrent + current debt) − cash ──
-  const ltNon = rawInstant(LT_DEBT_NONCURRENT_TAGS, anchorEnd);
-  const ltCur = rawInstant(LT_DEBT_CURRENT_TAGS, anchorEnd);
-  const stDebt = rawInstant(SHORT_TERM_DEBT_TAGS, anchorEnd);
-  const debtCurrentTotal = rawInstant(DEBT_CURRENT_TOTAL_TAGS, anchorEnd);
-  const totalDebtDirect = rawInstant(TOTAL_DEBT_TAGS, anchorEnd);
-  const cashRaw = rawInstant(CASH_TAGS, anchorEnd);
-  const cash = cashRaw ? sv(cashRaw.value, cashRaw.prov) : null;
+  // The whole assembly is parameterized over the period end so D4 can evaluate the SAME
+  // base (same tag preferences, same lease-inclusion) at the prior year end for the
+  // average-debt denominator — a mixed-basis average would skew the implied rate.
+  const computeGrossDebtAt = (end?: string) => {
+  const ltNon = rawInstant(LT_DEBT_NONCURRENT_TAGS, end);
+  const ltCur = rawInstant(LT_DEBT_CURRENT_TAGS, end);
+  const stDebt = rawInstant(SHORT_TERM_DEBT_TAGS, end);
+  const debtCurrentTotal = rawInstant(DEBT_CURRENT_TOTAL_TAGS, end);
+  const totalDebtDirect = rawInstant(TOTAL_DEBT_TAGS, end);
 
   // Current debt: prefer the DISJOINT specifics (short-term borrowings + current LT maturities);
   // fall back to DebtCurrent (the total current-debt concept) only when neither is tagged, since
@@ -443,22 +486,30 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   const ltNonBundled = !!(ltNon && LEASE_INCLUSIVE_DEBT_TAGS.has(ltNon.tag));
   const ltCurBundled = !!(ltCur && LEASE_INCLUSIVE_DEBT_TAGS.has(ltCur.tag));
   const currentFromTotal = !currentParts.length && !!debtCurrentTotal;   // DebtCurrent bundles current leases
-  const finLeaseNon = rawInstant(FINANCE_LEASE_NONCURRENT_TAGS, anchorEnd);
-  const finLeaseCur = rawInstant(FINANCE_LEASE_CURRENT_TAGS, anchorEnd);
+  const finLeaseNon = rawInstant(FINANCE_LEASE_NONCURRENT_TAGS, end);
+  const finLeaseCur = rawInstant(FINANCE_LEASE_CURRENT_TAGS, end);
   const leaseParts = includeFinLeases && (baseFromSplit || aggregateLeaseExcluding)
     ? [ltNonBundled ? null : finLeaseNon, (ltCurBundled || currentFromTotal) ? null : finLeaseCur].filter(Boolean) as { value: number; prov: Provenance; tag: string }[]
     : [];
 
   const debtParts = [...baseParts, ...leaseParts];
-  let gross_debt: SourcedValue | null = null;
-  if (debtParts.length) {
-    const total = debtParts.reduce((s, p) => s + p.value, 0);
-    const leaseNote = leaseParts.length ? ' (incl. finance leases)' : '';
-    gross_debt = sv(total, {
-      source: 'edgar', detail: `${debtParts.map((p) => p.tag).join(' + ')}${leaseNote} (derived)`, tag: 'derived:GrossDebt',
-      period: anchorEnd, fy: anchorFy, url: debtParts[0].prov.url,
-    });
-  }
+  if (!debtParts.length) return null;
+  return {
+    value: debtParts.reduce((s, p) => s + p.value, 0),
+    tags: `${debtParts.map((p) => p.tag).join(' + ')}${leaseParts.length ? ' (incl. finance leases)' : ''}`,
+    url: debtParts[0].prov.url,
+  };
+  };
+
+  const cashRaw = rawInstant(CASH_TAGS, anchorEnd);
+  const cash = cashRaw ? sv(cashRaw.value, cashRaw.prov) : null;
+  const grossAtAnchor = computeGrossDebtAt(anchorEnd);
+  const gross_debt: SourcedValue | null = grossAtAnchor
+    ? sv(grossAtAnchor.value, {
+        source: 'edgar', detail: `${grossAtAnchor.tags} (derived)`, tag: 'derived:GrossDebt',
+        period: anchorEnd, fy: anchorFy, url: grossAtAnchor.url,
+      })
+    : null;
   let net_debt: SourcedValue | null = null;
   if (gross_debt) {
     net_debt = sv(gross_debt.value - (cash?.value ?? 0), {
@@ -468,6 +519,37 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     });
   } else {
     gaps.push('Net debt at entry');
+  }
+
+  // ── D4 implied cost of existing debt (sanity anchor, banded) ──
+  // Numerator: gross interest chain ONLY — a net interest line is a GAP, never a basis.
+  // Denominator: average of beginning/ending gross debt, SAME assembly at both ends.
+  // Emitted only when gross debt > 0.5× EBITDA and the result ∈ [1%, 15%]; suppressed
+  // for financial SICs. Badged approximate (includes non-cash DFC/OID amortization).
+  let implied_cost_of_debt: SourcedValue | null = null;
+  if (!isFinancialSic && grossAtAnchor && anchorEnd) {
+    const interest = rawDuration(INTEREST_EXPENSE_TAGS, anchorEnd);
+    const priorEnd = (() => {
+      const cands = revenueSeriesEnds.filter((e) => {
+        const gapDays = (Date.parse(anchorEnd) - Date.parse(e)) / 86_400_000;
+        return gapDays >= 335 && gapDays <= 395;
+      });
+      return cands.length ? cands[cands.length - 1] : undefined;
+    })();
+    const grossPrior = priorEnd ? computeGrossDebtAt(priorEnd) : null;
+    const ebitdaForGate = fy_ebitda?.value ?? 0;
+    if (interest && ebitdaForGate > 0 && grossAtAnchor.value > 0.5 * ebitdaForGate) {
+      const denom = grossPrior ? (grossAtAnchor.value + grossPrior.value) / 2 : grossAtAnchor.value;
+      if (denom > 0) {
+        const rate = interest.value / denom;
+        if (rate >= 0.01 && rate <= 0.15) {
+          implied_cost_of_debt = sv(rate, {
+            ...interest.prov,
+            detail: `${interest.tag} ÷ ${grossPrior ? `avg(gross debt ${priorEnd}, ${anchorEnd})` : `gross debt ${anchorEnd} (no prior year — ending balance)`} — approximate: includes non-cash DFC/OID amortization`,
+          });
+        }
+      }
+    }
   }
 
   // ── Effective tax rate = tax expense ÷ pretax income (statutory fallback) ──
@@ -485,34 +567,17 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     effective_tax_rate = sv(statutory, { source: 'default', detail: `Statutory default ${(statutory * 100).toFixed(0)}% (no derivable effective rate)` });
   }
 
-  // ── NOL carryforward (optional — absence is not a gap) ──
+  // ── NOL carryforward (optional — absence is not a gap). D6: companyfacts returns
+  //    NON-DIMENSIONAL facts only — member-tagged NOL layers are invisible, so the
+  //    extracted figure is presented as a FLOOR, never the total. ──
   const nolRaw = rawInstant(NOL_TAGS, anchorEnd);
-  const nol_carryforward = nolRaw ? sv(nolRaw.value, nolRaw.prov) : null;
+  const nol_carryforward = nolRaw
+    ? sv(nolRaw.value, { ...nolRaw.prov, detail: `${nolRaw.prov.detail} — ≥ floor: member-level (state/foreign) detail is invisible in companyfacts` })
+    : null;
 
   const sector: SourcedValue | null = opts.sicDescription
     ? { value: 0, provenance: { source: 'edgar', detail: `SIC: ${opts.sicDescription}` } }
     : null;
-
-  // ── D1 multi-year history (per-period alias resolution; see lib/edgar/history.ts) ──
-  const seriesOpts = { kind: 'duration' as const, unitScale: scale, unit: anchor?.unit };
-  const revenueSeries = buildAnnualSeries(facts, 'revenue', REVENUE_TAGS, seriesOpts);
-  const opincSeries = buildAnnualSeries(facts, 'operating_income', OPERATING_INCOME_TAGS, seriesOpts);
-  let daSeries = buildAnnualSeries(facts, 'da', DA_TAGS, seriesOpts);
-  if (!daSeries.points.length) {
-    // per-period component reconstruction: BOTH required at each end (no fake totals)
-    const depSeries = buildAnnualSeries(facts, 'depreciation', DEPRECIATION_TAGS, seriesOpts);
-    const amortSeries = buildAnnualSeries(facts, 'amortization', AMORTIZATION_TAGS, seriesOpts);
-    daSeries = deriveSeries('da', [depSeries, amortSeries], ([d, a]) => d + a);
-  }
-  const capexSeries = buildAnnualSeries(facts, 'capex', CAPEX_TAGS, seriesOpts);
-  const ebitdaSeries = deriveSeries('ebitda', [opincSeries, daSeries], ([oi, d]) => oi + d);
-  const history = {
-    revenue: revenueSeries,
-    operating_income: opincSeries,
-    da: daSeries,
-    capex: capexSeries,
-    ebitda: ebitdaSeries,
-  };
 
   return {
     history,
@@ -521,6 +586,8 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     dpo,
     cogs,
     days_notes,
+    implied_cost_of_debt,
+    currency_unsupported,
     entityName: facts.entityName ?? 'Unknown',
     cik10,
     currency: opts.currency ?? detectedCcy ?? 'USD',

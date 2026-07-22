@@ -15,7 +15,6 @@ const inst = (end: string, val: number, filed = '2024-02-15') => ({
   end, val: val * M, fy: 2023, fp: 'FY', form: '10-K', filed, accn: `a-${filed}`,
 });
 
-const usd = (facts: object) => ({ units: { USD: Object.values(facts) } });
 
 /** Manufacturer: full component set + consecutive prior-year inventory. */
 const MAKER: CompanyFacts = {

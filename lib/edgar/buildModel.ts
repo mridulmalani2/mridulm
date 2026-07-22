@@ -149,6 +149,14 @@ export function draftModelFromHistoricals(raw: RawHistoricals, opts: DraftOption
   // Reporting currency detected from the filing (USD for most EDGAR; EUR/GBP/… for foreign
   // filers), with a visible override on the review screen. Falls back to USD.
   s.currency = opts.currency ?? (raw.currency as ModelState['currency']) ?? 'USD';
+  // D6 currency honesty: a real reporting currency OUTSIDE the modelled set BLOCKS Build
+  // (the meta 'missing' entry trips the store gate) — never a silent USD fallback.
+  if (raw.currency_unsupported) {
+    prov['meta.currency_unsupported'] = {
+      source: 'missing',
+      detail: `Reporting currency ${raw.currency_unsupported} is not supported — the engine models USD, EUR, GBP, JPY, INR. Convert the inputs or wait for multi-currency (Phase G).`,
+    };
+  }
   s.sector = sector;
   s.company_description = `Imported from SEC EDGAR${raw.fiscalYear ? ` · FY${raw.fiscalYear}` : ''}.`;
 

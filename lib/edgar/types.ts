@@ -71,6 +71,13 @@ export interface RawHistoricals {
   dpo: SourcedValue | null;
   cogs: SourcedValue | null;
   days_notes: string[];
+  /** D4: gross interest ÷ average gross debt (same assembly both ends) — a banded
+   *  [1%, 15%] sanity anchor, emitted only when gross debt > 0.5× EBITDA; suppressed
+   *  for financial SICs; approximate (includes non-cash DFC/OID amortization). */
+  implied_cost_of_debt?: SourcedValue | null;
+  /** D6: the anchor fact's currency when it is OUTSIDE the modelled set — a BLOCKING
+   *  badge at Build ("currency SEK not supported"), never a silent USD fallback. */
+  currency_unsupported?: string;
   gross_debt: SourcedValue | null;           // total borrowings (£m/$m)
   cash: SourcedValue | null;                 // cash & equivalents (£m/$m)
   net_debt: SourcedValue | null;             // gross debt − cash (£m/$m)
