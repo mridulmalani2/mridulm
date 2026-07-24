@@ -64,6 +64,18 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     });
   }
 
+  // §8 [v1.0.5]: the goodwill plug is SIGNED and never clamped — a negative plug (purchase
+  // price + capitalized transaction costs below the carrying value of net identifiable
+  // assets) is the bargain-purchase signal and must never render silently. The trigger is
+  // the SIGN OF THE PLUG on the t=0 ModelOutput row (constant thereafter — never amortized).
+  if (x.balance_sheet.length > 0 && x.balance_sheet[0].goodwill < 0) {
+    flags.push({
+      code: 'negative_goodwill',
+      severity: 'warn',
+      message: `Goodwill plug is NEGATIVE (${x.balance_sheet[0].goodwill.toFixed(1)}) — entry price (incl. transaction costs) sits below the carrying value of net identifiable assets; bargain-purchase signal, shown unclamped (§8; ASC 805 gain recognition out of scope in v1)`,
+    });
+  }
+
   // §8 "seed = facts net PP&E, else 0 with NOTE" — the note must reach the product
   // boundary (C2 review F3: it previously died inside EngineCore).
   if (x.ppe_seeded_at_zero) {

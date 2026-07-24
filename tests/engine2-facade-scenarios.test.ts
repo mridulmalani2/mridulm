@@ -140,6 +140,18 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
     });
     expect(wornOut.coherence.some((f) => f.code === 'negative_ppe' && f.severity === 'warn')).toBe(true);
 
+    // §8 [v1.0.5] negative goodwill: asset-heavy at a low multiple ⇒ the SIGNED plug goes
+    // negative and the WARN fires — never clamped, never silent. Trigger = sign of the plug.
+    const assetHeavy = runModel({ ...facts, net_ppe: facts.fy_ebitda * 10 }, assumptions);
+    expect(assetHeavy.balance_sheet[0].goodwill).toBeLessThan(0);
+    expect(assetHeavy.balance_sheet[0].goodwill).toBe(assetHeavy.balance_sheet[5].goodwill); // t=0 plug, never amortized
+    const ngw = assetHeavy.coherence.find((f) => f.code === 'negative_goodwill');
+    expect(ngw?.severity).toBe('warn');
+    expect(ngw?.message).toContain('bargain-purchase');
+    for (const bs of assetHeavy.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(0.005); // §14.2 sign-agnostic
+    // …and the base case (positive plug) stays silent
+    expect(runModel(facts, assumptions).coherence.some((f) => f.code === 'negative_goodwill')).toBe(false);
+
     // covenant breach in base case (G2 Y1 runs ≈3.26x net)
     const covBreach = runModel(GOLDEN_DEALS.G2.facts, {
       ...GOLDEN_DEALS.G2.assumptions,

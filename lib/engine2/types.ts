@@ -404,6 +404,7 @@ export interface CoherenceFlag {
     | 'ppe_seeded_at_zero'
     | 'cash_floor_breach'
     | 'negative_ppe'
+    | 'negative_goodwill'
     | 'negative_sponsor_equity';
   severity: 'block' | 'warn';
   message: string;
