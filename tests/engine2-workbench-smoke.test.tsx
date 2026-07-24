@@ -107,6 +107,24 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     for (const banned of ['Fragility', 'Reality Check', 'Fund economics']) expect(html).not.toContain(banned);
   });
 
+  it('E2b — buildWithExhibits populates scenarios (4 presets, entry frozen) + the 5×5 centered sensitivity; all three new tabs render', () => {
+    importFixture();
+    useEngine2Model.getState().buildWithExhibits();
+    const out = useEngine2Model.getState().output!;
+    expect(out.scenarios).toHaveLength(4);
+    for (const s of out.scenarios!) expect(s.returns.sponsor_net.irr).not.toBeNull();
+    // §14.8: every preset is a downside — IRR ≤ base
+    for (const s of out.scenarios!) expect(s.returns.sponsor_net.irr!).toBeLessThanOrEqual(out.returns.sponsor_net.irr! + 1e-12);
+    const grid = out.sensitivity![0];
+    expect(grid.irr).toHaveLength(5);
+    expect(grid.irr[2][2]).toBe(out.returns.sponsor_net.irr); // §14.7 center ≡ base
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Sensitivity');
+    expect(html).toContain('Scenarios');
+    expect(html).toContain('Methodology');
+    expect(html).not.toMatch(/\d\.\d{8,}/); // exhibits also cross the format boundary
+  });
+
   it('history cells that are gaps render as em-dashes, never zeros', () => {
     importFixture(); // 2023/2024 have revenue only — EBITDA/capex cells are gaps
     const html = renderToStaticMarkup(<Workbench />);

@@ -60,7 +60,7 @@ const Workbench: React.FC = () => {
   const output = useEngine2Model((s) => s.output);
   const error = useEngine2Model((s) => s.error);
   const missing = useEngine2Model((s) => s.missingFacts);
-  const build = useEngine2Model((s) => s.build);
+  const build = useEngine2Model((s) => s.buildWithExhibits);
   const resuggest = useEngine2Model((s) => s.resuggest);
   if (!facts) {
     return <p className="text-[11px] p-6" style={labelStyle}>Import a company first (Screen 1) — the v2 workbench reads the engine2 store.</p>;

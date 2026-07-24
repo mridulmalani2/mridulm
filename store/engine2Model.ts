@@ -14,6 +14,7 @@ import { useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { runModel, type Engine2ModelOutput } from '../lib/engine2/facade';
+import { runModelWithScenarios } from '../lib/engine2/scenarios';
 import { suggestAssumptions, type SuggestionBasis } from '../lib/engine2/suggest';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
@@ -45,6 +46,9 @@ export interface Engine2ModelStore {
   editAssumptions: (next: DealAssumptions, editedPaths: string[]) => void;
   /** ONE runModel call; atomic output replace. Gated on missingFacts. */
   build: () => void;
+  /** Build WITH exhibits (§13): preset single-factor stress scenarios + the committed
+   *  downside, and a 5×5 entry×exit sensitivity centered on base. Same gate as build. */
+  buildWithExhibits: () => void;
   reset: () => void;
 }
 
@@ -123,6 +127,38 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
     try {
       const output = runModel(facts, assumptions); // the ONE call — §16 single path
+      set({ output, error: null });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, output: null });
+    }
+  },
+
+  buildWithExhibits: () => {
+    const { facts, assumptions, missingFacts } = get();
+    if (!facts || !assumptions) return;
+    if (missingFacts.length) {
+      get().build(); // reuse the gate + message path
+      return;
+    }
+    try {
+      const m = assumptions.entry.entry_multiple ?? assumptions.exit.multiple;
+      const step = 0.5;
+      const around = (center: number) => [center - 2 * step, center - step, center, center + step, center + 2 * step];
+      const g = assumptions.operations.growth;
+      const output = runModelWithScenarios(facts, assumptions, {
+        scenarios: [
+          // §13 committed downside + single-factor stress rows (entry frozen for all)
+          { name: 'Downside (growth −200bps, exit −0.5x)', deltas: { operations: { growth: g.map((x) => x - 0.02) }, exit_multiple: assumptions.exit.multiple - 0.5 } },
+          { name: 'Growth stress (−200bps)', deltas: { operations: { growth: g.map((x) => x - 0.02) } } },
+          { name: 'Margin stress (−200bps target)', deltas: { operations: { target_margin: assumptions.operations.target_margin - 0.02 } } },
+          { name: 'Exit stress (−1.0x)', deltas: { exit_multiple: assumptions.exit.multiple - 1.0 } },
+        ],
+        sensitivity: [{
+          row_axis: 'entry_multiple', col_axis: 'exit_multiple',
+          row_values: around(m), col_values: around(assumptions.exit.multiple),
+          base_row_index: 2, base_col_index: 2,
+        }],
+      });
       set({ output, error: null });
     } catch (e: unknown) {
       set({ error: (e as Error).message, output: null });
