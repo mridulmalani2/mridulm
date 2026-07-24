@@ -93,3 +93,60 @@ comparison script, not asserted from the patch.
   exit_equity_pre_mip_total 703.87 → 703.83; max MOIC delta 0.0003); (iii) max IRR delta
   0.23bp (G5 pre-promote/sponsor 15.9626% → 15.9649%); (iv) G1 expected.json
   byte-unchanged.
+
+---
+
+## v1.1.1 Phase G-1 golden extension (2026-07-24)
+
+**What this adds**: two new goldens for SPEC v1.1.0's interim distributions + restricted-
+payment cash trap — **G2-DIST** (trap ON at net leverage 2.75) and **G3-DIST** (trap OFF,
+promote in the money). Each holds its base golden constant in every field and adds exactly
+two: `structure.distributions` and `covenants.rp_trap`. That is deliberate: every
+difference from the base is then attributable to §3 step 7 / §3.7 alone, and the entry-S&U
+and unlevered-stream identities become exact assertions rather than approximations.
+
+**Branch coverage** (the reason for two workbooks rather than one):
+
+| Branch | Where | Committed values |
+|---|---|---|
+| Trap capacity ZERO ⇒ fully blocked | G2-DIST Y1 | rp_max 0.00, paid 0.00, blocked=T, cash above floor 11.30 (so cash alone would have paid) |
+| Trap clips BELOW request and cash cap ⇒ partially blocked | G2-DIST Y2 | rp_max 12.09 = paid; request 25.00, cash cap 15.68; blocked=T; pro-forma net leverage lands exactly on 2.75 |
+| Cash cap binds, trap does NOT ⇒ not blocked | G2-DIST Y3 | paid 15.34, closing cash = floor 10.00, rp_max 75.65; blocked=F |
+| Request binds | G2-DIST Y4/Y5 · G3-DIST Y2/Y4/Y5 | paid ≡ request |
+| Year-N payment rides the period-N flow (§14.16) | G2-DIST Y5 · G3-DIST Y5 | final sponsor flow 1052.06 = sponsor_share 1044.06 + 8.00 |
+| Trap OFF with LIVE requests (rp_max = +∞) | G3-DIST all years | rp_max N/A, blocked=F everywhere |
+| §10 hurdle base INCLUDES cumulative distributions | G3-DIST exit | MIP 16.53; the pre-v1.1.0 base would pay 1.82 (9.1× discriminator) |
+| §1 mid-year × distributions | G2-DIST | sponsor IRR 13.3906% period-end vs 13.4572% mid-year |
+| §9 unlevered EXCLUDES distributions | both | `returns.unlevered` byte-identical to the base golden |
+| Entry frozen by a post-close flow | both | `sources_uses` byte-identical to the base golden |
+
+**Golden-uncovered by design** (SPEC §17 [v1.1.1] records each with its reason; the G-1
+engine PR must land a kernel/module fixture for every one, and the adjudication below
+checks that list is complete): §3.7 at `EBITDA_adj ≤ 0`; accrued PIK inside a BINDING trap;
+the exact §3.7 tie (`rp_max` == cash-capped amount ⇒ NOT blocked); §10's exit-equity cap
+binding on the promote; payback REACHED inside the hold.
+
+**Movement in the pre-existing goldens: NONE — proved, not asserted.** A leaf-by-leaf
+comparison of every `expected.json` at HEAD against the regenerated tree reports
+**changed=0, removed=0, added=270** across G1/G2/G3/G4/G5/G2-D, and all six `schedule.csv`
+diffs are **pure appends** (5 added lines each, zero deletions). The 270 added leaves are
+the new columns only: `waterfall[].{distribution_requested, rp_max, distribution_paid,
+distribution_blocked}`, `returns.{dpi, payback_year}`,
+`returns.{sponsor_net,pre_promote}.irr_mid_year`, and the `distributions` block. On every
+pre-G-1 golden they are trivially derivable: `distributions: null ≡ zeros` ⇒ paid = 0 by
+`max(0, min(0, …))`, blocked = false by the §3.7 tie rule (`rp_max < min(0, …)` is false for
+rp_max ≥ 0), rp_max = N/A with the trap off, DPI all zero, payback N/A — and
+`irr_mid_year ≡ irr` **exactly** (bit-identical), because with no interim sponsor flow every
+shifted term is `0/(1+r)^(t−0.5) = 0` and the NPV polynomial is unchanged. That identity is
+itself asserted in `tests/goldens.test.ts`, so the additivity claim is re-checked in CI, not
+just at review time.
+
+**Adjudication (PHASE_B rule — second independent pass; goldens are gospel only after this
+section is signed):**
+
+- [ ] **Adjudication pass 4 (Phase G-1 extension): PENDING.**
+
+**Status: G2-DIST and G3-DIST are NOT yet gospel — no engine code may implement §3 step 7
+until pass 4 is signed.** `tests/engine2-sequence.test.ts` carries a self-deleting
+`PENDING_G1_KEYS` list so the C5 gate stays green while the engine lags the fixtures; the
+guard test fails the moment `runCore` emits any step-7 column, forcing the list's removal.

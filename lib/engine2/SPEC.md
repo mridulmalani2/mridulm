@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.1.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.1.1 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -29,8 +29,13 @@ mixed conventions). Interim sponsor flows exist exactly when interim distributio
 [v1.1.0 — §3 step 7]: under mid-year, a distribution paid in year t < N shifts to t−0.5
 like any interim flow, while the YEAR-N distribution is part of the year-N sponsor flow and
 NEVER shifts (it rides the exit event — one period-N flow, School B kept internally
-consistent). With an empty distribution schedule the option remains inert and the UI says
-so. The golden extension for G-1 must pin one mid-year × distributions check value.
+consistent). **Stream scope [v1.1.1 — stated; already the shipped behaviour]:** the option
+applies to the SPONSOR-SIDE streams only (sponsor net + pre-promote); the unlevered stream
+always uses period-end times. That scope is what makes the inertness claim true — the
+unlevered stream carries interim UFCF in every deal, so a model-wide mid-year option would
+never be inert. With an empty distribution schedule the option is therefore numerically
+inert and the UI says so. Pinned by G2-DIST (§17): sponsor IRR 13.3906% period-end vs
+**13.4572% mid-year**, and `irr_mid_year ≡ irr` on all six pre-G-1 goldens.
 Mid-year adds ~0.5–1.0pp to IRR when active — disclosed as timing, never as alpha.
 v2 upgrade path: XIRR on actual close/exit dates with a first-year stub (DR-2's preferred
 practice), which retires the convention toggle entirely.
@@ -331,7 +336,11 @@ honest presentation of that simplification, and the analyst sees the condition i
 silent residual. Display/coherence only — no arithmetic path changes. **PP&E roll
 (explicit)**: ppe[t] = ppe[t−1] + capex[t] − D&A[t] — purely mechanical; may go negative
 (coherence WARN `negative_ppe`); D&A stays %-of-revenue-driven (the §7 disclosure refers to
-depreciation detail, not the BS roll). Carryover tax basis → **no
+depreciation detail, not the BS roll). **Equity roll [v1.1.1 — stated]**: equity[t] =
+equity[t−1] + net income[t] − **interim distribution paid[t]** (§3 step 7). A distribution
+leaves the entity as cash and as book equity in the SAME year; §14.2 (the BS closes every
+year, |check| < $0.005m) forces the second leg, so it is normative, not presentational. It
+is a return OF/ON capital, never an expense — it never touches net income, EBIT or tax. Carryover tax basis → **no
 incremental tax D&A, no tax-deductible goodwill**; book/tax divergence and deferred taxes
 legitimately ignored in v1 (no DTL arises on the goodwill excess in a nontaxable stock deal —
 ASC 805-740-25-9). Debt carried at par with OID as a separate deferred cost (avoids the
@@ -668,12 +677,60 @@ outstanding at step 4 exit only if pool exhausted by repay; concretely: drawn ba
 by end Y3); cash never below floor; no floor-breach flag (revolver never exhausts).
 Floor-breach itself (revolver exhausted) is covered by a kernel fixture, not a golden.
 
+**G2-DIST — interim distributions under a BINDING restricted-payment trap [v1.1.1 — G-1]**
+(proves §3 step 7's three-way cap, §3.7's closed form and blocked flag, §14.16's period-N
+clause, §1 mid-year × distributions): **every field identical to G2** — facts, entry,
+financing, operating case, exit, tax, fees — plus exactly two: `structure.distributions =
+[25.0, 25.0, 25.0, 10.0, 8.0]` and `covenants.rp_trap = { metric: 'net_leverage', level:
+2.75 }`. Holding the base constant is the point: every difference from G2 is attributable
+to step 7 alone. Asserts: **entry S&U byte-identical to G2** (step 7 is post-close, so it
+cannot re-price entry — the §13 entry-frozen discipline applied to a structure field);
+Y1 **fully blocked** (rp_max = 0 while cash above the floor is positive — the trap, not the
+cash, is what stops it); Y2 **partially blocked** (paid = rp_max, strictly below BOTH the
+request and the cash cap, and the payment lands pro-forma net leverage exactly on 2.75);
+Y3 **cash-capped and NOT blocked** (closing cash = the 10.0 floor; rp_max above the
+request); Y4/Y5 **request-capped**; the Y5 payment settles inside the period-N sponsor flow;
+the unlevered stream is byte-identical to G2's (§9 excludes distributions).
+Check values: paid = [0.00, 12.09, 15.34, 10.00, 8.00]; blocked = [T, T, F, F, F];
+cumulative 45.43; sponsor stream [−587.22, 0.00, 12.09, 15.34, 10.00, **1052.06**] where the
+final flow = sponsor_share 1044.06 + paid[5] 8.00 (§14.16); sponsor IRR **13.3906%**
+period-end and **13.4572% mid-year** (the §1 check value); MOIC 1.8553; DPI ends 0.0774,
+payback N/A. Note the economics the golden also pins: distributions RAISE the IRR (+19.6bp
+vs G2's 13.1946% — earlier cash) while LOWERING the MOIC (1.8553 vs 1.8584 — the cash paid
+out no longer sweeps, so more interest accrues). Timing, not alpha.
+
+**G3-DIST — distributions with the trap OFF and a distribution-inflated promote [v1.1.1 —
+G-1]** (proves the null-trap branch under LIVE requests, §10's amended hurdle base, §9's
+unlevered exclusion on a PIK/OID/days-NWC deal): **every field identical to G3** plus
+`structure.distributions = [20.0, 15.0, 25.0, 22.0, 20.0]` and `covenants.rp_trap = null`.
+Asserts: entry S&U byte-identical to G3; rp_max renders **N/A every year** and NO year is
+blocked (trap off ⇒ only the two cash caps bind — the branch every existing golden leaves
+untested, because they all request zero); Y1/Y3 cash-capped to the 8.0 floor, Y2/Y4/Y5
+request-capped; the unlevered stream byte-identical to G3's; the promote strictly in the
+money. Check value: **MIP = 0.15 × (600.23 + 98.09 − 1.5 × 392.08) = 16.53** — under the
+pre-v1.1.0 hurdle base (exit equity alone) the SAME deal pays 1.82, so the fixture
+discriminates the §10 amendment by 9.1×. Sponsor IRR 12.5305% (mid-year 12.7509%),
+MOIC 1.7389; pre-promote IRR 13.0918%, MOIC 1.7811; DPI ends 0.2502, payback N/A.
+
+**Golden-uncovered by design [v1.1.1]** — each covered by a kernel/module fixture in the
+G-1 engine PR, for the reason stated (same precedent as the floor-breach case above):
+(i) §3.7 with `EBITDA_adj ≤ 0` (no financeable golden has a non-positive EBITDA — the
+normative closed form's whole point is that it still yields rp_max = 0 there);
+(ii) `gross_debt_end` INCLUDING accrued PIK inside a binding trap (G3-DIST has the PIK note
+but runs the trap off; G2-DIST has the trap but no PIK);
+(iii) the §3.7 exact TIE (`rp_max` exactly equal to the cash-capped amount ⇒ NOT blocked) —
+not constructible in float from a full model chain;
+(iv) §10's exit-equity CAP binding on the promote (needs cumulative distributions large
+against a near-zero exit residual);
+(v) payback REACHED inside the hold (needs cumulative distributions ≥ the entry check).
+
 ---
 
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.1.1 | 2026-07-24 | **PHASE G-1 GOLDEN EXTENSION (template step 2; still NO engine/UI code).** Two new §17 goldens, each holding its base golden constant so every difference is attributable to §3 step 7 alone: **G2-DIST** (= G2 + `distributions [25,25,25,10,8]` + `rp_trap {net_leverage, 2.75}`) exercises all four cap branches — fully trap-blocked / partially trap-blocked / cash-capped / request-capped — plus a year-N payment and the §1 mid-year check value (sponsor IRR 13.3906% period-end vs 13.4572% mid-year); **G3-DIST** (= G3 + `distributions [20,15,25,22,20]`, trap OFF) exercises the null-trap branch under LIVE requests and pins §10's amended hurdle base (MIP 16.53 vs 1.82 under the pre-v1.1.0 rule — a 9.1× discriminator). Both assert entry S&U byte-identical to their base (step 7 is post-close) and an unlevered stream byte-identical to their base (§9 exclusion). **Existing fixtures: ZERO numeric movement — the regeneration is provably ADDITIVE** (leaf-by-leaf: 0 changed, 0 removed, 270 added across G1–G5/G2-D; all six schedule.csv diffs are pure appends). New fixture columns: `waterfall[].distribution_requested / rp_max / distribution_paid / distribution_blocked`, `returns.dpi / payback_year`, `returns.{sponsor_net,pre_promote}.irr_mid_year`, and a `distributions` block. Two wording clarifications the goldens FORCED, both matching shipped behaviour with zero numeric change: **§1 stream scope** — the mid-year option applies to the sponsor-side streams only (this is what makes v1.1.0's inertness claim true: the unlevered stream carries interim UFCF in every deal); **§8 equity roll** — equity[t] = equity[t−1] + NI[t] − paid[t], normative because §14.2's BS-close forces the second leg (a distribution is a return of capital, never an expense — it never touches NI/EBIT/tax). §17 also records the five branches left golden-uncovered BY DESIGN, each with its reason and a required engine-side fixture (EBITDA_adj ≤ 0; accrued PIK inside a binding trap; the exact §3.7 tie; §10's exit-equity cap binding; payback reached in-hold). | Phase G-1 template step 2; reference derivation `scripts/goldens/spec_calc.py`; independent hostile sign-off + adjudication recorded in `tests/goldens/DERIVATION.md` |
 | v1.1.0 | 2026-07-24 | **PHASE G-1 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version): interim distributions + restricted-payment cash trap.** All pre-existing output fields numerically unchanged for every existing deal (when code lands, ModelOutput additionally GAINS paid/blocked rows + DPI — additive fields only): the feature is default-OFF (`distributions: null ≡ zeros`, `rp_trap: null`), no §17 golden sets either field, and the suggestion layer proposes neither — **golden regeneration NOT needed for this amendment; the FEATURE requires a golden EXTENSION (template step 2: a distributions variant workbook + derivation + adjudication) BEFORE any engine code lands.** (1) §3 step 7 goes live: paid = max(0, min(request[t], cash − min_cash, rp_max)); never revolver-funded (step-6 ordering + the floor cap); blocked/clipped capacity NOT accrued (rejected: owed-distributions ledger). (2) §3.7 RP trap: pro-forma net-leverage test (real agreements test giving effect to the payment); LINEAR in the paid amount ⇒ closed-form rp_max = max(0, cash − (gross_debt_end − L × EBITDA_adj)) — **the no-solver rule holds; the backlog's feared same-year cycle dissolves** (interest is beginning-balance, debt service already fixed at step 7). DSCR-metric trap REJECTED v1 (numerator unchanged by the payment — vacuous pro-forma). New coherence WARN `distribution_blocked`. (3) §9 membership row (sponsor +, pre-promote +, unlevered EXCLUDED — capital-structure-blind); DPI/payback de-degenerated (DPI on the t=0 equity check; payback on distributions alone — exit does not count, the L-10 lesson); RVPI stays out (no interim marks — would fabricate a valuation). (4) §10 pre-MIP total proceeds INCLUDE cumulative distributions; promote computed and paid AT EXIT only (rejected: interim carry + clawback). (5) §12/§14.9 walk-down gains "+ interim distributions (sponsor share)"; identity reconciles to sponsor TOTAL Δ, exact by the §9 algebra (second-order sweep effects live truthfully inside the paydown bar). (6) §13: request schedule + trap frozen across scenarios (structure/policy); slim credit block gains paid/blocked per year. (7) §14.18 invariant — the pro-forma clause stated in the MONEY form conditioned on paid > 0 (holds for all EBITDA_adj incl. ≤ 0; a ratio-form tolerance would be dimensionally incoherent), pointwise no-accrual (paid[t] ≤ request[t], no catch-up), DPI monotone, credit-metric exclusion. (8) §16 schema: `structure.distributions`, `covenants.rp_trap` + structural gates (≥ 0, length = hold_years). (9) §15 disclosure line. (10) §1 mid-year × distributions pinned: t < N distributions shift to t−0.5; the year-N distribution rides the period-N exit flow and NEVER shifts; inertness now conditioned on an empty schedule. (11) §14.16 final-cashflow clause amended: final sponsor_net flow ≡ sponsor_share + sponsor share of paid[N]. (12) §14.12/§14.14 domains gain "empty distribution schedule / trap off" (a binding trap converts marginal debt into trapped zero-yield cash and can reverse §14.12's sign; interim flows break §14.14's closed form). (13) §3.7 blocked-flag tie-break: `distribution_blocked[t] ⇔ rp_max < min(request[t], max(0, cash − min_cash))`, ties false. (14) §5 solver-exemplar corrected (the distribution trap is the named NON-cycle; genuine cycles require non-invertibility, not mere dependence). DR-1 Item 2's voluntary-prepayment ECF credit REMAINS deferred (sweep-credit mechanism, separate line). Independent sign-off round 1 REFUSED (5 blocking findings — §14.16/§14.18 falsity, E ≤ 0 normativity, §1 contradiction, §14.12/14 domains); all applied; round 2 GRANTED with 4 minor residuals, applied in this commit. | Phase G-1 template step 1; hostile independent sign-off: REFUSED then GRANTED (2 rounds, 2026-07-24) |
 | v1.0.5 | 2026-07-24 | **Disclosure only — ZERO numeric change; golden regeneration NOT needed (no arithmetic path touched; no golden produces the condition, coherence arrays on all §17 goldens byte-unchanged — asserted in the PR).** §8 goodwill-plug sign semantics stated: the plug is SIGNED and never clamped; negative goodwill (asset-heavy filer at a low entry multiple — reachable since the D-layer net-PP&E extraction, 2026-07-24) is disclosed via new coherence WARN `negative_goodwill` instead of rendering silently in the BS tab (adversarial cutover review, Finding 5). ASC 805 bargain-purchase gain recognition explicitly out of scope (Phase G step-up module) — the signed plug + WARN is the disclosed simplification. | Adversarial cutover review 2026-07-24 (PR #98 review, deferred item); independent sign-off recorded in the amendment PR |
 | v1.0.4 | 2026-07-22 | **Wording only — zero numeric change (goldens regeneration byte-identical, asserted in the PR).** (1) §11 senior-leverage inequality qualified: "≤ total **whenever total ≥ 0**" + net-leverage SIGNED/senior-floored-at-0 semantics stated (the unqualified claim was inherited from FINANCIAL_DEFINITIONS and is false in the net-cash regime — C7 independent review F1). (2) §16 states the two structural gates the build already enforces: unique tranche names (they key §7 write-off schedules + retirement reporting — C5 review's mis-attribution hazard) and revolver drawn_at_close = 0 in v1 (C2 review F1). | Independent C5–C9 conformance re-review (5 agents, 2026-07-22; PR #83 carries the code/test findings) |

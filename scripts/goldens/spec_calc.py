@@ -8,8 +8,12 @@ fixtures in tests/goldens/ are independent ground truth. Every block cites its S
 This script is a TEST ARTIFACT: it generates committed fixtures only, and regenerating them
 is a reviewed change (agreement check pins the output).
 
-Scope = exactly what the five goldens need (SPEC §17): FY basis, no rollover, no monitoring,
-no mid-year, single flat sweep pct, at most one revolver. Anything outside that scope raises.
+Scope = exactly what the goldens need (SPEC §17): FY basis, no rollover, no monitoring,
+single flat sweep pct, at most one revolver. Anything outside that scope raises.
+[v1.1.1] Scope extended for Phase G-1: §3 step 7 interim distributions + §3.7 the
+restricted-payment cash trap, §9 DPI/payback, §10's distribution-inclusive promote hurdle,
+and the §1 mid-year IRR of the sponsor-side streams (recorded alongside the period-end IRR;
+the goldens' DISPLAYED convention stays period-end — §17 "mid-year off").
 """
 
 import json, csv, math, os, sys
@@ -36,10 +40,17 @@ def nwc_balance(nwc, revenue, margin):
     cogs = revenue * (1.0 - margin)  # disclosed COGS proxy (§7)
     return nwc["dso"] / 365.0 * revenue + nwc["dio"] / 365.0 * cogs - nwc["dpo"] / 365.0 * cogs
 
-# ── IRR (Newton + bisection fallback) ────────────────────────────────────────
-def irr(cfs):
+# ── §1 timing ────────────────────────────────────────────────────────────────
+def mid_year_times(n):
+    """§1 mid-year convention: interim flows shift to t − 0.5; the flow at t = 0 (close)
+    and the EXIT flow (t = N) never shift. `n` = N + 1 (t0-anchored series)."""
+    return [float(i) if i == 0 or i == n - 1 else i - 0.5 for i in range(n)]
+
+# ── IRR (bisection) ──────────────────────────────────────────────────────────
+def irr(cfs, times=None):
+    ts = list(range(len(cfs))) if times is None else times
     def npv(r):
-        return sum(cf / (1 + r) ** t for t, cf in enumerate(cfs))
+        return sum(cf / (1 + r) ** t for t, cf in zip(ts, cfs))
     lo, hi = -0.9999, 10.0
     if npv(lo) * npv(hi) > 0:
         return None
@@ -60,6 +71,20 @@ def run(golden):
     N = a["hold_years"]
     assert a["entry"]["basis"] == "fy" and a["exit"]["basis"] == "fy"
     assert a.get("rollover_equity", 0) == 0 and a["fees"].get("monitoring") is None
+
+    # §16 [v1.1.0] schema additions (flattened here as the script flattens structure.*):
+    # `structure.distributions` (null ≡ all-zero ≡ feature off) and `covenants.rp_trap`.
+    # Structural gate: entries ≥ 0, length == hold_years.
+    dist_request = a.get("distributions")
+    if dist_request is None:
+        dist_request = [0.0] * N
+    assert len(dist_request) == N, "§16 gate: distributions length must equal hold_years"
+    assert all(d >= 0 for d in dist_request), "§16 gate: distribution requests must be ≥ 0"
+    rp_trap = a.get("rp_trap")
+    assert rp_trap is None or rp_trap["metric"] == "net_leverage", "§3.7: v1 metric is net_leverage"
+    # Rollover is 0 across every golden (asserted above) ⇒ the sponsor's pari-passu share of
+    # each paid distribution is 100% (§9 membership row).
+    sponsor_dist_share = 1.0
 
     # §2/§16 derived
     ebitda0 = f["fy_ebitda"]
@@ -123,6 +148,7 @@ def run(golden):
     out["balance_sheet"].append(bs_row(cash, nwc0, ppe, dfc, goodwill, total_par + drawn, equity_bs))
 
     prev_nwc = nwc0
+    paid_by_year = []         # §3 step 7: distributions actually paid (total equity)
     ufcf_stream = []          # unlevered (§9): interim UFCF inflows
     u_acq, u_post = (a["tax"]["nol"]["acquired_opening"] if acq_usable else 0.0), 0.0  # unlevered NOL state
     ebitda_adj_full = None    # full-precision exit-year EBITDA_adj (§15: no intermediate rounding)
@@ -231,6 +257,29 @@ def run(golden):
             draw = min(min_cash - c, rev_commit - drawn)
             c += draw; drawn += draw
         breach = c < min_cash - 1e-9
+
+        # §3 step 7 [v1.1.0] — interim distribution. Runs AFTER the draw (step 6), so a
+        # distribution can never be revolver-funded, and the `c − min_cash` cap can only
+        # spend what sits ABOVE the floor. In a breach year c < min_cash ⇒ paid = 0 by
+        # arithmetic. Blocked/clipped capacity is NOT accrued (no catch-up ledger).
+        request = dist_request[t]
+        # §3.7 gross_debt_end = post-step-1..6 par outstanding incl. accrued PIK to date,
+        # plus the drawn revolver — the same debt definition §11 net leverage uses.
+        gross_debt_end = sum(bal[tr["name"]] + pik_acc[tr["name"]] - mand[tr["name"]] - sweep[tr["name"]]
+                             for tr in terms) + drawn
+        if rp_trap is None:
+            rp_max = None                                    # trap OFF ⇒ +∞ (cash caps still bind)
+            rp_cap = float("inf")
+        else:
+            # NORMATIVE for ALL EBITDA_adj incl. ≤ 0 (§3.7): the money form of the pro-forma
+            # test, post-payment net debt ≤ L × EBITDA_adj. The ratio form inverts at E ≤ 0.
+            rp_max = max(0.0, c - (gross_debt_end - rp_trap["level"] * ebitda_adj))
+            rp_cap = rp_max
+        paid = max(0.0, min(request, c - min_cash, rp_cap))
+        # §3.7 blocked ⇔ the trap clipped what cash alone would have allowed; ties ⇒ false.
+        blocked = rp_cap < min(request, max(0.0, c - min_cash))
+        c -= paid
+        paid_by_year.append(paid)
         closing_cash = c
 
         # balances forward
@@ -251,7 +300,9 @@ def run(golden):
         dfc = dfc - sum(oid_amort.values()) - sum(fee_amort.values()) - exit_writeoff
         ni = ebit - (sum(cash_int.values()) + rev_int + sum(pik_acc.values()) + sum(oid_amort.values())
                      + sum(fee_amort.values()) + commit_fee + exit_writeoff) - tax
-        equity_bs += ni
+        # A distribution leaves as cash and as book equity in the year paid — §14.2 (the BS
+        # closes every year) forces it; §8 [v1.1.1] states it.
+        equity_bs += ni - paid
         debt_bs = sum(bal.values()) + drawn
         row = bs_row(closing_cash, nwc, ppe, dfc, goodwill, debt_bs, equity_bs)
         assert abs(row["check"]) < TOL, f"BS does not close in year {t+1}: {row['check']}"
@@ -288,7 +339,12 @@ def run(golden):
                                  "revolver_repayment": r2(rev_repay), "sweep_pool": r2(pool),
                                  "sweep_pct_applied": r4(pct), "sweep_applied_total": r2(sum(sweep.values())),
                                  "revolver_draw": r2(draw), "closing_cash": r2(closing_cash),
-                                 "cash_floor_breach": bool(breach)})
+                                 "cash_floor_breach": bool(breach),
+                                 # §3 step 7 / §3.7 [v1.1.0]
+                                 "distribution_requested": r2(request),
+                                 "rp_max": (r2(rp_max) if rp_max is not None else None),
+                                 "distribution_paid": r2(paid),
+                                 "distribution_blocked": bool(blocked)})
         out["balance_sheet"].append(row)
         cash = closing_cash; prev_nwc = nwc
 
@@ -314,15 +370,35 @@ def run(golden):
     payoff = sum(bal.values()) + drawn
     exit_fees = a["exit"]["fees_pct"] * exit_ev
     exit_eq = exit_ev - payoff + cash - exit_fees
+    cum_dist = sum(paid_by_year)                       # total equity distributions over the hold
+    sponsor_paid = [p * sponsor_dist_share for p in paid_by_year]
     mip_payout = 0.0
     if a.get("mip"):
         hurdle_val = a["mip"]["hurdle_moic"] * sponsor_equity
-        mip_payout = min(a["mip"]["pool_pct"] * max(0.0, exit_eq - hurdle_val), max(0.0, exit_eq))
+        # §10 [v1.1.0]: "pre-MIP total equity proceeds" INCLUDES cumulative interim
+        # distributions (the hurdle tests total value returned); the promote is still
+        # computed and paid AT EXIT ONLY, capped at the exit equity available — a cap that
+        # can now genuinely bind (large cumulative distributions, small exit residual).
+        mip_payout = min(a["mip"]["pool_pct"] * max(0.0, exit_eq + cum_dist - hurdle_val),
+                         max(0.0, exit_eq))
     sponsor_share = exit_eq - mip_payout
 
-    sponsor_cfs = [-sponsor_equity] + [0.0] * (N - 1) + [sponsor_share]
-    prepromote_cfs = [-sponsor_equity] + [0.0] * (N - 1) + [exit_eq]
+    # §9 [v1.1.0] membership: interim distributions are IN the sponsor stream (sponsor share)
+    # and IN the pre-promote stream (total), EXCLUDED from the unlevered stream (an
+    # equity/financing flow — the unlevered stream is capital-structure-blind). §14.16: the
+    # year-N distribution and the exit settle in the SAME period-N flow.
+    sponsor_cfs = [-sponsor_equity] + sponsor_paid[:-1] + [sponsor_share + sponsor_paid[-1]]
+    prepromote_cfs = [-sponsor_equity] + paid_by_year[:-1] + [exit_eq + paid_by_year[-1]]
     unlev_cfs = [-(ev + txn)] + ufcf_stream[:-1] + [ufcf_stream[-1] + exit_ev - exit_fees]
+
+    # §9 [v1.1.0] DPI & payback — on DISTRIBUTIONS ALONE; exit proceeds never count toward
+    # payback (the de-degeneration, ledger L-10). Payback is N/A when never reached in-hold.
+    cum, dpi, payback = 0.0, [], None
+    for t in range(N):
+        cum += sponsor_paid[t]
+        dpi.append(r4(cum / sponsor_equity) if sponsor_equity > 0 else None)
+        if payback is None and sponsor_equity > 0 and cum >= sponsor_equity:
+            payback = t + 1
     out["exit"] = {"exit_ebitda_basis_value": r2(exit_ebitda), "exit_ev": r2(exit_ev),
                    "debt_payoff_at_par_plus_pik": r2(payoff), "cash_at_exit": r2(cash),
                    "exit_fees": r2(exit_fees), "monitoring_termination": 0.0,
@@ -330,16 +406,34 @@ def run(golden):
                    "exit_equity_pre_mip_total": r2(exit_eq), "mip_payout": r2(mip_payout),
                    "sponsor_share": r2(sponsor_share), "rollover_share": 0.0}
     out["returns"] = {
-        "sponsor_net": stream(sponsor_cfs, sponsor_equity),
-        "pre_promote": stream(prepromote_cfs, sponsor_equity),
+        # §1: the mid-year option is a display alternative on the SPONSOR-SIDE streams only;
+        # the unlevered stream always uses period-end times.
+        "sponsor_net": stream(sponsor_cfs, sponsor_equity, mid_year=True),
+        "pre_promote": stream(prepromote_cfs, sponsor_equity, mid_year=True),
         "unlevered": stream(unlev_cfs, ev + txn),
+        "dpi": dpi,
+        "payback_year": payback,
+    }
+    out["distributions"] = {
+        "requested": [r2(d) for d in dist_request],
+        "paid": [r2(p) for p in paid_by_year],
+        "sponsor_share_paid": [r2(p) for p in sponsor_paid],
+        "cumulative_paid": r2(cum_dist),
+        "trap_level": (rp_trap["level"] if rp_trap else None),
+        "blocked_years": [i + 1 for i in range(N) if out["waterfall"][i]["distribution_blocked"]],
     }
     return out
 
-def stream(cfs, invested):
+def stream(cfs, invested, mid_year=False):
     inflows = sum(c for c in cfs if c > 0)
-    return {"cashflows": [r2(c) for c in cfs], "irr": (r6(irr(cfs)) if irr(cfs) is not None else None),
-            "moic": r4(inflows / invested) if invested > 0 else None}
+    r = irr(cfs)
+    d = {"cashflows": [r2(c) for c in cfs], "irr": (r6(r) if r is not None else None),
+         "moic": r4(inflows / invested) if invested > 0 else None}
+    if mid_year:
+        # §1 display option, recorded alongside (never instead of) the period-end IRR.
+        m = irr(cfs, mid_year_times(len(cfs)))
+        d["irr_mid_year"] = r6(m) if m is not None else None
+    return d
 
 def bs_row(cash, nwc, ppe, dfc, gw, debt, eq):
     assets = cash + nwc + ppe + dfc + gw
@@ -444,6 +538,18 @@ def g2_downside():
     g["assumptions"]["exit"]["multiple"] = 8.5
     return g
 
+# G2-DIST / G3-DIST — the Phase G-1 distribution variants (§17 [v1.1.1]). Facts, entry
+# structure, financing and operating case are IDENTICAL to the base golden; the ONLY added
+# fields are `structure.distributions` and `covenants.rp_trap`, so every difference from the
+# base is attributable to §3 step 7 / §3.7 alone (entry-frozen assert below, same discipline
+# as G2-D). Distributions are post-close, so entry cannot move.
+def dist_variant(base, requests, trap):
+    import copy
+    g = copy.deepcopy(GOLDENS[base])
+    g["assumptions"]["distributions"] = requests
+    g["assumptions"]["rp_trap"] = trap
+    return g
+
 def write_csv(path, res):
     rows = []
     N = len(res["operating"])
@@ -464,6 +570,10 @@ def write_csv(path, res):
             series("revolver." + k, res["revolver"], k)
     for k in ["opening_cash", "sweep_pool", "sweep_applied_total", "closing_cash"]:
         series("wf." + k, res["waterfall"], k)
+    # §3 step 7 / §3.7 [v1.1.1] — appended at the tail so the pre-existing rows are untouched
+    for k in ["distribution_requested", "rp_max", "distribution_paid", "distribution_blocked"]:
+        series("wf." + k, res["waterfall"], k)
+    rows.append(["returns.dpi"] + res["returns"]["dpi"])
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
         for r in rows: w.writerow(r)
@@ -475,8 +585,14 @@ if __name__ == "__main__":
     for name, g in GOLDENS.items():
         results[name] = run(g)
     results["G2-D"] = run(g2_downside())
-    # entry-frozen check for the scenario (§13): S&U identical to G2 base
+    results["G2-DIST"] = run(dist_variant("G2", [25.0, 25.0, 25.0, 10.0, 8.0],
+                                          {"metric": "net_leverage", "level": 2.75}))
+    results["G3-DIST"] = run(dist_variant("G3", [20.0, 15.0, 25.0, 22.0, 20.0], None))
+    # entry-frozen checks (§13 for the scenario; §3 step 7 is post-close so the DIST variants
+    # cannot move entry either): S&U identical to the base golden.
     assert results["G2-D"]["sources_uses"] == results["G2"]["sources_uses"], "G2-D entry not frozen!"
+    assert results["G2-DIST"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST entry not frozen!"
+    assert results["G3-DIST"]["sources_uses"] == results["G3"]["sources_uses"], "G3-DIST entry not frozen!"
     for name, res in results.items():
         d = os.path.join(outdir, name.replace("-", ""))
         os.makedirs(d, exist_ok=True)

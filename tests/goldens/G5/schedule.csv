@@ -33,3 +33,8 @@ wf.opening_cash,4.0,4.0,4.0,6.33,8.14
 wf.sweep_pool,0.0,0.0,4.66,8.28,11.27
 wf.sweep_applied_total,0.0,0.0,2.33,4.14,5.63
 wf.closing_cash,4.0,4.0,6.33,8.14,9.63
+wf.distribution_requested,0.0,0.0,0.0,0.0,0.0
+wf.rp_max,,,,,
+wf.distribution_paid,0.0,0.0,0.0,0.0,0.0
+wf.distribution_blocked,False,False,False,False,False
+returns.dpi,0.0,0.0,0.0,0.0,0.0
