@@ -21,6 +21,7 @@ import type { AIProvider } from '../lib/engine/ai/providers';
 import { computeChangedTraceFields } from '../lib/traceMap';
 import { getCompanyFacts, getSubmissions, extractRecentFilings } from '../lib/edgar/client';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
+import { isIfrsCompanyFacts, mapCompanyFactsIfrs } from '../lib/edgar/mapCompanyFactsIfrs';
 import { getEsefFilings, getEsefReport } from '../lib/edgar/esef';
 import { mapIfrsReport } from '../lib/edgar/mapIfrs';
 import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
@@ -778,7 +779,11 @@ Be specific. Use the company name to infer business type and calibrate according
           .map((f) => ({ form: f.form, filingDate: f.filingDate, documentUrl: f.documentUrl }));
       } catch { /* submissions unavailable — proceed with companyfacts only */ }
 
-      const raw = mapCompanyFacts(facts, { sicDescription });
+      // D6: IFRS-reporting 20-F filers carry facts['ifrs-full'] and (previously) extracted
+      // NOTHING — route them to the IFRS companyfacts mapper.
+      const raw = isIfrsCompanyFacts(facts)
+        ? mapCompanyFactsIfrs(facts, { sicDescription })
+        : mapCompanyFacts(facts, { sicDescription });
       const sector = opts?.sector ?? inferSector(sicDescription);
       const { state, provenance } = draftModelFromHistoricals(raw, {
         dealName: opts?.dealName ?? raw.entityName,
