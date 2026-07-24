@@ -97,6 +97,30 @@ const Workbench: React.FC = () => {
           Build →
         </button>
       </div>
+      {output && (
+        <div className="mt-2 flex items-center justify-between">
+          <button
+            onClick={async () => {
+              const { buildEngine2Workbook } = await import('../../../lib/engine2/excelExport');
+              const buf = await buildEngine2Workbook(output, ccy).xlsx.writeBuffer();
+              const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_engine2.xlsx`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
+            style={{ border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono }}
+          >
+            Export Excel
+          </button>
+          {/* E4 per the phase rule: AI features are stubbed OFF VISIBLY, never half-wired */}
+          <span className="text-[9px] uppercase tracking-widest" style={labelStyle}>
+            AI suggest · redline · memo — OFF in v2 (E4 pending)
+          </span>
+        </div>
+      )}
       {output && <OutputTabs output={output} currency={ccy} />}
       {output && output.coherence.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
