@@ -124,7 +124,11 @@ and unlevered-stream identities become exact assertions rather than approximatio
 engine PR must land a kernel/module fixture for every one, and the adjudication below
 checks that list is complete): §3.7 at `EBITDA_adj ≤ 0`; accrued PIK inside a BINDING trap;
 the exact §3.7 tie (`rp_max` == cash-capped amount ⇒ NOT blocked); §10's exit-equity cap
-binding on the promote; payback REACHED inside the hold.
+binding on the promote; payback REACHED inside the hold. **The completeness check earned
+its keep: pass 4 added four more** — step 7 inside a revolver-draw/floor-breach year; the
+inner `min(request, cash cap)` of the blocked FLAG; `rollover_equity > 0` (the pari-passu
+split of a paid distribution); and §14.18's credit-metric exclusion (the reference
+derivation emits no `credit` block).
 
 **Movement in the pre-existing goldens: NONE — proved, not asserted.** A leaf-by-leaf
 comparison of every `expected.json` at HEAD against the regenerated tree reports
@@ -144,9 +148,53 @@ just at review time.
 **Adjudication (PHASE_B rule — second independent pass; goldens are gospel only after this
 section is signed):**
 
-- [ ] **Adjudication pass 4 (Phase G-1 extension): PENDING.**
+- [x] **Adjudication pass 4a — G2-DIST (2026-07-24, independent agent): SIGNED.** **392
+  lines** hand-derived from SPEC §1–§11/§14/§15/§17 at full precision with a from-scratch
+  implementation written from the spec text (`spec_calc.py` never opened, imported or run);
+  **zero mismatches beyond tolerance**. The deriver was anchored first: run with an empty
+  schedule and no trap it reproduced the signed G2 golden on 45 sampled leaves plus exit
+  equity, IRR and MOIC. Load-bearing confirmations: `rp_max` [0.00, 12.0897, 75.6454,
+  142.5246, 218.0190]; Y2 pro-forma net leverage **(350.2689793 − 13.5864793)/122.43 =
+  2.750000000000000, error 0.0e+00**; Y3 closing cash exactly 10.000000; final sponsor flow
+  1044.0616 + 8.00 = 1052.0616 (§14.16); BS closes to ≤1.2e−13 every year *only* with §8
+  [v1.1.1]'s `− paid` leg; DPI/payback/mid-year all reproduced. **Eight adversarial probes,
+  each shown to DISCRIMINATE** the spec's reading from the plausible wrong one: measuring
+  `gross_debt_end` at the beginning balance instead → paid [0, 0, 18.36, 10, 8]; reading
+  `blocked` as "clipped for any reason" → [T,T,T,F,F] ≠ committed; shifting the whole
+  period-N flow under mid-year → 15.0199% ≠ 13.4572%; counting exit toward payback → year 5
+  ≠ N/A. Two precision proofs: the committed IRR 0.133906 is reachable only from
+  full-precision flows (the stored 2dp flows give 0.13390**7**), and G2-DIST's Y2 sweep pool
+  and sweep applied are **identical to G2's** — direct empirical proof that step 7 runs
+  after steps 5/6 and cannot retro-fund the sweep. 21 leaves sit exactly on the ±0.005
+  display boundary; all 21 are inherited G2 lines whose exact decimal ends in …5 at the
+  third place — step 7 introduced none.
+- [x] **Adjudication pass 4b — G3-DIST (2026-07-24, independent agent): SIGNED.** **397
+  lines** hand-derived the same way, plus 8 `schedule.csv` lines and a **64-line
+  back-reproduction of the signed G3** with distributions zeroed (0 mismatches) to anchor
+  the deriver; **zero mismatches beyond tolerance** (largest money delta 0.0050, all exact
+  half-cent display ties; largest IRR delta 0.03bp). Confirmed: `rp_max` null and
+  `blocked` false in all five years; Y1/Y3 cash-capped to closing cash **exactly 8.000000**;
+  Y2/Y4/Y5 request-capped; PIK ending 135 × 1.12⁵ = 237.916127 **byte-identical to G3** (a
+  pro-rata sweep including the PIK would give 172.67); MIP **16.531017** vs **1.816980**
+  under the pre-v1.1.0 hurdle base — the 9.10× discriminator §17 claims; BS `|check|` < 1e-12
+  at every t. **The §10 no-double-count question was answered with arithmetic, not
+  assertion**: G3's total value returned is 703.83 while G3-DIST's is 600.23 + 98.09 =
+  698.32 — **$5.51m LOWER**, which equals the incremental senior interest from not sweeping
+  the distributed cash ($82.32 vs $76.80 = $5.52, flowing 1:1 because §163(j) binds every
+  year so none of it is deductible). Each dollar is counted once — retained or paid, never
+  both — and the amended base is conservative, not inflated. Further bugs the fixture is
+  shown to catch: step 7 before step 5 (paid [6.68, 11.53, 8.97, 12.67, 16.25], MIP 0.00);
+  a cash cap ignoring the floor (Y1 closing 4.68); a missing `− paid` equity leg (breaks
+  `check` by 98.09); floor added instead of `max` (Y1 interest 23.90 vs 21.87); the v1.0.3
+  rounded-EBITDA regression (`exit_ev` 921.70 proves full precision — rounded gives 921.74).
 
-**Status: G2-DIST and G3-DIST are NOT yet gospel — no engine code may implement §3 step 7
-until pass 4 is signed.** `tests/engine2-sequence.test.ts` carries a self-deleting
-`PENDING_G1_KEYS` list so the C5 gate stays green while the engine lags the fixtures; the
-guard test fails the moment `runCore` emits any step-7 column, forcing the list's removal.
+Both passes independently flagged the same pre-existing, out-of-scope defect:
+`derived.entry_net_leverage_fy` is GROSS (par ÷ EBITDA) in all six pre-G-1 goldens while
+§11 defines net leverage as (gross − cash) ÷ EBITDA_adj. It is byte-identical across every
+golden and untouched by this extension, so it is ticketed separately rather than folded in.
+
+**Status: G2-DIST and G3-DIST are GOSPEL.** Engine2 modules are wrong wherever they
+disagree with these fixtures; disputes reopen only via spec amendment + re-derivation.
+`tests/engine2-sequence.test.ts` carries a self-deleting `PENDING_G1_KEYS` list so the C5
+gate stays green while the engine lags the fixtures; the guard test fails the moment
+`runCore` emits any step-7 column, forcing the list's removal.
