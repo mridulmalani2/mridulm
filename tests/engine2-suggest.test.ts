@@ -87,6 +87,22 @@ describe('D7 — suggestion assembly (bases mandatory)', () => {
 });
 
 describe('SPEC §14.13 — the all-suggested model is coherent', () => {
+  it('MIDDLE-MARKET branch (unitranche template, fy_ebitda < $100m) ⇒ ZERO flags too (accuracy audit 2026-07-24: this branch never flowed through runModel in any test)', () => {
+    const MID_CAP: DealFacts = {
+      ...LARGE_CAP,
+      entity_name: 'Mid Market Co',
+      fy_revenue: 240, fy_ebitda: 48, fy_ebitda_margin: 0.2,
+      net_ppe: 40, gross_debt: 0, cash: 0, net_debt: 0,
+      history: LARGE_CAP.history.map((h) => ({ ...h, revenue: h.revenue === null ? null : h.revenue / 10, ebitda: h.ebitda === null ? null : h.ebitda / 10, capex: h.capex === null ? null : h.capex / 10 })),
+    };
+    const { assumptions, basis } = suggestAssumptions(MID_CAP);
+    expect(basis['entry.entry_multiple'].detail).toContain('middle-market'); // the OTHER branch
+    const out = runModel(MID_CAP, assumptions);
+    expect(out.coherence).toEqual([]);
+    expect(out.returns.sponsor_net.irr).not.toBeNull();
+    for (const bs of out.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(0.005);
+  });
+
   it('runModel(facts, suggestAssumptions(facts)) ⇒ ZERO coherence flags; sane outputs', () => {
     const { assumptions } = suggestAssumptions(LARGE_CAP);
     const out = runModel(LARGE_CAP, assumptions);

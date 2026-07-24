@@ -34,6 +34,48 @@ function assertBlockMatches(actual: Record<string, unknown>[], fixture: Record<s
   }
 }
 
+describe('§7 early retirement — the deferred tax deduction lands in t+1 (accuracy-audit gate hole, 2026-07-24)', () => {
+  // Golden-uncovered BY DESIGN (spec_calc.py raises on early retirement), so this is the
+  // ONE committed end-to-end pin: a small priority-1 tranche with OID under a 100% sweep
+  // retires early; the unamortized OID+fee remainder must hit the UNCAPPED pool exactly
+  // one year later (book write-off in year t, deduction in t+1 — SPEC v1.0.3 §7).
+  it('retirement year carries only scheduled amortization; t+1 jumps by exactly the remainder', () => {
+    const facts = DEALS.G2.facts;
+    const base = DEALS.G2.assumptions;
+    const a = {
+      ...base,
+      structure: {
+        ...base.structure,
+        sweep: { base_pct: 1, grid: null },
+        tranches: [
+          { name: 'Stub TL', type: 'senior' as const, size: { amount: 6 }, pricing: { kind: 'floating' as const, base_rate: 0.036, spread: 0.05, floor: 0 }, amort_pct_of_face: 0, maturity_years: 6, oid_pct: 0.05, sweep: { participates: true, priority: 0 } },
+          ...base.structure.tranches,
+        ],
+      },
+    };
+    const core = runCore(facts, a);
+    const stub = core.tranches[0];
+    expect(stub[0].name).toBe('Stub TL');
+    // find the retirement year t: ending balance hits 0 with a positive beginning balance
+    const t = stub.findIndex((r) => r.beginning_balance > 1e-9 && r.ending_balance <= 1e-9);
+    expect(t).toBeGreaterThanOrEqual(0);
+    expect(t).toBeLessThan(4); // engineered to retire well before exit (year-N merges instead)
+    // remainder = unamortized OID+fee at the END of year t under straight-line-to-maturity
+    const fee = a.fees.financing_pct_of_commitments * 6;
+    const oid = 0.05 * 6;
+    const perYear = (fee + oid) / 6;
+    const remainder = fee + oid - perYear * (t + 1);
+    expect(remainder).toBeGreaterThan(0.01); // the test is vacuous if nothing remains
+    // t+1's uncapped pool = that year's own scheduled amortization + commitment fees + the remainder
+    const scheduledPlusFees = (y: number) => core.operating[y].financing_fee_amortization
+      + (core.revolver ? core.revolver[y].commitment_fee : 0);
+    expect(core.tax[t].uncapped_deductions).toBeCloseTo(scheduledPlusFees(t), 9);
+    expect(core.tax[t + 1].uncapped_deductions - scheduledPlusFees(t + 1)).toBeCloseTo(remainder, 9);
+    // and the balance sheet closes at full precision through the retirement
+    for (const bs of core.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(1e-9);
+  });
+});
+
 describe('runCore — first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
   for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5']) {
     it(`${golden}: operating, tax, tranches, revolver, waterfall, balance sheet`, () => {

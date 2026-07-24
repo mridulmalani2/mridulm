@@ -54,8 +54,13 @@ export function midYearTimes(flowCount: number): number[] {
  * display option). Returns null when undefined: fewer than 2 flows, no sign change, or no
  * SIGN-CHANGING root in (−0.9999, 10] (a bracketing method cannot see even-multiplicity
  * tangential roots, and the search floor is −0.9999, not −1 — total-loss streams with
- * IRR ∈ (−1, −0.9999) render N/A). With multiple sign changes the root found in the
- * bracket is returned (golden streams have exactly one sign change).
+ * IRR ∈ (−1, −0.9999) render N/A). MULTI-ROOT POLICY (accuracy audit 2026-07-24): when a
+ * stream has multiple sign changes (Descartes admits several IRRs — reachable once §3
+ * step-7 interim distributions land), the ENDPOINT sign test governs: an ODD count of
+ * in-bracket roots returns one of them (which one is unspecified — the bracket midpoint
+ * path decides); an EVEN count is invisible to the endpoint test and returns null (N/A —
+ * missed, never wrong). Sponsor streams with one outflow followed by inflows keep a
+ * unique IRR; the G-1 engine PR must add multi-sign-change tests before shipping.
  */
 export function irr(cashflows: number[], times?: number[]): number | null {
   if (cashflows.length < 2) return null;
