@@ -64,6 +64,11 @@ const DealEngine: React.FC = () => {
 
   // ── Phase E (engine2) v2 workbench — flag + ?v2=1, dual-engine window only ──
   if (SHOW_ENGINE2_WORKBENCH && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('v2')) {
+    // Dev-only handle for driving the workbench without the proxy (walkthroughs/tests);
+    // stripped from production builds.
+    if (import.meta.env.DEV) {
+      void import('../store/engine2Model').then((m) => { (window as unknown as Record<string, unknown>).__engine2 = m.useEngine2Model; });
+    }
     return <Workbench />;
   }
 
