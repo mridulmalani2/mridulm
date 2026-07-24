@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SHOW_LEGACY_OUTPUTS } from '../lib/legacyOutputs';
+import { SHOW_ENGINE2_WORKBENCH } from '../config/features';
+import Workbench from '../components/deal-engine/v2/Workbench';
 import { useDealEngineStore } from '../store/dealEngine';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
@@ -59,6 +61,11 @@ const DealEngine: React.FC = () => {
   useEffect(() => {
     if (!isLargeScreen) setChatOpen(false);
   }, [isLargeScreen]);
+
+  // ── Phase E (engine2) v2 workbench — flag + ?v2=1, dual-engine window only ──
+  if (SHOW_ENGINE2_WORKBENCH && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('v2')) {
+    return <Workbench />;
+  }
 
   // ── 3-screen start flow (Phase 1): Source → Assumptions review → Model ──
   if (startScreen === 'assumptions') return <AssumptionsReview />;

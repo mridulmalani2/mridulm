@@ -10,7 +10,8 @@
  * are REPLACED atomically by each build (no stale mixed outputs).
  */
 
-import { create } from 'zustand';
+import { useSyncExternalStore } from 'react';
+import { createStore } from 'zustand/vanilla';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { runModel, type Engine2ModelOutput } from '../lib/engine2/facade';
 import { suggestAssumptions, type SuggestionBasis } from '../lib/engine2/suggest';
@@ -47,7 +48,7 @@ export interface Engine2ModelStore {
   reset: () => void;
 }
 
-export const useEngine2Model = create<Engine2ModelStore>((set, get) => ({
+export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   facts: null,
   missingFacts: [],
   factNotes: [],
@@ -130,6 +131,23 @@ export const useEngine2Model = create<Engine2ModelStore>((set, get) => ({
 
   reset: () => set({ facts: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null }),
 }));
+
+/**
+ * Selector hook over the vanilla store. The SERVER snapshot reads CURRENT state (not
+ * zustand v5's initial-state default): this app is a pure SPA — renderToStaticMarkup
+ * appears only in the SSR smoke tests, where the store is populated before render and
+ * hydration mismatches cannot exist.
+ */
+export function useEngine2Model<T>(selector: (s: Engine2ModelStore) => T): T {
+  return useSyncExternalStore(
+    engine2Store.subscribe,
+    () => selector(engine2Store.getState()),
+    () => selector(engine2Store.getState()),
+  );
+}
+useEngine2Model.getState = engine2Store.getState;
+useEngine2Model.setState = engine2Store.setState;
+useEngine2Model.subscribe = engine2Store.subscribe;
 
 /** The assumption groups a YOU badge protects from re-suggest overwrite. */
 function pickUserOwned(current: DealAssumptions, basis: Record<string, FieldBasis>): Partial<DealAssumptions> {
