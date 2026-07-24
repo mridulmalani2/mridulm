@@ -211,6 +211,103 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     expect(closedFormTwoFlowIrr(100, -1, 5)).toBeNull();
     expect(closedFormTwoFlowIrr(100, 100, 0)).toBeNull();
   });
+
+  // ── MULTI-SIGN-CHANGE POLICY ──────────────────────────────────────────────
+  // Required by the 2026-07-24 accuracy audit BEFORE SPEC §3 step-7 interim flows ship:
+  // until G-1, every sponsor stream was [−outflow, 0, …, 0, +exit] — one sign change, so
+  // Descartes guaranteed a unique IRR and the multi-root question never arose. irr.ts's
+  // documented policy: ODD in-bracket root count ⇒ one root is returned (WHICH one is
+  // unspecified); EVEN ⇒ invisible to the endpoint sign test ⇒ null. The product guarantee
+  // is "missed, never wrong" — a returned number is ALWAYS a root.
+
+  it('multi-root: an EVEN in-bracket root count returns null, never one of the roots', () => {
+    // −100, +230, −132 has exact roots at 10% and 20% (132x² − 230x + 100 = 0, x = 1/(1+r)).
+    // Both sit inside (−0.9999, 10], so the endpoint signs match and the bracket is blind.
+    const cfs = [-100, 230, -132];
+    expect(Math.abs(npv(0.1, cfs))).toBeLessThan(1e-9);
+    expect(Math.abs(npv(0.2, cfs))).toBeLessThan(1e-9);
+    expect(irr(cfs)).toBeNull(); // N/A — the honest answer when the IRR is ambiguous
+  });
+
+  it('multi-root: an ODD in-bracket root count returns a genuine root (NPV ≈ 0), not a bracket edge', () => {
+    // −100, +400, −500, +250: three sign changes but only ONE real root — 250x³ − 500x² +
+    // 400x − 100 has roots x = 0.4353208 and a complex pair, so r = 1/0.4353208 − 1 ≈ 129.71%.
+    const cfs = [-100, 400, -500, 250];
+    const r = irr(cfs);
+    expect(r).not.toBeNull();
+    expect(r!).toBeCloseTo(1 / 0.43532075 - 1, 6);
+    const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+    expect(Math.abs(npv(r!, cfs))).toBeLessThan(1e-6 * scale); // well-conditioned here
+    expect(r!).toBeGreaterThan(-0.9999);
+    expect(r!).toBeLessThan(10);
+  });
+
+  it('multi-sign-change: a returned IRR always satisfies the solver contract — converged residual OR a bracketed sign change', () => {
+    // The contract is a DISJUNCTION, and stating it as either half alone is false:
+    //   (a) |NPV(r)| ≤ 1e-12 · Σ|cf|  — the solver's own convergence test (early return); or
+    //   (b) r sits within ~1 ulp of a sign change — the bracket-exhaustion path.
+    // (b) alone fails for streams that converge early on the residual (r is then accurate to
+    // the residual tolerance, not to 1 ulp). (a) alone fails near the r → −1 pole, where the
+    // discount factors (1 + r)^t blow up and the NPV curve goes near-vertical: measured over
+    // 13,606 random multi-sign streams that returned an IRR, 14 showed |NPV| up to 6% of
+    // scale, yet ALL 14 were bracketed within 1e-15 relative and ALL sat at r ∈ [−0.9997,
+    // −0.976] — deep-loss rates against the search floor, not wrong answers.
+    // What the disjunction rules out is the thing that would actually hurt: a bracket edge or
+    // an unsolved Newton seed dressed up as an IRR.
+    fc.assert(
+      fc.property(fc.array(fc.double({ min: -500, max: 500, noNaN: true }), { minLength: 3, maxLength: 8 }), (cfs) => {
+        const signs = cfs.filter((c) => c !== 0).map((c) => Math.sign(c));
+        const changes = signs.reduce((n, s, i) => (i > 0 && s !== signs[i - 1] ? n + 1 : n), 0);
+        fc.pre(changes >= 2); // the regime that only exists once interim flows can be non-zero
+        const r = irr(cfs);
+        if (r === null) return; // N/A is always an acceptable answer
+        const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+        const converged = Math.abs(npv(r, cfs)) <= 1e-12 * Math.max(1, scale);
+        const d = Math.max(Math.abs(r) * 1e-12, Number.MIN_VALUE);
+        const bracketed =
+          npv(Math.max(-0.9999, r - d), cfs) * npv(Math.min(10, r + d), cfs) <= 0;
+        expect(converged || bracketed, `returned ${r} for ${JSON.stringify(cfs)}: neither converged nor bracketed`).toBe(true);
+        expect(r).toBeGreaterThan(-1); // never the RATE_LO edge dressed up as an answer
+      }),
+      { numRuns: 1000 },
+    );
+  });
+
+  it('§3 step 7 shape: distributions are ≥ 0 by construction, so a POSITIVE exit keeps the sponsor stream single-sign-change (unique IRR)', () => {
+    // paid[t] = max(0, min(…)) — the engine can never emit a negative interim sponsor flow.
+    // With a positive year-N flow the stream is [−out, ≥0, …, ≥0, +] : exactly one sign
+    // change ⇒ Descartes gives at most one positive root ⇒ the multi-root policy never bites
+    // on a solvent deal. This is the property that makes G-1 safe to ship.
+    fc.assert(
+      fc.property(
+        money(50, 1e3),
+        fc.array(money(0, 100), { minLength: 1, maxLength: 6 }),
+        money(1, 2e3),
+        (outflow, dists, exitFlow) => {
+          const cfs = [-outflow, ...dists, exitFlow];
+          const r = irr(cfs);
+          fc.pre(r !== null);
+          const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+          expect(Math.abs(npv(r!, cfs))).toBeLessThan(1e-6 * scale);
+          // and mid-year (§1) solves on the same stream without changing that guarantee
+          const m = irr(cfs, midYearTimes(cfs.length));
+          if (m !== null) expect(Math.abs(npv(m, cfs, midYearTimes(cfs.length)))).toBeLessThan(1e-6 * scale);
+        },
+      ),
+    );
+  });
+
+  it('§3 step 7 shape: a NEGATIVE year-N flow (value wipeout) after paid distributions is the one two-sign-change case — N/A, never a fabricated IRR', () => {
+    // [−587.22, +12.09, +15.34, +10, −5] — distributions paid, then the exit wipes out.
+    const cfs = [-587.22, 12.09, 15.34, 10, -5];
+    const r = irr(cfs);
+    if (r !== null) {
+      const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+      expect(Math.abs(npv(r, cfs))).toBeLessThan(1e-6 * scale); // still a genuine root
+    }
+    // Either way the caller never receives a plausible-looking non-root.
+    expect(r === null || Number.isFinite(r)).toBe(true);
+  });
 });
 
 // ── waterfall (SPEC §3, invariants §14.3/4/5/15) ─────────────────────────────
