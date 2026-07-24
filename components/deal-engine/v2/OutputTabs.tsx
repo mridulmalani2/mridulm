@@ -19,7 +19,7 @@ const th = 'text-right font-normal px-2 py-1';
 const td = 'text-right px-2 py-1';
 const rowB = { borderTop: '1px solid rgba(17,17,17,0.08)' } as const;
 
-type Tab = 'summary' | 'returns' | 'operating' | 'su' | 'debt' | 'bs' | 'credit';
+type Tab = 'summary' | 'returns' | 'operating' | 'su' | 'debt' | 'bs' | 'credit' | 'sensitivity' | 'scenarios' | 'methodology';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'summary', label: 'Summary' },
   { id: 'returns', label: 'Returns' },
@@ -28,6 +28,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'debt', label: 'Debt' },
   { id: 'bs', label: 'Balance sheet' },
   { id: 'credit', label: 'Credit' },
+  { id: 'sensitivity', label: 'Sensitivity' },
+  { id: 'scenarios', label: 'Scenarios' },
+  { id: 'methodology', label: 'Methodology' },
 ];
 
 const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, children }) => (
@@ -207,6 +210,88 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
   </Table>
 );
 
+const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
+  const grid = o.sensitivity?.[0];
+  if (!grid) return <p className="text-[11px]" style={label}>Run “Build” to compute the sensitivity exhibits.</p>;
+  const cell = (c: number, v: number | null, isBase: boolean, fmt: (x: number | null) => string) => (
+    <td key={c} className={td} style={isBase ? { background: 'rgba(21,93,252,0.10)', fontWeight: 600 } : undefined}>{fmt(v)}</td>
+  );
+  const block = (title: string, m: (number | null)[][], fmt: (x: number | null) => string) => (
+    <div className="mb-4">
+      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>{title} — {grid.row_axis} (rows) × {grid.col_axis} (cols)</p>
+      <Table head={['', ...grid.col_values.map((v) => num(v, 1))]}>
+        {m.map((row, r) => (
+          <tr key={r} style={rowB}>
+            <td className="px-2 py-1">{num(grid.row_values[r], 1)}</td>
+            {row.map((v, c) => cell(c, v, r === grid.base_row_index && c === grid.base_col_index, fmt))}
+          </tr>
+        ))}
+      </Table>
+    </div>
+  );
+  return (
+    <div>
+      {block('Sponsor IRR', grid.irr, (x) => pct(x))}
+      {block('Sponsor MOIC', grid.moic, (x) => multiple(x))}
+      <p className="text-[10px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base.</p>
+    </div>
+  );
+};
+
+const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  if (!o.scenarios?.length) return <p className="text-[11px]" style={label}>Run “Build” to compute the scenario exhibits.</p>;
+  return (
+    <div>
+      <Table head={['Scenario', 'IRR', 'Δ vs base', 'MOIC', 'Min closing cash', 'Breach year', 'Floor breach']}>
+        {o.scenarios.map((s) => {
+          const minCash = Math.min(...s.waterfall.map((w) => w.closing_cash));
+          const anyBreach = s.waterfall.some((w) => w.cash_floor_breach);
+          return (
+            <tr key={s.name} style={rowB}>
+              <td className="px-2 py-1">{s.name}</td>
+              <td className={td}>{pct(s.returns.sponsor_net.irr)}</td>
+              <td className={td}>{s.irr_delta_vs_base == null ? 'N/A' : pct(s.irr_delta_vs_base)}</td>
+              <td className={td}>{multiple(s.returns.sponsor_net.moic)}</td>
+              <td className={td}>{money(minCash, ccy)}</td>
+              <td className={td}>{s.covenant_breach_year == null ? '—' : `Y${s.covenant_breach_year + 1}`}</td>
+              <td className={td}>{anyBreach ? '■ yes' : '—'}</td>
+            </tr>
+          );
+        })}
+      </Table>
+      <p className="text-[10px] mt-2" style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (SPEC §13 — a downside never silently re-prices entry).</p>
+    </div>
+  );
+};
+
+/** SPEC §15: the assumptions & methodology page — every disclosed simplification, matter-of-fact. */
+const DISCLOSURES: [string, string][] = [
+  ['Annual periods', 'flows at period end; mid-year IRR display option only'],
+  ['Beginning-balance interest', 'strictly sequential engine, no solver — conservative on amortizing/swept tranches'],
+  ['Day-count', 'annual accrual understates Actual/360 cash interest ~1.0–1.4% of interest; basis stated per tranche'],
+  ['Static rates', 'no forward curve in v1; base rate is a template value'],
+  ['Constant tax rate', 'effective rate from the filing held flat'],
+  ['Exit = entry multiple', 'multiple expansion requires an explicit thesis (DR-4)'],
+  ['§382 limit static', 'unused-limitation carryforward omitted — conservative'],
+  ['NOL usage not optimized', 'consumed in full per §6.3 even when the minimum-tax floor binds or the current-year benefit is nil'],
+  ['Acquired §163(j) carryforwards', 'out of scope in v1'],
+  ['Exit-year fee write-off', 'deducted UNCAPPED (Treas. Reg. §1.163(j)-1(b)(22))'],
+  ['PP&E roll', 'mechanical (capex − D&A); may go negative — warned, never clamped'],
+  ['Post-2025 OBBBA sub-changes', 'no interest capitalization, no CFC modeling'],
+  ['Call protection', 'BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions (Phase G)'],
+];
+
+const Methodology: React.FC = () => (
+  <div>
+    <p className="text-[10px] uppercase tracking-widest mb-2" style={label}>Assumptions & methodology (SPEC §15) — a model is a range, not a point</p>
+    <Table head={['Simplification', 'Why it is immaterial or conservative']}>
+      {DISCLOSURES.map(([a, b]) => (
+        <tr key={a} style={rowB}><td className="px-2 py-1">{a}</td><td className="px-2 py-1 text-left" style={{ color: 'rgba(17,17,17,0.65)' }}>{b}</td></tr>
+      ))}
+    </Table>
+  </div>
+);
+
 const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Currency }> = ({ output, currency }) => {
   const [tab, setTab] = useState<Tab>('summary');
   return (
@@ -227,6 +312,9 @@ const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Curren
       {tab === 'debt' && <Debt o={output} ccy={currency} />}
       {tab === 'bs' && <BS o={output} ccy={currency} />}
       {tab === 'credit' && <Credit o={output} />}
+      {tab === 'sensitivity' && <Sensitivity o={output} />}
+      {tab === 'scenarios' && <Scenarios o={output} ccy={currency} />}
+      {tab === 'methodology' && <Methodology />}
     </div>
   );
 };
