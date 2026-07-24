@@ -466,7 +466,16 @@ export interface ModelOutput {
     entry_ebitda_for_sizing: number; // ALWAYS FY (SPEC §11)
     total_debt_at_par: number;
     sponsor_equity: number;
-    entry_net_leverage_fy: number;
+    /**
+     * §11 [v1.1.2] GROSS: total debt at PAR ÷ FY EBITDA — the quoted term-sheet number and
+     * the basis §17 sizes tranches on. NOT netted against the funded min-cash (§2 does put
+     * it on the t=0 BS, so the §11 net figure would be (par − min_cash) ÷ EBITDA — a
+     * genuinely different number). Renamed from `entry_net_leverage_fy`, which named a
+     * definition the value never had. ModelOutput carries NO entry-date NET leverage:
+     * `credit[].net_leverage` is net from year 1 onward, so any surface showing both must
+     * label the bases explicitly or it overstates deleveraging.
+     */
+    entry_gross_leverage_fy: number;
   };
   sources_uses: SourcesUses;
   operating: OperatingYear[];

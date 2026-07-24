@@ -45,7 +45,7 @@ ${su.debt_at_par.map((d) => capRow(d.name, d.amount)).join('\n')}
 ${capRow('Sponsor + rollover equity', su.sponsor_equity + su.rollover_equity)}
 
 ## Credit statistics
-Entry net leverage ${multiple(o.derived.entry_net_leverage_fy)}; final-year net leverage ${lastCredit?.net_leverage == null ? 'N/A' : multiple(lastCredit.net_leverage)}; Y1 DSCR ${o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}; cumulative paydown ${lastCredit?.cumulative_paydown_pct_of_entry_debt == null ? 'N/A' : pct(lastCredit.cumulative_paydown_pct_of_entry_debt)} of entry debt.
+Entry GROSS leverage ${multiple(o.derived.entry_gross_leverage_fy)} (par ÷ FY EBITDA, not netted against funded min-cash); final-year NET leverage ${lastCredit?.net_leverage == null ? 'N/A' : multiple(lastCredit.net_leverage)} — different bases, so do not present the two as a single deleveraging series; Y1 DSCR ${o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}; cumulative paydown ${lastCredit?.cumulative_paydown_pct_of_entry_debt == null ? 'N/A' : pct(lastCredit.cumulative_paydown_pct_of_entry_debt)} of entry debt.
 
 ## Free cash flow
 ${o.operating.map((y, i) => `Y${i + 1} ${money(y.fcf_pre_debt, ccy)}`).join(' · ')}

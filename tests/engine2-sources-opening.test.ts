@@ -129,7 +129,12 @@ describe('sourcesUses.ts + openingBalance.ts reproduce the golden t=0 columns (C
       // entry leverage on FY EBITDA, gross par net of the target's (zero) pre-close cash —
       // the CFDF frame: min-cash is NEW money, not acquired cash (reference derivation)
       if (spec.fy_ebitda > 0) {
-        expect(Math.abs(sized.total_par / spec.fy_ebitda - g.derived.entry_net_leverage_fy)).toBeLessThan(5e-5);
+        // §11 [v1.1.2]: GROSS — par ÷ FY EBITDA, NOT netted against the funded min-cash.
+        expect(Math.abs(sized.total_par / spec.fy_ebitda - g.derived.entry_gross_leverage_fy)).toBeLessThan(5e-5);
+        // and the two definitions really are different, so the name matters: the §11 NET
+        // figure at t=0 would be (par − min_cash) ÷ EBITDA, materially lower.
+        const entryNet = (sized.total_par - spec.min_cash) / spec.fy_ebitda;
+        expect(entryNet).toBeLessThan(g.derived.entry_gross_leverage_fy);
       }
 
       // sources & uses block

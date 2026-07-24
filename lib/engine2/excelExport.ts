@@ -65,8 +65,12 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Equity (sponsor + rollover)', o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity],
     ['Total capitalization', capTotal],
     ['— CREDIT STATISTICS —', null],
-    ['Entry net leverage (FY)', o.derived.entry_net_leverage_fy],
-    ['Final-year net leverage', o.credit[o.credit.length - 1]?.net_leverage ?? null],
+    // §11 [v1.1.2]: entry is GROSS, final-year is NET — two different bases, so both are
+    // labelled explicitly. They previously read 'Entry net leverage' / 'Final-year net
+    // leverage', which looked like one series and overstated deleveraging by the funded
+    // min-cash at the entry end.
+    ['Entry gross leverage (FY, par ÷ EBITDA)', o.derived.entry_gross_leverage_fy],
+    ['Final-year NET leverage', o.credit[o.credit.length - 1]?.net_leverage ?? null],
     ['Y1 DSCR', o.credit[0]?.dscr ?? null],
     ['— FREE CASH FLOW —', null],
     ...o.operating.map((y, i): Cell[] => [`FCF pre-debt Y${i + 1}`, y.fcf_pre_debt]),

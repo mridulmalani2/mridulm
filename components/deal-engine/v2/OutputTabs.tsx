@@ -51,8 +51,10 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.sponsor_net.moic)}</p></div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry → exit</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_multiple)} → {multiple(o.exit.exit_ev / o.exit.exit_ebitda_basis_value)}</p></div>
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry leverage · Y1 DSCR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_net_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
+      {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
+          per-year credit metrics on the other tabs are NET. */}
+      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_gross_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
     </div>
     <Table head={['Value bridge', money(0, ccy) === '' ? '' : '']}>
       {[
