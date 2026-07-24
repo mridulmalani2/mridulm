@@ -68,6 +68,9 @@ const Workbench: React.FC = () => {
   const ccy = facts.currency as Engine2Currency;
   const blocked = missing.length > 0;
   return (
+    // the v2 tree inks in near-black; it must supply its own paper (the site shell is
+    // dark — verified visually in the browser pane, 2026-07-24)
+    <div className="min-h-screen overflow-y-auto" style={{ background: '#F9F9F7' }}>
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-baseline justify-between mb-1">
         <h2 className="text-sm tracking-widest uppercase" style={{ fontFamily: mono, color: '#111' }}>{facts.entity_name}</h2>
@@ -131,6 +134,7 @@ const Workbench: React.FC = () => {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 };
