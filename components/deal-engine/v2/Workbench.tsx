@@ -11,6 +11,7 @@ import type { Engine2Currency } from '../../../lib/format';
 import AssumptionsPanel from './AssumptionsPanel';
 import HistoryTable from './HistoryTable';
 import BasisBadge from './BasisBadge';
+import OutputTabs from './OutputTabs';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
@@ -96,6 +97,7 @@ const Workbench: React.FC = () => {
           Build →
         </button>
       </div>
+      {output && <OutputTabs output={output} currency={ccy} />}
       {output && output.coherence.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
           {output.coherence.map((f) => (

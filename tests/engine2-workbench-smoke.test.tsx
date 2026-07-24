@@ -93,6 +93,20 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).toContain('trading anchor');
   });
 
+  it('E2a — output tabs render after build: summary hero, bridge rows, deleveraging footer text present; no sentinels', () => {
+    importFixture();
+    useEngine2Model.getState().build();
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Summary');
+    expect(html).toContain('Value bridge');
+    expect(html).toContain('Net-debt paydown');
+    expect(html).toContain('FCF conversion');
+    expect(html).not.toContain('9999');
+    expect(html).not.toMatch(/\d\.\d{8,}/);
+    // the §E2 removal list stays absent from the v2 tree
+    for (const banned of ['Fragility', 'Reality Check', 'Fund economics']) expect(html).not.toContain(banned);
+  });
+
   it('history cells that are gaps render as em-dashes, never zeros', () => {
     importFixture(); // 2023/2024 have revenue only — EBITDA/capex cells are gaps
     const html = renderToStaticMarkup(<Workbench />);
