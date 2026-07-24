@@ -18,3 +18,8 @@ export const SHOW_VIDEO_STORY = false;
 // The deal-engine toolkit lives at /deal-engine. Hidden from the navbar for
 // now — the route still resolves by direct URL. Flip to true to surface it.
 export const SHOW_DEAL_ENGINE_NAV = false;
+
+// Phase E (engine2) v2 workbench — the new ModelOutput-driven screens, mounted at
+// /deal-engine?v2=1 during the dual-engine window. OFF until the Phase E gate
+// (3-issuer staging walkthrough) passes; Phase F makes it the only path.
+export const SHOW_ENGINE2_WORKBENCH = false;
