@@ -28,7 +28,7 @@ describe('import routes feed the engine2 store (the single modeling path)', () =
     expect(s.output).toBeNull();          // never builds uninvited
   });
 
-  it('manual entry (private target) flows through the SAME feeder', () => {
+  it('manual entry (private target) flows through the SAME feeder — sector pick included', () => {
     useDealEngineStore.getState().loadFromHistoricals(manualHistoricals({
       dealName: 'Handmade Co', sector: 'Industrials', currency: 'EUR',
       ltmRevenue: 300, ebitdaMargin: 0.22, daPctRevenue: 0.03, capexPctRevenue: 0.03,
@@ -37,6 +37,9 @@ describe('import routes feed the engine2 store (the single modeling path)', () =
     const s = useEngine2Model.getState();
     expect(s.facts?.entity_name).toBe('Handmade Co');
     expect(s.facts?.currency).toBe('EUR');
+    // the USER'S sector pick reaches facts.sector (F-tail review MAJOR: a provenance
+    // label — "Manually entered — Sector" — must never stand in for the user's choice)
+    expect(s.facts?.sector).toBe('Industrials');
     expect(s.missingFacts).toEqual([]);
   });
 

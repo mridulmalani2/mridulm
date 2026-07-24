@@ -14,7 +14,6 @@ import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import { isIfrsCompanyFacts, mapCompanyFactsIfrs } from '../lib/edgar/mapCompanyFactsIfrs';
 import { getEsefFilings, getEsefReport } from '../lib/edgar/esef';
 import { mapIfrsReport } from '../lib/edgar/mapIfrs';
-import { inferSector } from '../lib/edgar/buildModel';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { CompanyFacts } from '../lib/edgar/client';
 import { detectProvider, type AIProvider } from '../lib/ai2/gateway/providers';
@@ -33,10 +32,10 @@ export interface DealEngineStore {
   legacySaveNotice: boolean;
   dismissLegacySaveNotice: () => void;
 
-  importFromEdgar: (cik10: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
+  importFromEdgar: (cik10: string) => Promise<void>;
   importFromEsef: (lei: string, opts?: { dealName?: string; sector?: string }) => Promise<void>;
   /** Manual entry (private targets): RawHistoricals → engine2, same as every other route. */
-  loadFromHistoricals: (raw: RawHistoricals, opts?: { dealName?: string; sector?: string }) => void;
+  loadFromHistoricals: (raw: RawHistoricals) => void;
   /** Previous-engine saves can no longer open (the engine they ran on is deleted). */
   loadModel: (file: File) => Promise<void>;
 }
@@ -87,7 +86,7 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
     set({ apiKey: null, aiProvider: 'anthropic' });
   },
 
-  importFromEdgar: async (cik10, opts) => {
+  importFromEdgar: async (cik10) => {
     set({ isCalculating: true, error: null });
     try {
       const facts = await getCompanyFacts(cik10);
@@ -109,7 +108,6 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
       const raw = isIfrsCompanyFacts(facts)
         ? mapCompanyFactsIfrs(facts, { sicDescription })
         : mapCompanyFacts(facts, { sicDescription, sicCode });
-      if (opts?.sector === undefined) inferSector(sicDescription); // sector rides raw.sector provenance
       feedEngine2FromImport(raw, { ticker, factsPayload: facts, latestAnnualForm });
       set({ isCalculating: false });
     } catch (e: unknown) {
@@ -146,6 +144,7 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
   },
 
   loadFromHistoricals: (raw) => {
+    // facts.sector rides raw.sector provenance (manual: the user's pick; EDGAR: the SIC text)
     feedEngine2FromImport(raw);
     set({ error: null });
   },

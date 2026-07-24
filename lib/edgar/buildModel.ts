@@ -69,7 +69,10 @@ export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
     net_ppe: null, // manual entry has no PP&E field — engine2 §8 seeds 0 with its disclosed note
     effective_tax_rate: sv(inp.taxRate, 'Effective tax rate'),
     nol_carryforward: inp.nol && inp.nol > 0 ? sv(inp.nol, 'NOL carryforward') : null,
-    sector: { value: 0, provenance: userProv('Sector') },
+    // the DETAIL carries the user's actual sector pick — the adapter surfaces provenance
+    // detail as facts.sector, so anything else here discards the user's choice (F-tail
+    // review MAJOR: "Manually entered — Sector" was reaching the AI prompt verbatim)
+    sector: { value: 0, provenance: { source: 'user', detail: inp.sector } },
     gaps: [],
     dso: null,
     dio: null,

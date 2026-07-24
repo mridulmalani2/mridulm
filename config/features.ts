@@ -19,15 +19,7 @@ export const SHOW_VIDEO_STORY = false;
 // navbar — engine2 is the default engine and the toolkit is presentable.
 export const SHOW_DEAL_ENGINE_NAV = true;
 
-// ── Phase F2 cutover flag (PHASE_F_CUTOVER.md §F2) ──
-// 2 ⇒ engine2 (SPEC v1.0.4, golden-gated) is the DEFAULT at /deal-engine: import screens →
-//     v2 workbench; the old flow remains ONLY for previous-engine saves (OWNER #2 banner).
-// 1 ⇒ ROLLBACK: the old flow is the default again; the v2 workbench stays reachable at
-//     ?v2=1 behind SHOW_ENGINE2_WORKBENCH (the dual-engine window).
-// Old `lib/engine` is deleted only after one clean production week (§F2), never by this flag.
-export const ENGINE: 1 | 2 = 2;
-
-// Phase E (engine2) v2 workbench at /deal-engine?v2=1 — the dual-engine testing window.
-// Redundant while ENGINE=2 (v2 is the default); keep TRUE so a rollback to ENGINE=1
-// retains the side-by-side surface.
-export const SHOW_ENGINE2_WORKBENCH = true;
+// The dual-engine flags (ENGINE, SHOW_ENGINE2_WORKBENCH) are GONE with the F-tail
+// deletion (2026-07-24): engine2 is the only engine, so an in-app rollback flag would be
+// a lie. Rollback = revert the deletion PR (the last pre-deletion tree is preserved at
+// git tag `pre-deletion-lib-engine`) and redeploy.

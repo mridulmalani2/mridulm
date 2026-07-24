@@ -7,9 +7,9 @@ import ApiKeyInline from './ApiKeyInline';
 /**
  * Manual-entry "facts" screen (Phase 1) — for private targets not on EDGAR. It collects the
  * SAME factual surface the 10-K/EDGAR mapper extracts (revenue, EBITDA margin, D&A%, capex%,
- * NWC%, net debt, tax rate), builds a RawHistoricals tagged 'user', and routes through the
- * IDENTICAL assumptions review → model flow. The manual and EDGAR routes diverge only in how
- * the facts are sourced — everything downstream is one shared path.
+ * NWC%, net debt, tax rate), builds a RawHistoricals tagged 'user', and feeds the IDENTICAL
+ * engine2 workbench. The manual and EDGAR routes diverge only in how the facts are
+ * sourced — everything downstream is one shared path.
  */
 
 const mono = "'JetBrains Mono', monospace";
@@ -58,7 +58,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       taxRate: num(f.taxRate) / 100,
       nol: num(f.nol),
     });
-    loadFromHistoricals(raw, { dealName: f.dealName, sector: f.sector });
+    loadFromHistoricals(raw);
   };
 
   const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[f.currency] ?? '$';
@@ -70,7 +70,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <div className="border-t-[3px] border-[#111] mb-6" />
         <h1 className="font-playfair text-4xl lg:text-5xl font-bold mb-3" style={{ color: '#111' }}>Enter the facts</h1>
         <p className="mb-8" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 480 }}>
-          For a private target. Enter the same financials a 10-K would give us — you'll set the deal assumptions (growth, leverage, exit) on the next screen, exactly as the EDGAR route does.
+          For a private target. Enter the same financials a 10-K would give us — you'll set the deal assumptions (growth, leverage, exit) in the workbench, exactly as the EDGAR route does.
         </p>
 
         <div className="p-6 lg:p-8" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
