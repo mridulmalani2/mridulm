@@ -40,9 +40,11 @@ describe('Phase F1 — differential vs DIFF_LEDGER (goldens as arbiter)', () => 
     }
   });
 
-  it('writes the report artifact (rebuild/F1_DIFFERENTIAL.md)', () => {
+  it('writes the report artifact (rebuild/F1_DIFFERENTIAL.md) and it states the CLEAN gate', () => {
     const md = renderF1Report(result, '2026-07-24');
     writeFileSync(join(__dirname, '..', 'rebuild', 'F1_DIFFERENTIAL.md'), md);
-    expect(md).toContain('Gate');
+    // the artifact must assert the gate outcome in its own text — a regressed differential
+    // can't silently regenerate a passing-looking report
+    expect(md).toContain('ZERO open INVESTIGATE cells');
   });
 });

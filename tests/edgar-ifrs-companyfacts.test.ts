@@ -93,4 +93,16 @@ describe('D6 — non-modelled currency (SEK 20-F filer)', () => {
     expect(r.currency_unsupported).toBe('SEK');
     expect(r.fy_revenue?.value).toBe(2290); // facts still shown — Build is what's blocked
   });
+
+  it.each(['CHF', 'NOK', 'DKK', 'CNY'])('%s — every non-modelled code raises the badge and keeps its identity', (code) => {
+    const r = mapCompanyFactsIfrs(eurFiler(code), {});
+    expect(r.currency_unsupported).toBe(code);
+    expect(r.currency).toBe(code);
+  });
+
+  it.each(['USD', 'EUR', 'GBP', 'JPY', 'INR'])('%s — every MODELLED currency passes clean (no badge)', (code) => {
+    const r = mapCompanyFactsIfrs(eurFiler(code), {});
+    expect(r.currency_unsupported).toBeUndefined();
+    expect(r.currency).toBe(code);
+  });
 });

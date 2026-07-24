@@ -5,16 +5,19 @@
 import { describe, it, expect } from 'vitest';
 import { bps, fromPctInput, headroom, money, moneyIso, multiple, num, pct, staleness, toPctInput } from '../lib/format';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
+import { useEngine2Model } from '../store/engine2Model';
 import { suggestAssumptions } from '../lib/engine2/suggest';
 import { runModel } from '../lib/engine2/facade';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
 
 describe('lib/format — §15 display boundary (snapshot rules)', () => {
-  it('money: 1dp of millions, thousands separators, sign outside the symbol', () => {
+  it('money: 1dp of millions, thousands separators, sign outside the symbol — ALL FIVE modelled symbols', () => {
     expect(money(1234.567, 'USD')).toBe('$1,234.6m');
     expect(money(-42.04, 'EUR')).toBe('−€42.0m');
     expect(money(0, 'GBP')).toBe('£0.0m');
+    expect(money(9.95, 'JPY')).toBe('¥10.0m');
+    expect(money(7, 'INR')).toBe('₹7.0m');
     expect(money(null, 'USD')).toBe('N/A');
   });
 
@@ -121,6 +124,45 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     const raw = mapCompanyFacts(FIXTURE, {});
     const { missing } = adaptRawHistoricals({ ...raw, currency_unsupported: 'SEK' });
     expect(missing).toContain('currency_unsupported');
+  });
+
+  it('badge honesty: a statutory-default tax rate wears TEMPLATE, never "from the filing"', () => {
+    const noTax: CompanyFacts = JSON.parse(JSON.stringify(FIXTURE));
+    delete (noTax as any).facts['us-gaap'].IncomeTaxExpenseBenefit;
+    const raw = mapCompanyFacts(noTax, { sicCode: '3711' });
+    expect(raw.effective_tax_rate?.provenance.source).toBe('default'); // mapper's own honesty
+    const adapted = adaptRawHistoricals(raw);
+    expect(adapted.templateBases['tax.rate']).toContain('statutory default');
+    // and with a REAL derivable rate the honest path stays untouched
+    const real = adaptRawHistoricals(mapCompanyFacts(FIXTURE, { sicCode: '3711' }));
+    expect(real.templateBases['tax.rate']).toBeUndefined();
+  });
+
+  it('badge honesty: a MISSING capex placeholder never wears a FACTS badge in the store', () => {
+    const noCapex: CompanyFacts = JSON.parse(JSON.stringify(FIXTURE));
+    delete (noCapex as any).facts['us-gaap'].PaymentsToAcquirePropertyPlantAndEquipment;
+    useEngine2Model.getState().reset();
+    useEngine2Model.getState().importFromRaw(mapCompanyFacts(noCapex, { sicCode: '3711' }));
+    const s = useEngine2Model.getState();
+    expect(s.missingFacts).toContain('maint_capex_pct_revenue');
+    expect(s.basis['operations.maint_capex_pct_revenue'].kind).toBe('template');
+    expect(s.basis['operations.maint_capex_pct_revenue'].detail).toContain('the filing lacked');
+  });
+
+  it('the anchor-enrich guard: user OR ai work blocks the re-import; fresh imports allow it', () => {
+    useEngine2Model.getState().reset();
+    const raw = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
+    useEngine2Model.getState().importFromRaw(raw);
+    expect(useEngine2Model.getState().importUntouched(raw.entityName)).toBe(true);
+    expect(useEngine2Model.getState().importUntouched('Someone Else Inc')).toBe(false);
+    // an AI-applied refinement is WORK — the late anchor must not clobber it
+    useEngine2Model.setState({ basis: { ...useEngine2Model.getState().basis, 'operations.growth': { kind: 'ai', detail: 'ai-refined' } } });
+    expect(useEngine2Model.getState().importUntouched(raw.entityName)).toBe(false);
+    // …and a re-import clears stale AI narration
+    useEngine2Model.setState({ aiNotes: ['AI: something → 1'], redlineItems: [{ path: 'x', challenge: 'y' }] as never });
+    useEngine2Model.getState().importFromRaw(raw);
+    expect(useEngine2Model.getState().aiNotes).toEqual([]);
+    expect(useEngine2Model.getState().redlineItems).toBeNull();
   });
 
   it('extracted net PP&E reaches DealFacts (kills the §8 self-inflicted warn on real filers)', () => {

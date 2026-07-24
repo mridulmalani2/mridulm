@@ -142,6 +142,7 @@ const Workbench: React.FC = () => {
   const error = useEngine2Model((s) => s.error);
   const missing = useEngine2Model((s) => s.missingFacts);
   const sourceCurrency = useEngine2Model((s) => s.sourceCurrency);
+  const factNotes = useEngine2Model((s) => s.factNotes);
   const build = useEngine2Model((s) => s.buildWithExhibits);
   const resuggest = useEngine2Model((s) => s.resuggest);
   const reset = useEngine2Model((s) => s.reset);
@@ -175,6 +176,11 @@ const Workbench: React.FC = () => {
           facts={facts}
           isoOverride={missing.includes('currency_unsupported') ? sourceCurrency : null}
         />
+        {/* honest-degradation notes from extraction (currency, days gating, ROU inclusion,
+            FPI history) — computed since D2/D6 but only now SHOWN (review 2026-07-24) */}
+        {factNotes.map((n) => (
+          <p key={n} className="text-[9px] mt-1" style={labelStyle}>◦ {n}</p>
+        ))}
       </div>
       <MissingBar />
       <AssumptionsPanel />

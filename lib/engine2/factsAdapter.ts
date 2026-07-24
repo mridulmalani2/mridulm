@@ -20,6 +20,10 @@ export interface AdaptedFacts {
   missing: string[];
   /** Honest-degradation notes carried from extraction (days gating, FPI history, …). */
   notes: string[];
+  /** Assumption paths whose FACT input was a statutory/placeholder default — the store
+   *  downgrades their suggestion badge from 'facts' to 'template' with this detail (a
+   *  defaulted value must never wear a "from the filing" basis — review 2026-07-24). */
+  templateBases: Record<string, string>;
 }
 
 const MODELLED: ReadonlySet<string> = new Set(['USD', 'EUR', 'GBP', 'JPY', 'INR']);
@@ -27,6 +31,7 @@ const MODELLED: ReadonlySet<string> = new Set(['USD', 'EUR', 'GBP', 'JPY', 'INR'
 export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
   const missing: string[] = [];
   const notes: string[] = [...raw.days_notes];
+  const templateBases: Record<string, string> = {};
   const req = (v: number | null | undefined, path: string, fallback: number): number => {
     if (v == null || !Number.isFinite(v)) {
       missing.push(path);
@@ -37,6 +42,19 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
 
   if (raw.currency_unsupported) {
     notes.push(`currency ${raw.currency_unsupported} unsupported — Build blocked`);
+  }
+
+  // A statutory-default tax rate is a legitimate TEMPLATE input, but it must never wear a
+  // "from the filing" badge (review 2026-07-24). The mappers mark their fallback with
+  // provenance.source 'default'; a fully absent rate gets the same honest downgrade.
+  if (raw.effective_tax_rate == null || raw.effective_tax_rate.provenance.source === 'default') {
+    templateBases['tax.rate'] =
+      'statutory default — the filing gave no derivable effective rate; review';
+  }
+  // The combined PP&E+ROU concept is a stated fallback — surface the statement (the v2
+  // screens render notes; provenance detail alone never reaches the default surface).
+  if (raw.net_ppe && /right-of-use|ROU/i.test(raw.net_ppe.provenance.detail ?? '')) {
+    notes.push('net PP&E includes finance-lease right-of-use assets (combined concept — the filing does not tag the pure figure)');
   }
 
   // D1 history → HistoricalYear rows: union of period ends across series, per-cell nulls.
@@ -94,5 +112,5 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
   }
   if (raw.currency_unsupported) missing.push('currency_unsupported');
 
-  return { facts, missing, notes };
+  return { facts, missing, notes, templateBases };
 }

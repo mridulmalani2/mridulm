@@ -244,12 +244,11 @@ function feedEngine2FromImport(
   })
     .then((a) => {
       if (!a) return;
-      const s = useEngine2Model.getState();
-      // never clobber work: enrich only while this exact import sits untouched
-      const untouched = s.facts?.entity_name === raw.entityName
-        && s.output === null
-        && !Object.values(s.basis).some((b) => b.kind === 'user');
-      if (untouched) useEngine2Model.getState().importFromRaw(raw, { trading_anchor: a.ev_ebitda });
+      // never clobber work: enrich only while this exact import sits untouched — a USER
+      // edit or an AI-applied refinement both count as work (review 2026-07-24)
+      if (useEngine2Model.getState().importUntouched(raw.entityName)) {
+        useEngine2Model.getState().importFromRaw(raw, { trading_anchor: a.ev_ebitda });
+      }
     })
     .catch(() => undefined);
 }

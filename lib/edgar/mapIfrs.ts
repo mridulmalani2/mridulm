@@ -214,7 +214,12 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   const anchorFact = latestFY(ifrsFactsFor(REVENUE)) ?? latestFY(ifrsFactsFor(OPERATING_PROFIT));
   const anchorFy = anchorFact ? fiscalYear(anchorFact.fact) : null;
   const detectedCcy = anchorFact ? unitCurrency(anchorFact.fact) : undefined;
-  const currency = detectedCcy && KNOWN_CURRENCIES.has(detectedCcy) ? detectedCcy : 'EUR';
+  // D6 parity with the EDGAR mappers (review 2026-07-24): a REAL currency outside the
+  // modelled set keeps its own code and raises the BLOCKING `currency_unsupported` badge —
+  // never a silent EUR fallback (a SEK filing must not build wearing € symbols). The 'EUR'
+  // default survives only for the degenerate no-anchor case, where no figures flow anyway.
+  const currency = detectedCcy ?? 'EUR';
+  const currency_unsupported = detectedCcy && !KNOWN_CURRENCIES.has(detectedCcy) ? detectedCcy : undefined;
 
   const prov = (tag: string, period?: string): Provenance => ({
     source: 'esef', detail: `${IFRS}${tag} · FY${anchorFy ?? '—'} · ESEF`, url,
@@ -444,6 +449,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   return {
     entityName: opts.entityName ?? 'Unknown',
     currency,
+    currency_unsupported,
     fiscalYear: anchorFy ?? undefined,
     periodEnd,
     basis: 'FY',
