@@ -119,6 +119,12 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).toContain('Value bridge');
     expect(html).toContain('Net-debt paydown');
     expect(html).toContain('FCF conversion');
+    // §11 [v1.1.2]: the Summary tile's entry leverage is GROSS and must say so — the
+    // per-year credit metrics on the Credit tab are NET, and an unlabelled pairing reads
+    // as one deleveraging series. Labels were the actual defect and were untested
+    // (hostile review F6, 2026-07-24).
+    expect(html).toContain('Entry gross leverage');
+    expect(html).not.toMatch(/Entry\s+net\s+leverage/i);
     expect(html).not.toContain('9999');
     expect(html).not.toMatch(/\d\.\d{8,}/);
     // the §E2 removal list stays absent from the v2 tree

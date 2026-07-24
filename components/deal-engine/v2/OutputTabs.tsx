@@ -196,6 +196,7 @@ const BS: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy 
 );
 
 const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
+  <div>
   <Table head={['Year', 'Net lev', 'Senior net', 'ICR', 'FCCR', 'DSCR', 'Lev headroom', 'Springing']}>
     {o.credit.map((c, i) => (
       <tr key={i} style={rowB}>
@@ -210,6 +211,13 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
       </tr>
     ))}
   </Table>
+  {/* §11 [v1.1.2]: these are NET of cash; the Summary tab's entry figure is GROSS. Stated
+      on screen, because reading the two as one deleveraging series overstates it. */}
+  <p className="text-[10px] mt-2" style={label}>
+    Leverage here is NET of cash (SPEC §11). The Summary tab&apos;s entry leverage is GROSS
+    (debt at par ÷ FY EBITDA — the quoted sizing basis), so the two are not a single series.
+  </p>
+  </div>
 );
 
 const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {

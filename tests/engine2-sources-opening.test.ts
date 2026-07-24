@@ -126,15 +126,19 @@ describe('sourcesUses.ts + openingBalance.ts reproduce the golden t=0 columns (C
       expect(Math.abs(entry.enterprise_value - g.derived.enterprise_value), 'EV').toBeLessThan(TOL);
       expect(Math.abs(su.sponsor_equity - g.derived.sponsor_equity), 'sponsor equity').toBeLessThan(TOL);
       expect(Math.abs(sized.total_par - g.derived.total_debt_at_par), 'total par').toBeLessThan(TOL);
-      // entry leverage on FY EBITDA, gross par net of the target's (zero) pre-close cash —
-      // the CFDF frame: min-cash is NEW money, not acquired cash (reference derivation)
+      // §11 [v1.1.2]: entry leverage is GROSS — par ÷ FY EBITDA, deliberately NOT netted
+      // against the funded min-cash. §2 does put min_cash on the t=0 balance sheet, so the
+      // §11 net figure would be (par − cash_to_balance_sheet) ÷ EBITDA.
       if (spec.fy_ebitda > 0) {
-        // §11 [v1.1.2]: GROSS — par ÷ FY EBITDA, NOT netted against the funded min-cash.
         expect(Math.abs(sized.total_par / spec.fy_ebitda - g.derived.entry_gross_leverage_fy)).toBeLessThan(5e-5);
-        // and the two definitions really are different, so the name matters: the §11 NET
-        // figure at t=0 would be (par − min_cash) ÷ EBITDA, materially lower.
-        const entryNet = (sized.total_par - spec.min_cash) / spec.fy_ebitda;
-        expect(entryNet).toBeLessThan(g.derived.entry_gross_leverage_fy);
+        // Pin the GAP itself, sourced from the model rather than test literals. The gap is
+        // exactly cash_to_balance_sheet ÷ EBITDA, so this fires if the field ever drifts to
+        // the net definition — unlike a bare `net < gross`, which reduces algebraically to
+        // `min_cash > 0` and detects nothing (hostile review F2, 2026-07-24).
+        const entryNet = (su.debt_at_par.reduce((s, d) => s + d.amount, 0) - su.cash_to_balance_sheet) / spec.fy_ebitda;
+        expect(g.derived.entry_gross_leverage_fy - entryNet, `${golden} gross−net gap`)
+          .toBeCloseTo(su.cash_to_balance_sheet / spec.fy_ebitda, 9);
+        if (su.cash_to_balance_sheet > 0) expect(entryNet).toBeLessThan(g.derived.entry_gross_leverage_fy);
       }
 
       // sources & uses block
