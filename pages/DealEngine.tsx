@@ -38,6 +38,8 @@ const DealEngine: React.FC = () => {
   const toggleTraceMode = useDealEngineStore((s) => s.toggleTraceMode);
   const modelVersion = useDealEngineStore((s) => s.modelVersion);
   const lastChangedTraceFields = useDealEngineStore((s) => s.lastChangedTraceFields);
+  const legacySaveNotice = useDealEngineStore((s) => s.legacySaveNotice);
+  const dismissLegacySaveNotice = useDealEngineStore((s) => s.dismissLegacySaveNotice);
 
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [activeTab, setActiveTab] = useState<OutputTab>('returns');
@@ -111,6 +113,18 @@ const DealEngine: React.FC = () => {
 
       {/* API Key Modal */}
       {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
+
+      {/* E1 [OWNER #2]: previous-engine save loaded — prime the cutover expectation */}
+      {legacySaveNotice && (
+        <div className="relative z-20 flex items-center justify-between px-4 py-2" style={{ background: 'rgba(180,120,0,0.12)', borderBottom: '1px solid rgba(180,120,0,0.4)' }}>
+          <p className="text-[11px]" style={{ color: '#92600a', fontFamily: "'JetBrains Mono', monospace" }}>
+            This deal was saved by the previous engine — it still opens here, but re-import from source to use the rebuilt engine (v2).
+          </p>
+          <button onClick={dismissLegacySaveNotice} className="text-[10px] uppercase tracking-widest px-2" style={{ color: '#92600a', fontFamily: "'JetBrains Mono', monospace" }}>
+            dismiss
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <Header />

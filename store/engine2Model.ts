@@ -19,7 +19,7 @@ import { suggestAssumptions, type SuggestionBasis } from '../lib/engine2/suggest
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
 
-export type FieldBasis = SuggestionBasis | { kind: 'user'; detail: string };
+export type FieldBasis = SuggestionBasis | { kind: 'user'; detail: string } | { kind: 'ai'; detail: string };
 
 export interface Engine2ModelStore {
   facts: DealFacts | null;
@@ -49,8 +49,18 @@ export interface Engine2ModelStore {
   /** Build WITH exhibits (§13): preset single-factor stress scenarios + the committed
    *  downside, and a 5×5 entry×exit sensitivity centered on base. Same gate as build. */
   buildWithExhibits: () => void;
+
+  // ── E4 AI (key/provider shared with the old store's localStorage) ──
+  aiBusy: boolean;
+  redlineItems: import('../lib/ai2/redline').RedlineItem[] | null;
+  aiNotes: string[];
+  /** AI-suggest: Class-B refinements only, clamped to the suggestion rails, AI badges. */
+  aiSuggest: () => Promise<void>;
+  /** Redline: hostile challenges over assumptions + bases + coherence; edits nothing. */
+  runRedlineAction: () => Promise<void>;
   reset: () => void;
 }
+
 
 export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   facts: null,
@@ -165,7 +175,52 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
   },
 
-  reset: () => set({ facts: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null }),
+  aiBusy: false,
+  redlineItems: null,
+  aiNotes: [],
+
+  aiSuggest: async () => {
+    const { facts, assumptions, missingFacts } = get();
+    if (!facts || !assumptions) return;
+    set({ aiBusy: true, error: null, aiNotes: [] });
+    try {
+      const { aiRefineAssumptions } = await import('../lib/ai2/suggest');
+      const { makeAiText, savedAiConfig } = await import('../lib/ai2/textCall');
+      const cfg = savedAiConfig();
+      if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use AI-suggest.', aiBusy: false }); return; }
+      const result = await aiRefineAssumptions(facts, assumptions, missingFacts, makeAiText(cfg.provider, cfg.apiKey));
+      set({
+        assumptions: result.assumptions,
+        basis: { ...get().basis, ...result.aiBasis },
+        aiNotes: [
+          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value} — ${a.basis}`),
+          ...result.dropped.map((d) => `dropped: ${d}`),
+        ],
+        output: null, // assumptions moved — outputs never survive an edit
+        aiBusy: false,
+      });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, aiBusy: false });
+    }
+  },
+
+  runRedlineAction: async () => {
+    const { assumptions, basis, output } = get();
+    if (!assumptions) return;
+    set({ aiBusy: true, error: null });
+    try {
+      const { runRedline } = await import('../lib/ai2/redline');
+      const { makeAiText, savedAiConfig } = await import('../lib/ai2/textCall');
+      const cfg = savedAiConfig();
+      if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use Redline.', aiBusy: false }); return; }
+      const items = await runRedline(assumptions, basis, output?.coherence ?? [], makeAiText(cfg.provider, cfg.apiKey));
+      set({ redlineItems: items, aiBusy: false });
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, aiBusy: false });
+    }
+  },
+
+  reset: () => set({ facts: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
 }));
 
 /**

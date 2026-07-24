@@ -55,6 +55,87 @@ const MissingBar: React.FC = () => {
   );
 };
 
+/** E4 toolbar: AI-suggest, Redline, Memo download, and the PURE goal-seek. When no key
+ *  is saved the AI buttons stay visibly OFF (the phase rule) — goal-seek always works. */
+const AiToolbar: React.FC = () => {
+  const facts = useEngine2Model((s) => s.facts);
+  const assumptions = useEngine2Model((s) => s.assumptions);
+  const output = useEngine2Model((s) => s.output);
+  const aiBusy = useEngine2Model((s) => s.aiBusy);
+  const aiSuggest = useEngine2Model((s) => s.aiSuggest);
+  const runRedlineAction = useEngine2Model((s) => s.runRedlineAction);
+  const [target, setTarget] = useState('20');
+  const [lever, setLever] = useState<'entry_multiple' | 'exit_multiple' | 'leverage' | 'growth_shift'>('entry_multiple');
+  const [seek, setSeek] = useState<string | null>(null);
+  const hasKey = typeof window !== 'undefined' && !!localStorage.getItem('deal-engine-api-key');
+  if (!facts || !assumptions) return null;
+
+  const btn = { border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono } as const;
+  const downloadMemo = async () => {
+    if (!output) return;
+    const { memoSkeleton } = await import('../../../lib/ai2/memo');
+    const md = memoSkeleton(output, facts.currency as Engine2Currency);
+    const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_memo.md`; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const runSeek = async () => {
+    const { solveForIrr } = await import('../../../lib/ai2/goalseek');
+    const t = Number(target) / 100;
+    if (!Number.isFinite(t)) { setSeek('enter a target IRR %'); return; }
+    const r = solveForIrr(facts, assumptions, lever, t);
+    if (!r) { setSeek(`target ${target}% is outside what ${lever} can reach — N/A`); return; }
+    setSeek(`${lever} = ${r.value.toFixed(3)} ⇒ IRR ${pct(r.achieved_irr)}`);
+  };
+
+  return (
+    <span className="flex items-center gap-1.5 flex-wrap justify-end">
+      <select value={lever} onChange={(e) => setLever(e.target.value as typeof lever)}
+        className="px-1 py-1 text-[9px] uppercase" style={btn}>
+        <option value="entry_multiple">entry ×</option>
+        <option value="exit_multiple">exit ×</option>
+        <option value="leverage">leverage</option>
+        <option value="growth_shift">growth Δ</option>
+      </select>
+      <input value={target} onChange={(e) => setTarget(e.target.value)} className="w-10 px-1 py-1 text-[10px] text-right" style={btn} />
+      <span className="text-[9px]" style={labelStyle}>%</span>
+      <button onClick={runSeek} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>Goal-seek</button>
+      {seek && <span className="text-[9px]" style={labelStyle}>{seek}</span>}
+      {output && <button onClick={downloadMemo} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>Memo ↓</button>}
+      {hasKey ? (
+        <>
+          <button onClick={aiSuggest} disabled={aiBusy} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>
+            {aiBusy ? 'AI…' : 'AI suggest'}
+          </button>
+          <button onClick={runRedlineAction} disabled={aiBusy} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>Redline</button>
+        </>
+      ) : (
+        <span className="text-[9px] uppercase tracking-widest" style={labelStyle}>AI suggest · redline — OFF (no API key)</span>
+      )}
+    </span>
+  );
+};
+
+/** AI outcomes strip: what AI-suggest applied/dropped (auditable) + redline challenges. */
+const AiResults: React.FC = () => {
+  const aiNotes = useEngine2Model((s) => s.aiNotes);
+  const redlineItems = useEngine2Model((s) => s.redlineItems);
+  if (!aiNotes.length && !redlineItems) return null;
+  return (
+    <div className="mt-2 p-2.5" style={{ border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.04)' }}>
+      {aiNotes.map((n, i) => (
+        <p key={`n${i}`} className="text-[10px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>{n}</p>
+      ))}
+      {redlineItems?.map((r, i) => (
+        <p key={`r${i}`} className="text-[10px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>
+          ✎ {r.path}: {r.challenge}
+        </p>
+      ))}
+    </div>
+  );
+};
+
 const Workbench: React.FC = () => {
   const facts = useEngine2Model((s) => s.facts);
   const output = useEngine2Model((s) => s.output);
@@ -118,12 +199,10 @@ const Workbench: React.FC = () => {
           >
             Export Excel
           </button>
-          {/* E4 per the phase rule: AI features are stubbed OFF VISIBLY, never half-wired */}
-          <span className="text-[9px] uppercase tracking-widest" style={labelStyle}>
-            AI suggest · redline · memo — OFF in v2 (E4 pending)
-          </span>
+          <AiToolbar />
         </div>
       )}
+      <AiResults />
       {output && <OutputTabs output={output} currency={ccy} />}
       {output && output.coherence.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
