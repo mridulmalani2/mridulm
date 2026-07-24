@@ -233,6 +233,23 @@ safe to build on):**
   longer calls it a "clarification"; §16 states the ModelOutput contract; §1 resolves what
   `irr` means under `mid_year_irr: true`; the pre-amendment §14.16 mirror in the C6 gate
   carries an explicit note.
+- **Round 2 (2026-07-24): GRANTED.** The reviewer re-verified every closure itself rather
+  than reading the summary, and proved the two guards by **MUTATION** on an isolated copy of
+  the tree (repo untouched): the conditional-emission engine that provably defeated the
+  round-1 guard is caught by the round-2 guard, and so are `rp_max: null` and
+  `payback_year: null` — the natural feature-off values, and the exact pair a `toBeFalsy()`
+  would have waved through. It re-ran the additivity comparison twice (dc90841 → 7f906f8:
+  changed=0/removed=0/added=0; 9eb0135 → 7f906f8: changed=0/removed=0/added=270), confirmed
+  the script is deterministic across five regenerations, and re-enumerated all 37
+  behavioural branches from scratch. It also noted a bonus G2-DIST-D delivers unplanned: it
+  blocks 50.00 of requests across Y1–Y2 yet pays only 17.25 in Y3 (cash-capped, request 25)
+  and exactly 10.00 in Y4 against a 14.64 cash cap — a far sharper no-accrual discriminator
+  than G2-DIST alone. Three text-only conditions attached and applied: the §10 duplicated
+  clause, §17 item (xi) for the coherence WARN, and §16's output-contract omissions. **The
+  WARN condition matters beyond the list**: `engine2-facade-scenarios.test.ts` asserts
+  `coherence == []` for every golden, and the DIST goldens are designed to trip
+  `distribution_blocked` — so that convention is amended deliberately in §17 rather than
+  discovered as a failing test on day one of the engine PR.
 
 **Status: G2-DIST, G3-DIST and G2-DIST-D are GOSPEL.** Engine2 modules are wrong wherever they
 disagree with these fixtures; disputes reopen only via spec amendment + re-derivation.
