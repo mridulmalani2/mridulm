@@ -31,8 +31,10 @@ export interface Engine2ModelStore {
   output: Engine2ModelOutput | null;
   error: string | null;
 
-  /** Screen 1 → 2: adapt extraction, then AUTO-suggest (one-click re-suggest = same call). */
-  importFromRaw: (raw: RawHistoricals, opts?: { hold_years?: number }) => void;
+  /** Screen 1 → 2: adapt extraction, then AUTO-suggest (one-click re-suggest = same call).
+   *  opts.trading_anchor: the D5 EV/EBITDA anchor when the quote resolved (null = no key/
+   *  ticker/implausible — the coherence gate suppresses on null). */
+  importFromRaw: (raw: RawHistoricals, opts?: { hold_years?: number; trading_anchor?: number | null }) => void;
   /** Re-run the D7 suggestion pass over current facts (overwrites non-user bases only). */
   resuggest: () => void;
   /** Confirm a MISSING fact with a user-entered value (flips it out of the Build gate). */
@@ -55,9 +57,10 @@ export const useEngine2Model = create<Engine2ModelStore>((set, get) => ({
   error: null,
 
   importFromRaw: (raw, opts) => {
-    const { facts, missing, notes } = adaptRawHistoricals(raw);
+    const adapted = adaptRawHistoricals(raw);
+    const facts = { ...adapted.facts, implied_trading_ev_ebitda: opts?.trading_anchor ?? null };
     const { assumptions, basis } = suggestAssumptions(facts, opts);
-    set({ facts, missingFacts: missing, factNotes: notes, assumptions, basis, output: null, error: null });
+    set({ facts, missingFacts: adapted.missing, factNotes: adapted.notes, assumptions, basis, output: null, error: null });
   },
 
   resuggest: () => {

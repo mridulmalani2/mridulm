@@ -10,7 +10,8 @@
  * This thin proxy sets the compliant User-Agent, forwards to a strict allowlist of EDGAR
  * endpoints (SSRF-safe — it never forwards an arbitrary URL), streams large responses, edge-
  * caches them so repeat lookups never re-hit SEC, and best-effort throttles. It returns ONLY
- * public EDGAR data and holds no secrets.
+ * public data; the one secret it holds (FINNHUB_API_KEY, for the D5 trading-anchor quote)
+ * is attached server-side and never reaches the client.
  *
  * Routing: a SINGLE fixed route `/api/edgar?path=<endpoint>/<args>` (e.g.
  * `/api/edgar?path=companyfacts/CIK0000320193`). A fixed function + query param is far more
@@ -77,8 +78,24 @@ function resolveTarget(segments: string[]): Resolved | null {
       && rest[rest.length - 1].endsWith('.json')) {
     return { url: `https://filings.xbrl.org/${rest.join('/')}`, sMaxAge: 21_600 };
   }
+  // ── D5 trading-anchor quote (Finnhub free tier: 60 calls/min; we make ~1 per import).
+  // The API key lives ONLY here (Vercel env FINNHUB_API_KEY) — appended server-side,
+  // never shipped to the client. No key configured ⇒ resolveTarget returns the sentinel
+  // and the handler answers 501 quote_unconfigured (the client renders no anchor — the
+  // coherence gate suppresses on null; nothing breaks, nothing is guessed).
+  if (endpoint === 'quote' && rest.length === 1 && TICKER_RE.test(rest[0])) {
+    const key = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+      .process?.env?.FINNHUB_API_KEY;
+    if (!key) return { url: 'about:quote-unconfigured', sMaxAge: 0 };
+    return {
+      url: `https://finnhub.io/api/v1/quote?symbol=${rest[0].toUpperCase()}&token=${encodeURIComponent(key)}`,
+      sMaxAge: 900, // a delayed anchor is fine — it feeds a ±band coherence check, not pricing
+    };
+  }
   return null;
 }
+
+const TICKER_RE = /^[A-Za-z][A-Za-z0-9.-]{0,9}$/;
 
 // Best-effort throttle: serialise within a warm instance so a buggy client loop can't burst
 // SEC. Real protection is the edge cache below; this is defence-in-depth, not a global limiter.
@@ -108,6 +125,11 @@ export default async function handler(request: Request): Promise<Response> {
 
   const target = resolveTarget(segments);
   if (!target) return json({ error: `Unsupported or malformed EDGAR endpoint: ${pathParam}` }, 400);
+  // D5: quote requested but no FINNHUB_API_KEY configured — a clean, non-erroring
+  // "unconfigured" answer; the client renders no anchor (null suppresses the gate).
+  if (target.url === 'about:quote-unconfigured') {
+    return json({ error: 'quote_unconfigured', detail: 'Set FINNHUB_API_KEY on Vercel to enable the trading anchor.' }, 501);
+  }
 
   try {
     await throttle();
