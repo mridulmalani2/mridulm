@@ -1,4 +1,11 @@
-# Phase F1 — Bounded differential report (old `lib/engine` vs `lib/engine2`)
+# Phase F1 — Bounded differential report (old `lib/engine` vs `lib/engine2`) — FINAL
+
+**FROZEN HISTORICAL RECORD (F tail, 2026-07-24).** The old engine and the differential
+runner (`scripts/f1/`, `tests/f1-differential.test.ts`) were deleted with the cutover
+tail; this report stands as generated 2026-07-24 against the tree preserved at tag
+`pre-deletion-lib-engine`. The gate it records — ZERO open INVESTIGATE cells — was met
+before the flip and cannot be re-run against a deleted engine by design
+(PHASE_F_CUTOVER.md §F3: "DIFF_LEDGER frozen as the historical record").
 
 Generated 2026-07-24 by `scripts/f1/runF1.ts` over the SPEC §17 golden regimes
 (G1–G5, `tests/fixtures/engine2-golden-deals.ts`) — the clean-room set adjudicated by

@@ -1,7 +1,7 @@
 /**
- * Phase 1 — SSR render smoke for the import start-flow screens. A browser isn't available in
- * CI, so we SSR-render (react-dom/server, DOM-free) with a mocked store and assert each screen
- * renders without throwing and shows its key content + provenance badges.
+ * SSR render smoke for the LIVE import screens (post-cutover: SourceScreen + ManualFactsScreen
+ * feed engine2; the old review screen died with the F-tail deletion — its MISSING/N-C
+ * protections live on in the engine2 adapter + workbench tests).
  */
 
 import { vi, describe, it, expect } from 'vitest';
@@ -14,75 +14,14 @@ vi.mock('../store/dealEngine', () => ({
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
-import { draftModelFromHistoricals } from '../lib/edgar/buildModel';
-import type { CompanyFacts } from '../lib/edgar/client';
-import sample from './fixtures/companyfacts-sample.json';
-import AssumptionsReview from '../components/deal-engine/start/AssumptionsReview';
 import SourceScreen from '../components/deal-engine/start/SourceScreen';
 import ManualFactsScreen from '../components/deal-engine/start/ManualFactsScreen';
-import ProvenanceBadge from '../components/deal-engine/inputs/ProvenanceBadge';
-import InputField from '../components/deal-engine/inputs/InputField';
-
-const draft = () => {
-  const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
-  const { state, provenance } = draftModelFromHistoricals(raw, { dealName: raw.entityName });
-  return { state, provenance, raw };
-};
 
 const noop = () => {};
 
-describe('AssumptionsReview SSR', () => {
-  it('renders both groups, the deal name, provenance badges and Build', () => {
-    const { state, provenance, raw } = draft();
-    holder.state = {
-      modelState: state, provenanceMap: provenance, rawHistoricals: raw, sourceFilings: [],
-      editAssumption: noop, aiSuggestAssumptions: noop, isSuggesting: false,
-      buildModelFromDraft: noop, setStartScreen: noop, error: null, apiKey: null,
-    };
-    const html = renderToStaticMarkup(React.createElement(AssumptionsReview));
-    expect(html).toContain('Northwind Industries Inc.');
-    expect(html).toContain('Extracted from filings');
-    expect(html).toContain('Assumptions you set');
-    expect(html).toContain('Build Model');
-    expect(html).toContain('EDGAR');      // a factual-field provenance badge
-    expect(html).toContain('AI-suggest');
-  });
-
-  it('renders a MISSING badge + empty placeholder for a field the filing lacks', () => {
-    const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
-    const sparse = { ...raw, capex: null, capex_pct_revenue: null };   // filing lacked capex
-    const { state, provenance } = draftModelFromHistoricals(sparse, { dealName: raw.entityName });
-    holder.state = {
-      modelState: state, provenanceMap: provenance, rawHistoricals: sparse, sourceFilings: [],
-      editAssumption: noop, aiSuggestAssumptions: noop, isSuggesting: false,
-      buildModelFromDraft: noop, setStartScreen: noop, error: null, apiKey: null,
-    };
-    const html = renderToStaticMarkup(React.createElement(AssumptionsReview));
-    expect(html).toContain('MISSING');             // the red badge
-    expect(html).toContain('— enter value —');     // the empty-input placeholder (no guessed number)
-  });
-
-  it('shows N/C (not a placeholder-derived number) for implied returns when an input is MISSING', () => {
-    const raw = mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescription: 'Industrial machinery' });
-    const sparse = { ...raw, ebitda_margin: null, fy_ebitda: null };   // margin missing → EV + returns tainted
-    const { state, provenance } = draftModelFromHistoricals(sparse, { dealName: raw.entityName });
-    holder.state = {
-      modelState: state, provenanceMap: provenance, rawHistoricals: sparse, sourceFilings: [],
-      editAssumption: noop, aiSuggestAssumptions: noop, isSuggesting: false,
-      buildModelFromDraft: noop, setStartScreen: noop, error: null, apiKey: null,
-    };
-    const html = renderToStaticMarkup(React.createElement(AssumptionsReview));
-    expect(html).toContain('N/C');                              // implied returns suppressed
-    expect(html).toContain('fill MISSING inputs to compute');   // the cue
-    // The fabricated EV (multiple × revenue × 0.2 placeholder) must not be shown in the implied line.
-    expect(html).not.toContain(`EV ${'$'}${state.entry.enterprise_value.toFixed(0)}m`);
-  });
-});
-
 describe('SourceScreen SSR', () => {
   it('renders the search, URL path and the coming-soon upload', () => {
-    holder.state = { importFromEdgar: noop, importFromEsef: noop, isCalculating: false, error: null };
+    holder.state = { importFromEdgar: noop, importFromEsef: noop, loadModel: noop, isCalculating: false, error: null };
     const html = renderToStaticMarkup(
       React.createElement(MemoryRouter, null, React.createElement(SourceScreen, { onManual: noop })),
     );
@@ -90,6 +29,7 @@ describe('SourceScreen SSR', () => {
     expect(html).toContain('Company name or ticker');
     expect(html).toContain('coming soon');
     expect(html).toContain('Manual entry');
+    expect(html).toContain('open a saved model'); // the previous-engine load path
   });
 });
 
@@ -101,32 +41,7 @@ describe('ManualFactsScreen SSR', () => {
     expect(html).toContain('LTM Revenue');
     expect(html).toContain('EBITDA Margin');
     expect(html).toContain('Net Debt at Entry');
-    expect(html).toContain('Review Assumptions');
+    expect(html).toContain('Open the workbench');
   });
 });
 
-describe('ProvenanceBadge', () => {
-  it('renders the source label and a link when a url is present', () => {
-    const html = renderToStaticMarkup(React.createElement(ProvenanceBadge, {
-      provenance: { source: 'edgar', detail: 'us-gaap:Revenues', url: 'https://www.sec.gov/x' },
-    }));
-    expect(html).toContain('EDGAR');
-    expect(html).toContain('https://www.sec.gov/x');
-  });
-  it('renders nothing without provenance', () => {
-    expect(renderToStaticMarkup(React.createElement(ProvenanceBadge, {}))).toBe('');
-  });
-});
-
-describe('InputField (model screen) honours the missing invariant', () => {
-  it('renders a MISSING badge + empty placeholder, not the hidden placeholder number', () => {
-    holder.state = { updateField: noop };
-    const html = renderToStaticMarkup(React.createElement(InputField, {
-      label: 'D&A % Revenue', path: 'margins.da_pct_revenue', value: 0.03, suffix: '%',
-      provenance: { source: 'missing', detail: 'D&A %: not reported in the filing — enter to confirm' },
-    }));
-    expect(html).toContain('MISSING');
-    expect(html).toContain('— enter value —');
-    expect(html).not.toContain('value="0.03"');   // the placeholder number is never shown
-  });
-});

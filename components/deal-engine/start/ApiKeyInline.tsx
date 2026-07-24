@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
-import { PROVIDER_DEFAULTS } from '../../../lib/engine/ai/providers';
+import { PROVIDER_DEFAULTS } from '../../../lib/ai2/gateway/providers';
 
 /**
  * Compact, optional API-key entry for the start screens (Phase 1). The AI-suggest step on the

@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
-import { draftModelFromHistoricals } from '../lib/edgar/buildModel';
+import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import type { CompanyFacts } from '../lib/edgar/client';
 
 const M = 1e6;
@@ -75,9 +75,9 @@ describe('D6 — currency honesty + NOL floor', () => {
 
   it('the unsupported currency BLOCKS Build via a meta missing entry with the reason', () => {
     const r = mapCompanyFacts(base({}, 'SEK'), {});
-    const draft = draftModelFromHistoricals(r, {});
-    expect(draft.provenance['meta.currency_unsupported']?.source).toBe('missing');
-    expect(draft.provenance['meta.currency_unsupported']?.detail).toContain('SEK');
+    const adapted = adaptRawHistoricals(r);
+    expect(adapted.missing).toContain('currency_unsupported'); // Build-gating downstream
+    expect(adapted.notes.some((n) => n.includes('SEK'))).toBe(true);
   });
 
   it('a modelled currency (EUR) sets no unsupported flag', () => {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { manualHistoricals } from '../../../lib/edgar/buildModel';
-import type { ModelState } from '../../../lib/dealEngineTypes';
+
 import ApiKeyInline from './ApiKeyInline';
 
 /**
@@ -18,10 +18,10 @@ const inputStyle: React.CSSProperties = { background: '#fff', border: '1px solid
 const labelStyle: React.CSSProperties = { color: 'rgba(17,17,17,0.4)', fontFamily: mono };
 
 const SECTORS = ['Technology', 'Healthcare', 'Industrials', 'Consumer', 'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other'];
-const CURRENCIES: ModelState['currency'][] = ['USD', 'GBP', 'EUR', 'INR', 'JPY'];
+const CURRENCIES: ('USD' | 'GBP' | 'EUR' | 'INR' | 'JPY')[] = ['USD', 'GBP', 'EUR', 'INR', 'JPY'];
 
 const DEFAULTS = {
-  dealName: 'New Deal', sector: 'Technology', currency: 'USD' as ModelState['currency'],
+  dealName: 'New Deal', sector: 'Technology', currency: 'USD' as 'USD' | 'GBP' | 'EUR' | 'INR' | 'JPY',
   ltmRevenue: '100', ebitdaMargin: '25', daPctRevenue: '3', capexPctRevenue: '3',
   nwcPctRevenue: '10', netDebt: '0', taxRate: '25', nol: '0',
 };
@@ -87,7 +87,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </label>
             <label className="block">
               <span className="block mb-1 text-[10px] tracking-widest uppercase" style={labelStyle}>Currency</span>
-              <select value={f.currency} onChange={(e) => setF((p) => ({ ...p, currency: e.target.value as ModelState['currency'] }))} className="w-full px-3 py-2 text-sm" style={inputStyle}>
+              <select value={f.currency} onChange={(e) => setF((p) => ({ ...p, currency: e.target.value as 'USD' | 'GBP' | 'EUR' | 'INR' | 'JPY' }))} className="w-full px-3 py-2 text-sm" style={inputStyle}>
                 {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
@@ -111,7 +111,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           )}
 
           <button type="submit" className="w-full py-2.5 text-sm tracking-widest uppercase" style={{ background: '#CC0000', color: '#fff', fontFamily: mono, border: '1px solid #CC0000', letterSpacing: '0.12em' }}>
-            Review Assumptions →
+            Open the workbench →
           </button>
 
           {/* Optional AI key — reused by AI-suggest on the next screen */}
