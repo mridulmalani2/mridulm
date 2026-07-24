@@ -128,6 +128,11 @@ const SECTOR_DEFAULTS: Record<string, {
 };
 
 interface DealEngineStore {
+  /** E1 [OWNER DECISION #2]: set when a save produced by the previous engine is loaded —
+   *  the model screen shows the "re-import from source" banner (dismissable; the Phase F
+   *  cutover turns this into the hard unsupported message). */
+  legacySaveNotice: boolean;
+  dismissLegacySaveNotice: () => void;
   modelState: ModelState | null;
   isCalculating: boolean;
   chatHistory: ChatMessage[];
@@ -770,10 +775,14 @@ Be specific. Use the company name to infer business type and calibrate according
 
       // Submissions are best-effort: they enrich sector + filing links but aren't required.
       let sicDescription: string | undefined;
+      let sicCode: string | undefined;
+      let ticker: string | undefined;
       let filings: { form: string; filingDate: string; documentUrl: string }[] = [];
       try {
         const subs = await getSubmissions(cik10);
         sicDescription = subs.sicDescription;
+        sicCode = (subs as { sic?: string }).sic;
+        ticker = subs.tickers?.[0];
         filings = extractRecentFilings(subs, ['10-K', '20-F', '40-F'])
           .slice(0, 3)
           .map((f) => ({ form: f.form, filingDate: f.filingDate, documentUrl: f.documentUrl }));
@@ -783,7 +792,28 @@ Be specific. Use the company name to infer business type and calibrate according
       // NOTHING — route them to the IFRS companyfacts mapper.
       const raw = isIfrsCompanyFacts(facts)
         ? mapCompanyFactsIfrs(facts, { sicDescription })
-        : mapCompanyFacts(facts, { sicDescription });
+        : mapCompanyFacts(facts, { sicDescription, sicCode });
+
+      // E1 production wiring: the SAME extraction feeds the engine2 store (the v2 flow at
+      // ?v2=1). The D5 trading anchor resolves best-effort in the background — null (no
+      // key / no ticker / implausible) simply never renders, and a late anchor re-imports
+      // with identical facts, which only enriches the coherence input pre-build.
+      void import('./engine2Model').then(({ useEngine2Model }) => {
+        useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });
+        void import('../lib/edgar/quote')
+          .then(({ fetchTradingAnchor }) =>
+            fetchTradingAnchor(ticker, facts, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null))
+          .then((a) => {
+            if (!a) return;
+            const s = useEngine2Model.getState();
+            // never clobber work: enrich only while this exact import sits untouched
+            const untouched = s.facts?.entity_name === raw.entityName
+              && s.output === null
+              && !Object.values(s.basis).some((b) => b.kind === 'user');
+            if (untouched) useEngine2Model.getState().importFromRaw(raw, { trading_anchor: a.ev_ebitda });
+          })
+          .catch(() => undefined);
+      });
       const sector = opts?.sector ?? inferSector(sicDescription);
       const { state, provenance } = draftModelFromHistoricals(raw, {
         dealName: opts?.dealName ?? raw.entityName,
@@ -1053,7 +1083,11 @@ Set trigger_recalculation true.`;
     URL.revokeObjectURL(url);
   },
 
+  legacySaveNotice: false,
+  dismissLegacySaveNotice: () => set({ legacySaveNotice: false }),
+
   loadModel: async (file) => {
+    set({ legacySaveNotice: true }); // every .json save today is a previous-engine save
     const text = await file.text();
     const raw = JSON.parse(text) as Partial<ModelState>;
     // Deep-merge with defaults so an input-only template JSON (no output fields)

@@ -57,11 +57,16 @@ describe('engine2 import boundary (dual-engine regime)', () => {
     expect(offenders, `engine2 files importing the frozen engine: ${offenders.join(', ')}`).toEqual([]);
   });
 
-  it('no module outside engine2 imports from both engines', () => {
+  it('no module outside engine2 imports from both engines (one sanctioned bridge)', () => {
+    // PHASE_E §E1 production wiring: the OLD import flow feeds the engine2 store (one
+    // extraction, two consumers) — a STATE hand-off, not a calculation mix; the numbers
+    // computed on each side never cross. This is the ONLY sanctioned mixed consumer and
+    // it dies with the old engine at Phase F (sunset with this whole test).
+    const MIXED_ALLOWLIST = new Set(['store/dealEngine.ts']);
     const offenders: string[] = [];
     for (const f of files) {
       const rel = relative(ROOT, f);
-      if (rel.startsWith('lib/engine2')) continue;
+      if (rel.startsWith('lib/engine2') || MIXED_ALLOWLIST.has(rel)) continue;
       const specs = importSources(readFileSync(f, 'utf8'));
       if (importsOldEngine(specs) && importsNewEngine(specs)) offenders.push(rel);
     }

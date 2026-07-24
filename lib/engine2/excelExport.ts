@@ -41,28 +41,44 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Deal Engine v2 (engine2)';
 
-  // ── Summary ──
-  sheetFromRows(wb, 'Summary', [`${o.facts.entity_name} — ${currency}m`, ''], [
+  // ── Summary — the exportable one-pager follows the R&P panel order recorded in
+  //    conventions.json presentation.summaryPanelOrder (§E2 DR-5 alignment):
+  //    price & multiples → S&U → returns → capitalization → credit → FCF. The
+  //    on-screen Summary tab is the returns-first dashboard VARIANT of the same data.
+  const capTotal = o.derived.total_debt_at_par + o.sources_uses.rollover_equity + o.sources_uses.sponsor_equity;
+  sheetFromRows(wb, 'Summary', [`${o.facts.entity_name} — ${currency}m (R&P panel order)`, ''], [
+    ['— PURCHASE PRICE & MULTIPLES —', null],
+    ['Enterprise value', o.derived.enterprise_value],
+    ['Entry multiple (FY)', o.derived.entry_multiple],
+    ['Exit multiple', o.exit.exit_ev / o.exit.exit_ebitda_basis_value],
+    ['— SOURCES & USES —', null],
+    ['Total uses', o.sources_uses.total_uses],
+    ['Debt at par', o.derived.total_debt_at_par],
+    ['Sponsor equity (plug)', o.sources_uses.sponsor_equity],
+    ['— RETURNS —', null],
     ['Sponsor IRR', o.returns.sponsor_net.irr],
     ['Sponsor MOIC', o.returns.sponsor_net.moic],
     ['Pre-promote IRR', o.returns.pre_promote.irr],
     ['Unlevered IRR', o.returns.unlevered.irr],
-    ['Entry multiple', o.derived.entry_multiple],
-    ['Exit multiple', o.exit.exit_ev / o.exit.exit_ebitda_basis_value],
+    ['— CAPITALIZATION —', null],
+    ...o.sources_uses.debt_at_par.map((d): Cell[] => [`${d.name} (x EBITDA · % of cap)`, d.amount]),
+    ['Equity (sponsor + rollover)', o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity],
+    ['Total capitalization', capTotal],
+    ['— CREDIT STATISTICS —', null],
     ['Entry net leverage (FY)', o.derived.entry_net_leverage_fy],
-    ['Enterprise value', o.derived.enterprise_value],
-    ['Sponsor equity', o.sources_uses.sponsor_equity],
-    ['Exit equity (pre-MIP)', o.exit.exit_equity_pre_mip_total],
-    ['Bridge: EBITDA growth @ entry', o.bridge.ebitda_growth_at_entry_multiple],
-    ['Bridge: multiple change', o.bridge.multiple_change_bar],
-    ['Bridge: interaction', o.bridge.interaction],
-    ['Bridge: net-debt paydown', o.bridge.net_debt_paydown],
-  ], [null, PCT]);
+    ['Final-year net leverage', o.credit[o.credit.length - 1]?.net_leverage ?? null],
+    ['Y1 DSCR', o.credit[0]?.dscr ?? null],
+    ['— FREE CASH FLOW —', null],
+    ...o.operating.map((y, i): Cell[] => [`FCF pre-debt Y${i + 1}`, y.fcf_pre_debt]),
+  ], [null, MONEY]);
   const sum = wb.getWorksheet('Summary')!;
-  // metric-appropriate formats on the value column
-  [1, 2, 3, 4].forEach((r) => { sum.getCell(r + 1, 2).numFmt = PCT; });
-  [5, 6, 7].forEach((r) => { sum.getCell(r + 1, 2).numFmt = MULT; });
-  [8, 9, 10, 11, 12, 13, 14].forEach((r) => { sum.getCell(r + 1, 2).numFmt = MONEY; });
+  // metric-appropriate formats where the generic MONEY is wrong
+  sum.eachRow((row, r) => {
+    const labelCell = String(row.getCell(1).value ?? '');
+    if (/IRR/.test(labelCell)) sum.getCell(r, 2).numFmt = PCT;
+    if (/multiple|MOIC|leverage/i.test(labelCell)) sum.getCell(r, 2).numFmt = MULT;
+    if (/DSCR/.test(labelCell)) sum.getCell(r, 2).numFmt = '0.00';
+  });
 
   // ── Operating ──
   sheetFromRows(wb, 'Operating',

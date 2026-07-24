@@ -34,8 +34,21 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
   it('PARITY: cells equal the ModelOutput numbers exactly (raw floats, no display rounding)', async () => {
     const rb = await roundTrip(buildEngine2Workbook(output, 'USD'));
     const sum = rb.getWorksheet('Summary')!;
-    expect(sum.getCell(2, 2).value).toBe(output.returns.sponsor_net.irr);
-    expect(sum.getCell(9, 2).value).toBe(output.derived.enterprise_value);
+    // R&P panel order (§E2): find by label — the order itself is asserted below
+    const cellByLabel = (label: string) => {
+      let v: unknown = undefined;
+      sum.eachRow((row) => { if (String(row.getCell(1).value) === label) v = row.getCell(2).value; });
+      return v;
+    };
+    expect(cellByLabel('Sponsor IRR')).toBe(output.returns.sponsor_net.irr);
+    expect(cellByLabel('Enterprise value')).toBe(output.derived.enterprise_value);
+    // the R&P section order: price → S&U → returns → capitalization → credit → FCF
+    const sections: string[] = [];
+    sum.eachRow((row) => { const s = String(row.getCell(1).value ?? ''); if (s.startsWith('— ')) sections.push(s); });
+    expect(sections).toEqual([
+      '— PURCHASE PRICE & MULTIPLES —', '— SOURCES & USES —', '— RETURNS —',
+      '— CAPITALIZATION —', '— CREDIT STATISTICS —', '— FREE CASH FLOW —',
+    ]);
     const op = rb.getWorksheet('Operating')!;
     expect(op.getCell(2, 2).value).toBe(output.operating[0].revenue);
     expect(op.getCell(6, 10).value).toBe(output.operating[4].fcf_pre_debt);
