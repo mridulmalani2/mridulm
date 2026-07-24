@@ -33,6 +33,9 @@ describe('mapCompanyFacts — headline figures (Northwind FY2023, $m)', () => {
     expect(r.net_debt?.value).toBeCloseTo(255, 6);                 // 335 − 80
     expect(r.effective_tax_rate?.value).toBeCloseTo(0.21, 6);      // 31.5 / 150
     expect(r.nol_carryforward?.value).toBeCloseTo(40, 6);
+    // Net PP&E at the SAME anchor (engine2 §8 opening seed) — FY2023 instant, not FY2022.
+    expect(r.net_ppe?.value).toBeCloseTo(480, 6);
+    expect(r.net_ppe?.provenance.period).toBe('2023-12-31');
   });
 
   it('anchors every figure to the same fiscal year (FY2023, period end 2023-12-31)', () => {
@@ -91,6 +94,24 @@ describe('mapCompanyFacts — gaps are surfaced, never silently defaulted', () =
     const r = mapCompanyFacts(c);
     expect(r.net_debt).toBeNull();
     expect(r.gaps).toContain('Net debt at entry');
+  });
+
+  it('missing net PP&E stays null — NOT a Build-blocking gap (§8 has a disclosed 0-seed fallback)', () => {
+    const c = clone();
+    delete c.facts['us-gaap']['PropertyPlantAndEquipmentNet'];
+    const r = mapCompanyFacts(c);
+    expect(r.net_ppe).toBeNull();
+    expect(r.gaps).not.toContain('Net PP&E');
+  });
+
+  it('the ROU-inclusive PP&E concept is a stated fallback, never a silent substitute', () => {
+    const c = clone();
+    const facts = c.facts['us-gaap']['PropertyPlantAndEquipmentNet'];
+    delete c.facts['us-gaap']['PropertyPlantAndEquipmentNet'];
+    c.facts['us-gaap']['PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization'] = facts;
+    const r = mapCompanyFacts(c);
+    expect(r.net_ppe?.value).toBeCloseTo(480, 6);
+    expect(r.net_ppe?.provenance.detail).toContain('finance-lease ROU');
   });
 });
 

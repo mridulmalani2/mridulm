@@ -74,13 +74,28 @@ export async function fetchQuotePrice(ticker: string): Promise<number | null> {
   }
 }
 
-/** End-to-end: ticker + facts payload + net debt/EBITDA (millions) → anchor or null. */
+/** The anchor is only honest when quote currency and share count verifiably match the
+ *  filing: a domestic 10-K filer reporting USD (Finnhub free quotes are USD, and a 10-K
+ *  filer's listed shares ARE the dei share count). A 20-F/40-F filer quotes as an ADR —
+ *  USD price × ordinary shares ÷ home-currency EBITDA silently blends FX and the ADR
+ *  ratio (SAP live: ~16.4x displayed vs ~14x true). Can't verify ⇒ no anchor, no guess. */
+export function anchorComputable(
+  reportingCurrency: string | undefined,
+  latestAnnualForm: string | undefined,
+): boolean {
+  return reportingCurrency === 'USD' && /^10-K/.test(latestAnnualForm ?? '');
+}
+
+/** End-to-end: ticker + facts payload + net debt/EBITDA (millions) → anchor or null.
+ *  `filing` gates the computation (see anchorComputable) — unverifiable ⇒ null. */
 export async function fetchTradingAnchor(
   ticker: string | undefined,
   facts: CompanyFacts,
   netDebtMillions: number | null,
   fyEbitdaMillions: number | null,
+  filing: { reportingCurrency: string | undefined; latestAnnualForm: string | undefined },
 ): Promise<TradingAnchor | null> {
+  if (!anchorComputable(filing.reportingCurrency, filing.latestAnnualForm)) return null;
   if (!ticker || netDebtMillions == null || fyEbitdaMillions == null) return null;
   const sh = sharesOutstanding(facts);
   if (!sh) return null;

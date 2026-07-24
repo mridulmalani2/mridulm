@@ -31,6 +31,7 @@ const eurFiler = (unit = 'EUR'): CompanyFacts => ({
       CashAndCashEquivalents: { units: { [unit]: [inst('2023-12-31', 250)] } },
       CurrentBorrowings: { units: { [unit]: [inst('2023-12-31', 80)] } },
       NoncurrentBorrowings: { units: { [unit]: [inst('2023-12-31', 520)] } },
+      PropertyPlantAndEquipment: { units: { [unit]: [inst('2023-12-31', 640)] } },
       LeaseLiabilities: { units: { [unit]: [inst('2023-12-31', 110)] } },
       IncomeTaxExpenseContinuingOperations: { units: { [unit]: [fy('2023-01-01', '2023-12-31', 78)] } },
       ProfitLossBeforeTax: { units: { [unit]: [fy('2023-01-01', '2023-12-31', 300)] } },
@@ -59,6 +60,15 @@ describe('D6 — IFRS 20-F filer in companyfacts (EUR happy path)', () => {
     expect(r.net_debt?.value).toBeCloseTo(710 - 250, 9);
   });
 
+  it('net PP&E extracts at the anchor (engine2 §8 seed); absence stays null, never a gap', () => {
+    expect(r.net_ppe?.value).toBe(640);
+    const f = eurFiler();
+    delete (f as any).facts['ifrs-full'].PropertyPlantAndEquipment;
+    const rn = mapCompanyFactsIfrs(f, {});
+    expect(rn.net_ppe).toBeNull();
+    expect(rn.gaps).not.toContain('Net PP&E');
+  });
+
   it('operating NWC per the D2 definition; effective tax from the filing; FY-only history note', () => {
     expect(r.nwc?.value).toBeCloseTo((900 - 250) - (600 - 80), 9); // 650 − 520 = 130
     expect(r.effective_tax_rate?.value).toBeCloseTo(78 / 300, 9);
@@ -82,5 +92,17 @@ describe('D6 — non-modelled currency (SEK 20-F filer)', () => {
     const r = mapCompanyFactsIfrs(eurFiler('SEK'), {});
     expect(r.currency_unsupported).toBe('SEK');
     expect(r.fy_revenue?.value).toBe(2290); // facts still shown — Build is what's blocked
+  });
+
+  it.each(['CHF', 'NOK', 'DKK', 'CNY'])('%s — every non-modelled code raises the badge and keeps its identity', (code) => {
+    const r = mapCompanyFactsIfrs(eurFiler(code), {});
+    expect(r.currency_unsupported).toBe(code);
+    expect(r.currency).toBe(code);
+  });
+
+  it.each(['USD', 'EUR', 'GBP', 'JPY', 'INR'])('%s — every MODELLED currency passes clean (no badge)', (code) => {
+    const r = mapCompanyFactsIfrs(eurFiler(code), {});
+    expect(r.currency_unsupported).toBeUndefined();
+    expect(r.currency).toBe(code);
   });
 });

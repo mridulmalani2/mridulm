@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SHOW_LEGACY_OUTPUTS } from '../lib/legacyOutputs';
-import { SHOW_ENGINE2_WORKBENCH } from '../config/features';
+import { ENGINE, SHOW_ENGINE2_WORKBENCH } from '../config/features';
 import Workbench from '../components/deal-engine/v2/Workbench';
+import { useEngine2Model } from '../store/engine2Model';
 import { useDealEngineStore } from '../store/dealEngine';
 import Header from '../components/deal-engine/layout/Header';
 import InputPanel from '../components/deal-engine/inputs/InputPanel';
@@ -29,6 +30,31 @@ import { TraceGraphProvider } from '../components/deal-engine/TraceGraph/TraceGr
 
 type OutputTab = 'returns' | 'su' | 'debt' | 'balancesheet' | 'credit' | 'fragility' | 'sensitivity' | 'scenarios' | 'reality';
 
+/**
+ * Phase F2 (PHASE_F_CUTOVER.md §F2) — the ONE routing decision for /deal-engine, pure so the
+ * cutover semantics are directly testable:
+ *   ENGINE=2 → engine2 is the default: workbench when facts exist; otherwise the import
+ *   screens — EXCEPT a previous-engine save (OWNER #2), which still opens the old flow
+ *   beneath its banner. ENGINE=1 (rollback) → the old flow is default; ?v2=1 keeps forcing
+ *   the workbench during the dual-engine window.
+ */
+export function resolveDealEngineSurface(p: {
+  engine: 1 | 2;
+  hasEngine2Facts: boolean;
+  legacySaveNotice: boolean;
+  hasModelState: boolean;
+  v2Param: boolean;
+  showV2Window: boolean;
+}): 'workbench' | 'import-screens' | 'old-flow' {
+  if (p.engine === 2) {
+    if (p.hasEngine2Facts) return 'workbench';
+    if (p.legacySaveNotice && p.hasModelState) return 'old-flow';
+    return 'import-screens';
+  }
+  if (p.showV2Window && p.v2Param) return 'workbench';
+  return 'old-flow';
+}
+
 const DealEngine: React.FC = () => {
   const modelState = useDealEngineStore((s) => s.modelState);
   const startScreen = useDealEngineStore((s) => s.startScreen);
@@ -52,6 +78,7 @@ const DealEngine: React.FC = () => {
   );
 
   const traceGraph = useTraceGraph(modelState, modelVersion, lastChangedTraceFields);
+  const engine2Facts = useEngine2Model((s) => s.facts);
 
   useEffect(() => {
     const handler = () => setIsLargeScreen(window.innerWidth >= 1024);
@@ -64,15 +91,29 @@ const DealEngine: React.FC = () => {
     if (!isLargeScreen) setChatOpen(false);
   }, [isLargeScreen]);
 
-  // ── Phase E (engine2) v2 workbench — flag + ?v2=1, dual-engine window only ──
-  if (SHOW_ENGINE2_WORKBENCH && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('v2')) {
-    // Dev-only handle for driving the workbench without the proxy (walkthroughs/tests);
-    // stripped from production builds.
-    if (import.meta.env.DEV) {
-      void import('../store/engine2Model').then((m) => { (window as unknown as Record<string, unknown>).__engine2 = m.useEngine2Model; });
-    }
-    return <Workbench />;
+  // Dev-only handle for driving the workbench without the proxy (walkthroughs/tests);
+  // stripped from production builds.
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    (window as unknown as Record<string, unknown>).__engine2 = useEngine2Model;
   }
+
+  // ── Phase F2 routing (see resolveDealEngineSurface for the semantics + tests) ──
+  const surface = resolveDealEngineSurface({
+    engine: ENGINE,
+    hasEngine2Facts: engine2Facts !== null,
+    legacySaveNotice,
+    hasModelState: modelState != null,
+    v2Param: typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('v2'),
+    showV2Window: SHOW_ENGINE2_WORKBENCH,
+  });
+  if (surface === 'workbench') return <Workbench />;
+  if (surface === 'import-screens') {
+    return manualEntry
+      ? <ManualFactsScreen onBack={() => setManualEntry(false)} />
+      : <SourceScreen onManual={() => setManualEntry(true)} />;
+  }
+  // surface === 'old-flow': the legacy screens below (default under ENGINE=1 rollback;
+  // under ENGINE=2 only a previous-engine save lands here, beneath its OWNER #2 banner)
 
   // ── 3-screen start flow (Phase 1): Source → Assumptions review → Model ──
   if (startScreen === 'assumptions') return <AssumptionsReview />;

@@ -32,6 +32,15 @@ export function money(v: number | null | undefined, currency: Engine2Currency, d
   return `${sign}${CSYM[currency]}${num(Math.abs(v), dp)}m`;
 }
 
+/** Money prefixed with an ISO code for currencies OUTSIDE the modelled set (display-only
+ *  surfaces like the history table): 210838 → "SEK 210,838m". The modelled five keep their
+ *  symbols via money(); an unsupported filing must never wear another currency's symbol. */
+export function moneyIso(v: number | null | undefined, isoCode: string, dp = 1): string {
+  if (v == null || !Number.isFinite(v)) return 'N/A';
+  const sign = v < 0 ? '−' : '';
+  return `${sign}${isoCode} ${num(Math.abs(v), dp)}m`;
+}
+
 /** Rate/IRR as a percentage, 1dp (§15): 0.1596 → "16.0%"; null → "N/A" (never 9999). */
 export function pct(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';

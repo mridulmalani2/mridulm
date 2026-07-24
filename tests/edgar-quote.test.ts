@@ -3,8 +3,8 @@
  * proxy's (Finnhub key server-side; 501 when unconfigured) — here the PURE parts are
  * pinned, plus the null-suppression honesty rules.
  */
-import { describe, it, expect } from 'vitest';
-import { computeTradingAnchor, sharesOutstanding } from '../lib/edgar/quote';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { anchorComputable, computeTradingAnchor, fetchTradingAnchor, sharesOutstanding } from '../lib/edgar/quote';
 import { useEngine2Model } from '../store/engine2Model';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
@@ -31,6 +31,33 @@ describe('D5 — computeTradingAnchor (pure)', () => {
     expect(computeTradingAnchor(100, 100e6, 0, 0, false)).toBeNull();
     expect(computeTradingAnchor(100, 100e6, 0, 10, false)).toBeNull(); // 1000x > 60x band
     expect(computeTradingAnchor(0.01, 100e6, -900, 1000, false)).toBeNull(); // < 1x band
+  });
+});
+
+describe('D5 — the honest-anchor gate: domestic 10-K + USD only (FX/ADR contamination guard)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('anchorComputable: USD 10-K (incl. amendments) computes; FPIs and non-USD filers never do', () => {
+    expect(anchorComputable('USD', '10-K')).toBe(true);
+    expect(anchorComputable('USD', '10-K/A')).toBe(true);
+    expect(anchorComputable('EUR', '20-F')).toBe(false);  // SAP live: USD ADR ÷ EUR EBITDA ≈ ×FX
+    expect(anchorComputable('USD', '20-F')).toBe(false);  // ADR ratio unverifiable (Shell-class)
+    expect(anchorComputable('SEK', '20-F')).toBe(false);
+    expect(anchorComputable('USD', '40-F')).toBe(false);
+    expect(anchorComputable('USD', undefined)).toBe(false); // submissions failed ⇒ can't verify
+    expect(anchorComputable(undefined, '10-K')).toBe(false);
+  });
+
+  it('fetchTradingAnchor short-circuits BEFORE any network call when the gate fails', async () => {
+    vi.stubGlobal('fetch', () => { throw new Error('network attempted despite failed gate'); });
+    const factsWithShares = {
+      cik: 52, entityName: 'Rheinwerk SE',
+      facts: { dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2025-12-31', val: 1_166e6 }] } } } },
+    } as unknown as CompanyFacts;
+    const a = await fetchTradingAnchor('SAP', factsWithShares, 4000, 10_928, {
+      reportingCurrency: 'EUR', latestAnnualForm: '20-F',
+    });
+    expect(a).toBeNull();
   });
 });
 

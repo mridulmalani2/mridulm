@@ -89,6 +89,7 @@ export function suggestAssumptions(
 
   // ── Margin: hold at the filing margin (flat path — expansion needs a thesis) ──
   b('operations.target_margin', 'facts', `FY${facts.fiscal_year} EBITDA margin held flat — margin expansion requires an explicit thesis`);
+  b('operations.maint_capex_pct_revenue', 'facts', `FY${facts.fiscal_year} capex ÷ revenue from the filing`);
 
   // ── NWC: days method ONLY when every gated day survived D2; else % of revenue ──
   const nwc: DealAssumptions['operations']['nwc'] =

@@ -66,6 +66,12 @@ const LEASE_EXCLUDING_TOTAL_TAGS = new Set(['LongTermDebt']);
 const FINANCE_LEASE_NONCURRENT_TAGS = ['FinanceLeaseLiabilityNoncurrent'];
 const FINANCE_LEASE_CURRENT_TAGS = ['FinanceLeaseLiabilityCurrent'];
 const LEASE_INCLUSIVE_DEBT_TAGS = new Set(['LongTermDebtAndCapitalLeaseObligations', 'LongTermDebtAndCapitalLeaseObligationsCurrent']);
+// Net PP&E (engine2 §8 opening-roll seed). The pure concept first; the combined
+// PP&E + finance-lease-ROU concept only as fallback (its use is stated in the detail).
+const PPE_NET_TAGS = [
+  'PropertyPlantAndEquipmentNet',
+  'PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization',
+];
 const CASH_TAGS = [
   'CashAndCashEquivalentsAtCarryingValue',
   'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
@@ -503,6 +509,15 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
 
   const cashRaw = rawInstant(CASH_TAGS, anchorEnd);
   const cash = cashRaw ? sv(cashRaw.value, cashRaw.prov) : null;
+  // Net PP&E at the anchor (engine2 §8 opening seed). NOT a Build-blocking gap when absent —
+  // the engine's disclosed 0-seed fallback covers genuine non-reporters; the fallback tag's
+  // ROU inclusion is stated so the displayed basis stays traceable.
+  const ppeRaw = rawInstant(PPE_NET_TAGS, anchorEnd);
+  const net_ppe = ppeRaw
+    ? sv(ppeRaw.value, ppeRaw.tag === PPE_NET_TAGS[1]
+        ? { ...ppeRaw.prov, detail: `${ppeRaw.prov.detail} (incl. finance-lease ROU assets)` }
+        : ppeRaw.prov)
+    : null;
   const grossAtAnchor = computeGrossDebtAt(anchorEnd);
   const gross_debt: SourcedValue | null = grossAtAnchor
     ? sv(grossAtAnchor.value, {
@@ -606,6 +621,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     gross_debt,
     cash,
     net_debt,
+    net_ppe,
     effective_tax_rate,
     nol_carryforward,
     sector,

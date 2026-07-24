@@ -50,6 +50,26 @@ describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
   });
 });
 
+describe('mapIfrsReport — D6 currency honesty (review 2026-07-24: no silent EUR fallback)', () => {
+  const reKey = (code: string): XbrlJsonReport => {
+    const clone = JSON.parse(JSON.stringify(sample).replace(/iso4217:EUR/g, `iso4217:${code}`));
+    return clone as XbrlJsonReport;
+  };
+
+  it('a supported non-EUR currency keeps its own code, no blocking badge', () => {
+    const r = mapIfrsReport(reKey('GBP'), {});
+    expect(r.currency).toBe('GBP');
+    expect(r.currency_unsupported).toBeUndefined();
+  });
+
+  it.each(['SEK', 'CHF', 'NOK', 'DKK'])('%s filing keeps ITS code + raises the BLOCKING badge (never renders as €)', (code) => {
+    const r = mapIfrsReport(reKey(code), {});
+    expect(r.currency).toBe(code);            // the raw code, not 'EUR'
+    expect(r.currency_unsupported).toBe(code); // Build-gating badge downstream
+    expect(r.fy_revenue?.value).toBe(1200);    // figures still extract — display wears the code
+  });
+});
+
 describe('rankEsefMatches — searches the ESEF-filer universe (surfaces the listed parent)', () => {
   const ENTITIES: EsefTickerEntry[] = [
     { lei: '549300MKFYEKVRWML317', name: 'UNILEVER PLC' },

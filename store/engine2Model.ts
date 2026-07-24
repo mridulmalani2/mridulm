@@ -23,6 +23,10 @@ export type FieldBasis = SuggestionBasis | { kind: 'user'; detail: string } | { 
 
 export interface Engine2ModelStore {
   facts: DealFacts | null;
+  /** The FILING's currency code as extracted (e.g. 'SEK') — when it is outside the modelled
+   *  set, facts.currency holds a display placeholder and Build is gated; display surfaces
+   *  (history table) use THIS code so an unsupported filing never wears another symbol. */
+  sourceCurrency: string | null;
   /** DealFacts paths extraction could not provide — Build is gated until confirmed. */
   missingFacts: string[];
   /** Honest-degradation notes from extraction (days gating, FPI history, currency). */
@@ -41,6 +45,10 @@ export interface Engine2ModelStore {
   resuggest: () => void;
   /** Confirm a MISSING fact with a user-entered value (flips it out of the Build gate). */
   confirmFact: (path: string, value: number) => void;
+  /** True while the CURRENT import for `entityName` sits untouched — no build, no user
+   *  edit, no AI-applied refinement. The background trading-anchor enrich re-imports only
+   *  in this state; any work (user OR ai badge) blocks the clobber (review 2026-07-24). */
+  importUntouched: (entityName: string) => boolean;
   /** Replace the assumptions object (typed, whole-object per §13 array semantics) and mark
    *  the edited field paths as YOU. */
   editAssumptions: (next: DealAssumptions, editedPaths: string[]) => void;
@@ -64,6 +72,7 @@ export interface Engine2ModelStore {
 
 export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   facts: null,
+  sourceCurrency: null,
   missingFacts: [],
   factNotes: [],
   assumptions: null,
@@ -75,7 +84,32 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const adapted = adaptRawHistoricals(raw);
     const facts = { ...adapted.facts, implied_trading_ev_ebitda: opts?.trading_anchor ?? null };
     const { assumptions, basis } = suggestAssumptions(facts, opts);
-    set({ facts, missingFacts: adapted.missing, factNotes: adapted.notes, assumptions, basis, output: null, error: null });
+    // Badge honesty (review 2026-07-24): a suggestion whose FACT input was a placeholder or
+    // statutory default must not wear a "from the filing" badge. Two sources of truth:
+    // the adapter's templateBases (defaulted inputs) and the missing list (placeholder
+    // inputs — Build is gated, but the badge must still tell the truth while it shows).
+    const MISSING_TO_ASSUMPTION: Record<string, string> = {
+      maint_capex_pct_revenue: 'operations.maint_capex_pct_revenue',
+      da_pct_revenue: 'operations.da_pct_revenue',
+      fy_ebitda: 'operations.target_margin',
+      nwc_pct_revenue: 'operations.nwc',
+    };
+    const honest: Record<string, FieldBasis> = { ...basis };
+    for (const [path, detail] of Object.entries(adapted.templateBases)) {
+      honest[path] = { kind: 'template', detail };
+    }
+    for (const m of adapted.missing) {
+      const path = MISSING_TO_ASSUMPTION[m];
+      if (path) honest[path] = { kind: 'template', detail: `the filing lacked ${m} — confirm it above (Build stays gated)` };
+    }
+    set({
+      facts,
+      sourceCurrency: raw.currency_unsupported ?? raw.currency,
+      missingFacts: adapted.missing, factNotes: adapted.notes, assumptions, basis: honest,
+      output: null, error: null,
+      // AI notes/redlines describe assumptions that no longer exist after ANY re-import
+      aiNotes: [], redlineItems: null,
+    });
   },
 
   resuggest: () => {
@@ -94,6 +128,13 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       basis: merged,
       output: null,
     });
+  },
+
+  importUntouched: (entityName) => {
+    const s = get();
+    return s.facts?.entity_name === entityName
+      && s.output === null
+      && !Object.values(s.basis).some((b) => b.kind === 'user' || b.kind === 'ai');
   },
 
   confirmFact: (path, value) => {
@@ -220,7 +261,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
   },
 
-  reset: () => set({ facts: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
+  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
 }));
 
 /**

@@ -45,6 +45,8 @@ const AMORTISATION = ['AmortisationExpense', 'AmortisationOfIntangibleAssetsOthe
 const PRETAX = ['ProfitLossBeforeTax'];
 const TAX = ['IncomeTaxExpenseContinuingOperations', 'TaxExpenseIncome'];
 const CASH = ['CashAndCashEquivalents'];
+// Net PP&E (engine2 §8 opening-roll seed) — carrying amount; ROU-inclusive concept as stated fallback.
+const PPE_NET = ['PropertyPlantAndEquipment', 'PropertyPlantAndEquipmentIncludingRightofuseAssets'];
 const BORROW_TOTAL = ['Borrowings', 'BorrowingsAndLeaseLiabilities'];
 const BORROW_NONCURRENT = ['NoncurrentBorrowings', 'BorrowingsNoncurrent', 'NoncurrentPortionOfNoncurrentBorrowings'];
 const BORROW_CURRENT = ['CurrentBorrowings', 'BorrowingsCurrent', 'CurrentPortionOfNoncurrentBorrowings'];
@@ -212,7 +214,12 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   const anchorFact = latestFY(ifrsFactsFor(REVENUE)) ?? latestFY(ifrsFactsFor(OPERATING_PROFIT));
   const anchorFy = anchorFact ? fiscalYear(anchorFact.fact) : null;
   const detectedCcy = anchorFact ? unitCurrency(anchorFact.fact) : undefined;
-  const currency = detectedCcy && KNOWN_CURRENCIES.has(detectedCcy) ? detectedCcy : 'EUR';
+  // D6 parity with the EDGAR mappers (review 2026-07-24): a REAL currency outside the
+  // modelled set keeps its own code and raises the BLOCKING `currency_unsupported` badge —
+  // never a silent EUR fallback (a SEK filing must not build wearing € symbols). The 'EUR'
+  // default survives only for the degenerate no-anchor case, where no figures flow anyway.
+  const currency = detectedCcy ?? 'EUR';
+  const currency_unsupported = detectedCcy && !KNOWN_CURRENCIES.has(detectedCcy) ? detectedCcy : undefined;
 
   const prov = (tag: string, period?: string): Provenance => ({
     source: 'esef', detail: `${IFRS}${tag} · FY${anchorFy ?? '—'} · ESEF`, url,
@@ -333,6 +340,13 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   // ── Cash ──
   const cashHit = ifrsInstant(CASH);
   const cash = cashHit ? sv(cashHit.value, provHit(cashHit)) : null;
+  // Net PP&E at the anchor (§8 seed) — absence stays null (engine's disclosed 0-seed fallback).
+  const ppeHit = ifrsInstant(PPE_NET);
+  const net_ppe = ppeHit
+    ? sv(ppeHit.value, localOf(ppeHit.concept ?? '') === PPE_NET[1]
+        ? { ...provHit(ppeHit), detail: `${provHit(ppeHit).detail} (incl. right-of-use assets)` }
+        : provHit(ppeHit))
+    : null;
 
   // ── NWC = current assets − current liabilities ──
   const sumParts = (parts: Array<Hit | null>, labels: string[], min: number): Hit | null => {
@@ -435,6 +449,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   return {
     entityName: opts.entityName ?? 'Unknown',
     currency,
+    currency_unsupported,
     fiscalYear: anchorFy ?? undefined,
     periodEnd,
     basis: 'FY',
@@ -450,6 +465,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     gross_debt,
     cash,
     net_debt,
+    net_ppe,
     effective_tax_rate,
     nol_carryforward: null,   // not consistently tagged in ESEF
     sector: null,
