@@ -82,12 +82,55 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
         const inflows = mine.cashflows.reduce((s, c) => (c > 0 ? s + c : s), 0);
         expect(mine.moic!).toBeCloseTo(inflows / -mine.cashflows[0], 9);
       }
-      // §14.16 mirror: sponsor_share ≡ final sponsor_net cashflow
+      // §14.16 mirror: final sponsor_net cashflow ≡ sponsor_share + the sponsor share of
+      // paid[N]. Every case here runs an EMPTY distribution schedule, so the second term is
+      // 0 and this is the amended identity's degenerate arm — the G-1 engine PR extends this
+      // to the DIST goldens, where paid[N] > 0 (hostile review finding 9, 2026-07-24).
+      expect(g.distributions.paid[g.distributions.paid.length - 1]).toBe(0);
       expect(returns.sponsor_net.cashflows[returns.sponsor_net.cashflows.length - 1]).toBeCloseTo(exit.sponsor_share, 9);
       // gp fee income: null when monitoring is OFF (§9 memo)
       expect(buildGpFeeIncome(assumptions.fees.monitoring, [], exit.monitoring_termination)).toBeNull();
     });
   }
+
+  /**
+   * SPEC §9/§10 [v1.1.0] output surfaces the GOLDEN EXTENSION committed ahead of the engine.
+   * Unlike the waterfall columns (guarded by PENDING_G1_KEYS in engine2-sequence.test.ts),
+   * the C6 gate above hard-codes cashflows/irr/moic per stream and would silently ignore
+   * these four forever [hostile review finding 4, 2026-07-24]. This guard fails the moment
+   * the engine emits any of them, forcing the gate to be extended rather than left behind.
+   */
+  const PENDING_G1_RETURN_SURFACES = ['dpi', 'payback_year'] as const;
+  const PENDING_G1_STREAM_FIELDS = ['irr_mid_year'] as const;
+
+  it('PENDING G-1 return surfaces: dpi / payback_year / irr_mid_year are still engine-side TODO (self-deleting guard)', () => {
+    const core = runCore(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
+    const exit = exitFromCore(core, GOLDEN_DEALS.G2.assumptions);
+    const returns = buildReturns(GOLDEN_DEALS.G2.assumptions, {
+      sponsor_equity: core.sources_uses.sponsor_equity,
+      rollover_equity: core.sources_uses.rollover_equity,
+      enterprise_value: core.derived.enterprise_value,
+      transaction_costs: core.sources_uses.transaction_costs,
+      unlevered_fcf: core.unlevered_fcf,
+      exit,
+      hold_years: GOLDEN_DEALS.G2.assumptions.entry.hold_years,
+    }) as unknown as Record<string, unknown>;
+    for (const k of PENDING_G1_RETURN_SURFACES) {
+      expect(returns[k], `buildReturns now emits ${k} — extend the C6 gate to assert it against the fixtures`).toBeUndefined();
+    }
+    for (const s of ['sponsor_net', 'pre_promote'] as const) {
+      for (const k of PENDING_G1_STREAM_FIELDS) {
+        expect((returns[s] as Record<string, unknown>)[k], `buildReturns now emits ${s}.${k} — extend the C6 gate`).toBeUndefined();
+      }
+    }
+    // The fixtures already carry all of them, on every golden — so the gate has something
+    // concrete to start asserting the moment the guard fires.
+    const fix = load('G2DIST');
+    expect(fix.returns.dpi).toHaveLength(5);
+    expect(fix.returns).toHaveProperty('payback_year');
+    expect(fix.returns.sponsor_net).toHaveProperty('irr_mid_year');
+    expect(fix.distributions.paid).toHaveLength(5);
+  });
 
   it('G3 §17 asserts: promote strictly in the money; PIK payoff at par + accrued', () => {
     const core = runCore(GOLDEN_DEALS.G3.facts, GOLDEN_DEALS.G3.assumptions);

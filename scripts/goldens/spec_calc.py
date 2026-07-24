@@ -550,6 +550,20 @@ def dist_variant(base, requests, trap):
     g["assumptions"]["rp_trap"] = trap
     return g
 
+# G2-DIST-D — the §13 scenario × distributions golden [v1.1.1]. The SAME request schedule
+# and the SAME trap level as G2-DIST (structure/policy fields are FROZEN across scenarios —
+# a scenario may not re-write a distribution policy), with G2-D's operating deltas laid over
+# the top. What varies is only whether the trap BINDS under the downside path — which is
+# precisely what §13 says the credit dashboard exists to show.
+G2_DIST_REQUESTS = [25.0, 25.0, 25.0, 10.0, 8.0]
+G2_DIST_TRAP = {"metric": "net_leverage", "level": 2.75}
+
+def g2_dist_downside():
+    g = dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP)
+    g["assumptions"]["operations"]["growth"] = [x - 0.02 for x in GOLDENS["G2"]["assumptions"]["operations"]["growth"]]
+    g["assumptions"]["exit"]["multiple"] = 8.5
+    return g
+
 def write_csv(path, res):
     rows = []
     N = len(res["operating"])
@@ -585,14 +599,21 @@ if __name__ == "__main__":
     for name, g in GOLDENS.items():
         results[name] = run(g)
     results["G2-D"] = run(g2_downside())
-    results["G2-DIST"] = run(dist_variant("G2", [25.0, 25.0, 25.0, 10.0, 8.0],
-                                          {"metric": "net_leverage", "level": 2.75}))
+    results["G2-DIST"] = run(dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP))
     results["G3-DIST"] = run(dist_variant("G3", [20.0, 15.0, 25.0, 22.0, 20.0], None))
+    results["G2-DIST-D"] = run(g2_dist_downside())
+    # §13 [v1.1.1]: the request schedule and the trap are structure/policy — FROZEN across
+    # scenarios. Only whether the trap BINDS may differ.
+    assert (results["G2-DIST-D"]["distributions"]["requested"]
+            == results["G2-DIST"]["distributions"]["requested"]), "G2-DIST-D request schedule not frozen!"
+    assert (results["G2-DIST-D"]["distributions"]["trap_level"]
+            == results["G2-DIST"]["distributions"]["trap_level"]), "G2-DIST-D trap level not frozen!"
     # entry-frozen checks (§13 for the scenario; §3 step 7 is post-close so the DIST variants
     # cannot move entry either): S&U identical to the base golden.
     assert results["G2-D"]["sources_uses"] == results["G2"]["sources_uses"], "G2-D entry not frozen!"
     assert results["G2-DIST"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST entry not frozen!"
     assert results["G3-DIST"]["sources_uses"] == results["G3"]["sources_uses"], "G3-DIST entry not frozen!"
+    assert results["G2-DIST-D"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST-D entry not frozen!"
     for name, res in results.items():
         d = os.path.join(outdir, name.replace("-", ""))
         os.makedirs(d, exist_ok=True)

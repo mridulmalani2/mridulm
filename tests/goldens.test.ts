@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);
@@ -26,10 +26,10 @@ describe('golden agreement check', () => {
 });
 
 describe('SPEC §17 committed assertions', () => {
-  let g1: any, g2: any, g3: any, g4: any, g5: any, g2d: any, g2dist: any, g3dist: any;
+  let g1: any, g2: any, g3: any, g4: any, g5: any, g2d: any, g2dist: any, g3dist: any, g2distd: any;
   beforeAll(() => {
-    [g1, g2, g3, g4, g5, g2d, g2dist, g3dist] =
-      ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST'].map(load);
+    [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd] =
+      ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD'].map(load);
   });
 
   it('G1 closed-form check values (§14.14)', () => {
@@ -162,21 +162,54 @@ describe('SPEC §17 committed assertions', () => {
             .toBeLessThanOrEqual(L * g.operating[i].ebitda_adj + 0.005);
         }
         cum += w.distribution_paid;
-        // DPI monotone non-decreasing, and computed on distributions alone.
+        // §9 DPI is a VALUE, not just a shape: cumulative sponsor distributions ÷ the
+        // sponsor's t=0 check. Asserting monotonicity alone would pass any wrong
+        // denominator (e.g. pre-promote total) — hostile review finding 6, 2026-07-24.
+        expect(g.returns.dpi[i], `${name} Y${i + 1} DPI value`)
+          .toBeCloseTo(cum / g.derived.sponsor_equity, 3);
         if (i > 0) expect(g.returns.dpi[i]).toBeGreaterThanOrEqual(g.returns.dpi[i - 1]);
       });
       expect(g.distributions.cumulative_paid).toBeCloseTo(cum, 2);
       // Payback: distributions ALONE; exit proceeds never count (L-10). No golden reaches it
-      // (the engine PR covers the reached branch with a module fixture — DERIVATION.md).
-      if (cum >= g.derived.sponsor_equity) expect(g.returns.payback_year).toBeGreaterThan(0);
-      else expect(g.returns.payback_year).toBeNull();
-      // Distributions are excluded from the unlevered stream (§9 membership).
-      expect(g.returns.unlevered.cashflows.length).toBe(g.waterfall.length + 1);
+      // (the engine PR covers the reached branch with a module fixture — DERIVATION.md), so
+      // assert the FIRST-year semantics against the series rather than the dead live arm.
+      const firstReached = g.returns.dpi.findIndex((d: number) => d >= 1);
+      expect(g.returns.payback_year).toBe(firstReached === -1 ? null : firstReached + 1);
     }
   });
 
+  it('§9 membership: distributions are EXCLUDED from the unlevered stream (byte-identical to base)', () => {
+    // The unlevered stream is capital-structure-blind, so adding a distribution to a deal
+    // must not move it AT ALL. Asserting only the stream LENGTH would pass an implementation
+    // that added paid[t] to every interim UFCF — hostile review finding 5, 2026-07-24. This
+    // is the §17/DERIVATION claim stated as the equality it actually is.
+    expect(g2dist.returns.unlevered).toEqual(g2.returns.unlevered);
+    expect(g3dist.returns.unlevered).toEqual(g3.returns.unlevered);
+    // The downside variant's unlevered stream tracks ITS OWN operating case, so it matches
+    // the plain downside scenario rather than the base — same rule, different path.
+    expect(g2distd.returns.unlevered).toEqual(g2d.returns.unlevered);
+  });
+
+  it('G2-DIST-D (§13): the request schedule and trap are FROZEN across scenarios; only the BINDING moves', () => {
+    // §13: distributions and the RP trap are structure/policy fields, frozen like the rest of
+    // the entry structure. What a downside changes is whether the trap BINDS — which §13
+    // names as the credit dashboard's reason to exist (hostile review finding 2, 2026-07-24).
+    expect(g2distd.distributions.requested).toEqual(g2dist.distributions.requested);
+    expect(g2distd.distributions.trap_level).toBe(g2dist.distributions.trap_level);
+    expect(g2distd.sources_uses).toEqual(g2.sources_uses); // entry frozen (§13/§14.17)
+    // Y2 is the discriminator: PAID 12.09 in the base case, FULLY BLOCKED in the downside —
+    // same policy, weaker EBITDA, so the pro-forma test that just cleared now fails.
+    expect(g2dist.waterfall[1].distribution_paid).toBeCloseTo(12.09, 2);
+    expect(g2distd.waterfall[1].distribution_paid).toBe(0);
+    expect(g2distd.waterfall[1].rp_max).toBe(0);
+    expect(g2distd.waterfall[1].distribution_blocked).toBe(true);
+    // Less cash reaches the sponsor, later — and §14.8's downside monotonicity still holds.
+    expect(g2distd.distributions.cumulative_paid).toBeLessThan(g2dist.distributions.cumulative_paid);
+    expect(g2distd.returns.sponsor_net.irr).toBeLessThanOrEqual(g2dist.returns.sponsor_net.irr);
+  });
+
   it('balance sheet closes every year, every golden (§14.2)', () => {
-    for (const g of [g1, g2, g3, g4, g5, g2d, g2dist, g3dist]) {
+    for (const g of [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd]) {
       for (const row of g.balance_sheet) expect(Math.abs(row.check)).toBeLessThan(0.005);
     }
   });

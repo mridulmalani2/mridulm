@@ -90,12 +90,27 @@ describe('§7 early retirement — the deferred tax deduction lands in t+1 (accu
 
 describe('runCore — first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
   it('PENDING_G1_KEYS: the §3-step-7 columns are still engine-side TODO (self-deleting guard)', () => {
-    // The goldens already carry these columns (tests/goldens/G2DIST, G3DIST). Until the G-1
-    // engine PR lands, runCore must not emit them — and once it does, this test fails and
-    // forces PENDING_G1_KEYS to be deleted so the gate above starts asserting them.
-    const row = runCore(DEALS.G2.facts, DEALS.G2.assumptions).waterfall[0] as unknown as Record<string, unknown>;
-    for (const k of PENDING_G1_KEYS) {
-      expect(row[k], `runCore now emits ${k} — delete PENDING_G1_KEYS so the C5 gate covers it`).toBeUndefined();
+    // The goldens already carry these columns (tests/goldens/G2DIST, G3DIST, G2DISTD). Until
+    // the G-1 engine PR lands, runCore must not emit them — and once it does, this test fails
+    // and forces PENDING_G1_KEYS to be deleted so the gate above starts asserting them.
+    //
+    // The probe runs a LIVE schedule + trap as well as the bare G2 assumptions [hostile
+    // review finding 3, 2026-07-24]: §16 says `distributions: null ≡ off`, which openly
+    // invites an engine that emits these columns ONLY when the feature is on. Such an engine
+    // would slip past a zero-request probe, PENDING_G1_KEYS would survive, and
+    // assertBlockMatches would keep skipping those columns on G1–G5 forever — while the
+    // fixtures demand 0.0/false on all five unconditionally. The fields are not on
+    // DealAssumptions yet; that is exactly what the cast records.
+    const live = {
+      ...DEALS.G2.assumptions,
+      structure: { ...DEALS.G2.assumptions.structure, distributions: [25, 25, 25, 10, 8] },
+      covenants: { ...DEALS.G2.assumptions.covenants, rp_trap: { metric: 'net_leverage', level: 2.75 } },
+    } as unknown as typeof DEALS.G2.assumptions;
+    for (const [label, a] of [['empty schedule', DEALS.G2.assumptions], ['live schedule', live]] as const) {
+      const row = runCore(DEALS.G2.facts, a).waterfall[0] as unknown as Record<string, unknown>;
+      for (const k of PENDING_G1_KEYS) {
+        expect(row[k], `runCore now emits ${k} (${label}) — delete PENDING_G1_KEYS so the C5 gate covers it`).toBeUndefined();
+      }
     }
   });
 

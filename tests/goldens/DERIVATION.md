@@ -4,7 +4,7 @@
 `scripts/goldens/spec_calc.py` — a SPEC-literal Python implementation (different language
 from the engine, zero repo imports). Each `G*/expected.json` + `schedule.csv` is its
 committed output; `tests/goldens.test.ts` re-runs the script and fails on any drift, and
-re-asserts the 22 SPEC §17 assertions in CI.
+re-asserts the SPEC §17 assertions in CI (22 at v1.0, 29 at v1.1.1).
 
 **Line → SPEC mapping**: every block of spec_calc.py carries its SPEC section marker
 (§2 S&U/plug · §3 waterfall & running-cash · §4 beginning-balance interest, max(base,floor)+spread,
@@ -98,12 +98,13 @@ comparison script, not asserted from the patch.
 
 ## v1.1.1 Phase G-1 golden extension (2026-07-24)
 
-**What this adds**: two new goldens for SPEC v1.1.0's interim distributions + restricted-
-payment cash trap — **G2-DIST** (trap ON at net leverage 2.75) and **G3-DIST** (trap OFF,
-promote in the money). Each holds its base golden constant in every field and adds exactly
-two: `structure.distributions` and `covenants.rp_trap`. That is deliberate: every
-difference from the base is then attributable to §3 step 7 / §3.7 alone, and the entry-S&U
-and unlevered-stream identities become exact assertions rather than approximations.
+**What this adds**: three new goldens for SPEC v1.1.0's interim distributions + restricted-
+payment cash trap — **G2-DIST** (trap ON at net leverage 2.75), **G3-DIST** (trap OFF,
+promote in the money) and **G2-DIST-D** (the §13 scenario variant). Each holds its base
+golden constant in every field and adds exactly two: `structure.distributions` and
+`covenants.rp_trap`. That is deliberate: every difference from the base is then attributable
+to §3 step 7 / §3.7 alone, and the entry-S&U and unlevered-stream identities become exact
+assertions rather than approximations.
 
 **Branch coverage** (the reason for two workbooks rather than one):
 
@@ -113,12 +114,13 @@ and unlevered-stream identities become exact assertions rather than approximatio
 | Trap clips BELOW request and cash cap ⇒ partially blocked | G2-DIST Y2 | rp_max 12.09 = paid; request 25.00, cash cap 15.68; blocked=T; pro-forma net leverage lands exactly on 2.75 |
 | Cash cap binds, trap does NOT ⇒ not blocked | G2-DIST Y3 | paid 15.34, closing cash = floor 10.00, rp_max 75.65; blocked=F |
 | Request binds | G2-DIST Y4/Y5 · G3-DIST Y2/Y4/Y5 | paid ≡ request |
-| Year-N payment rides the period-N flow (§14.16) | G2-DIST Y5 · G3-DIST Y5 | final sponsor flow 1052.06 = sponsor_share 1044.06 + 8.00 |
+| Year-N payment rides the period-N flow (§14.16) | G2-DIST Y5 · G3-DIST Y5 | G2-DIST 1052.06 = 1044.06 + 8.00; G3-DIST 603.69 = 583.69 + 20.00 |
 | Trap OFF with LIVE requests (rp_max = +∞) | G3-DIST all years | rp_max N/A, blocked=F everywhere |
 | §10 hurdle base INCLUDES cumulative distributions | G3-DIST exit | MIP 16.53; the pre-v1.1.0 base would pay 1.82 (9.1× discriminator) |
 | §1 mid-year × distributions | G2-DIST | sponsor IRR 13.3906% period-end vs 13.4572% mid-year |
-| §9 unlevered EXCLUDES distributions | both | `returns.unlevered` byte-identical to the base golden |
-| Entry frozen by a post-close flow | both | `sources_uses` byte-identical to the base golden |
+| §9 unlevered EXCLUDES distributions | all three | `returns.unlevered` byte-identical to the base golden |
+| Entry frozen by a post-close flow | all three | `sources_uses` byte-identical to the base golden |
+| §13 policy FROZEN across scenarios, BINDING is not | G2-DIST-D | same requests `[25,25,25,10,8]` and same level 2.75 as G2-DIST; Y2 flips from paid 12.09 to **paid 0.00, rp_max 0, blocked=T**; cumulative 45.43 → 35.25; sponsor IRR 13.3906% → 8.9638% |
 
 **Golden-uncovered by design** (SPEC §17 [v1.1.1] records each with its reason; the G-1
 engine PR must land a kernel/module fixture for every one, and the adjudication below
@@ -193,7 +195,46 @@ Both passes independently flagged the same pre-existing, out-of-scope defect:
 §11 defines net leverage as (gross − cash) ÷ EBITDA_adj. It is byte-identical across every
 golden and untouched by this extension, so it is ticketed separately rather than folded in.
 
-**Status: G2-DIST and G3-DIST are GOSPEL.** Engine2 modules are wrong wherever they
+**Independent hostile sign-off (spec-amendment rule — separate from the adjudications
+above; the adjudicators judge the NUMBERS, this pass judges whether the amendment is
+safe to build on):**
+
+- **Round 1 (2026-07-24): REFUSED**, with the reviewer stating explicitly "I am not
+  disputing a single committed value." It independently reproduced the additivity claim
+  with its own comparator (changed=0 / removed=0 / added=270, plus a second check that
+  pruning the 8 new key names reproduces the old JSON with identical key ORDER and float
+  repr), confirmed the fixtures regenerate byte-for-byte, and verified `irr_mid_year ≡ irr`
+  at RAW float level (every interim entry is `0x0.0p+0`; `irr(cfs).hex()` equal on all 12
+  sponsor-side streams). Five BLOCKING findings, all about coverage and gates rather than
+  arithmetic, all applied in this pass:
+  1. The golden-uncovered list omitted **§12/§14.9's walk-down term** — no golden carries a
+     `bridge` block at all. Added as §17 item (x), together with the observation that §10's
+     hurdle base (TOTAL paid) and §12's walk-down (SPONSOR share) coincide only at
+     rollover = 0, which is every golden — so no fixture can distinguish them.
+  2. **§13's scenario × distributions** was neither covered nor listed. Closed with a
+     GOLDEN rather than a list entry, as the reviewer preferred: **G2-DIST-D**.
+  3. The `PENDING_G1_KEYS` guard probed a deal with NO schedule, so an engine that emitted
+     the columns only when the feature is on would have slipped past it and left the C5
+     gate skipping those columns on G1–G5 permanently. The guard now probes a LIVE schedule
+     too, and §16 states the columns are emitted unconditionally.
+  4. Four output surfaces (`returns.dpi`, `payback_year`, `irr_mid_year`, the
+     `distributions` block) had NO pending-key mechanism at all — the C6 gate hard-codes
+     cashflows/irr/moic and would have ignored them forever. A matching self-deleting guard
+     now sits in `tests/engine2-exit-returns.test.ts`.
+  5. The unlevered-membership assertion tested only stream LENGTH — vacuous, since adding
+     `paid[t]` to every interim UFCF passes it. Replaced with the byte-identity §17 and
+     this document actually claim.
+  Minor findings 6–10 applied in the same pass: DPI's VALUE is now asserted against
+  `cum / sponsor_equity` (monotonicity alone passes any wrong denominator); payback is
+  asserted against the series rather than a dead branch; §8 now REJECTS the two
+  alternatives that also close the balance sheet (expense treatment — identical BS, so
+  §14.2 cannot distinguish it; contra-asset presentation — which the fixtures DO
+  discriminate) instead of over-claiming that §14.2 forces the rule, and the changelog no
+  longer calls it a "clarification"; §16 states the ModelOutput contract; §1 resolves what
+  `irr` means under `mid_year_irr: true`; the pre-amendment §14.16 mirror in the C6 gate
+  carries an explicit note.
+
+**Status: G2-DIST, G3-DIST and G2-DIST-D are GOSPEL.** Engine2 modules are wrong wherever they
 disagree with these fixtures; disputes reopen only via spec amendment + re-derivation.
 `tests/engine2-sequence.test.ts` carries a self-deleting `PENDING_G1_KEYS` list so the C5
 gate stays green while the engine lags the fixtures; the guard test fails the moment
