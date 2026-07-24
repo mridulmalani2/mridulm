@@ -141,6 +141,7 @@ const Workbench: React.FC = () => {
   const output = useEngine2Model((s) => s.output);
   const error = useEngine2Model((s) => s.error);
   const missing = useEngine2Model((s) => s.missingFacts);
+  const sourceCurrency = useEngine2Model((s) => s.sourceCurrency);
   const build = useEngine2Model((s) => s.buildWithExhibits);
   const resuggest = useEngine2Model((s) => s.resuggest);
   if (!facts) {
@@ -160,7 +161,12 @@ const Workbench: React.FC = () => {
           Suggest everything
         </button>
       </div>
-      <div className="mb-4"><HistoryTable facts={facts} /></div>
+      <div className="mb-4">
+        <HistoryTable
+          facts={facts}
+          isoOverride={missing.includes('currency_unsupported') ? sourceCurrency : null}
+        />
+      </div>
       <MissingBar />
       <AssumptionsPanel />
       {error && <p className="text-[11px] mt-3" style={{ color: '#b91c1c', fontFamily: mono }}>{error}</p>}

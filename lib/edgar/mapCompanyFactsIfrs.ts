@@ -36,6 +36,9 @@ const LEASE_NONCURRENT = ['NoncurrentLeaseLiabilities', 'LeaseLiabilitiesNoncurr
 const LEASE_CURRENT = ['CurrentLeaseLiabilities', 'LeaseLiabilitiesCurrent'];
 const TAX_EXPENSE = ['IncomeTaxExpenseContinuingOperations', 'TaxExpenseIncome'];
 const PRETAX = ['ProfitLossBeforeTax'];
+// Net PP&E (engine2 §8 opening-roll seed) — carrying amount as presented; the
+// ROU-inclusive concept only as a stated fallback.
+const PPE = ['PropertyPlantAndEquipment', 'PropertyPlantAndEquipmentIncludingRightofuseAssets'];
 
 const KNOWN_CURRENCIES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'INR']);
 const ANNUAL_FORMS = new Set(['20-F', '20-F/A', '40-F', '40-F/A', '10-K', '10-K/A']);
@@ -164,6 +167,13 @@ export function mapCompanyFactsIfrs(
     }
   }
   const cash = cashRaw ? sv(cashRaw.value, cashRaw.prov) : null;
+  // Net PP&E at the anchor (§8 seed) — absence stays null (engine's disclosed 0-seed fallback).
+  const ppeRaw = instantAt(PPE, anchorEnd);
+  const net_ppe = ppeRaw
+    ? sv(ppeRaw.value, ppeRaw.tag === PPE[1]
+        ? { ...ppeRaw.prov, detail: `${ppeRaw.prov.detail} (incl. right-of-use assets)` }
+        : ppeRaw.prov)
+    : null;
   const net_debt = gross_debt
     ? sv(gross_debt.value - (cash?.value ?? 0), { source: 'edgar', detail: cash ? 'Gross debt − cash (derived)' : 'Gross debt (no cash at period) (derived)', tag: 'derived:NetDebt', taxonomy: T, period: anchorEnd, fy: anchorFy })
     : null;
@@ -215,6 +225,7 @@ export function mapCompanyFactsIfrs(
     gross_debt,
     cash,
     net_debt,
+    net_ppe,
     effective_tax_rate,
     nol_carryforward: null, // IFRS DTA disclosures don't map to the US NOL concept — gap by design
     sector: opts.sicDescription ? { value: 0, provenance: { source: 'edgar', detail: `SIC: ${opts.sicDescription}` } } : null,

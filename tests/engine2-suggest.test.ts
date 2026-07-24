@@ -73,7 +73,7 @@ describe('D7 — suggestion assembly (bases mandatory)', () => {
   });
 
   it('EVERY suggested field group carries a basis with kind + detail', () => {
-    for (const key of ['entry.entry_multiple', 'operations.growth', 'operations.target_margin', 'operations.nwc', 'structure.tranches', 'structure.sweep', 'tax.rate', 'fees', 'exit.multiple', 'mip', 'covenants']) {
+    for (const key of ['entry.entry_multiple', 'operations.growth', 'operations.target_margin', 'operations.maint_capex_pct_revenue', 'operations.nwc', 'structure.tranches', 'structure.sweep', 'tax.rate', 'fees', 'exit.multiple', 'mip', 'covenants']) {
       expect(basis[key]?.kind, key).toBeTruthy();
       expect(basis[key]?.detail?.length, key).toBeGreaterThan(8);
     }

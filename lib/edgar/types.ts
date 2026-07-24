@@ -81,6 +81,9 @@ export interface RawHistoricals {
   gross_debt: SourcedValue | null;           // total borrowings (£m/$m)
   cash: SourcedValue | null;                 // cash & equivalents (£m/$m)
   net_debt: SourcedValue | null;             // gross debt − cash (£m/$m)
+  /** Net PP&E at the anchor period end — seeds the engine2 §8 opening roll. Absent ⇒ null
+   *  (the engine seeds 0 WITH its disclosed warning; never a fabricated figure). */
+  net_ppe: SourcedValue | null;
   effective_tax_rate: SourcedValue | null;   // tax expense / pretax income (decimal)
   nol_carryforward: SourcedValue | null;     // NOL carryforward (£m/$m)
   sector?: SourcedValue | null;              // SIC-derived sector, when available

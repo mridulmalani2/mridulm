@@ -3,7 +3,7 @@
  * and the RawHistoricals → DealFacts adapter (gaps stay gaps; suggest+runModel e2e).
  */
 import { describe, it, expect } from 'vitest';
-import { bps, fromPctInput, headroom, money, multiple, num, pct, staleness, toPctInput } from '../lib/format';
+import { bps, fromPctInput, headroom, money, moneyIso, multiple, num, pct, staleness, toPctInput } from '../lib/format';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { suggestAssumptions } from '../lib/engine2/suggest';
 import { runModel } from '../lib/engine2/facade';
@@ -16,6 +16,13 @@ describe('lib/format — §15 display boundary (snapshot rules)', () => {
     expect(money(-42.04, 'EUR')).toBe('−€42.0m');
     expect(money(0, 'GBP')).toBe('£0.0m');
     expect(money(null, 'USD')).toBe('N/A');
+  });
+
+  it('moneyIso: an UNSUPPORTED filing currency wears its ISO code, never a borrowed symbol', () => {
+    expect(moneyIso(210838, 'SEK', 0)).toBe('SEK 210,838m');
+    expect(moneyIso(-9169, 'SEK', 0)).toBe('−SEK 9,169m');
+    expect(moneyIso(null, 'SEK')).toBe('N/A');
+    expect(moneyIso(210838, 'SEK', 0)).not.toContain('$');
   });
 
   it('pct/multiple/bps/headroom: 1dp conventions; null ⇒ N/A — 9999/99 can never render', () => {
@@ -85,6 +92,8 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     expect(missing).toEqual([]);
     expect(facts.fy_revenue).toBe(1020);
     expect(facts.fy_ebitda).toBeCloseTo(240, 9);
+    // net PP&E passes through when extracted; absent in this fixture ⇒ null (§8 fallback)
+    expect(facts.net_ppe).toBeNull();
     expect(facts.history.map((h) => h.period_end)).toEqual(['2023-12-31', '2024-12-31', '2025-12-31']);
     expect(facts.history[0].ebitda).toBeNull(); // no 2023 OpInc — the cell stays a gap
     expect(facts.effective_tax_rate).toBeCloseTo(0.24, 9);
@@ -112,5 +121,17 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     const raw = mapCompanyFacts(FIXTURE, {});
     const { missing } = adaptRawHistoricals({ ...raw, currency_unsupported: 'SEK' });
     expect(missing).toContain('currency_unsupported');
+  });
+
+  it('extracted net PP&E reaches DealFacts (kills the §8 self-inflicted warn on real filers)', () => {
+    const raw = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
+    const { facts } = adaptRawHistoricals({
+      ...raw,
+      net_ppe: { value: 480, provenance: { source: 'edgar', detail: 'PropertyPlantAndEquipmentNet' } },
+    });
+    expect(facts.net_ppe).toBe(480);
+    const { assumptions } = suggestAssumptions(facts);
+    const out = runModel(facts, assumptions);
+    expect(out.coherence.some((f) => f.message.includes('PP&E seeded at 0'))).toBe(false);
   });
 });

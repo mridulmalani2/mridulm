@@ -72,7 +72,7 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     fy_ebitda_margin: revenue > 0 ? ebitda / revenue : 0,
     da_pct_revenue: req(raw.da_pct_revenue?.value, 'da_pct_revenue', 0.03),
     maint_capex_pct_revenue: req(raw.capex_pct_revenue?.value, 'maint_capex_pct_revenue', 0.03),
-    net_ppe: null, // not extracted yet (PP&E chain is a D follow-up) — §8 seeds 0 with the WARN
+    net_ppe: raw.net_ppe?.value ?? null, // absent in the filing ⇒ §8 seeds 0 with its disclosed WARN
     operating_nwc: raw.nwc?.value ?? null,
     nwc_pct_revenue: raw.nwc_pct_revenue?.value ?? null,
     dso: raw.dso?.value ?? null,

@@ -23,6 +23,10 @@ export type FieldBasis = SuggestionBasis | { kind: 'user'; detail: string } | { 
 
 export interface Engine2ModelStore {
   facts: DealFacts | null;
+  /** The FILING's currency code as extracted (e.g. 'SEK') — when it is outside the modelled
+   *  set, facts.currency holds a display placeholder and Build is gated; display surfaces
+   *  (history table) use THIS code so an unsupported filing never wears another symbol. */
+  sourceCurrency: string | null;
   /** DealFacts paths extraction could not provide — Build is gated until confirmed. */
   missingFacts: string[];
   /** Honest-degradation notes from extraction (days gating, FPI history, currency). */
@@ -64,6 +68,7 @@ export interface Engine2ModelStore {
 
 export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   facts: null,
+  sourceCurrency: null,
   missingFacts: [],
   factNotes: [],
   assumptions: null,
@@ -75,7 +80,11 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const adapted = adaptRawHistoricals(raw);
     const facts = { ...adapted.facts, implied_trading_ev_ebitda: opts?.trading_anchor ?? null };
     const { assumptions, basis } = suggestAssumptions(facts, opts);
-    set({ facts, missingFacts: adapted.missing, factNotes: adapted.notes, assumptions, basis, output: null, error: null });
+    set({
+      facts,
+      sourceCurrency: raw.currency_unsupported ?? raw.currency,
+      missingFacts: adapted.missing, factNotes: adapted.notes, assumptions, basis, output: null, error: null,
+    });
   },
 
   resuggest: () => {
@@ -220,7 +229,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
   },
 
-  reset: () => set({ facts: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
+  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
 }));
 
 /**

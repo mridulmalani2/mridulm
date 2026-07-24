@@ -802,7 +802,12 @@ Be specific. Use the company name to infer business type and calibrate according
         useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });
         void import('../lib/edgar/quote')
           .then(({ fetchTradingAnchor }) =>
-            fetchTradingAnchor(ticker, facts, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null))
+            fetchTradingAnchor(ticker, facts, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null, {
+              // Honest-anchor gate: USD-reporting domestic 10-K filers only — an FPI's USD ADR
+              // quote over home-currency EBITDA would blend FX + the ADR ratio into a shown figure.
+              reportingCurrency: raw.currency_unsupported ?? raw.currency,
+              latestAnnualForm: filings[0]?.form,
+            }))
           .then((a) => {
             if (!a) return;
             const s = useEngine2Model.getState();

@@ -31,6 +31,7 @@ const eurFiler = (unit = 'EUR'): CompanyFacts => ({
       CashAndCashEquivalents: { units: { [unit]: [inst('2023-12-31', 250)] } },
       CurrentBorrowings: { units: { [unit]: [inst('2023-12-31', 80)] } },
       NoncurrentBorrowings: { units: { [unit]: [inst('2023-12-31', 520)] } },
+      PropertyPlantAndEquipment: { units: { [unit]: [inst('2023-12-31', 640)] } },
       LeaseLiabilities: { units: { [unit]: [inst('2023-12-31', 110)] } },
       IncomeTaxExpenseContinuingOperations: { units: { [unit]: [fy('2023-01-01', '2023-12-31', 78)] } },
       ProfitLossBeforeTax: { units: { [unit]: [fy('2023-01-01', '2023-12-31', 300)] } },
@@ -57,6 +58,15 @@ describe('D6 — IFRS 20-F filer in companyfacts (EUR happy path)', () => {
     expect(r.gross_debt?.value).toBeCloseTo(520 + 80 + 110, 9);
     expect(r.gross_debt?.provenance.detail).toContain('incl. IFRS-16 leases');
     expect(r.net_debt?.value).toBeCloseTo(710 - 250, 9);
+  });
+
+  it('net PP&E extracts at the anchor (engine2 §8 seed); absence stays null, never a gap', () => {
+    expect(r.net_ppe?.value).toBe(640);
+    const f = eurFiler();
+    delete (f as any).facts['ifrs-full'].PropertyPlantAndEquipment;
+    const rn = mapCompanyFactsIfrs(f, {});
+    expect(rn.net_ppe).toBeNull();
+    expect(rn.gaps).not.toContain('Net PP&E');
   });
 
   it('operating NWC per the D2 definition; effective tax from the filing; FY-only history note', () => {

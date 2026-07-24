@@ -85,6 +85,24 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).not.toContain('disabled');
   });
 
+  it('an UNSUPPORTED filing currency (SEK) renders its ISO code in the history — never a borrowed $ symbol', () => {
+    importFixture((f) => {
+      // re-key every unit map USD → SEK: anchor unit outside the modelled set ⇒ blocking badge
+      for (const tag of Object.keys((f as any).facts['us-gaap'])) {
+        const u = (f as any).facts['us-gaap'][tag].units;
+        u.SEK = u.USD; delete u.USD;
+      }
+    });
+    const s = useEngine2Model.getState();
+    expect(s.missingFacts).toContain('currency_unsupported');
+    expect(s.sourceCurrency).toBe('SEK');
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('SEK 1,020m');   // FY2025 revenue in ITS OWN currency code
+    expect(html).not.toContain('$');         // the placeholder symbol never reaches the table
+    expect(html).toContain('not supported'); // the D6 blocking line still shows
+    expect(html).toContain('disabled');      // and Build stays gated
+  });
+
   it('a cheap trading anchor produces the coherence banner after build (warn glyph, message)', () => {
     importFixture(undefined, 6.0);
     useEngine2Model.getState().build();

@@ -45,6 +45,8 @@ const AMORTISATION = ['AmortisationExpense', 'AmortisationOfIntangibleAssetsOthe
 const PRETAX = ['ProfitLossBeforeTax'];
 const TAX = ['IncomeTaxExpenseContinuingOperations', 'TaxExpenseIncome'];
 const CASH = ['CashAndCashEquivalents'];
+// Net PP&E (engine2 §8 opening-roll seed) — carrying amount; ROU-inclusive concept as stated fallback.
+const PPE_NET = ['PropertyPlantAndEquipment', 'PropertyPlantAndEquipmentIncludingRightofuseAssets'];
 const BORROW_TOTAL = ['Borrowings', 'BorrowingsAndLeaseLiabilities'];
 const BORROW_NONCURRENT = ['NoncurrentBorrowings', 'BorrowingsNoncurrent', 'NoncurrentPortionOfNoncurrentBorrowings'];
 const BORROW_CURRENT = ['CurrentBorrowings', 'BorrowingsCurrent', 'CurrentPortionOfNoncurrentBorrowings'];
@@ -333,6 +335,13 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   // ── Cash ──
   const cashHit = ifrsInstant(CASH);
   const cash = cashHit ? sv(cashHit.value, provHit(cashHit)) : null;
+  // Net PP&E at the anchor (§8 seed) — absence stays null (engine's disclosed 0-seed fallback).
+  const ppeHit = ifrsInstant(PPE_NET);
+  const net_ppe = ppeHit
+    ? sv(ppeHit.value, localOf(ppeHit.concept ?? '') === PPE_NET[1]
+        ? { ...provHit(ppeHit), detail: `${provHit(ppeHit).detail} (incl. right-of-use assets)` }
+        : provHit(ppeHit))
+    : null;
 
   // ── NWC = current assets − current liabilities ──
   const sumParts = (parts: Array<Hit | null>, labels: string[], min: number): Hit | null => {
@@ -450,6 +459,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     gross_debt,
     cash,
     net_debt,
+    net_ppe,
     effective_tax_rate,
     nol_carryforward: null,   // not consistently tagged in ESEF
     sector: null,
