@@ -24,6 +24,7 @@ const LEI_RE = /^[A-Za-z0-9]{18,20}$/;
 const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const importFromEdgar = useDealEngineStore((s) => s.importFromEdgar);
   const importFromEsef = useDealEngineStore((s) => s.importFromEsef);
+  const loadModel = useDealEngineStore((s) => s.loadModel);
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
 
@@ -154,6 +155,15 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
               Manual entry (private)
             </button>
           </div>
+
+          {/* F2 / OWNER #2: previous-engine .json saves still open (old flow + banner) —
+              this is the load path now that the classic screens are no longer the default. */}
+          <label className="block mt-3 text-[10px] tracking-widest uppercase text-center cursor-pointer"
+            style={{ color: 'rgba(17,17,17,0.35)', fontFamily: mono }}>
+            <input type="file" accept=".json" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadModel(f); e.target.value = ''; }} />
+            open a saved model (.json — previous engine)
+          </label>
 
           {/* Optional AI key — reused by AI-suggest on the next screen */}
           <ApiKeyInline />

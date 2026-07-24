@@ -144,6 +144,7 @@ const Workbench: React.FC = () => {
   const sourceCurrency = useEngine2Model((s) => s.sourceCurrency);
   const build = useEngine2Model((s) => s.buildWithExhibits);
   const resuggest = useEngine2Model((s) => s.resuggest);
+  const reset = useEngine2Model((s) => s.reset);
   if (!facts) {
     return <p className="text-[11px] p-6" style={labelStyle}>Import a company first (Screen 1) — the v2 workbench reads the engine2 store.</p>;
   }
@@ -156,10 +157,18 @@ const Workbench: React.FC = () => {
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-baseline justify-between mb-1">
         <h2 className="text-sm tracking-widest uppercase" style={{ fontFamily: mono, color: '#111' }}>{facts.entity_name}</h2>
-        <button onClick={resuggest} className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
-          style={{ border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono }}>
-          Suggest everything
-        </button>
+        <span className="flex items-center gap-1.5">
+          {/* F2: the workbench is the default screen — this is the way back to Screen 1
+              (engine2 reset only; the page re-renders the source screen on empty facts). */}
+          <button onClick={reset} className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
+            style={{ border: '1px solid rgba(17,17,17,0.2)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
+            ← New import
+          </button>
+          <button onClick={resuggest} className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
+            style={{ border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono }}>
+            Suggest everything
+          </button>
+        </span>
       </div>
       <div className="mb-4">
         <HistoryTable

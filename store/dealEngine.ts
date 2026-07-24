@@ -27,6 +27,9 @@ import { mapIfrsReport } from '../lib/edgar/mapIfrs';
 import { draftModelFromHistoricals, inferSector } from '../lib/edgar/buildModel';
 import type { RawHistoricals, ProvenanceMap, Provenance } from '../lib/edgar/types';
 import { isMissing } from '../lib/edgar/missing';
+import { useEngine2Model } from './engine2Model';
+import { fetchTradingAnchor } from '../lib/edgar/quote';
+import type { CompanyFacts } from '../lib/edgar/client';
 
 // ── LBO Financial Sanity Check ──────────────────────────────────────────
 // Derived from first principles:
@@ -220,6 +223,35 @@ interface DealEngineStore {
   aiSuggestAssumptions: () => Promise<void>;
   /** Commit the reviewed draft → full model, switch to the model screen. */
   buildModelFromDraft: () => void;
+}
+
+/**
+ * F2 — ONE feeder from every import route (EDGAR / ESEF / manual) into the engine2 store,
+ * so the v2 workbench (the default engine) always has facts the moment an import lands.
+ * The D5 trading anchor resolves best-effort in the background: the honest-anchor gate
+ * (domestic 10-K + USD — lib/edgar/quote.ts) nulls it for anyone whose quote/share-count
+ * pairing can't be verified, and the untouched-guard never clobbers user work.
+ */
+function feedEngine2FromImport(
+  raw: RawHistoricals,
+  quote?: { ticker?: string; factsPayload: CompanyFacts; latestAnnualForm?: string },
+): void {
+  useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });
+  if (!quote?.ticker) return;
+  void fetchTradingAnchor(quote.ticker, quote.factsPayload, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null, {
+    reportingCurrency: raw.currency_unsupported ?? raw.currency,
+    latestAnnualForm: quote.latestAnnualForm,
+  })
+    .then((a) => {
+      if (!a) return;
+      const s = useEngine2Model.getState();
+      // never clobber work: enrich only while this exact import sits untouched
+      const untouched = s.facts?.entity_name === raw.entityName
+        && s.output === null
+        && !Object.values(s.basis).some((b) => b.kind === 'user');
+      if (untouched) useEngine2Model.getState().importFromRaw(raw, { trading_anchor: a.ev_ebitda });
+    })
+    .catch(() => undefined);
 }
 
 export const useDealEngineStore = create<DealEngineStore>((set, get) => ({
@@ -794,31 +826,10 @@ Be specific. Use the company name to infer business type and calibrate according
         ? mapCompanyFactsIfrs(facts, { sicDescription })
         : mapCompanyFacts(facts, { sicDescription, sicCode });
 
-      // E1 production wiring: the SAME extraction feeds the engine2 store (the v2 flow at
-      // ?v2=1). The D5 trading anchor resolves best-effort in the background — null (no
-      // key / no ticker / implausible) simply never renders, and a late anchor re-imports
-      // with identical facts, which only enriches the coherence input pre-build.
-      void import('./engine2Model').then(({ useEngine2Model }) => {
-        useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });
-        void import('../lib/edgar/quote')
-          .then(({ fetchTradingAnchor }) =>
-            fetchTradingAnchor(ticker, facts, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null, {
-              // Honest-anchor gate: USD-reporting domestic 10-K filers only — an FPI's USD ADR
-              // quote over home-currency EBITDA would blend FX + the ADR ratio into a shown figure.
-              reportingCurrency: raw.currency_unsupported ?? raw.currency,
-              latestAnnualForm: filings[0]?.form,
-            }))
-          .then((a) => {
-            if (!a) return;
-            const s = useEngine2Model.getState();
-            // never clobber work: enrich only while this exact import sits untouched
-            const untouched = s.facts?.entity_name === raw.entityName
-              && s.output === null
-              && !Object.values(s.basis).some((b) => b.kind === 'user');
-            if (untouched) useEngine2Model.getState().importFromRaw(raw, { trading_anchor: a.ev_ebitda });
-          })
-          .catch(() => undefined);
-      });
+      // F2 production wiring: the SAME extraction feeds the engine2 store SYNCHRONOUSLY
+      // (engine2 is the default engine — the workbench must be renderable the moment the
+      // import lands). The D5 trading anchor still resolves best-effort in the background.
+      feedEngine2FromImport(raw, { ticker, factsPayload: facts, latestAnnualForm: filings[0]?.form });
       const sector = opts?.sector ?? inferSector(sicDescription);
       const { state, provenance } = draftModelFromHistoricals(raw, {
         dealName: opts?.dealName ?? raw.entityName,
@@ -867,6 +878,9 @@ Be specific. Use the company name to infer business type and calibrate according
       const filing = filings[0];
       const report = await getEsefReport(filing.jsonUrl);
       const raw = mapIfrsReport(report, { entityName: opts?.dealName ?? filing.entityName, reportUrl: docUrl(filing) });
+      // F2: ESEF imports feed the default (engine2) workbench too — no quote context
+      // (no US listing pairing to verify, so the honest-anchor gate stays closed).
+      feedEngine2FromImport(raw);
       const sector = opts?.sector ?? 'Other';
       const { state, provenance } = draftModelFromHistoricals(raw, {
         dealName: opts?.dealName ?? filing.entityName ?? raw.entityName,
@@ -894,6 +908,8 @@ Be specific. Use the company name to infer business type and calibrate according
     const sector = opts?.sector ?? inferSector(raw.sector?.provenance.detail);
     const { state, provenance } = draftModelFromHistoricals(raw, { dealName: opts?.dealName ?? raw.entityName, sector });
     const recalc = fullRecalc(state);
+    // F2: manual entry feeds the default (engine2) workbench too — no quote context.
+    feedEngine2FromImport(raw);
     set({ rawHistoricals: raw, provenanceMap: provenance, modelState: recalc, startScreen: 'assumptions', sourceFilings: [] });
   },
 
