@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.1.3 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.2.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -50,7 +50,115 @@ never as alpha; the UI must not promise a percentage-point effect the engine can
 v2 upgrade path: XIRR on actual close/exit dates with a first-year stub (DR-2's preferred
 practice), which retires the convention toggle entirely.
 
-Deferred: quarterly periods, day-count computation (disclosed-bias note in §4 instead).
+## §1.1 Entry EBITDA basis — LTM quarter-stitch [v1.2.0 — G-2; DATA-SIDE, engine unchanged]
+
+**The problem this closes.** §11 sizes leverage and tests covenants on "FY(LTM) EBITDA", but
+the extraction layer today feeds the engine the latest COMPLETE fiscal year only — which can
+be up to ~15 months stale by the time a deal is modelled (a filer 11 months into its next
+year, plus the ~45-day 10-Q / ~60–90-day 10-K filing lag). For a fast-growing or
+recently-impaired target that materially misstates current EBITDA, and every downstream
+number (entry EV at a fixed multiple, leverage, the whole model) inherits the error. G-2
+makes the sizing figure the most-current TRAILING-TWELVE-MONTHS value when interim filings
+allow, and DISCLOSES the as-of date and basis when they do not.
+
+**This is a DATA-SIDE feature (Tier B).** The ENGINE is unchanged: it still consumes exactly
+one EBITDA number (`DealFacts.fy_ebitda`) and one revenue number, through the same arithmetic.
+G-2 only changes WHAT that number is (a stitched LTM instead of the last FY) and adds its
+provenance/as-of. **Every §17 golden is a MANUAL input set, not EDGAR-derived, so all
+`tests/goldens/*` fixtures regenerate BYTE-IDENTICALLY** — that byte-identity is the Tier-B
+admission ticket (rebuild/PHASE_G_EXTENSIONS.md). The new arithmetic is the STITCH, adjudicated
+by DATA-LAYER fixtures, not by the engine goldens. (Distinct from the deferred *quarterly
+engine periods* below — that would change §1's period model and is Tier A; this does not.)
+
+**Convention.** The sizing EBITDA (and revenue) is the most-current 12-month figure available:
+- **LTM-stitched** when the filer has interim filings covering a partial current year; else
+- **the latest complete fiscal year (FY)**, with staleness disclosed;
+- **never** an annualized partial period (see rejected alternatives).
+
+**The stitch (normative formula).** For a duration metric M, with the latest complete fiscal
+year FY covering [Y_start, Y_end] and the most-recent interim period ending at date `e` (the
+current partial year running from the current fiscal start `C_start` to `e`):
+```
+LTM(M) = FY(M)  +  YTD_current(M)  −  YTD_prior(M)
+  FY(M)           = M over [Y_start, Y_end]                       (the last full year)
+  YTD_current(M)  = M over [C_start, e]                           (this year, through e)
+  YTD_prior(M)    = M over [C_start − 1yr, e − 1yr]               (last year, same span)
+```
+LTM(M) is then the trailing twelve months ending at `e` = (Y_end + the fraction of the year
+past Y_end represented by e) — algebraically it telescopes to "the 12 months ending at `e`".
+The three spans must ALIGN (same fiscal-quarter count in YTD_current and YTD_prior; FY the
+full year immediately preceding the current partial). **Q4-standalone fallback:** US GAAP
+filers report YTD figures in 10-Qs and only the FULL year in the 10-K (a standalone Q4 is
+rarely filed). When only YTD + FY exist, the standalone final stub is `Q_last = FY − YTD_9M`;
+the stitch above never needs a standalone quarter, but a stub is required to build a clean
+quarterly SERIES for display and is computed this way.
+
+**Derived EBITDA stitches per COMPONENT.** EBITDA is not a filed tag; it is
+OperatingIncome + D&A (or the §7 component chain). LTM EBITDA = LTM(operating income) +
+LTM(D&A) — each component stitched independently and combined ONLY where all three spans
+(FY, YTD_current, YTD_prior) resolve for EVERY component. If any component is missing at any
+of the three spans, the stitch is REFUSED for EBITDA and the basis falls back to FY with a
+disclosed note — never a partial-component fake total (the D1 honesty rule, history.ts rule 5).
+
+**52/53-week filers and fiscal-year changes.** Spans are identified by FISCAL-PERIOD role
+(full year / 9-month YTD / quarter), NOT by exact day count, because 52/53-week retailers and
+mid-history fiscal-year changes make exact counts unreliable. The day-count windows widen
+accordingly and extend the existing history.ts full-year rule (350–380 days): full year
+350–380, 9-month YTD 250–285, 6-month YTD 165–200, quarter 80–100. A span whose duration
+falls in no window is not used for stitching (it stays a hole, honestly). Period identity
+remains END-DATE-keyed (D1 rule 3); restatements take the latest `filed` vintage (rule 2);
+tags resolve per-period (rule 1) and a component whose tag differs across the three stitch
+spans is flagged.
+
+**Foreign private issuers (FPI) / no-interim filers.** A 20-F filer (e.g. SAP) files
+ANNUALLY only — no 10-Q, no YTD points — so the stitch is impossible and the basis is the
+latest FY. This is the CORRECT behaviour, not a degradation, but it must be DISCLOSED: the
+sizing EBITDA carries an as-of date (the FY period end) and a **staleness badge** by the age
+of that anchor relative to the import date:
+```
+fresh   : anchor ≤ 4.5 months old   (within one quarter + a normal filing lag)
+aging   : 4.5–13.5 months           (a quarter has closed unreported, or an FY is imminent)
+stale   : > 13.5 months             (a full annual period has closed unreported)
+```
+The 4.5 / 13.5 thresholds are the reporting cadence (US domestic: 10-Q within ~40–45 days of
+quarter end, 10-K within ~60–90 days of year end; the FPI 20-F is due within 4 months of
+year end) — a disclosed convention, not a magic number, and cited as such. A STITCHED LTM
+also carries an as-of (its `e`) and the same badge scale (a stitched figure is rarely worse
+than `aging`). The badge marks the AS-OF; it never changes a number.
+
+**Provenance.** The stitched figure records its inputs on the fact's provenance:
+`LTM ending <e> = FY<year> <v1> + YTD <span> <v2> − prior-YTD <v3>`, so the number traces to
+the three filed spans (the §15 traceability rule at the data boundary). The FY-fallback records
+`FY<year> as-of <period_end>, <n> months stale — no interim filings`. Neither path invents a
+value: a metric the stitch cannot build stays FY (or MISSING if even FY is absent), never a
+default.
+
+**Rejected alternatives.**
+1. *Latest complete FY only* (the status quo). Rejected — up to ~15 months stale; badly
+   misstates current EBITDA for a fast mover or a company past a recent impairment/step-change,
+   and the error compounds through entry EV → leverage → the whole model.
+2. *Annualize the latest quarter × 4* (or the latest YTD ÷ fraction × 1). Rejected — ignores
+   SEASONALITY; a Q4-heavy retailer's Q1 × 4 is wildly wrong. The stitch uses a full trailing
+   year and is seasonality-neutral by construction.
+3. *Average four standalone quarters.* Rejected — fragile: filers report YTD, not always
+   standalone quarters, and a standalone Q4 is rarely filed. The YTD-based stitch uses figures
+   filers actually report and needs fewer of them.
+4. *Change the engine to quarterly periods* to get currency. Rejected here — that is the
+   Tier-A "quarterly engine periods" deferral (below), a different and larger change; LTM
+   stitching gets currency on the SIZING FACT without touching the annual engine.
+
+**Golden/adjudication [Tier B].** Adjudicated by DATA-LAYER fixtures — synthetic
+companyfacts-shaped inputs with quarterly/YTD points — whose stitched output is independently
+hand-derived (the Phase-B adjudication rule, redirected at the stitch). Required fixtures:
+(i) a clean US GAAP domestic filer mid-year (Q3 interim) — the FY + YTD − prior-YTD path;
+(ii) a 52/53-week filer — the widened day-count windows;
+(iii) an FPI / annual-only filer — the FY-fallback + staleness badge, no stitch;
+(iv) a missing-component case — the per-component refusal → FY fallback with a note;
+(v) a fiscal-year-change / span-hole case — a stub duration in no window is not used.
+The engine goldens are NOT regenerated; their byte-identity is asserted as the Tier-B ticket.
+
+Deferred: quarterly ENGINE periods (a §1 period-model change, Tier A — distinct from the
+data-side LTM stitch above), day-count computation (disclosed-bias note in §4 instead).
 
 ## §2 Sources & Uses at close [CONFIRMED DR-2]
 
@@ -476,7 +584,7 @@ ICR = EBITDA_adj / cash interest; FCCR = (EBITDA_adj − maint capex − cash ta
 interest + commitment fees + mandatory amort); DSCR = FCF_pre_debt / (same denominator).
 **Only scheduled service in the DSCR denominator — never discretionary sweeps** [CONFIRMED
 DR-1 Item 8]. **Leverage sizing and every covenant test use FY(LTM) EBITDA even when the
-valuation basis is NTM** — lender convention; if entry is NTM-based the UI shows both, LTM
+valuation basis is NTM** — lender convention; the "(LTM)" is realized by §1.1's quarter-stitch [v1.2.0] (the sizing fact is the trailing-twelve-months figure when interim filings allow, else the latest FY with staleness disclosed); if entry is NTM-based the UI shows both, LTM
 canonical. **[v1.1.3 — now implemented]** the entry multiple (`derived.entry_multiple`) is
 the multiple on the VALUATION basis — EV ÷ FY EBITDA under an FY entry, but EV ÷ (FY ×
 (1 + growth[0])) under an NTM entry (§9). Every surface that shows it therefore LABELS it by
@@ -679,6 +787,14 @@ Structural gate [v1.0.3]: term-tranche maturity > `hold_years` (§3) is validate
 Structural gates [v1.0.4 — stated; already enforced]: tranche NAMES are unique (they key
 the §7 write-off schedules and retirement reporting); the revolver's `drawn_at_close` = 0
 in v1 (§2 has no drawn-revolver source line).
+Schema additions [v1.2.0 — G-2, Class A / data-side, realized in the G-2 data PR]:
+`DealFacts.fy_ebitda` / `fy_revenue` keep their names and engine role but their VALUE becomes
+the §1.1 LTM-stitched figure when interim filings allow; the fact gains an `as_of` date (the
+LTM end `e`, or the FY period end on fallback), a `basis: 'ltm_stitched' | 'fy'` marker, and
+a staleness tier — Class A provenance the UI renders as a badge (§1.1). The ENGINE contract is
+unchanged (it still reads one EBITDA/revenue number); this is a data-layer enrichment, so
+every §17 golden (manual inputs) is byte-identical. No new REQUIRED field: a metric the stitch
+cannot build falls back to FY, and FY-absent stays MISSING exactly as today.
 Schema additions [v1.1.0 — G-1]: `structure.distributions: number[] | null` — the per-year
 REQUESTED distribution amounts ($m, length `hold_years`; null ≡ all-zero ≡ feature off, so
 every pre-v1.1.0 deal and every suggestion default is byte-identical to before); and
@@ -909,6 +1025,7 @@ rather than something discovered as a red test (found by the hostile sign-off, r
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.2.0 | 2026-07-25 | **PHASE G-2 FEATURE AMENDMENT (spec-first; NO engine/UI/data code in this version) — quarter-stitched LTM sizing basis. DATA-SIDE (Tier B): the ENGINE is unchanged and every §17 golden regenerates BYTE-IDENTICALLY (the Tier-B admission ticket); only the extraction layer changes WHAT `fy_ebitda`/`fy_revenue` is.** §1.1 added: the sizing EBITDA/revenue becomes the most-current trailing-twelve-months figure — `LTM(M) = FY(M) + YTD_current(M) − YTD_prior(M)` (normative), telescoping to the 12 months ending at the latest interim period end `e`; Q4-standalone stub `= FY − YTD_9M` for the display series; derived EBITDA stitches PER COMPONENT (OI + D&A) and refuses (→ FY fallback + note) if any component is absent at any of the three spans (D1 no-fake-total rule). Spans identified by fiscal-period ROLE with widened day-count windows (full year 350–380, 9M 250–285, 6M 165–200, quarter 80–100) for 52/53-week filers and fiscal-year changes; END-date keyed, latest-vintage restatement, per-period tag resolution (history.ts D1 rules 1–3,5 reused). FPI / annual-only filers (20-F, e.g. SAP) cannot stitch ⇒ latest FY with an as-of and a **staleness badge** (fresh ≤4.5m / aging 4.5–13.5m / stale >13.5m — the reporting cadence, cited, not a magic number). Provenance records the three filed spans (or the FY-fallback age); no value is invented — a metric the stitch cannot build stays FY or MISSING, never a default. §11's "FY(LTM)" is now realized by §1.1. Rejected: latest-FY-only (status quo, up to ~15m stale); annualize a partial period ×4 (ignores seasonality); average 4 standalone quarters (fragile — filers report YTD); change the engine to quarterly periods (that is the Tier-A deferral, a different change). Adjudicated by DATA-LAYER fixtures (US-GAAP mid-year stitch / 52-53-week / FPI-fallback / missing-component refusal / span-hole), independently hand-derived; engine goldens NOT regenerated. Independent hostile sign-off on this amendment + the Tier-B classification pending (iterate until GRANTED before any code). | Phase G-2 template step 1 (Tier B, rebuild/PHASE_G_EXTENSIONS.md); backlog #2 |
 | v1.1.3 | 2026-07-25 | **DISPLAY-ONLY LABEL FIX — zero arithmetic change, no golden touched.** The entry multiple was hard-labelled `'Entry multiple (FY)'` in the Excel Summary sheet and stated as `at X FY EBITDA` in the downloaded memo, but `derived.entry_multiple` is on the VALUATION basis — NTM-based under an NTM entry (§9), where those labels are FALSE (same defect class as the v1.1.2 entry-leverage rename: the value is correct, the label was not). §11 already decided the convention ("if entry is NTM-based the UI shows both, LTM canonical"); this IMPLEMENTS it via one shared display helper `entryMultipleDisplay` (`facade.ts`) used by all three surfaces (Excel, memo, Summary tile): the multiple is labelled by its actual basis, and under NTM the FY/LTM-canonical figure (EV ÷ `entry_ebitda_for_sizing`, always FY) is shown alongside. FY deals are byte-identical. NTM is golden-uncovered (§9), so it is pinned by DIRECTED tests + mutation on each surface (hard-coding the basis label, dropping the canonical row, and reverting the memo clause each turn a test red). No spec GAP — §11 was already decided; this is code catching up to it. | Open ticket (pre-existing, deferred from G-1); no amendment needed (implements existing §11) |
 | v1.1.2 | 2026-07-24 | **NAMING + LABEL CORRECTION — zero arithmetic change; every golden VALUE byte-identical (one fixture KEY renamed, proved leaf-by-leaf: 1 removed / 1 added per golden, 0 changed).** `derived.entry_net_leverage_fy` was named "net" but always computed GROSS (total par ÷ FY EBITDA). Both Phase G-1 adjudicators flagged it independently. **The value is correct and stays** — gross is what the market quotes and what §17 sizes tranches on — so this is option (a), a rename, not a re-derivation: field → **`entry_gross_leverage_fy`**, and §11 now states the convention with its rejected alternative (netting against funded min-cash) and the reason. **The defect reached three DISPLAYED surfaces, two of them falsely**: the Excel export row `'Entry net leverage (FY)'` and the same line in the DOWNLOADED IC MEMO (`memoSkeleton` → `<Entity>_memo.md`; **not** a prompt — the first draft of this row called it one, which the hostile sign-off corrected) each sat directly above a genuinely-net final-year figure, so both read as one series across two bases and OVERSTATED deleveraging by the min-cash artifact (G2 would show 4.0x → 0.86x where the like-for-like gross entry figure is 4.0x and the net entry figure is 3.909x). All three labels now say GROSS, the basis divergence is disclosed in the memo's `## Caveats` section, on the Excel `Methodology` sheet and in the Credit tab/sheet headers, and all three labels are now ASSERTED by tests — they were not, which is why the original defect was undetectable. **The old code comment is also corrected**: it justified the value by asserting that in the cash-free/debt-free frame "entry net debt ≡ par because min-cash is new money" — a false premise (the t=0 BS holds the cash; being newly funded explains why it is there, not why it is not cash). §11 records the remaining disclosed gap: ModelOutput carries no entry-date NET leverage; §11 now also states that the deferral is a product call about headline surfaces, not a measure of effort (the numerator already exists in `facade.ts` and is already displayed via §12's paydown bar). **Hostile sign-off round 1 REFUSED** with 5 blocking findings, all applied: the displayed number had ZERO engine-side test coverage (proved by mutation — the net definition AND a hard-coded 99.0 sentinel both passed 373/373); the added assertion reduced algebraically to `min_cash > 0`; the memo 'fix' wrote an IMPERATIVE into a user-facing deliverable; a second copy of the false-premise comment survived; §11's new labelling rule was breached by the very artifacts this change shipped; and zero label assertions were added for a defect that WAS a label. §11's rejection also gained its strongest argument (minimum operating cash is not surplus cash — credit agreements net only unrestricted cash, and §3.7 already treats floor cash as unavailable), the first two reasons having been circular and secondary. **Round 2 GRANTED (2026-07-25)** — an independent reviewer reproduced every fix on an isolated tree: both round-1 mutations (net definition AND the 99.0 sentinel) now go RED through the new C5-gate assertion; the imperative is out of the downloaded memo; the false-premise duplicate is gone; all three labels are mutation-tested; the zero-arithmetic claim reproduces (changed=0, one key renamed per golden). Three new residuals, all cosmetic and non-blocking: F2's gap assertion is algebraically a `gross == Σpar/EBITDA` test (insensitive to the cash VALUE, though it decisively catches the net-definition drift it targets); the fc210d3 message said "nine goldens" where the C5 loop is 8 (G2-D shares G2's entry S&U, covered by the C2 gate); the UI Credit tab header is still bare "Net lev" with the basis in the note directly below. | Independently flagged by BOTH Phase G-1 adjudicating agents, 2026-07-24 (adjudication passes 4a and 4b, `tests/goldens/DERIVATION.md`); owner-directed fix; independent hostile sign-off round 1 REFUSED → round 2 GRANTED |
 | v1.1.1 | 2026-07-24 | **PHASE G-1 GOLDEN EXTENSION (template step 2; still NO engine/UI code).** Three new §17 goldens, each holding its base golden constant so every difference is attributable to §3 step 7 alone: **G2-DIST** (= G2 + `distributions [25,25,25,10,8]` + `rp_trap {net_leverage, 2.75}`) exercises all four cap branches — fully trap-blocked / partially trap-blocked / cash-capped / request-capped — plus a year-N payment and the §1 mid-year check value (sponsor IRR 13.3906% period-end vs 13.4572% mid-year); **G3-DIST** (= G3 + `distributions [20,15,25,22,20]`, trap OFF) exercises the null-trap branch under LIVE requests and pins §10's amended hurdle base (MIP 16.53 vs 1.82 under the pre-v1.1.0 rule — a 9.1× discriminator). Both assert entry S&U byte-identical to their base (step 7 is post-close) and an unlevered stream byte-identical to their base (§9 exclusion). **Existing fixtures: ZERO numeric movement — the regeneration is provably ADDITIVE** (leaf-by-leaf: 0 changed, 0 removed, 270 added across G1–G5/G2-D; all six schedule.csv diffs are pure appends). New fixture columns: `waterfall[].distribution_requested / rp_max / distribution_paid / distribution_blocked`, `returns.dpi / payback_year`, `returns.{sponsor_net,pre_promote}.irr_mid_year`, and a `distributions` block. **G2-DIST-D** (= G2-DIST + G2-D's operating deltas, with the request schedule and trap level UNCHANGED) proves §13's freeze rule: same policy, weaker EBITDA, and year 2 flips from paid 12.09 to fully BLOCKED (rp_max 0) — cumulative 45.43 → 35.25, sponsor IRR 13.3906% → 8.9638%. One wording clarification the goldens FORCED, matching shipped behaviour with zero numeric change: **§1 stream scope** — the mid-year option applies to the sponsor-side streams only (this is what makes v1.1.0's inertness claim true: the unlevered stream carries interim UFCF in every deal); And one NEW normative rule filling a hole v1.1.0 shipped with (NOT a clarification — there was no prior behaviour to match): **§8 equity roll** — equity[t] = equity[t−1] + NI[t] − paid[t]. §14.2's BS-close forces *an* offsetting entry but does not by itself pick this one, so §8 now REJECTS the two alternatives that also close: expense treatment (identical BS — rejected because it would contaminate NI/EBIT and the §6 tax base) and the contra-asset presentation (which the fixtures DO discriminate). §17 also records the branches left golden-uncovered BY DESIGN, each with its reason and a required engine-side fixture. **Adjudication pass 4 (two independent hand-derivations, 392 + 397 lines, ZERO mismatches beyond tolerance — SIGNED; DERIVATION.md) also returned four findings applied in this version**: (a) the golden-uncovered list was INCOMPLETE — added (vi) step 7 inside a revolver-draw/floor-breach year, (vii) the inner `min(request, cash cap)` of the blocked FLAG, (viii) `rollover_equity > 0`'s pari-passu split, (ix) §14.18's credit-metric exclusion (the reference derivation emits no `credit` block); (b) §3.7 gains the DRAW-INVARIANCE result — `rp_max` is unchanged by a step-6 draw because *d* enters `cash` and `gross_debt_end` alike, so "never revolver-funded" holds independently of the step order; (c) §9's membership table gains a LEGEND — `out (−)` (in the stream, as t=0 outflow) vs `excluded` (not in the stream) are not synonyms, and an adjudicator misread it on first pass; (d) §1's drafted "~0.5–1.0pp" mid-year magnitude is CORRECTED — the non-shifting exit flow dominates, so the measured uplift is +6.7bp (G2-DIST) and +22.0bp (G3-DIST), and the UI must not promise a pp-scale effect. Both passes separately flagged a PRE-EXISTING out-of-scope defect (`derived.entry_net_leverage_fy` is gross while §11 defines net) — ticketed, not folded in. **Independent hostile sign-off round 1 REFUSED** — explicitly "not disputing a single committed value", but with 5 BLOCKING coverage/gate findings, all applied here: (i) the uncovered list still omitted §12/§14.9's walk-down term (no golden carries a `bridge` block) — now item (x), with the §10-TOTAL vs §12-SPONSOR-SHARE divergence that no rollover-0 fixture can distinguish; (ii) §13's scenario × distributions was neither covered nor listed — closed with the **G2-DIST-D golden**, not a list entry; (iii) the `PENDING_G1_KEYS` guard probed a deal with NO schedule, so an engine emitting the columns only when the feature is ON would have slipped past it and left the C5 gate skipping them on G1–G5 forever — the guard now probes a LIVE schedule and §16 requires unconditional emission; (iv) `returns.dpi` / `payback_year` / `irr_mid_year` / the `distributions` block had NO guard at all — a matching self-deleting guard now sits in the C6 gate; (v) the unlevered-membership assertion tested only stream LENGTH (vacuous — adding `paid[t]` to every UFCF passes it) — replaced with the byte-identity actually claimed. Minors also applied: DPI's VALUE now asserted against `cum ÷ sponsor_equity`; §16 states the ModelOutput contract (incl. `rp_max` null ⇔ +∞ and unconditional emission); §1 resolves what `irr` means under `mid_year_irr: true` (both always carried; the toggle only selects the headline). **Round 2 GRANTED** with three text-only conditions, applied here: (a) a duplicated clause my §10 edit left behind, removed; (b) §17 item **(xi)** for §3.7's coherence WARN — the reference derivation emits no `coherence` block, so only the WARN's CONDITION is pinned — together with the convention amendment it forces: `engine2-facade-scenarios.test.ts` asserts `coherence == []` for every golden, and G2-DIST/G2-DIST-D are deliberate exceptions (a blocked distribution is the trap working, not an incoherent deal), decided here rather than discovered as a red test; (c) §16's output-contract omissions closed — `ScenarioResult.waterfall`'s two added fields, plus a statement that the fixtures' top-level `distributions` block is FIXTURE-ONLY and must not become a ModelOutput surface (every value is derivable from `waterfall[]`, so it would be a second path). Round 2 verified the guards by MUTATION on an isolated tree: the conditional-emission engine that defeated the round-1 guard is caught by the round-2 guard, and `rp_max: null` / `payback_year: null` — the natural feature-off values that a `toBeFalsy()` would have let through — are caught too. | Phase G-1 template step 2; reference derivation `scripts/goldens/spec_calc.py`; adjudication pass 4a/4b + independent hostile sign-off (round 1 REFUSED → round 2 GRANTED) recorded in `tests/goldens/DERIVATION.md` |
