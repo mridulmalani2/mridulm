@@ -1,4 +1,11 @@
-# Deal Engine v2 — Rebuild Program
+# Deal Engine v2 — Rebuild Program — ✅ COMPLETE (2026-07-24)
+
+**All phases 0/A/B/C/D/E/F are DONE.** engine2 is the only engine (cutover PR #98;
+deletion tail owner-accelerated the same day — the one-clean-week soak was waived by
+owner decision, with tag `pre-deletion-lib-engine` + PR-revert as the rollback).
+`rebuild/DIFF_LEDGER.md` and `rebuild/F1_DIFFERENTIAL.md` are FROZEN historical records.
+Phase G (staged extensions) is the live program: G-1 (interim distributions + RP cash
+trap) SPEC v1.1.0 amendment is merged (PR #101); next is its golden extension.
 
 This directory is the complete, self-contained plan for the ground-up overhaul of the LBO
 toolkit (mridulmalani.com/research/toolkit). It was produced by reverse-engineering the live

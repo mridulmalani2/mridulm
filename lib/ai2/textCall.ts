@@ -5,10 +5,10 @@
  * no tools — the E4 modules parse strict JSON or markdown from plain text.
  */
 
-import { buildProviderConfig, type AIProvider } from '../engine/ai/providers';
-import { buildAnthropicRequest, extractAnthropicText } from '../engine/ai/adapters/anthropic';
-import { buildOpenAIRequest, extractOpenAIText } from '../engine/ai/adapters/openai';
-import { buildGoogleRequest, extractGoogleText } from '../engine/ai/adapters/google';
+import { buildProviderConfig, type AIProvider } from './gateway/providers';
+import { buildAnthropicRequest, extractAnthropicText } from './gateway/adapters/anthropic';
+import { buildOpenAIRequest, extractOpenAIText } from './gateway/adapters/openai';
+import { buildGoogleRequest, extractGoogleText } from './gateway/adapters/google';
 
 export type AiTextFn = (system: string, user: string) => Promise<string>;
 

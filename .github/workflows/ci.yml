@@ -24,26 +24,6 @@ jobs:
       - name: Type check + production build
         run: npm run build
 
-  # ── Dual-engine regime (rebuild/PHASE_A_SPEC.md §A4) ──────────────────────
-  # lib/engine + lib/dealEngineTypes.ts are FROZEN while lib/engine2 is built.
-  # A PR touching them fails unless it carries the FREEZE-EXCEPTION label, and
-  # every exception requires a row in rebuild/DIFF_LEDGER.md. Sunset: Phase F.
-  engine-freeze:
-    name: Old-engine freeze (dual-engine regime)
-    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'FREEZE-EXCEPTION')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Fail if frozen engine files changed
-        run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD -- 'lib/engine/' 'lib/dealEngineTypes.ts' || true)
-          if [ -n "$CHANGED" ]; then
-            echo "::error::lib/engine is FROZEN during the engine2 rebuild (see ENGINE_ARCHITECTURE.md, dual-engine regime). Changed files:"
-            echo "$CHANGED"
-            echo "::error::To override: add the FREEZE-EXCEPTION label to this PR and append a row to rebuild/DIFF_LEDGER.md explaining the change."
-            exit 1
-          fi
-          echo "Frozen surfaces untouched."
+  # The dual-engine freeze job SUNSET with the F-tail deletion (2026-07-24): the old
+  # engine is gone (tag `pre-deletion-lib-engine`); tests/engine2-boundary.test.ts now
+  # guards that the deleted paths are never reintroduced.

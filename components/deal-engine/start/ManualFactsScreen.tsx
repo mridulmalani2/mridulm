@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { manualHistoricals } from '../../../lib/edgar/buildModel';
-import type { ModelState } from '../../../lib/dealEngineTypes';
+
 import ApiKeyInline from './ApiKeyInline';
 
 /**
  * Manual-entry "facts" screen (Phase 1) — for private targets not on EDGAR. It collects the
  * SAME factual surface the 10-K/EDGAR mapper extracts (revenue, EBITDA margin, D&A%, capex%,
- * NWC%, net debt, tax rate), builds a RawHistoricals tagged 'user', and routes through the
- * IDENTICAL assumptions review → model flow. The manual and EDGAR routes diverge only in how
- * the facts are sourced — everything downstream is one shared path.
+ * NWC%, net debt, tax rate), builds a RawHistoricals tagged 'user', and feeds the IDENTICAL
+ * engine2 workbench. The manual and EDGAR routes diverge only in how the facts are
+ * sourced — everything downstream is one shared path.
  */
 
 const mono = "'JetBrains Mono', monospace";
@@ -18,10 +18,10 @@ const inputStyle: React.CSSProperties = { background: '#fff', border: '1px solid
 const labelStyle: React.CSSProperties = { color: 'rgba(17,17,17,0.4)', fontFamily: mono };
 
 const SECTORS = ['Technology', 'Healthcare', 'Industrials', 'Consumer', 'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other'];
-const CURRENCIES: ModelState['currency'][] = ['USD', 'GBP', 'EUR', 'INR', 'JPY'];
+const CURRENCIES: ('USD' | 'GBP' | 'EUR' | 'INR' | 'JPY')[] = ['USD', 'GBP', 'EUR', 'INR', 'JPY'];
 
 const DEFAULTS = {
-  dealName: 'New Deal', sector: 'Technology', currency: 'USD' as ModelState['currency'],
+  dealName: 'New Deal', sector: 'Technology', currency: 'USD' as 'USD' | 'GBP' | 'EUR' | 'INR' | 'JPY',
   ltmRevenue: '100', ebitdaMargin: '25', daPctRevenue: '3', capexPctRevenue: '3',
   nwcPctRevenue: '10', netDebt: '0', taxRate: '25', nol: '0',
 };
@@ -58,7 +58,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       taxRate: num(f.taxRate) / 100,
       nol: num(f.nol),
     });
-    loadFromHistoricals(raw, { dealName: f.dealName, sector: f.sector });
+    loadFromHistoricals(raw);
   };
 
   const csym = ({ GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' } as Record<string, string>)[f.currency] ?? '$';
@@ -70,7 +70,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <div className="border-t-[3px] border-[#111] mb-6" />
         <h1 className="font-playfair text-4xl lg:text-5xl font-bold mb-3" style={{ color: '#111' }}>Enter the facts</h1>
         <p className="mb-8" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 480 }}>
-          For a private target. Enter the same financials a 10-K would give us — you'll set the deal assumptions (growth, leverage, exit) on the next screen, exactly as the EDGAR route does.
+          For a private target. Enter the same financials a 10-K would give us — you'll set the deal assumptions (growth, leverage, exit) in the workbench, exactly as the EDGAR route does.
         </p>
 
         <div className="p-6 lg:p-8" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
@@ -87,7 +87,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </label>
             <label className="block">
               <span className="block mb-1 text-[10px] tracking-widest uppercase" style={labelStyle}>Currency</span>
-              <select value={f.currency} onChange={(e) => setF((p) => ({ ...p, currency: e.target.value as ModelState['currency'] }))} className="w-full px-3 py-2 text-sm" style={inputStyle}>
+              <select value={f.currency} onChange={(e) => setF((p) => ({ ...p, currency: e.target.value as 'USD' | 'GBP' | 'EUR' | 'INR' | 'JPY' }))} className="w-full px-3 py-2 text-sm" style={inputStyle}>
                 {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
@@ -111,7 +111,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           )}
 
           <button type="submit" className="w-full py-2.5 text-sm tracking-widest uppercase" style={{ background: '#CC0000', color: '#fff', fontFamily: mono, border: '1px solid #CC0000', letterSpacing: '0.12em' }}>
-            Review Assumptions →
+            Open the workbench →
           </button>
 
           {/* Optional AI key — reused by AI-suggest on the next screen */}

@@ -6,10 +6,10 @@ import { searchEsefByName } from '../../../lib/edgar/esef';
 import ApiKeyInline from './ApiKeyInline';
 
 /**
- * Screen 1 — Source (Phase 1). Pull a target's ACTUAL financials from a free structured filing
- * source: SEC EDGAR (US issuers) or ESEF via filings.xbrl.org (EU/UK-listed). Both feed the same
- * RawHistoricals → assumptions review → model. A manual-entry fallback remains for private
- * targets. Every extracted figure is shown on the next screen with a link back to the filing.
+ * Screen 1 — Source. Pull a target's ACTUAL financials from a free structured filing
+ * source: SEC EDGAR (US issuers) or ESEF via filings.xbrl.org (EU/UK-listed). Every route
+ * feeds the SAME engine2 workbench (extraction → adapter → suggest → build); a manual-entry
+ * fallback remains for private targets. Facts carry provenance; gaps stay gaps.
  */
 
 const mono = "'JetBrains Mono', monospace";
@@ -44,7 +44,7 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
       try {
         if (m === 'sec') {
           const r = await searchCompanies(q, 10);
-          setMatches(r.map((c) => ({ id: c.cik10, title: c.title, tag: c.ticker, onPick: () => { setQuery(`${c.title} (${c.ticker})`); setMatches([]); importFromEdgar(c.cik10, { dealName: c.title }); } })));
+          setMatches(r.map((c) => ({ id: c.cik10, title: c.title, tag: c.ticker, onPick: () => { setQuery(`${c.title} (${c.ticker})`); setMatches([]); importFromEdgar(c.cik10); } })));
         } else {
           const r = await searchEsefByName(q, 10);
           setMatches(r.map((e) => ({ id: e.lei, title: e.name, tag: `${e.lei.slice(0, 6)}…`, onPick: () => { setQuery(e.name); setMatches([]); importFromEsef(e.lei, { dealName: e.name }); } })));
@@ -80,7 +80,7 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
         <div className="border-t-[3px] border-[#111] mb-6" />
         <h1 className="font-playfair text-4xl lg:text-5xl font-bold mb-3" style={{ color: '#111' }}>Source the target</h1>
         <p className="mb-8" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 460 }}>
-          Pull a listed company's actual financials straight from its regulatory filings — {isSec ? 'US issuers via SEC EDGAR' : 'EU/UK-listed via ESEF'}. Every extracted figure is shown on the next screen with a link back to the filing; nothing is assumed without you seeing it.
+          Pull a listed company's actual financials straight from its regulatory filings — {isSec ? 'US issuers via SEC EDGAR' : 'EU/UK-listed via ESEF'}. Every extracted figure lands with its provenance, gaps are surfaced — never defaulted — and nothing is assumed without you seeing it.
         </p>
 
         <div className="p-6 lg:p-8" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
@@ -156,8 +156,9 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
             </button>
           </div>
 
-          {/* F2 / OWNER #2: previous-engine .json saves still open (old flow + banner) —
-              this is the load path now that the classic screens are no longer the default. */}
+          {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is
+              deleted — tag pre-deletion-lib-engine). Selecting one surfaces the honest
+              retirement notice + the re-import path. */}
           <label className="block mt-3 text-[10px] tracking-widest uppercase text-center cursor-pointer"
             style={{ color: 'rgba(17,17,17,0.35)', fontFamily: mono }}>
             <input type="file" accept=".json" className="hidden"
