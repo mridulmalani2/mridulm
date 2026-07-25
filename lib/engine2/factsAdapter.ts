@@ -99,9 +99,9 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     dso: raw.dso?.value ?? null,
     dio: raw.dio?.value ?? null,
     dpo: raw.dpo?.value ?? null,
-    gross_debt: raw.gross_debt?.value ?? 0,
-    cash: raw.cash?.value ?? 0,
-    net_debt: req(raw.net_debt?.value, 'net_debt', 0),
+    gross_debt: raw.gross_debt?.value ?? null, // display-only; honest null, never a fabricated 0 (§15)
+    cash: raw.cash?.value ?? null,
+    net_debt: req(raw.net_debt?.value, 'net_debt', 0), // the sizing figure — Build-gated when absent
     effective_tax_rate: raw.effective_tax_rate?.value ?? 0.21,
     nol_carryforward_floor: raw.nol_carryforward?.value ?? null,
     implied_cost_of_debt: raw.implied_cost_of_debt?.value ?? null,
