@@ -678,3 +678,25 @@ describe('exitMultipleDisplay — §9 single-source + value provenance', () => {
     expect(canonical).toBeGreaterThan(1);
   });
 });
+
+describe('G-2 fixture (viii) — the NTM base on a STITCHED LTM fact [B1, engine half]', () => {
+  // The stitch (data-side) produces LTM EBITDA 328 for fixture (viii); this pins the ENGINE half:
+  // under an NTM entry the valuation base is LTM × (1 + growth[0]) with growth[0] the annualized
+  // rate, and entry_ebitda_for_sizing is the LTM sizing basis — NOT the stale FY, NOT the projected base.
+  const LTM_EBITDA = 328, LTM_REVENUE = 1320;
+  const factsLtm = { ...GOLDEN_DEALS.G2.facts, fy_ebitda: LTM_EBITDA, fy_revenue: LTM_REVENUE,
+    fy_ebitda_margin: LTM_EBITDA / LTM_REVENUE, sizing_basis: 'LTM' as const };
+  const ntm: DealAssumptions = { ...GOLDEN_DEALS.G2.assumptions,
+    entry: { ...GOLDEN_DEALS.G2.assumptions.entry, basis: 'ntm' } };
+
+  it('EV = entry_multiple × (LTM × (1+growth[0])); sizing EBITDA is the LTM, not a stale FY', () => {
+    const o = runModel(factsLtm, ntm);
+    const g0 = ntm.operations.growth[0];
+    const ntmBase = LTM_EBITDA * (1 + g0);
+    expect(o.derived.enterprise_value).toBeCloseTo(o.derived.entry_multiple * ntmBase, 6);
+    // leverage / FY-canonical size on the LTM fact itself (the §11 "FY(LTM)" basis)
+    expect(o.derived.entry_ebitda_for_sizing).toBeCloseTo(LTM_EBITDA, 6);
+    // mutation guard: sizing the NTM base off a stale FY (e.g. 250) would move EV materially
+    expect(o.derived.enterprise_value).not.toBeCloseTo(o.derived.entry_multiple * 250 * (1 + g0), 2);
+  });
+});

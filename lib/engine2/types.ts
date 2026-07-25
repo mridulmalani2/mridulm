@@ -34,8 +34,10 @@ export interface HistoricalYear {
 }
 
 /**
- * Factual inputs at close, FY-anchored (fy_* naming is deliberate — extraction is
- * fiscal-year basis with a staleness badge, not LTM; PHASE_D D3, DIFF_LEDGER C-6).
+ * Factual inputs at close. `fy_*` is the ENGINE-CONTRACT name (retained for stability, DIFF_LEDGER
+ * L-11/C-6); it holds the §1.1 SIZING BASIS — the LTM quarter-stitch when interim filings allow,
+ * else the latest fiscal year — carried WITH its basis. NEVER infer the basis from the `fy_` name;
+ * read `sizing_basis`/`provenance` (the exact mislabel L-11 exists to prevent). [G-2]
  */
 export interface DealFacts {
   entity_name: string;
@@ -49,6 +51,12 @@ export interface DealFacts {
   fy_ebitda: number;
   /** = fy_ebitda / fy_revenue; carried for display, engine recomputes nothing from it. */
   fy_ebitda_margin: number;
+
+  /** §1.1 sizing basis: 'LTM' when the quarter-stitch succeeded, else 'FY'. Default 'FY' (manual). */
+  sizing_basis?: 'FY' | 'LTM';
+  /** As-of date of the sizing figures (LTM anchor `e`, or the FY period end). The UI derives the
+   *  staleness tier (fresh/aging/stale) from this vs now — `lib/format.stalenessTier`. */
+  sizing_as_of?: string;
   da_pct_revenue: number;
   maint_capex_pct_revenue: number;
   /** Opening net PP&E seed for the BS roll (SPEC §8); null ⇒ seed 0 + disclosed note. */
@@ -212,7 +220,7 @@ export interface DealAssumptions {
     driver: 'multiple' | 'ev';
     entry_multiple: number | null;
     enterprise_value: number | null;
-    /** Valuation basis; leverage sizing & covenants ALWAYS use FY EBITDA (SPEC §11, C-14). */
+    /** Valuation basis; leverage sizing & covenants use the §1.1 FY(LTM) sizing EBITDA — never NTM (SPEC §11, §1.1, C-14). [G-2/M2] */
     basis: 'fy' | 'ntm';
     hold_years: number;
   };
@@ -534,7 +542,7 @@ export interface ModelOutput {
   derived: {
     enterprise_value: number;
     entry_multiple: number;
-    entry_ebitda_for_sizing: number; // ALWAYS FY (SPEC §11)
+    entry_ebitda_for_sizing: number; // the §1.1 FY(LTM) sizing basis — FY, or the LTM stitch when interim filings allow (§11; read facts.sizing_basis, never the "fy_" name) [G-2/M2]
     total_debt_at_par: number;
     sponsor_equity: number;
     /**

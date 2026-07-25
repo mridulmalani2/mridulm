@@ -84,6 +84,19 @@ export function fromPctInput(text: string): number | null {
   return p / 100;
 }
 
+/** §1.1 staleness TIER of a sizing as-of vs now: fresh ≤4.5m / aging ≤14.5m / stale (filing-overdue
+ *  cadence). The ONE threshold definition — the LTM stitch (lib/edgar/ltmStitch) uses it too, so the
+ *  adjudicated goldens' badge and this display badge cannot diverge. null when no as-of. */
+export function stalenessTier(asOf: string | undefined | null, today: Date): 'fresh' | 'aging' | 'stale' | null {
+  if (!asOf) return null;
+  const ms = Date.parse(asOf);
+  if (!Number.isFinite(ms)) return null;
+  const months = (today.getTime() - ms) / (30.44 * 86_400_000);
+  if (months <= 4.5) return 'fresh';
+  if (months <= 14.5) return 'aging';
+  return 'stale';
+}
+
 /** Staleness label for the review screen (D3): "FY2025 · ended 2025-09-27 · 9 months ago". */
 export function staleness(fiscalYear: number | undefined, periodEnd: string | undefined, today: Date): string | null {
   if (!periodEnd) return null;

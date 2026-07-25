@@ -347,3 +347,25 @@ from `ltm_stitch.py`'s algorithm, at the ±$0.005m / ±0.1bp bar.
 **Status: g2ltm fixtures (i)–(ix) are GOSPEL** (both independent passes signed, ±$0.005m). The
 step-3 extraction/adapter PR's TS stitch is wrong wherever it disagrees; disputes reopen only via
 a §1.1 amendment + re-derivation.
+
+**Accuracy audit (2026-07-25, independent agent a6e77b2): 0 BLOCKING, 3 minor + 4 nits.** Verified
+clean: empty engine-arithmetic-path diff; engine §17 goldens byte-identical; TS `ltmStitch` ≡ oracle
+function-by-function; unit scaling exactly once; single-basis pair with no mixed-basis ratios;
+FY-fallback keeps mapXbrl's richer figures; badge parity via the shared `stalenessTier`; B1 engine
+half. Dispositions:
+- **Minor 1 — stitch notes/refusal silently absorbed (F7/F10): FIXED.** mapXbrl now appends the
+  stitch's disclosure notes (e.g. the ≤7d 52/53 approximation) to the LTM provenance detail, and the
+  refusal reason to the FY-fallback ebitda detail.
+- **Minor 2 — cross-span tag mix un-flagged, multi-tag path un-adjudicated: FIXED.** A stitching
+  metric whose winning tag differs across FY/YTD_c/YTD_p now REFUSES → FY (fail-closed); §1.1 tightened
+  the rule-1 "flag" to a refusal for the sizing basis; a directed conformance test pins it (the goldens
+  stay single-tag).
+- **Minor 3a — stale "ALWAYS FY EBITDA" comment (types.ts:223): FIXED** → "§1.1 FY(LTM) sizing basis."
+- **Minor 3b — the twin comment at `sourcesUses.ts:82`: DEFERRED.** `sourcesUses.ts` is on the
+  engine-arithmetic path; editing it (even a comment) would break the Tier-B empty-diff admission
+  ticket. Deferred to the next engine-touching (Tier-A) PR, which legitimately carries an engine diff.
+  The comment is not dangerous — a reader following M2's rule reads `facts.sizing_basis`, not the name.
+- **Nits 4–7 (r2 half-up vs banker's; leap-day target; stitch-FY vs anchor; ESEF no-stitch): NOTED,
+  not fixed.** Each is unreachable with integer-valued XBRL facts / a literal Feb-29 interim end /
+  pathological non-annual full-year data, or is the accepted v1 ESEF-FY simplification (M1 refuses the
+  common single-vintage case anyway; the UI badge still derives from period-end).

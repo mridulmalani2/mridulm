@@ -1,0 +1,54 @@
+{
+ "case": "iii",
+ "companyfacts": {
+  "cik": 1,
+  "entityName": "SYNTH",
+  "facts": {
+   "us-gaap": {
+    "DepreciationDepletionAndAmortization": {
+     "units": {
+      "USD": [
+       {
+        "accn": "acc-2025-04-15",
+        "end": "2024-12-31",
+        "filed": "2025-04-15",
+        "form": "20-F",
+        "start": "2024-01-01",
+        "val": 50
+       }
+      ]
+     }
+    },
+    "OperatingIncomeLoss": {
+     "units": {
+      "USD": [
+       {
+        "accn": "acc-2025-04-15",
+        "end": "2024-12-31",
+        "filed": "2025-04-15",
+        "form": "20-F",
+        "start": "2024-01-01",
+        "val": 200
+       }
+      ]
+     }
+    },
+    "Revenues": {
+     "units": {
+      "USD": [
+       {
+        "accn": "acc-2025-04-15",
+        "end": "2024-12-31",
+        "filed": "2025-04-15",
+        "form": "20-F",
+        "start": "2024-01-01",
+        "val": 1000
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ "import_date": "2025-12-01"
+}

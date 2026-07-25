@@ -49,8 +49,12 @@ export interface RawHistoricals {
   /** Fiscal year the headline figures are drawn from, and its period end. */
   fiscalYear?: number;
   periodEnd?: string;
-  /** 'FY' (latest annual) or 'LTM' (trailing four quarters) — how flow figures were assembled. */
+  /** 'FY' (latest annual) or 'LTM' (§1.1 quarter-stitch) — how the SIZING pair (revenue+EBITDA)
+   *  was assembled. da/capex/nwc stay FY-basis rates regardless. */
   basis: 'FY' | 'LTM';
+  /** §1.1 as-of date of the sizing figures: the LTM anchor `e` when stitched, else the FY period
+   *  end. The UI derives the staleness tier from this (lib/format.stalenessTier). */
+  as_of?: string;
 
   fy_revenue: SourcedValue | null;          // revenue (£m/$m)
   fy_ebitda: SourcedValue | null;           // EBITDA = operating income + D&A
