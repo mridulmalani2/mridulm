@@ -160,7 +160,7 @@ const AssumptionsPanel: React.FC = () => {
       {/* ── Advanced (collapsed) ── */}
       <details className="mt-3">
         <summary className="text-[10px] tracking-widest uppercase cursor-pointer" style={labelStyle}>
-          Advanced — tax · fees · sweep · MIP
+          Advanced — tax · fees · sweep · MIP · distributions
         </summary>
         <div className="mt-2">
           <Row label="Tax rate" path="tax.rate">
@@ -179,6 +179,43 @@ const AssumptionsPanel: React.FC = () => {
             <NumInput value={a.mip ? toPctInput(a.mip.pool_pct) : ''} suffix="%"
               onCommit={pctCommit((v) => [{ ...a, mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0 } }, ['mip']])} />
           </Row>
+          {/* ── §3 step 7 / §3.7 [v1.1.0] interim distributions ──────────────────────
+              Class B, Advanced tier. The suggestion layer proposes NEITHER field (§16): a
+              distribution policy is a sponsor decision with no history or convention basis,
+              so both start OFF and wear YOU the moment they are touched. */}
+          <Row label="Distributions / yr" path="structure.distributions">
+            <NumInput
+              value={a.structure.distributions === null ? '' : num(a.structure.distributions[0] ?? 0, 1)}
+              suffix={`× ${a.entry.hold_years}y`}
+              onCommit={numCommit((v) => [
+                {
+                  ...a,
+                  // §16 gate: length ≡ hold_years, entries ≥ 0. Zero clears the schedule
+                  // back to null so "off" stays a single representation.
+                  structure: {
+                    ...a.structure,
+                    distributions: v > 0 ? Array.from({ length: a.entry.hold_years }, () => v) : null,
+                  },
+                },
+                ['structure.distributions'],
+              ])} />
+          </Row>
+          <Row label="RP trap (net lev)" path="covenants.rp_trap">
+            <NumInput value={a.covenants.rp_trap === null ? '' : num(a.covenants.rp_trap.level, 2)} suffix="x"
+              onCommit={numCommit((v) => [
+                {
+                  ...a,
+                  covenants: { ...a.covenants, rp_trap: v > 0 ? { metric: 'net_leverage', level: v } : null },
+                },
+                ['covenants.rp_trap'],
+              ])} />
+          </Row>
+          {a.structure.distributions !== null && (
+            <p className="text-[10px] text-right" style={labelStyle}>
+              requested per year; what is PAID is capped by cash above the {num(a.structure.min_cash, 1)} floor
+              {a.covenants.rp_trap === null ? ' (no RP trap)' : ` and by the ${num(a.covenants.rp_trap.level, 2)}x pro-forma test`} — blocked capacity does not carry forward (§3.7)
+            </p>
+          )}
           {term && term.pricing.kind === 'floating' && (
             <p className="text-[10px] text-right" style={labelStyle}>
               {term.name}: base {toPctInput(term.pricing.base_rate)}% + {bps(term.pricing.spread)} (floor {toPctInput(term.pricing.floor)}%)

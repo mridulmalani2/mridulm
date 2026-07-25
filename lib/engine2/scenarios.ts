@@ -79,6 +79,11 @@ export function runScenario(
       sweep_applied_total: w.sweep_applied_total,
       closing_cash: w.closing_cash,
       cash_floor_breach: w.cash_floor_breach,
+      // §13 [v1.1.0]: a downside that traps the sponsor's distributions is precisely what
+      // the credit dashboard exists to show. The request schedule and the trap are
+      // structure/policy and are FROZEN across scenarios — only the BINDING moves.
+      distribution_paid: w.distribution_paid,
+      distribution_blocked: w.distribution_blocked,
     })),
     covenant_breach_year: covenantBreachYear(scenarioAssumptions.covenants, run.credit),
     irr_delta_vs_base: baseIrr !== null && scenarioIrr !== null ? scenarioIrr - baseIrr : null,

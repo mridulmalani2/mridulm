@@ -25,6 +25,7 @@ function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock
     unamortized_writeoff: core.exit_writeoff,
     invested_equity_total: core.sources_uses.sponsor_equity + core.sources_uses.rollover_equity,
     rollover_equity: core.sources_uses.rollover_equity,
+    cumulative_distributions: 0,
   };
   return buildExit(assumptions, inputs);
 }
@@ -48,6 +49,7 @@ function bridgeInputs(core: EngineCore, exit: ExitBlock, assumptions: DealAssump
     sponsor_share: exit.sponsor_share,
     sponsor_equity: su.sponsor_equity,
     monitoring_annual_total: 0,
+    interim_distributions_sponsor: 0,
   };
 }
 
@@ -114,6 +116,7 @@ describe('bridge.ts — §14.9 exact reconciliation on every golden (C8 gate)', 
       rollover_share: rolloverShare, rollover_equity: 100,
       sponsor_share: sponsorShare, sponsor_equity: sponsorEquity,
       monitoring_annual_total: 8,
+      interim_distributions_sponsor: 0,
     });
     expect(Math.abs(b.reconciliation_residual)).toBeLessThan(1e-9);
     expect(b.ebitda_growth_at_entry_multiple).toBeCloseTo(8 * 20, 9);

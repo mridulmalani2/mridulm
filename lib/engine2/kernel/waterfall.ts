@@ -20,6 +20,13 @@
  *   6. + revolver draw if cash < min_cash, capped at undrawn commitment; if still short →
  *      floor-breach flag (§14.4/§14.6); closing cash stays below the floor (and can be
  *      negative for a deep enough hole) — conservation (§14.3) is never clamped
+ *   7. − interim distribution [v1.1.0]: paid = max(0, min(request, cash − min_cash, rp_max))
+ *      with the §3.7 restricted-payment trap rp_max = max(0, cash − (gross_debt_end −
+ *      L × EBITDA_adj)) — closed form, LINEAR in the payment, so no solver and no cycle
+ *      (§5). Running it AFTER step 6 is what makes "never revolver-funded" true; §3.7's
+ *      draw-invariance (a draw adds the same d to cash and to gross_debt_end, which cancel)
+ *      makes it true a second time, independently of the ordering. Blocked-or-clipped
+ *      capacity is NOT accrued — no catch-up ledger.
  */
 
 import { capAtOutstanding } from './amort';
@@ -62,6 +69,17 @@ export interface WaterfallYearIn {
   sweep_pct: number;
   tranches: WaterfallTrancheIn[];
   revolver: WaterfallRevolverIn | null;
+  /** §3 step 7: the year's REQUESTED distribution ($m, ≥ 0). 0 ≡ feature off. */
+  distribution_request: number;
+  /** §3.7 trap level L on net leverage; null = trap OFF (rp_max = +∞). May be ≤ 0. */
+  rp_trap_level: number | null;
+  /**
+   * §3.7 the year's adjusted EBITDA — the trap's metric denominator in ratio form, but here
+   * only ever multiplied by L, so the closed form stays defined at EBITDA_adj ≤ 0 (which is
+   * NORMATIVE, not an edge case: at a non-positive EBITDA the money inequality yields
+   * rp_max = 0, exactly the lockdown a lender intends).
+   */
+  ebitda_adj: number;
 }
 
 export interface WaterfallTrancheOut {
@@ -86,6 +104,11 @@ export interface WaterfallYearOut {
   sweep_applied_total: number;
   revolver_draw: number;
   revolver_ending_drawn: number;
+  /** §3 step 7 / §3.7 [v1.1.0]. `rp_max` is null when the trap is OFF (+∞, never a sentinel). */
+  distribution_requested: number;
+  rp_max: number | null;
+  distribution_paid: number;
+  distribution_blocked: boolean;
   closing_cash: number;
   cash_floor_breach: boolean;
   tranches: WaterfallTrancheOut[];
@@ -170,7 +193,26 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
     }
     cash += draw;
   }
+  // The breach verdict is taken on POST-DRAW, PRE-distribution cash: step 7 can only spend
+  // what sits ABOVE the floor, so it can never create a breach (and in a breach year it
+  // pays 0 by arithmetic — cash − min_cash < 0).
   const breach = cash < min_cash - BREACH_EPS;
+
+  // 7. interim distribution (§3 step 7, §3.7 trap). Nothing feeds cash after this point.
+  const endingTranches = input.tranches.map((t, i) => t.outstanding - mandatory[i] - sweeps[i]);
+  const grossDebtEnd = sum(endingTranches) + drawn;
+  const rpMax =
+    input.rp_trap_level === null
+      ? null
+      : Math.max(0, cash - (grossDebtEnd - input.rp_trap_level * input.ebitda_adj));
+  const rpCap = rpMax ?? Infinity;
+  const cashCap = cash - min_cash; // may be negative — the outer max(0, …) handles it
+  const paid = Math.max(0, Math.min(input.distribution_request, cashCap, rpCap));
+  // §3.7 tie rule: blocked iff the TRAP clipped what cash alone would have allowed. Strict
+  // `<`, so rp_max exactly equal to the cash-capped amount is NOT blocked. False whenever
+  // the trap is off (rpCap = Infinity) or the request is 0.
+  const blocked = rpCap < Math.min(input.distribution_request, Math.max(0, cashCap));
+  cash -= paid;
 
   return {
     cash_interest_total: cashInterestTotal,
@@ -183,13 +225,17 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
     sweep_applied_total: sweepAppliedTotal,
     revolver_draw: draw,
     revolver_ending_drawn: drawn,
+    distribution_requested: input.distribution_request,
+    rp_max: rpMax,
+    distribution_paid: paid,
+    distribution_blocked: blocked,
     closing_cash: cash,
     cash_floor_breach: breach,
     tranches: input.tranches.map((t, i) => ({
       name: t.name,
       mandatory_amort: mandatory[i],
       sweep_repayment: sweeps[i],
-      ending_outstanding: t.outstanding - mandatory[i] - sweeps[i],
+      ending_outstanding: endingTranches[i],
     })),
   };
 }
@@ -217,6 +263,13 @@ function validate(input: WaterfallYearIn): void {
     assertNonNegative(t.cash_interest, `${t.name}.cash_interest`);
     assertFinite(t.sweep_priority, `${t.name}.sweep_priority`);
   }
+  // §3 step 7 / §16 gate: requests are ≥ 0 (a "negative distribution" would be a capital
+  // call — a different instrument, deliberately not modelled).
+  assertNonNegative(input.distribution_request, 'distribution_request');
+  // ebitda_adj is NOT range-checked: §3.7 is normative for EBITDA_adj ≤ 0 (the money form
+  // yields rp_max = 0 there). The trap LEVEL is likewise only required to be finite.
+  assertFinite(input.ebitda_adj, 'ebitda_adj');
+  if (input.rp_trap_level !== null) assertFinite(input.rp_trap_level, 'rp_trap_level');
   const r = input.revolver;
   if (r) {
     assertNonNegative(r.beginning_drawn, 'revolver.beginning_drawn');

@@ -19,7 +19,7 @@ import { buildBridge, type Engine2ValueBridge } from './bridge';
 import { runCoherence } from './check';
 import { buildCreditYear, type CreditYearInputs } from './credit';
 import { buildExit, monitoringTermination, type ExitInputs } from './exit';
-import { buildGpFeeIncome, buildReturns } from './returns';
+import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './returns';
 import { runCore, type EngineCore } from './sequence';
 import type { CreditYear, DealAssumptions, DealFacts, ExitBlock, ModelOutput, ReturnStreams } from './types';
 
@@ -37,6 +37,10 @@ export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): Ex
     unamortized_writeoff: core.exit_writeoff,
     invested_equity_total: core.sources_uses.sponsor_equity + core.sources_uses.rollover_equity,
     rollover_equity: core.sources_uses.rollover_equity,
+    // §10 [v1.1.0]: the hurdle base takes the TOTAL paid, not the sponsor share — both
+    // sides of the test are on a total-equity basis (§17 item (x): the two coincide only
+    // at rollover 0, which is every golden, so a fixture cannot discriminate them).
+    cumulative_distributions: core.distributions_paid.reduce((a, b) => a + b, 0),
   };
   return buildExit(assumptions, inputs);
 }
@@ -53,6 +57,7 @@ export function returnsFromCore(
     enterprise_value: core.derived.enterprise_value,
     transaction_costs: core.sources_uses.transaction_costs,
     unlevered_fcf: core.unlevered_fcf,
+    distributions_paid: core.distributions_paid,
     exit,
     hold_years: assumptions.entry.hold_years,
   });
@@ -110,6 +115,15 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     sponsor_share: exit.sponsor_share,
     sponsor_equity: core.sources_uses.sponsor_equity,
     monitoring_annual_total: monitoringAnnualByYear.reduce((a, b) => a + b, 0),
+    // §12 [v1.1.0]: add back only the SPONSOR share — the rollover's slice left through the
+    // same (smaller) paydown bar and is not sponsor money. Deliberately differs from §10's
+    // hurdle base, which takes the total; §17 item (x) records that no rollover-0 fixture
+    // can tell them apart, so this is the one place the distinction has to be written down.
+    interim_distributions_sponsor: sponsorShareOfDistributions(
+      core.distributions_paid,
+      core.sources_uses.sponsor_equity,
+      core.sources_uses.rollover_equity,
+    ).reduce((a, b) => a + b, 0),
   });
 
   const coherence = runCoherence({

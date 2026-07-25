@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runModel } from '../lib/engine2/facade';
+import { waterfallYear } from '../lib/engine2/kernel/waterfall';
 import { applyAxis, applyScenarioDeltas, buildSensitivityGrid, runModelWithScenarios, runScenario } from '../lib/engine2/scenarios';
 import { entryGrossLeverageFromAssumptions } from '../lib/engine2/sourcesUses';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
@@ -63,7 +64,11 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
           if (typeof v === 'number') expect(Math.abs(v)).toBeLessThan(9000); // 9999/99 banned
         }
       }
-      // §16: every golden is a coherent deal — ZERO flags
+      // §16: every golden is a coherent deal — ZERO flags. §17 [v1.1.1] amends this
+      // deliberately for the DIST goldens: G2-DIST and G2-DIST-D are DESIGNED to trip
+      // §3.7's `distribution_blocked` WARN, and a blocked distribution is the trap doing
+      // its job, not an incoherent deal. Exactly one WARN, listing exactly the blocked
+      // years the fixture records.
       expect(out.coherence).toEqual([]);
       expect(out.gp_fee_income).toBeNull(); // monitoring OFF in all goldens
       expect(out.scenarios).toBeNull();
@@ -156,7 +161,7 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
     // covenant breach in base case (G2 Y1 runs ≈3.26x net)
     const covBreach = runModel(GOLDEN_DEALS.G2.facts, {
       ...GOLDEN_DEALS.G2.assumptions,
-      covenants: { leverage_max: 3.0, dscr_min: null, fccr_min: null, springing: null },
+      covenants: { leverage_max: 3.0, dscr_min: null, fccr_min: null, springing: null, rp_trap: null },
     });
     expect(covBreach.coherence.some((f) => f.code === 'covenant_breach_base_case' && f.severity === 'warn')).toBe(true);
 
@@ -264,7 +269,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
       operations: { ...GOLDEN_DEALS.G1.assumptions.operations, growth: [0.05, 0.05, 0.05, 0.05, 0.05] },
       structure: {
         min_cash: 0,
-        sweep: { base_pct: 0, grid: null },
+        sweep: { base_pct: 0, grid: null }, distributions: null,
         tranches: [
           {
             name: 'Bullet', type: 'senior', size: { x_ebitda: 1 }, pricing: { kind: 'fixed', rate: 0.03 },
@@ -413,5 +418,160 @@ describe('entry leverage: one definition across the input and output surfaces (�
     const { facts, assumptions } = GOLDEN_DEALS.G2;
     expect(entryGrossLeverageFromAssumptions({ ...facts, fy_ebitda: 0 }, assumptions)).toBeNull();
     expect(entryGrossLeverageFromAssumptions({ ...facts, fy_ebitda: -5 }, assumptions)).toBeNull();
+  });
+});
+
+
+/**
+ * §3.7 / §17 [v1.1.1] — the ONE deliberate exception to "every golden runs coherence-CLEAN".
+ * G2-DIST and G2-DIST-D are built to make the restricted-payment trap bind, so they must
+ * carry exactly one WARN naming exactly the blocked years the fixtures record. G3-DIST runs
+ * the trap OFF and must stay clean, which is what makes this a real discriminator rather
+ * than a blanket exemption for anything with a distribution schedule.
+ */
+describe('§3.7 distribution_blocked WARN (the amended coherence convention)', () => {
+  const blockedFixture = (n: string) => load(n).distributions.blocked_years as number[];
+
+  for (const golden of ['G2DIST', 'G2DISTD'] as const) {
+    it(`${golden}: exactly one WARN, listing the fixture's blocked years`, () => {
+      const { facts, assumptions } = GOLDEN_DEALS[golden];
+      const flags = runModel(facts, assumptions).coherence;
+      expect(flags).toHaveLength(1);
+      expect(flags[0].code).toBe('distribution_blocked');
+      expect(flags[0].severity).toBe('warn'); // the trap working is not a broken model
+      for (const y of blockedFixture(golden)) expect(flags[0].message).toContain(String(y));
+    });
+  }
+
+  it('G3DIST: trap OFF ⇒ no distributions are blocked ⇒ still coherence-CLEAN', () => {
+    const { facts, assumptions } = GOLDEN_DEALS.G3DIST;
+    expect(blockedFixture('G3DIST')).toEqual([]);
+    expect(runModel(facts, assumptions).coherence).toEqual([]);
+  });
+
+  it('§13: the scenario slim block carries paid/blocked per year, and the policy is FROZEN', () => {
+    const { facts, assumptions } = GOLDEN_DEALS.G2DIST;
+    const base = runModel(facts, assumptions);
+    const down = runScenario(facts, assumptions, base, 'downside', G2_DOWNSIDE);
+    expect(down.waterfall[0]).toHaveProperty('distribution_paid');
+    expect(down.waterfall[0]).toHaveProperty('distribution_blocked');
+    // same policy, different binding — Y2 pays in the base and is fully blocked in the downside
+    const g2dist = load('G2DIST');
+    const g2distd = load('G2DISTD');
+    expect(g2dist.distributions.requested).toEqual(g2distd.distributions.requested);
+    expect(g2dist.waterfall[1].distribution_paid).toBeGreaterThan(0);
+    expect(down.waterfall[1].distribution_paid).toBe(0);
+    expect(down.waterfall[1].distribution_blocked).toBe(true);
+  });
+});
+
+/**
+ * SPEC §17 [v1.1.1] "golden-uncovered by design" — every branch on that list needs an
+ * engine-side fixture, because no §17 workbook can produce it. Each test names its item.
+ */
+describe('§17 golden-uncovered branches (the list each needs a fixture for)', () => {
+  const g2 = () => GOLDEN_DEALS.G2;
+
+  it('(ii) accrued PIK is INSIDE gross_debt_end when the trap binds', () => {
+    // G3-DIST has the PIK note but runs the trap OFF; G2-DIST has the trap but no PIK.
+    // Turning the trap ON over G3's stack is the only way to see the PIK in the metric.
+    const { facts, assumptions } = GOLDEN_DEALS.G3DIST;
+    const withTrap = { ...assumptions, covenants: { ...assumptions.covenants, rp_trap: { metric: 'net_leverage' as const, level: 3.5 } } };
+    const out = runModel(facts, withTrap);
+    out.waterfall.forEach((w, i) => {
+      if (w.rp_max === null) return;
+      const gross = out.tranches.reduce((a, t) => a + t[i].ending_balance, 0) + (out.revolver?.[i].ending_drawn ?? 0);
+      // the PIK leg is a real part of the trap's debt measure
+      const pikEnd = out.tranches.find((t) => t[0].name === 'PIK Note')![i].ending_balance;
+      expect(pikEnd).toBeGreaterThan(0);
+      expect(gross).toBeGreaterThan(pikEnd);
+      expect(w.rp_max).toBeCloseTo(Math.max(0, (w.closing_cash + w.distribution_paid) - (gross - 3.5 * out.operating[i].ebitda_adj)), 6);
+    });
+  });
+
+  it('(iii) the exact §3.7 TIE: rp_max == the cash-capped amount ⇒ NOT blocked', () => {
+    // Unconstructible from a full model chain in float, so it is pinned at the kernel.
+    const base = {
+      opening_cash: 100, fcf_pre_debt: 0, min_cash: 10, sweep_pct: 0,
+      tranches: [], revolver: null, ebitda_adj: 100,
+    };
+    // cash at step 7 = 100, floor 10 ⇒ cash cap 90. Choose L so rp_max is EXACTLY 90.
+    const out = waterfallYear({ ...base, distribution_request: 1000, rp_trap_level: -0.1 });
+    expect(out.rp_max).toBeCloseTo(90, 12); // 100 − (0 − (−0.1 × 100)) = 90
+    expect(out.distribution_paid).toBeCloseTo(90, 12);
+    expect(out.distribution_blocked).toBe(false); // ties ⇒ false
+  });
+
+  it('(iv) §10 exit-equity CAP binds and TRUNCATES the promote with no accrual', () => {
+    const { facts } = g2();
+    const a = {
+      ...g2().assumptions,
+      mip: { pool_pct: 1.0, hurdle_moic: 0 }, // pool 100%, no hurdle ⇒ uncapped ≫ exit equity
+      structure: { ...g2().assumptions.structure, distributions: [10, 10, 10, 10, 10] },
+    };
+    const out = runModel(facts, a);
+    const cum = out.waterfall.reduce((s, w) => s + w.distribution_paid, 0);
+    const uncapped = 1.0 * (out.exit.exit_equity_pre_mip_total + cum);
+    expect(uncapped).toBeGreaterThan(out.exit.exit_equity_pre_mip_total); // the cap is live
+    expect(out.exit.mip_payout).toBeCloseTo(out.exit.exit_equity_pre_mip_total, 6); // truncated
+    expect(out.exit.sponsor_share).toBeCloseTo(0, 6);
+  });
+
+  it('(v) payback REACHED in-hold, and it counts distributions ALONE', () => {
+    const { facts } = g2();
+    const huge = [400, 400, 400, 400, 400]; // far above the cash caps; paid is what matters
+    const out = runModel(facts, { ...g2().assumptions, structure: { ...g2().assumptions.structure, distributions: huge } });
+    const cum: number[] = [];
+    out.waterfall.reduce((s, w) => { cum.push(s + w.distribution_paid); return s + w.distribution_paid; }, 0);
+    const expected = cum.findIndex((c) => c >= out.derived.sponsor_equity);
+    expect(out.returns.payback_year).toBe(expected === -1 ? null : expected + 1);
+    // and the exit — however large — never contributes
+    expect(out.exit.sponsor_share).toBeGreaterThan(out.derived.sponsor_equity);
+    if (expected === -1) expect(out.returns.payback_year).toBeNull();
+  });
+
+  it('(vi) step 7 inside a floor-breach year pays 0 by arithmetic, and is NOT flagged blocked', () => {
+    const out = waterfallYear({
+      opening_cash: 5, fcf_pre_debt: -50, min_cash: 10, sweep_pct: 0,
+      tranches: [], revolver: { beginning_drawn: 0, commitment: 5, cash_interest: 0, commitment_fee: 0 },
+      distribution_request: 25, rp_trap_level: null, ebitda_adj: 100,
+    });
+    expect(out.cash_floor_breach).toBe(true);
+    expect(out.distribution_paid).toBe(0);
+    expect(out.distribution_blocked).toBe(false); // cash stopped it, not the trap
+  });
+
+  it('(viii) rollover > 0: the sponsor takes its PARI-PASSU share of each distribution', () => {
+    const { facts } = g2();
+    const a = { ...g2().assumptions, rollover_equity: 100, structure: { ...g2().assumptions.structure, distributions: [20, 20, 20, 20, 20] } };
+    const out = runModel(facts, a);
+    const share = out.sources_uses.sponsor_equity / (out.sources_uses.sponsor_equity + out.sources_uses.rollover_equity);
+    expect(share).toBeLessThan(1); // rollover is live
+    for (let t = 1; t < out.returns.sponsor_net.cashflows.length - 1; t++) {
+      expect(out.returns.sponsor_net.cashflows[t]).toBeCloseTo(out.waterfall[t - 1].distribution_paid * share, 9);
+      // the pre-promote stream takes the TOTAL (§9 membership)
+      expect(out.returns.pre_promote.cashflows[t]).toBeCloseTo(out.waterfall[t - 1].distribution_paid, 9);
+    }
+    // §12/§14.9 (x): the walk-down adds back only the SPONSOR slice; both identities exact
+    expect(Math.abs(out.bridge.reconciliation_residual)).toBeLessThan(1e-6);
+    const cumSponsor = out.waterfall.reduce((s, w) => s + w.distribution_paid * share, 0);
+    expect(out.bridge.walkdown.interim_distributions_sponsor).toBeCloseTo(cumSponsor, 9);
+    expect(out.bridge.walkdown.interim_distributions_sponsor)
+      .toBeLessThan(out.waterfall.reduce((s, w) => s + w.distribution_paid, 0)); // NOT the total
+  });
+
+  it('(ix) distributions never enter DSCR/FCCR/ICR or FCF conversion (§14.18)', () => {
+    const { facts } = g2();
+    const withDist = { ...g2().assumptions, structure: { ...g2().assumptions.structure, distributions: [20, 20, 20, 20, 20] } };
+    const a = runModel(facts, g2().assumptions);
+    const b = runModel(facts, withDist);
+    // Y1 is the clean comparison: its credit metrics are built from Y1 flows, and the
+    // distribution is paid at the END of Y1 — after every ratio's inputs are fixed.
+    expect(b.credit[0].dscr).toBeCloseTo(a.credit[0].dscr!, 12);
+    expect(b.credit[0].fccr).toBeCloseTo(a.credit[0].fccr!, 12);
+    expect(b.credit[0].icr).toBeCloseTo(a.credit[0].icr!, 12);
+    expect(b.credit[0].fcf_conversion).toBeCloseTo(a.credit[0].fcf_conversion!, 12);
+    // net leverage DOES move — cash left the balance sheet, which is the honest effect
+    expect(b.credit[0].net_leverage).toBeGreaterThan(a.credit[0].net_leverage!);
   });
 });

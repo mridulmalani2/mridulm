@@ -20,7 +20,7 @@ import type { CovenantAssumption, CreditYear } from '../lib/engine2/types';
 const ROOT = join(__dirname, '..');
 const load = (n: string) => JSON.parse(readFileSync(join(ROOT, 'tests/goldens', n, 'expected.json'), 'utf8'));
 
-const COV_LITE: CovenantAssumption = { leverage_max: null, dscr_min: null, fccr_min: null, springing: null };
+const COV_LITE: CovenantAssumption = { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: null };
 
 /** §17 tranche types per golden (for the senior filter). */
 const TYPES: Record<string, Record<string, string>> = {

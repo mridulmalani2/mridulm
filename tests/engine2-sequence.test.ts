@@ -18,22 +18,10 @@ const ROOT = join(__dirname, '..');
 const load = (n: string) => JSON.parse(readFileSync(join(ROOT, 'tests/goldens', n, 'expected.json'), 'utf8'));
 const TOL = 0.0075;
 
-/**
- * SPEC §3 step 7 / §3.7 [v1.1.0] fixture columns that the GOLDEN EXTENSION committed ahead
- * of the engine (Phase G template: golden + independent adjudication BEFORE engine code —
- * rebuild/PHASE_G_EXTENSIONS.md step 2 precedes step 3). The G-1 engine PR deletes this
- * list; the guard test below FAILS the moment the engine starts emitting these keys, so the
- * C5 gate cannot silently keep skipping them.
- */
-const PENDING_G1_KEYS = new Set([
-  'distribution_requested', 'rp_max', 'distribution_paid', 'distribution_blocked',
-]);
-
 function assertBlockMatches(actual: Record<string, unknown>[], fixture: Record<string, unknown>[], label: string, tol = TOL) {
   expect(actual.length, `${label} length`).toBe(fixture.length);
   for (let i = 0; i < fixture.length; i++) {
     for (const key of Object.keys(fixture[i])) {
-      if (PENDING_G1_KEYS.has(key)) continue;
       const f = fixture[i][key];
       const a = (actual[i] as Record<string, unknown>)[key];
       if (typeof f === 'number') {
@@ -89,33 +77,8 @@ describe('§7 early retirement — the deferred tax deduction lands in t+1 (accu
 });
 
 describe('runCore — first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
-  it('PENDING_G1_KEYS: the §3-step-7 columns are still engine-side TODO (self-deleting guard)', () => {
-    // The goldens already carry these columns (tests/goldens/G2DIST, G3DIST, G2DISTD). Until
-    // the G-1 engine PR lands, runCore must not emit them — and once it does, this test fails
-    // and forces PENDING_G1_KEYS to be deleted so the gate above starts asserting them.
-    //
-    // The probe runs a LIVE schedule + trap as well as the bare G2 assumptions [hostile
-    // review finding 3, 2026-07-24]: §16 says `distributions: null ≡ off`, which openly
-    // invites an engine that emits these columns ONLY when the feature is on. Such an engine
-    // would slip past a zero-request probe, PENDING_G1_KEYS would survive, and
-    // assertBlockMatches would keep skipping those columns on G1–G5 forever — while the
-    // fixtures demand 0.0/false on all five unconditionally. The fields are not on
-    // DealAssumptions yet; that is exactly what the cast records.
-    const live = {
-      ...DEALS.G2.assumptions,
-      structure: { ...DEALS.G2.assumptions.structure, distributions: [25, 25, 25, 10, 8] },
-      covenants: { ...DEALS.G2.assumptions.covenants, rp_trap: { metric: 'net_leverage', level: 2.75 } },
-    } as unknown as typeof DEALS.G2.assumptions;
-    for (const [label, a] of [['empty schedule', DEALS.G2.assumptions], ['live schedule', live]] as const) {
-      const row = runCore(DEALS.G2.facts, a).waterfall[0] as unknown as Record<string, unknown>;
-      for (const k of PENDING_G1_KEYS) {
-        expect(row[k], `runCore now emits ${k} (${label}) — delete PENDING_G1_KEYS so the C5 gate covers it`).toBeUndefined();
-      }
-    }
-  });
 
-
-  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5']) {
+  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2DIST', 'G3DIST', 'G2DISTD']) {
     it(`${golden}: operating, tax, tranches, revolver, waterfall, balance sheet`, () => {
       const g = load(golden);
       const core = runCore(DEALS[golden].facts, DEALS[golden].assumptions);

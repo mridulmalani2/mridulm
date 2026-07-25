@@ -160,3 +160,77 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect((html.match(/—/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 });
+
+/**
+ * SPEC §3 step 7 / §3.7 / §9 [v1.1.0] UI surfaces. The feature is default-OFF, so the two
+ * halves of this are: with no schedule NOTHING new renders (a pre-v1.1.0 deal must look
+ * exactly as it did), and with one the paid/blocked evidence and the de-degenerated
+ * DPI/payback headline appear.
+ */
+describe('interim distributions — the v1.1.0 UI surfaces', () => {
+  const withSchedule = (dists: number[] | null, trap: number | null) => {
+    importFixture();
+    const st = useEngine2Model.getState();
+    const a = st.assumptions!;
+    st.editAssumptions(
+      {
+        ...a,
+        structure: { ...a.structure, distributions: dists },
+        covenants: { ...a.covenants, rp_trap: trap === null ? null : { metric: 'net_leverage', level: trap } },
+      },
+      ['structure.distributions', 'covenants.rp_trap'],
+    );
+    useEngine2Model.getState().build();
+    return renderToStaticMarkup(<Workbench />);
+  };
+
+  it('OFF by default: no distributions table, no DPI/payback headline (a pre-v1.1.0 deal is unchanged)', () => {
+    const html = withSchedule(null, null);
+    expect(html).not.toContain('Interim distributions');
+    expect(html).not.toContain('DPI');
+    expect(html).not.toContain('Payback');
+  });
+
+  it('ON: DPI + payback are headlined on Summary, and the paid rows reach ModelOutput', () => {
+    const html = withSchedule([5, 5, 5, 5, 5], null);
+    // Summary is the default tab, so these are genuinely in the rendered markup.
+    expect(html).toContain('DPI');
+    expect(html).toContain('Payback');
+    expect(html).not.toContain('9999');
+    expect(html).not.toMatch(/\d\.\d{8,}/);
+    // The distributions TABLE lives on the Debt tab, which this default render does not
+    // mount — so it is asserted where it is actually observable: on the output the tab
+    // reads. Claiming a DOM assertion for markup that was never rendered would be the
+    // vacuous-test pattern this suite has been burned by twice.
+    const out = useEngine2Model.getState().output!;
+    expect(out.waterfall.some((w) => w.distribution_requested > 0)).toBe(true);
+    expect(out.waterfall.some((w) => w.distribution_paid > 0)).toBe(true);
+    expect(out.waterfall.every((w) => w.rp_max === null)).toBe(true); // trap OFF ⇒ N/A
+    expect(out.returns.dpi[out.returns.dpi.length - 1]).toBeGreaterThan(0);
+  });
+
+  it('the inputs live in Advanced and start empty — the suggestion layer proposes NEITHER (§16)', () => {
+    importFixture();
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Advanced — tax · fees · sweep · MIP · distributions');
+    expect(html).toContain('Distributions / yr');
+    expect(html).toContain('RP trap (net lev)');
+    const a = useEngine2Model.getState().assumptions!;
+    expect(a.structure.distributions).toBeNull();
+    expect(a.covenants.rp_trap).toBeNull();
+  });
+
+  it('a BINDING trap raises the §3.7 coherence WARN, and it reaches the banner', () => {
+    // a tight level against a levered opening balance sheet blocks the early years
+    const html = withSchedule([40, 40, 40, 40, 40], 0.5);
+    const out = useEngine2Model.getState().output!;
+    const blocked = out.waterfall.filter((w) => w.distribution_blocked);
+    expect(blocked.length).toBeGreaterThan(0);
+    const flag = out.coherence.find((f) => f.code === 'distribution_blocked');
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe('warn');
+    // the banner is tab-independent, so this part IS observable in the default render
+    expect(html).toContain('Restricted-payment trap blocks distributions');
+    expect(html).toContain('does not carry forward');
+  });
+});

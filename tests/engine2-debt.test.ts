@@ -70,6 +70,7 @@ function sized(golden: string) {
     tranches: spec.tranches,
     min_cash: spec.min_cash,
     sweep: { base_pct: spec.sweep_pct, grid: null },
+    distributions: null,
   };
   return sizeStructure(structure, spec.fy_ebitda);
 }
@@ -91,6 +92,7 @@ describe('debt.ts chained year loop reproduces the golden debt blocks — FCF in
           fcf_pre_debt: g.waterfall[y].fcf_pre_debt, // INJECTED per PHASE_C
           min_cash: spec.min_cash,
           sweep_pct: pct,
+          distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
         });
         const ctx = `${golden} Y${y + 1}`;
 
@@ -158,6 +160,7 @@ describe('debt.ts chained year loop reproduces the golden debt blocks — FCF in
           fcf_pre_debt: g.waterfall[y].fcf_pre_debt,
           min_cash: spec.min_cash,
           sweep_pct: spec.sweep_pct,
+          distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
         });
         if (y < N - 1) {
           expect(out.fully_retired, `${golden} Y${y + 1}`).toEqual([]);
@@ -209,6 +212,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
               ],
               min_cash: 5,
               sweep: { base_pct: 0.5, grid: null },
+              distributions: null,
             },
             100,
           );
@@ -232,14 +236,15 @@ describe('debt.ts §3–§5 properties & guards', () => {
         ],
         min_cash: 0,
         sweep: { base_pct: 1, grid: null },
+        distributions: null,
       },
       100,
     );
     let state = openingDebtState(s);
-    const y1 = runDebtYear(s, state, financeLines(s, state), { opening_cash: 0, fcf_pre_debt: 100, min_cash: 0, sweep_pct: 1 });
+    const y1 = runDebtYear(s, state, financeLines(s, state), { opening_cash: 0, fcf_pre_debt: 100, min_cash: 0, sweep_pct: 1, distribution_request: 0, rp_trap_level: null, ebitda_adj: 0 });
     expect(y1.fully_retired).toEqual(['Stub']);
     expect(y1.state_end.term_balances[0]).toBe(0);
-    const y2 = runDebtYear(s, y1.state_end, financeLines(s, y1.state_end), { opening_cash: y1.waterfall_row.closing_cash, fcf_pre_debt: 50, min_cash: 0, sweep_pct: 1 });
+    const y2 = runDebtYear(s, y1.state_end, financeLines(s, y1.state_end), { opening_cash: y1.waterfall_row.closing_cash, fcf_pre_debt: 50, min_cash: 0, sweep_pct: 1, distribution_request: 0, rp_trap_level: null, ebitda_adj: 0 });
     expect(y2.fully_retired).toEqual([]); // already retired at open — not re-reported
   });
 
@@ -253,24 +258,25 @@ describe('debt.ts §3–§5 properties & guards', () => {
         ],
         min_cash: 2,
         sweep: { base_pct: 0, grid: null },
+        distributions: null,
       },
       100,
     );
     let state = openingDebtState(s);
     // Y1: deep hole — full draw to the commitment, closing far below the floor
-    const y1 = runDebtYear(s, state, financeLines(s, state), { opening_cash: 2, fcf_pre_debt: -50, min_cash: 2, sweep_pct: 0 });
+    const y1 = runDebtYear(s, state, financeLines(s, state), { opening_cash: 2, fcf_pre_debt: -50, min_cash: 2, sweep_pct: 0, distribution_request: 0, rp_trap_level: null, ebitda_adj: 0 });
     expect(y1.revolver_row!.ending_drawn).toBe(5); // exact commitment (ulp contract)
     expect(y1.waterfall_row.cash_floor_breach).toBe(true);
     expect(y1.waterfall_row.closing_cash).toBeLessThan(0);
     // Y2: RUNS on the inherited negative opening cash (pre-v1.0.3 kernels threw here)
     const l2 = financeLines(s, y1.state_end);
-    const y2 = runDebtYear(s, y1.state_end, l2, { opening_cash: y1.waterfall_row.closing_cash, fcf_pre_debt: 10, min_cash: 2, sweep_pct: 0 });
+    const y2 = runDebtYear(s, y1.state_end, l2, { opening_cash: y1.waterfall_row.closing_cash, fcf_pre_debt: 10, min_cash: 2, sweep_pct: 0, distribution_request: 0, rp_trap_level: null, ebitda_adj: 0 });
     expect(y2.waterfall_row.cash_floor_breach).toBe(true);
     // conservation, not clamping: closing = opening + FCF − interest (commitment fully drawn ⇒ no fee, no headroom to draw)
     expect(y2.waterfall_row.closing_cash).toBeCloseTo(y1.waterfall_row.closing_cash + 10 - l2.cash_interest_total - l2.commitment_fee, 9);
     // Y3: cure — repays the revolver in full, flag clears
     const l3 = financeLines(s, y2.state_end);
-    const y3 = runDebtYear(s, y2.state_end, l3, { opening_cash: y2.waterfall_row.closing_cash, fcf_pre_debt: 60, min_cash: 2, sweep_pct: 0 });
+    const y3 = runDebtYear(s, y2.state_end, l3, { opening_cash: y2.waterfall_row.closing_cash, fcf_pre_debt: 60, min_cash: 2, sweep_pct: 0, distribution_request: 0, rp_trap_level: null, ebitda_adj: 0 });
     expect(y3.revolver_row!.repayment).toBeCloseTo(5, 9);
     expect(y3.state_end.revolver_drawn).toBe(0);
     expect(y3.waterfall_row.cash_floor_breach).toBe(false);
@@ -286,7 +292,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
       commitment_fee: 0.005, maturity_years: 5, drawn_at_close: 0,
     };
     const structureWith = (t: TrancheAssumption) =>
-      sizeStructure({ tranches: [t, rcf], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100);
+      sizeStructure({ tranches: [t, rcf], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100);
     expect(() => validateStructureForHold(structureWith(term(5)), 5)).toThrow(RangeError);
     expect(() => validateStructureForHold(structureWith(term(4)), 5)).toThrow(RangeError);
     expect(() => validateStructureForHold(structureWith(term(6)), 5)).not.toThrow();
