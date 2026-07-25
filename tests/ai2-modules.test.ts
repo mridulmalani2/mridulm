@@ -81,6 +81,20 @@ describe('E4 — redline + memo', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order); // R&P order preserved
     expect(md).not.toMatch(/\d\.\d{8,}/); // format boundary holds in the memo too
     expect(md).toContain('a range, not a point');
+    // §11: FY entry ⇒ the price line says "FY EBITDA", never "NTM"
+    expect(md).toContain('FY EBITDA');
+    expect(md).not.toContain('NTM');
+  });
+
+  it('§11 memo NTM entry: the price line states NTM and adds the FY/LTM-canonical multiple (directed — NTM golden-uncovered)', () => {
+    const ntm = { ...g2a, entry: { ...g2a.entry, basis: 'ntm' as const } };
+    const md = memoSkeleton(runModel(g2facts, ntm), 'USD');
+    const price = md.slice(md.indexOf('## Purchase price'), md.indexOf('## Sources'));
+    expect(price).toContain('NTM EBITDA');          // the true basis
+    expect(price).toContain('FY/LTM EBITDA');        // §11 "shows both, LTM canonical"
+    expect(price).toContain('canonical sizing basis');
+    // the false 'at X FY EBITDA' framing (multiple on NTM but labelled FY) must be gone
+    expect(price).not.toMatch(/at \d[\d.]*x FY EBITDA/);
   });
 
   it('memo: leverage bases are labelled, the basis caveat sits in Caveats, and no imperative leaks into the deliverable (§11 v1.1.2)', () => {
@@ -91,8 +105,9 @@ describe('E4 — redline + memo', () => {
     expect(credit).toContain('final-year NET leverage');
     expect(md).not.toContain('Entry net leverage');
     // memoSkeleton output is a DOWNLOADED DELIVERABLE, not a prompt — an instruction here
-    // lands in the document handed to an IC, and MEMO_POLISH_SYSTEM would preserve it as
-    // content rather than obey it. The basis disclosure belongs in Caveats (hostile F3).
+    // would land in the document handed to an IC. The basis disclosure belongs in Caveats
+    // (hostile F3). The memo path is now LLM-free (the polish pass was deleted, owner
+    // decision 2026-07-25), so no prompt can leak into it in the first place.
     expect(credit).not.toMatch(/\bdo not present\b|\byou (must|should)\b|\bnote that\b/i);
     const caveats = md.slice(md.indexOf('## Caveats'));
     expect(caveats).toContain('Entry leverage is GROSS');

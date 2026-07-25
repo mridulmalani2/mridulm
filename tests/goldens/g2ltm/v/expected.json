@@ -1,0 +1,17 @@
+{
+ "badge": "stale",
+ "case": "v",
+ "ebitda": {
+  "as_of": "2023-12-31",
+  "basis": "fy",
+  "value": 238.0
+ },
+ "notes": [],
+ "refusal_reason": "FY not adjacent to current partial (fiscal-year-end change)",
+ "revenue": {
+  "as_of": "2023-12-31",
+  "basis": "fy",
+  "value": 950.0
+ },
+ "stitched": false
+}

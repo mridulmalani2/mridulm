@@ -25,6 +25,10 @@ import type { CreditYear, DealAssumptions, DealFacts, ExitBlock, ModelOutput, Re
 
 export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2ValueBridge };
 
+// Display-derivation helpers (entryMultipleDisplay / exitMultipleDisplay) live in `./display.ts`,
+// OFF the engine-arithmetic path, so a facade.ts diff still means "engine arithmetic changed"
+// (tier-governance sign-off round 4). facade.ts assembles the MODEL; display.ts formats it.
+
 /** Assemble the §9 exit block from the core (shared by facade and scenarios.ts). */
 export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock {
   const N = assumptions.entry.hold_years;

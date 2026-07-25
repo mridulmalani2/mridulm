@@ -1,0 +1,17 @@
+{
+ "badge": "aging",
+ "case": "vi",
+ "ebitda": {
+  "as_of": "2024-12-31",
+  "basis": "fy",
+  "value": 250.0
+ },
+ "notes": [],
+ "refusal_reason": "Revenue YTD_prior restated >1% vs original \u2014 cross-vintage basis mix (restated: 760 (filed 2024-11-01) -> 700 (filed 2025-11-01))",
+ "revenue": {
+  "as_of": "2024-12-31",
+  "basis": "fy",
+  "value": 1000.0
+ },
+ "stitched": false
+}

@@ -13,6 +13,7 @@ import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/forma
 import BasisBadge from './BasisBadge';
 import type { DealAssumptions, CashPayTrancheAssumption } from '../../../lib/engine2/types';
 import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
+import { allInRate } from '../../../lib/engine2/kernel/rates';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
@@ -88,11 +89,11 @@ const AssumptionsPanel: React.FC = () => {
   // senior/unitranche tranche only, so a deal with a PIK note or mezz (golden G3: senior
   // 3.0x + PIK 1.5x) showed "3.0x" beside a 4.5x headline on the same screen.
   const termLeverage = entryGrossLeverageFromAssumptions(facts, a);
-  const blendedRate = term
-    ? term.pricing.kind === 'floating'
-      ? Math.max(term.pricing.base_rate, term.pricing.floor) + term.pricing.spread
-      : term.pricing.rate
-    : null;
+  // §4 all-in rate through the ONE engine primitive (debt.ts sizes interest with the same
+  // call) — never re-implemented here. Inlining `max(base,floor)+spread` was a second
+  // calculation path for an engine number: if §4's floor convention ever moved, this preview
+  // would silently disagree with the interest the engine actually charges.
+  const blendedRate = term ? allInRate(term.pricing) : null;
   const g = a.operations.growth;
 
   return (

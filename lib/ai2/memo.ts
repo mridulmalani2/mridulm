@@ -1,30 +1,37 @@
 /**
- * lib/ai2/memo.ts — the v2 memo generator (PHASE_E §E4). The SKELETON is deterministic
- * — pure ModelOutput → markdown in the R&P panel order recorded in conventions.json
+ * lib/ai2/memo.ts — the v2 memo generator (PHASE_E §E4). The memo is DETERMINISTIC —
+ * pure ModelOutput → markdown in the R&P panel order recorded in conventions.json
  * `presentation.summaryPanelOrder` (price & multiples → S&U → returns → capitalization
- * → credit → FCF), so the memo never states a number the exhibits don't.
+ * → credit → FCF), so it never states a number the exhibits don't. There is no LLM in the
+ * memo path: an earlier design carried a `MEMO_POLISH_SYSTEM` prompt for an optional LLM
+ * polish pass, but it was never wired, and putting an LLM in a numbers-bearing IC
+ * deliverable is a liability the 100%-accuracy regime declines (owner decision, 2026-07-25).
+ * If a polished memo is ever wanted, it re-enters with an ENFORCED number-preservation guard
+ * (every formatted figure survives verbatim or the deterministic skeleton is used instead) —
+ * a guarantee, not a prompt request; the skeleton stays the source of truth either way.
  *
- * The skeleton is the ONLY memo path that ships today. `MEMO_POLISH_SYSTEM` below is the
- * intended optional LLM polish pass and has **no call site** — the downloaded memo is
- * always the deterministic skeleton, never model-written prose. Stated because the module
- * previously described the polish pass as though it ran (hostile review F3, 2026-07-24).
- *
- * `memoSkeleton` output is a USER-FACING DELIVERABLE, not a prompt: Workbench's
- * `downloadMemo` turns it straight into `<Entity>_memo.md`. Nothing in it may be phrased as
- * an instruction — an imperative here lands in the document an analyst hands to an IC, and
- * `MEMO_POLISH_SYSTEM` would treat it as content to preserve, not guidance to obey. Basis
- * caveats and disclosures belong in the `## Caveats` section, which is the designated slot
- * (it already carries the coherence flags and the §15 range line). [Hostile review F3,
- * 2026-07-24 — this rule exists because it was broken.]
+ * `memoSkeleton` output is a USER-FACING DELIVERABLE: Workbench's `downloadMemo` turns it
+ * straight into `<Entity>_memo.md`. Nothing in it may be phrased as an instruction — an
+ * imperative here would land in the document an analyst hands to an IC. Basis caveats and
+ * disclosures belong in the `## Caveats` section, the designated slot (it already carries
+ * the coherence flags and the §15 range line). [Hostile review F3, 2026-07-24 — this rule
+ * exists because it was broken.]
  */
 
-import type { Engine2ModelOutput } from '../engine2/facade';
+import { type Engine2ModelOutput } from '../engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay } from '../engine2/display';
 import { money, multiple, num, pct } from '../format';
 import type { Engine2Currency } from '../format';
 
 export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): string {
   const su = o.sources_uses;
-  const exitMult = o.exit.exit_ev / o.exit.exit_ebitda_basis_value;
+  const exitMult = exitMultipleDisplay(o);
+  // §11: state the entry multiple's ACTUAL basis (NTM under an NTM entry — "FY EBITDA" was a
+  // false label there), and add the FY/LTM-canonical figure when NTM ("shows both, LTM canonical").
+  const em = entryMultipleDisplay(o);
+  const entryMultipleClause = em.fy_canonical === null
+    ? `${multiple(em.valuation)} FY EBITDA (${money(o.facts.fy_ebitda, ccy)})`
+    : `${multiple(em.valuation)} NTM EBITDA — ${multiple(em.fy_canonical)} on FY/LTM EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
   const totalDebt = o.derived.total_debt_at_par;
   const capTotal = totalDebt + su.rollover_equity + su.sponsor_equity;
   const capRow = (name: string, amt: number) =>
@@ -34,7 +41,7 @@ export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): strin
   return `# ${o.facts.entity_name} — LBO summary (engine2)
 
 ## Purchase price & multiples
-Entry EV ${money(o.derived.enterprise_value, ccy)} at ${multiple(o.derived.entry_multiple)} FY EBITDA (${money(o.facts.fy_ebitda, ccy)}); exit at ${multiple(exitMult)} in year ${o.assumptions.entry.hold_years}.
+Entry EV ${money(o.derived.enterprise_value, ccy)} at ${entryMultipleClause}; exit at ${multiple(exitMult)} in year ${o.assumptions.entry.hold_years}.
 
 ## Sources & uses
 | Uses | | Sources | |
@@ -68,10 +75,3 @@ ${o.coherence.length ? o.coherence.map((f) => `- ${f.severity === 'block' ? 'BLO
 - A model is a range, not a point — see the Sensitivity and Scenarios exhibits (SPEC §15).
 `;
 }
-
-/**
- * Polish prompt: prose only; introducing figures not present in the skeleton is forbidden.
- * NOT WIRED — zero call sites. Kept as the recorded design for the optional polish pass;
- * if it is ever wired up, every basis caveat in `## Caveats` must survive the rewrite.
- */
-export const MEMO_POLISH_SYSTEM = `You are a PE investment-memo editor. Rewrite the user's markdown memo into crisp IC prose, PRESERVING every number, table and section exactly — you may reword sentences and add connective narrative, but you must NOT introduce, alter or remove any figure. Return markdown only.`;

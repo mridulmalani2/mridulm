@@ -9,7 +9,8 @@
  */
 
 import ExcelJS from 'exceljs';
-import type { Engine2ModelOutput } from './facade';
+import { type Engine2ModelOutput } from './facade';
+import { entryMultipleDisplay, exitMultipleDisplay } from './display';
 
 const MONEY = '#,##0.0';
 const MONEY2 = '#,##0.00';
@@ -46,11 +47,19 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
   //    price & multiples → S&U → returns → capitalization → credit → FCF. The
   //    on-screen Summary tab is the returns-first dashboard VARIANT of the same data.
   const capTotal = o.derived.total_debt_at_par + o.sources_uses.rollover_equity + o.sources_uses.sponsor_equity;
+  const entryMult = entryMultipleDisplay(o);
   sheetFromRows(wb, 'Summary', [`${o.facts.entity_name} — ${currency}m (R&P panel order)`, ''], [
     ['— PURCHASE PRICE & MULTIPLES —', null],
     ['Enterprise value', o.derived.enterprise_value],
-    ['Entry multiple (FY)', o.derived.entry_multiple],
-    ['Exit multiple', o.exit.exit_ev / o.exit.exit_ebitda_basis_value],
+    // §11: label the entry multiple by its ACTUAL basis (it is NTM-based under an NTM entry,
+    // where 'Entry multiple (FY)' was a false label), and show the FY/LTM-canonical figure
+    // alongside it when NTM ("shows both, LTM canonical"). FY deals get exactly one row,
+    // unchanged.
+    [`Entry multiple (${entryMult.basis_label})`, entryMult.valuation],
+    ...(entryMult.fy_canonical !== null
+      ? [['Entry multiple (FY/LTM, canonical)', entryMult.fy_canonical] as Cell[]]
+      : []),
+    ['Exit multiple', exitMultipleDisplay(o)],
     ['— SOURCES & USES —', null],
     ['Total uses', o.sources_uses.total_uses],
     ['Debt at par', o.derived.total_debt_at_par],

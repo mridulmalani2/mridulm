@@ -42,6 +42,9 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
     };
     expect(cellByLabel('Sponsor IRR')).toBe(output.returns.sponsor_net.irr);
     expect(cellByLabel('Enterprise value')).toBe(output.derived.enterprise_value);
+    // §11: entry multiple is labelled by its ACTUAL basis. G2 is an FY entry ⇒ one row
+    // labelled '(FY)', value = derived.entry_multiple, and NO stray canonical row.
+    expect(cellByLabel('Entry multiple (FY)')).toBe(output.derived.entry_multiple);
     // §11 [v1.1.2] — the LABEL is the thing under test here, not just the number. This row
     // used to read 'Entry net leverage (FY)' directly above a genuinely-net final-year row,
     // so the workbook presented a deleveraging series spanning two bases. Nothing tested
@@ -78,6 +81,21 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
     // grid starts at row 3 (title, header); center cell = row 3+2, col 2+2
     expect(ws.getCell(5, 4).value).toBe(output.sensitivity![0].irr[2][2]);
     expect(output.sensitivity![0].irr[2][2]).toBe(output.returns.sponsor_net.irr); // §14.7
+  });
+
+  it('§11 NTM entry: the multiple row is labelled (NTM), a canonical FY/LTM row appears, and no (FY) mislabel survives', async () => {
+    // NTM is golden-uncovered; directed. G2 growth[0]=6% ⇒ NTM ≠ FY.
+    const ntm = { ...GOLDEN_DEALS.G2.assumptions, entry: { ...GOLDEN_DEALS.G2.assumptions.entry, basis: 'ntm' as const } };
+    const out = runModelWithScenarios(GOLDEN_DEALS.G2.facts, ntm, {});
+    const rb = await roundTrip(buildEngine2Workbook(out, 'USD'));
+    const sum = rb.getWorksheet('Summary')!;
+    const rows: [string, unknown][] = [];
+    sum.eachRow((row) => rows.push([String(row.getCell(1).value ?? ''), row.getCell(2).value]));
+    const byLabel = (l: string) => rows.find((r) => r[0] === l)?.[1];
+    expect(byLabel('Entry multiple (NTM)')).toBe(out.derived.entry_multiple);
+    expect(byLabel('Entry multiple (FY/LTM, canonical)')).toBeCloseTo(out.derived.enterprise_value / out.derived.entry_ebitda_for_sizing, 9);
+    // the whole point: the false '(FY)' label must NOT appear on an NTM entry
+    expect(rows.some((r) => r[0] === 'Entry multiple (FY)')).toBe(false);
   });
 
   it('null semantics: a no-debt deal exports credit ratios as the literal "N/A" — never 9999', async () => {

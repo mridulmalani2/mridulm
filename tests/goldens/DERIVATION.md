@@ -288,3 +288,62 @@ disagree with these fixtures; disputes reopen only via spec amendment + re-deriv
 `tests/engine2-sequence.test.ts` carries a self-deleting `PENDING_G1_KEYS` list so the C5
 gate stays green while the engine lags the fixtures; the guard test fails the moment
 `runCore` emits any step-7 column, forcing the list's removal.
+
+---
+
+## Phase G-2 — quarter-stitched LTM sizing basis (Tier B, SPEC §1.1 GRANTED)
+
+**Method** (2026-07-25): the reference is `scripts/goldens/ltm_stitch.py` — a SPEC §1.1-literal
+Python implementation of the LTM stitch, different language from the extraction code, ZERO repo
+imports. It consumes synthetic companyfacts-shaped fixtures (the exact `CompanyFacts → concept →
+unit → [{start,end,val,filed,form}]` shape `lib/edgar/history.ts` reads) and writes
+`tests/goldens/g2ltm/<case>/expected.json`. `tests/goldens-g2ltm.test.ts` re-runs it and fails on
+drift, and re-asserts the §1.1 stitch/refusal decisions in CI. This adjudicates the DATA-SIDE
+stitch only — the engine is untouched (Tier B). The step-3 extraction PR adds the conformance test
+`stitch(fixture) === expected.json` once the TS stitch exists.
+
+**Line → SPEC §1.1 mapping**: `classify` = the widened day-count windows (full 350–380 / 9M
+250–285 / 6M 165–200 / quarter 80–100); `dedupe` = history.ts rule 2 (latest `filed` wins, >1%
+note vs earliest, vintage_count for M1 presence); `canonical_spans` = ONE anchor `e`, shared FY /
+YTD_current / YTD_prior keys for revenue AND every EBITDA component (never per-metric spans);
+gates = F1 abutment (`FY.end+1d == cur.start`), F7 52/53 (|Δspan| ≤ 7d), F3/M1 vintage
+(prior-YTD `vintage_count ≥ 2` AND no >1% note on any span); `stitch` = `LTM = FY + YTD_c − YTD_p`
+with EBITDA per component (OperInc + D&A), F4 single-basis pair (either refuses ⇒ BOTH → FY),
+`badge` = fresh ≤4.5m / aging ≤14.5m / stale.
+
+**Reference results (2026-07-25)**: (i) clean mid-year PROCEEDS rev 1080.0 / EBITDA 267.0 fresh;
+(ii) 52/53-week PROCEEDS rev 1080.0 with the ≤7d disclosure note; (iii) FPI → FY 1000.0/250.0
+aging, no stitch; (iv) missing D&A component → BOTH FY (EBITDA recomputed to FY 250.0, not the
+stitched 267); (v) FYE-change abutment failure → FY 950.0/238.0 stale; (vi) restated prior-YTD
+760→700 (7.9%) → BOTH FY (EBITDA FY 250.0, not the stitched value — the pair-fallback bug the
+self-review caught); (vii) OperInc absent at prior-YTD → BOTH FY; (viii) NTM base case PROCEEDS
+rev 1320.0 / EBITDA 328.0; (ix) ESEF single-vintage prior-YTD → FY, fail-closed (un-evaluable).
+
+**Author self-review (2026-07-25)**: the first oracle draft had two defects, both caught before
+adjudication by checking outputs against the hand design: (1) the pair fallback kept the *stitched*
+EBITDA instead of recomputing FY (vi showed 267, must be 250); (2) EBITDA components selected spans
+independently, so a component absence refused for the wrong reason and risked a cross-period mix
+(Sep-2025 OI + Sep-2024 D&A). Both fixed by the canonical-shared-spans rewrite.
+
+**Adjudication (PHASE_B rule — two independent passes; a golden is gospel only after signed).**
+Each adjudicator hand-derives the assigned cases from SPEC §1.1 and the raw fixture inputs, NOT
+from `ltm_stitch.py`'s algorithm, at the ±$0.005m / ±0.1bp bar.
+
+- [x] **Adjudication pass 1 (2026-07-25, agent aa390b6): SIGNED.** Cases (i, ii, iii, iv, viii)
+  hand-derived from §1.1 + raw facts (no reuse of the reference algorithm): the PROCEEDS
+  arithmetic component-wise (i/viii rev 1080/1320, EBITDA 267/328), the badges, the (iii) FPI
+  and (iv) missing-component fallbacks. 5/5 EXACT (Δ=0.00), zero mismatches beyond ±$0.005m.
+  Confirmed the (iv) F4 discipline (revenue forced to FY 1000, not the individually-stitchable
+  1080) and that the 52/53 disclosure note attaches only to the genuine 7-day signature (ii),
+  not the 1-day leap artifact (i/viii) — the reference's reading is correct.
+- [x] **Adjudication pass 2 (2026-07-25, agent a51ab1b): SIGNED.** Refusal branches (v abutment,
+  vi restatement, vii component, ix vintage) + independent re-derivation of (i) and (viii). 6
+  EXACT (Δ=0.00). Verified the two self-review fixes hold: (vi) EBITDA = FY 250, NOT the stitched
+  267 (pair fallback recomputes FY — same in v=238, vii/ix=250); and refusals attributed to the
+  CORRECT gate (v=abutment only, vii=OperInc-absent), no misattribution. Every FY-fallback revenue
+  uses FY (vii 1000 not 1080; v 950 not 990), and every as_of anchors correctly (stitch→e,
+  fallback→FY period-end).
+
+**Status: g2ltm fixtures (i)–(ix) are GOSPEL** (both independent passes signed, ±$0.005m). The
+step-3 extraction/adapter PR's TS stitch is wrong wherever it disagrees; disputes reopen only via
+a §1.1 amendment + re-derivation.
