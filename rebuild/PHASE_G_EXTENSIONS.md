@@ -8,8 +8,32 @@ The full 5-step template is correct for anything that changes a computed number,
 runs steps that ADJUDICATE NOTHING on features that add no engine arithmetic (a "golden
 extension" for a pure-exposure feature is a literal no-op; an adjudication has no new number
 to check). Three tiers, assigned by **what a feature actually computes**, not by how big it
-feels. The gate is never self-declared loosely — a lighter tier must PROVE it qualifies (the
-escalation rule below), and the conformance review checks that proof.
+feels. The gate is never self-declared loosely — a lighter tier must PROVE it qualifies, and
+the conformance review checks that proof against the DIFF, not the author's summary.
+
+**Tier is assigned PER CHANGED NUMBER, not per feature [hostile review 2026-07-25].** A
+feature with even one Tier-A component IS Tier A, OR must be DECOMPOSED into separately-gated
+PRs with the arithmetic component gated as full Tier A. "That part is Tier A" is a hard
+decomposition requirement, never a parenthetical the author self-applies.
+
+**THE ADMISSION TICKET IS SOURCE-CONTAINMENT, NOT GOLDEN-OUTPUT [hostile review 2026-07-25 —
+this replaces the original byte-identity ticket, which was VACUOUS].** "Engine goldens
+regenerate byte-identically" is NECESSARY but NOT SUFFICIENT to prove a feature is data-side:
+this project's own `tests/goldens/DERIVATION.md` records engine-arithmetic mutations that
+left every golden byte-identical (the §10 `total→share` hurdle mutation passed 402/402;
+dropping the blocked-flag request term passed 402/402), and whole `runModel` regions are
+golden-uncovered by design (NTM basis, static-vs-forward rates, the §12 walk-down, EBITDA_adj
+≤ 0). Byte-identity proves only "no GOLDEN-COVERED arithmetic moved." The real ticket is a
+**mechanical, coverage-independent git-diff**:
+
+> **The ENGINE ARITHMETIC PATH** = `lib/engine2/kernel/**` + the modules behind `facade.ts`
+> that compute numbers: `operating, tax, debt, sequence, exit, returns, credit, bridge,
+> sourcesUses, openingBalance, scenarios, facade, check`. A Tier-B PR touches ZERO lines of
+> this path (except purely-additive Class-A/Class-C type fields in `types.ts`); a Tier-C PR
+> touches zero lines of it AND zero lines of `types.ts`. Verified by `git diff origin/main --
+> <paths>` in the conformance review. Byte-identical goldens remain a REQUIRED secondary
+> check — but the git-diff is what actually distinguishes "data-side" from "golden-uncovered
+> engine edit."
 
 ### Tier A — touches ENGINE ARITHMETIC (adds/changes a number inside `runModel`)
 The full five steps, unchanged (this is exactly what G-1 ran):
@@ -26,47 +50,73 @@ Backlog Tier A: #3 fund overlay, #5 refinancing, #7 partial exits, #8 sweet equi
 add-ons.
 
 ### Tier B — its OWN arithmetic, but DATA-SIDE (computes a FACT the engine consumes; the
-### engine's own numbers are unchanged)
-Same rigour, redirected at the NEW computation instead of the engine goldens:
+### engine arithmetic path is UNTOUCHED)
+Same rigour, redirected at the NEW computation with the SAME enforceable mechanisms Tier A's
+goldens carry — "same rigour" means the MECHANISM, not the adjective:
 1. **Spec amendment PR** (as Tier A) — the new data convention + formula + rejected
    alternative + independent hostile sign-off.
-2. **Data-layer fixtures + independent adjudication** of the new arithmetic (e.g. the LTM
-   stitch `FY + YTD − prior-YTD`), NOT an engine-golden regen. **PROOF OBLIGATION: every
-   existing `tests/goldens/*` fixture must regenerate BYTE-IDENTICALLY** — that byte-identity
-   IS the evidence the feature is data-side and not Tier A. If any golden moves, it is Tier A.
-3. **Extraction/adapter PR** + fixtures + an accuracy audit SCOPED to the new computation
-   (independence, no rounded value re-entering, drift bound).
-4. **UI PR** (disclosure tier + badge basis; e.g. staleness badges).
-5. **Adversarial conformance review** + the three-issuer walkthrough.
-Backlog Tier B: #2 quarter-stitched LTM, #4 reality-check comps, #10 market-data suggestions.
+2. **Data-layer fixtures + independent adjudication BOUND TO THE `DERIVATION.md` METHOD
+   VERBATIM**: a reference derivation in a DIFFERENT LANGUAGE with ZERO imports of the code
+   under test, TWO independent hand-derivation passes, the SAME ±$0.0125m / ±0.1bp bar,
+   "gospel only after signed" — AND a **CI regeneration gate** for the new fixtures
+   equivalent to `tests/goldens.test.ts` (a scheduled test re-runs the reference derivation
+   and fails on any drift). An ordinary same-language fixture with no regeneration gate is
+   NOT acceptable — that is the "adjudicated by the same logic that computes it" failure.
+3. **Extraction/adapter PR** + the source-containment diff proof (empty diff over the engine
+   arithmetic path) + an accuracy audit SCOPED to the new computation (independence, no
+   rounded value re-entering, drift bound).
+4. **UI PR** (disclosure tier + badge basis; e.g. staleness badges) — under Tier C's display
+   rules (mechanical field-trace + label mutation tests, below).
+5. **Adversarial conformance review** (verifies the diff proof + the tier choice) + the
+   three-issuer walkthrough.
+Backlog Tier B: #2 quarter-stitched LTM, #4 reality-check comps, #10 market-data suggestions,
+#11 covenant step-downs (a step-down SCHEDULE is data the engine consumes — see the table).
 
-### Tier C — PURE EXPOSURE (no new arithmetic anywhere)
+### Tier C — PURE EXPOSURE (no new arithmetic, no new engine/type code)
 For features that only render or wire fields that ALREADY exist and are already SPEC-traced:
-1. **Spec note** (convention + rejected alternative if any) + changelog row.
+1. **Spec note** (convention + rejected alternative if any) + changelog row + **independent
+   hostile sign-off** (thin on a convention that gates a DISPLAYED state — e.g. a covenant
+   label — is still governance; a Tier-C spec note is NOT exempt from sign-off).
 2. **UI PR** (input/output surface at the right disclosure tier).
 3. **Adversarial conformance review** + the three-issuer walkthrough.
-NO golden extension, NO adjudication — there is nothing to adjudicate.
-**HARD ESCALATION GATE (checked by the conformance review, not self-declared):** a feature
-is Tier C only if it PROVES both — (a) all engine goldens regenerate byte-identically, and
-(b) it introduces no DISPLAYED number that is not already a ModelOutput field tracing to a
-SPEC section. Fail (a) ⇒ Tier A. Fail (b) with a new derived value ⇒ Tier B (adjudicate the
-derivation) or Tier A (if it enters `runModel`). Any new UI assertion still gets the
-mutation check (the G-1 vacuous-assertion lesson applies at every tier).
-Backlog Tier C: #11 covenant step-downs UI/springing (engine fields exist from v1),
-#12 trace mode v2 (renders existing ModelOutput with SPEC-section links).
+NO golden extension, NO adjudication of a NEW number — there is none. But the DISPLAY gate is
+NOT weaker than Tier A/B; it is the same, because the v1.1.2/v1.1.3 defects (correct value,
+WRONG basis label, on displayed surfaces) were pre-existing, survived every prior walkthrough,
+and were caught by ADJUDICATORS + directed MUTATION tests, never by goldens:
+**HARD ESCALATION + DISPLAY GATE (mechanical, checked against the diff):**
+- (a) **Source containment**: the git-diff over the engine arithmetic path AND `types.ts` is
+  EMPTY. Fail ⇒ escalate (a new engine field ⇒ A; a new derived data value ⇒ B).
+- (b) **Every displayed value resolves to a NAMED `ModelOutput` field through `lib/format`** —
+  enforced, not asserted: no inline arithmetic in the render path (a UI cell computing
+  `EBITDA − threshold` is a SECOND CALCULATION PATH, forbidden by ENGINE_ARCHITECTURE §4).
+  The conformance review greps the changed render code for arithmetic operators on model
+  values; any hit escalates to B (adjudicate the derivation).
+- (c) **LABEL COVERAGE**: every displayed field — new OR relabelled — carries a
+  MUTATION-TESTED basis/label assertion (the v1.1.2/v1.1.3 lesson: "zero label assertions
+  were added for a defect that WAS a label"). A feature that renders numbers ANNOTATED with a
+  basis or SPEC-section (trace v2, covenant labels) additionally carries the label-adjudication
+  that caught v1.1.2/v1.1.3 — it does NOT skip adjudication merely for adding "no new number":
+  a mislabel of a correct number is exactly what Tier C must catch.
+Backlog Tier C: #12 trace mode v2 (renders existing ModelOutput with SPEC-section links —
+its native failure mode IS the mislabel class, so gate (c) is load-bearing here).
 
-**Why this is safe.** The 100%-accuracy guarantee lives in the ENGINE goldens + the
-displayed-number-traces-to-SPEC rule, and every tier still defends both: Tier A re-derives
-them, Tier B PROVES them byte-unchanged (that proof is the tier's admission ticket), and
-Tier C proves them byte-unchanged AND no new untraced number. A lighter tier can only ever
-mean "there is demonstrably nothing here to adjudicate," never "we adjudicated less."
+**Why this is safe — with the fix.** The 100%-accuracy guarantee is defended by TWO things:
+the ENGINE goldens/adjudication for arithmetic, and the displayed-number rules (field-trace +
+label mutation tests) for surfaces. Every tier defends both — but the ADMISSION TICKET is now
+the mechanical source-containment diff (coverage-independent), not golden byte-identity
+(coverage-dependent, and provably passable by golden-uncovered engine edits). Tier B redirects
+the SAME adjudication mechanism (different-language reference + two passes + regeneration gate)
+at the new computation; Tier C adds no number and mutation-tests every label. A lighter tier
+means "the diff proves there is nothing here to adjudicate" — which is checkable — NOT "we
+adjudicated less." (The original doc's "byte-identity IS the evidence" claim was the exact
+vacuous-proof pattern G-1 spent three hostile rounds learning to distrust; it is retracted.)
 
 ## Ordered backlog (re-derived from the audit + product review; owner may reorder)
 
 | # | Tier | Feature | Notes for its spec |
 |---|---|---|---|
 | 1 | A | ✅ **DONE 2026-07-25** — **Interim distributions + cash trap** | Unlocks DPI/RVPI/TVPI + payback properly (ILPA defs from DR-2); the feared same-year cycle DISSOLVED: §3.7's pro-forma test is linear in the payment, so rp_max has a closed form and the no-solver rule holds (SPEC v1.1.0 §5). Shipped as SPEC v1.1.0/v1.1.1 + goldens G2-DIST / G3-DIST / G2-DIST-D + engine + UI |
-| 2 | **B** | **Quarter-stitched LTM** | FY + YTD − prior-YTD, Q4 = FY − 9M, 52/53-week fixtures; FPI stays FY with staleness badge. DATA-SIDE: computes a more-current LTM fact the engine consumes; the engine's own arithmetic is unchanged (engine goldens must stay byte-identical — that is the Tier-B proof). Adjudicate the STITCH, not the engine goldens |
+| 2 | **B** | **Quarter-stitched LTM** | FY + YTD − prior-YTD, Q4 = FY − 9M, 52/53-week fixtures; FPI stays FY with staleness badge. DATA-SIDE: computes a more-current LTM fact the engine consumes. Admission ticket = EMPTY git-diff over the engine arithmetic path (NOT golden byte-identity — that is necessary-secondary). Adjudicate the STITCH with a different-language reference derivation + two passes + a CI regeneration gate (the DERIVATION.md method) |
 | 3 | A | **Fund/LP overlay** | Net-to-LP after fees/carry (European/American), reuses old fundReturns spec knowledge; feeds a fourth return row clearly labelled fund-level |
 | 4 | B | **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |
 | 5 | A | **Refinancing events** | Repricing, premium, extend; OID/DFC write-off interplay already spec'd in §7/§9 |
@@ -74,8 +124,8 @@ mean "there is demonstrably nothing here to adjudicate," never "we adjudicated l
 | 7 | A | **Partial exits / IPO selldown** | Interacts with MIP cap (SPEC §10 already forward-compatible) |
 | 8 | A | **MIP ratchets + sweet equity** | Sweet equity as a REAL strip structure (institutional loan notes + ordinaries) — the v1 promote stays separate; never blend the two instruments |
 | 9 | A | **Add-on acquisitions** | The old engine's deepest wound (debt discarded, scenario bases diverged): spec must state add-on debt enters the SAME waterfall, scenario/sensitivity bases include add-ons by construction (single code path guarantees it) |
-| 10 | B | **Market-data suggestions** | FRED SOFR curve + spreads by rating → SUGGESTED (market) badge tier goes live; forward base-rate paths into §4 (data-side suggestion values; the ENGINE arithmetic is unchanged — but if a forward-curve path enters `runModel`'s interest, that part is Tier A) |
-| 11 | **C** | **Covenant step-downs UI / springing** | Engine fields exist from v1 spec; expose + scenario integration. Must PROVE the escalation gate (goldens byte-identical, no new untraced number) or escalate |
+| 10 | **B/A** | **Market-data suggestions** | FRED SOFR curve + spreads by rating → SUGGESTED (market) badge tier goes live. The suggestion VALUES are Tier B (data-side). **But a forward base-rate path into §4 interest is Tier A** and MUST be a separate PR gated as full Tier A (golden extension + accuracy audit) — static rates are golden-uncovered, so byte-identity would hide it. Per-changed-number decomposition, not one B stamp |
+| 11 | **B** | **Covenant step-downs / springing** | A step-down SCHEDULE and the springing trigger are DATA the engine consumes to decide a breach STATE that is then displayed — not pure exposure. No golden trips a covenant (G5 is "no breach"), so this is the un-disprovable golden-uncovered case: it must PROVE source-containment (empty engine-arithmetic diff) and mutation-test the displayed breach label, or escalate |
 | 12 | **C** | **Trace mode v2** | Rebuilt against ModelOutput with SPEC-section links in trace cards; renders existing ModelOutput, adds no number (the spec makes traces meaningful: each node cites its formula) |
 
 ## v2 items deferred by SPEC but not yet scheduled (pull into the backlog when prioritized)
@@ -100,10 +150,15 @@ Recorded so every spec deferral has a tracked re-entry path (verifier finding, 2
   construction — it must flow through `runModel`.
 - Each feature's UI enters at the right disclosure tier (almost always Advanced).
 - After every feature: the three-issuer live walkthrough (E gate script) re-runs.
-- **Tier assignment is a claim to be PROVEN, not a label.** Tier B's admission ticket is
-  byte-identical engine goldens; Tier C's is that PLUS no new untraced displayed number. The
-  conformance review verifies the ticket; a failed proof escalates the tier. The lighter
-  tiers never mean "adjudicated less" — only "demonstrably nothing here to adjudicate."
-- **A hostile independent reviewer signs off the TIER CHOICE** for every Tier B/C feature
-  (not just the code) — the cheapest place to catch an under-gated feature is before it
-  ships, and the accuracy guarantee is only as strong as the tier boundary.
+- **Tier assignment is a claim to be PROVEN by a mechanical diff, not a label.** The
+  admission ticket for B and C is an EMPTY git-diff over the engine arithmetic path
+  (`lib/engine2/kernel/**` + the arithmetic modules behind `facade.ts`); Tier C additionally
+  requires an empty `types.ts` diff, a field-trace of every displayed value to a ModelOutput
+  field, and a mutation-tested label assertion for every displayed/relabelled field. Byte-
+  identical goldens are a REQUIRED secondary check but never the proof (they are passable by
+  golden-uncovered engine edits — DERIVATION.md documents two). A failed proof escalates.
+- **Tier is per changed number.** A feature with any Tier-A component is decomposed; the
+  arithmetic PR runs full Tier A. No mixed-tier single PR.
+- **A hostile independent reviewer signs off the TIER CHOICE and the diff proof** for every
+  Tier B/C feature (not just the code) — the cheapest place to catch an under-gated feature
+  is before it ships, and the accuracy guarantee is only as strong as the tier boundary.

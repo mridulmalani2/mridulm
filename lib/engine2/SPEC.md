@@ -64,11 +64,19 @@ allow, and DISCLOSES the as-of date and basis when they do not.
 **This is a DATA-SIDE feature (Tier B).** The ENGINE is unchanged: it still consumes exactly
 one EBITDA number (`DealFacts.fy_ebitda`) and one revenue number, through the same arithmetic.
 G-2 only changes WHAT that number is (a stitched LTM instead of the last FY) and adds its
-provenance/as-of. **Every §17 golden is a MANUAL input set, not EDGAR-derived, so all
-`tests/goldens/*` fixtures regenerate BYTE-IDENTICALLY** — that byte-identity is the Tier-B
-admission ticket (rebuild/PHASE_G_EXTENSIONS.md). The new arithmetic is the STITCH, adjudicated
-by DATA-LAYER fixtures, not by the engine goldens. (Distinct from the deferred *quarterly
-engine periods* below — that would change §1's period model and is Tier A; this does not.)
+provenance/as-of. **Tier-B admission ticket [corrected 2026-07-25 after the tier-governance
+review]: an EMPTY git-diff over the ENGINE ARITHMETIC PATH** (`lib/engine2/kernel/**` + the
+arithmetic modules behind `facade.ts`; changes confined to `lib/edgar/**`, `factsAdapter.ts`,
+additive Class-A `types.ts` fields, and display) — a mechanical, coverage-INDEPENDENT proof.
+Golden byte-identity is a REQUIRED secondary check but NOT the ticket: this project's
+`DERIVATION.md` documents engine mutations that leave every golden byte-identical, and
+`fy_ebitda`'s consumers are golden-covered anyway, so byte-identity alone cannot distinguish
+"data-side" from a golden-uncovered engine edit. The STITCH is adjudicated by DATA-LAYER
+fixtures bound to the `DERIVATION.md` method — a DIFFERENT-LANGUAGE reference derivation with
+zero imports of the code under test, two independent hand-derivation passes, the same
+±$0.0125m / ±0.1bp bar, and a CI regeneration gate equivalent to `tests/goldens.test.ts`. (The
+stitch is DISTINCT from the deferred *quarterly engine periods* below — that would change §1's
+period model and is Tier A; this does not touch the engine arithmetic path at all.)
 
 **Convention.** The sizing EBITDA (and revenue) is the most-current 12-month figure available:
 - **LTM-stitched** when the filer has interim filings covering a partial current year; else
@@ -148,14 +156,21 @@ default.
    stitching gets currency on the SIZING FACT without touching the annual engine.
 
 **Golden/adjudication [Tier B].** Adjudicated by DATA-LAYER fixtures — synthetic
-companyfacts-shaped inputs with quarterly/YTD points — whose stitched output is independently
-hand-derived (the Phase-B adjudication rule, redirected at the stitch). Required fixtures:
+companyfacts-shaped inputs with quarterly/YTD points — whose stitched output is derived by a
+DIFFERENT-LANGUAGE reference implementation (zero imports of the extraction code under test)
+and hand-checked by TWO independent passes at the ±$0.0125m / ±0.1bp bar, then pinned by a CI
+regeneration gate that re-runs the reference and fails on drift (the `tests/goldens.test.ts`
+mechanism, redirected at the stitch — NOT an ordinary same-language fixture, which would be
+adjudicated by the same logic it checks). Required fixtures:
 (i) a clean US GAAP domestic filer mid-year (Q3 interim) — the FY + YTD − prior-YTD path;
-(ii) a 52/53-week filer — the widened day-count windows;
+(ii) a 52/53-week filer — the widened day-count windows (incl. a 53rd-week quarter);
 (iii) an FPI / annual-only filer — the FY-fallback + staleness badge, no stitch;
 (iv) a missing-component case — the per-component refusal → FY fallback with a note;
-(v) a fiscal-year-change / span-hole case — a stub duration in no window is not used.
-The engine goldens are NOT regenerated; their byte-identity is asserted as the Tier-B ticket.
+(v) a fiscal-year-change / span-hole case — a stub duration in no window is not used;
+(vi) a restated prior-YTD across filing vintages — the latest-vintage rule keeps FY and both
+     YTD spans on a consistent vintage (the stitch must not mix vintages).
+The engine goldens are NOT regenerated; their byte-identity is a REQUIRED secondary check, and
+the PRIMARY Tier-B ticket is the empty engine-arithmetic-path git-diff (above).
 
 Deferred: quarterly ENGINE periods (a §1 period-model change, Tier A — distinct from the
 data-side LTM stitch above), day-count computation (disclosed-bias note in §4 instead).
