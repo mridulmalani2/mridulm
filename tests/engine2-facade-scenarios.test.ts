@@ -560,6 +560,47 @@ describe('§17 golden-uncovered branches (the list each needs a fixture for)', (
       .toBeLessThan(out.waterfall.reduce((s, w) => s + w.distribution_paid, 0)); // NOT the total
   });
 
+  it('(x) §10 hurdle base takes the TOTAL distributions, not the sponsor share — the rollover∧MIP∧dist case no golden makes (accuracy audit B, 2026-07-25)', () => {
+    // SPEC §17(x): §10's hurdle takes the TOTAL cumulative distributions while §12's
+    // walk-down adds back only the SPONSOR share; they coincide at rollover 0, which is every
+    // golden. The audit proved a `total→share` mutation of facade.ts:43 passed 402/402 — only
+    // the §12 half was pinned. This is the missing §10 fixture: rollover > 0 ∧ MIP ∧ dist.
+    const { facts } = g2();
+    const a = {
+      ...g2().assumptions,
+      rollover_equity: 100,
+      mip: { pool_pct: 0.15, hurdle_moic: 1.0 }, // low hurdle ⇒ promote in the money
+      structure: { ...g2().assumptions.structure, distributions: [20, 20, 20, 20, 20] },
+    };
+    const out = runModel(facts, a);
+    const invested = out.sources_uses.sponsor_equity + out.sources_uses.rollover_equity;
+    const share = out.sources_uses.sponsor_equity / invested;
+    const cumTotal = out.waterfall.reduce((s, w) => s + w.distribution_paid, 0);
+    const cumSponsor = cumTotal * share;
+    expect(share).toBeLessThan(1);                  // rollover live
+    expect(cumTotal).toBeGreaterThan(0);            // distributions paid
+    expect(out.exit.mip_payout).toBeGreaterThan(0); // promote in the money
+
+    const exitEq = out.exit.exit_equity_pre_mip_total;
+    const mipTotal = Math.min(0.15 * Math.max(0, exitEq + cumTotal - invested), Math.max(0, exitEq));
+    const mipShare = Math.min(0.15 * Math.max(0, exitEq + cumSponsor - invested), Math.max(0, exitEq));
+    // the engine matches the TOTAL base and NOT the sponsor-share base:
+    expect(out.exit.mip_payout).toBeCloseTo(mipTotal, 6);
+    expect(Math.abs(mipTotal - mipShare)).toBeGreaterThan(0.5);            // genuinely discriminating
+    expect(Math.abs(out.exit.mip_payout - mipShare)).toBeGreaterThan(0.5); // the mutation would fail here
+
+    // §12/§14.9 identity (b), asserted DIRECTLY on sponsor_net_delta with distributions
+    // present (accuracy audit A): the reconciliation_residual re-encodes identity (a) — the
+    // distribution term cancels out of it — so the walk-down's sponsor-total delta must be
+    // pinned against an independent recomputation here, not via the residual.
+    const cumSponsorPaid = out.waterfall.reduce((s, w) => s + w.distribution_paid * share, 0);
+    const sponsorTotalDelta = out.exit.sponsor_share + cumSponsorPaid - out.sources_uses.sponsor_equity;
+    expect(out.bridge.walkdown.sponsor_net_delta).toBeCloseTo(sponsorTotalDelta, 6);
+    expect(out.bridge.walkdown.interim_distributions_sponsor).toBeCloseTo(cumSponsorPaid, 9);
+    // and the §14.9 frictionless-bar identity (a) still reconciles
+    expect(Math.abs(out.bridge.reconciliation_residual)).toBeLessThan(1e-6);
+  });
+
   it('(ix) distributions never enter DSCR/FCCR/ICR or FCF conversion (§14.18)', () => {
     const { facts } = g2();
     const withDist = { ...g2().assumptions, structure: { ...g2().assumptions.structure, distributions: [20, 20, 20, 20, 20] } };

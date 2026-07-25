@@ -259,6 +259,30 @@ safe to build on):**
   `distribution_blocked` — so that convention is amended deliberately in §17 rather than
   discovered as a failing test on day one of the engine PR.
 
+**Independent hostile ACCURACY AUDIT of the G-1 engine (2026-07-25): CLEAN.** A separate
+agent recomputed ~110 load-bearing values from SPEC — by hand AND via a second Python
+implementation structured unlike `spec_calc.py` — and cross-checked every IRR with
+`numpy.roots` (polynomial method, different from the engine's bisection). **Zero disagreed
+beyond ±$0.005m / ±0.1bp.** It confirmed the reference derivation is genuinely independent
+(byte-reproduces all 9 fixtures), §3.7's normative EBITDA_adj ≤ 0 branch is correct through
+the real kernel, the multi-root IRR policy is sound, no rounded value re-enters arithmetic,
+and float drift (~1e-11 relative) sits 4–6 orders under the gate. It found **no wrong
+number**, and four MINOR proof-system/coverage holes — places where SPEC §17 claimed a
+fixture existed but none did, so a *future* regression could pass undetected. All four are
+now closed with directed fixtures, each mutation-verified against the exact mutant the audit
+described:
+- **(B) §17 item (x)'s §10 half was unguarded** — a `total→share` mutation of the §10 hurdle
+  base passed 402/402. Now pinned by a rollover > 0 ∧ MIP ∧ distributions case
+  (`engine2-facade-scenarios.test.ts`); the mutant fails it.
+- **(C) §17 item (vii) had no fixture** — dropping the request term from the blocked flag
+  passed 402/402. Now pinned by a directed kernel case (`engine2-kernel.test.ts`) with
+  `rp_max` strictly between request and cash cap.
+- **(A) the bridge `reconciliation_residual` re-encodes identity (a)** (the distribution term
+  cancels out of identity (b)'s residual). Identity (b) is now asserted DIRECTLY on
+  `walkdown.sponsor_net_delta` with distributions present; SPEC §12 states this honestly.
+- **(D) §14.18 at EBITDA_adj ≤ 0 WITH a payment** was only ~1% likely per CI run. Now pinned
+  by a directed net-cash kernel case (both sides of the money form negative).
+
 **Status: G2-DIST, G3-DIST and G2-DIST-D are GOSPEL.** Engine2 modules are wrong wherever they
 disagree with these fixtures; disputes reopen only via spec amendment + re-derivation.
 `tests/engine2-sequence.test.ts` carries a self-deleting `PENDING_G1_KEYS` list so the C5
