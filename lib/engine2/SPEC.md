@@ -838,7 +838,10 @@ headroom signed (breach = negative). Step-downs optional per covenant. Springing
 test: applies only in years where revolver drawn/commitment exceeds the trigger
 (`springing_test_active` per year). Deleveraging
 subtotals [CONFIRMED DR-5 Item 5 — "make deleveraging first-class"]: **FCF conversion %
-(FCF/EBITDA)** and **cumulative debt paydown as % of entry debt** are first-class ModelOutput
+(FCF/EBITDA_adj** — the adjusted basis, consistent with every other §11 credit metric; the
+numerator FCF is already net of the monitoring fee, so numerator and denominator share ONE basis.
+Differs from raw FCF/EBITDA only when a monitoring fee is present [accuracy-audit clarification])
+and **cumulative debt paydown as % of entry debt** are first-class ModelOutput
 fields rendered on the debt-schedule footer. Covenant suggestions
 [DR-4 Cat.4]: BSL preset = cov-lite (>90% of new issue) with a springing revolver test at
 35–40% draw; MM preset = maintenance covenants at 30–35% EBITDA headroom to base case.

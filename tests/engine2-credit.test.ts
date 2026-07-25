@@ -15,6 +15,8 @@ import {
   covenantLevel,
   type CreditYearInputs,
 } from '../lib/engine2/credit';
+import { runModel } from '../lib/engine2/facade';
+import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import type { CovenantAssumption, CreditYear } from '../lib/engine2/types';
 
 const ROOT = join(__dirname, '..');
@@ -127,6 +129,18 @@ describe('credit.ts — covenant machinery (golden-uncovered: hand fixtures)', (
     const g = load('G2');
     return inputsFromFixture(g, 'G2', 0); // Y1: net leverage ≈ (401.7 − 21.3)/116.6 ≈ 3.26x
   };
+
+  it('fcf_conversion denominator is EBITDA_adj, not raw EBITDA — pinned with monitoring ON [audit; golden-uncovered]', () => {
+    // All §17 goldens run monitoring:null, so ebitda_adj ≡ ebitda and the two denominators are
+    // indistinguishable. Turn monitoring ON so ebitda_adj < ebitda, and pin the §11 basis.
+    const { facts, assumptions } = GOLDEN_DEALS.G2;
+    const withMon = { ...assumptions, fees: { ...assumptions.fees, monitoring: { annual: 8, termination_years: assumptions.entry.hold_years, discount_rate: 0.10 } } };
+    const o = runModel(facts, withMon);
+    const op = o.operating[0], c = o.credit[0];
+    expect(op.ebitda_adj).toBeLessThan(op.ebitda!);                        // monitoring fee makes adj < raw
+    expect(c.fcf_conversion!).toBeCloseTo(op.fcf_pre_debt / op.ebitda_adj, 9);  // §11: FCF/EBITDA_adj
+    expect(c.fcf_conversion!).not.toBeCloseTo(op.fcf_pre_debt / op.ebitda!, 4); // NOT raw FCF/EBITDA (the rejected reading)
+  });
 
   it('scalar and step-down covenant resolution; headroom SIGNED (breach = negative)', () => {
     expect(covenantLevel(null, 3)).toBeNull();
