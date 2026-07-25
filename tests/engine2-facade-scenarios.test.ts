@@ -12,7 +12,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runModel } from '../lib/engine2/facade';
-import { applyScenarioDeltas, buildSensitivityGrid, runModelWithScenarios, runScenario } from '../lib/engine2/scenarios';
+import { applyAxis, applyScenarioDeltas, buildSensitivityGrid, runModelWithScenarios, runScenario } from '../lib/engine2/scenarios';
+import { entryGrossLeverageFromAssumptions } from '../lib/engine2/sourcesUses';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import type { DealAssumptions, DealFacts, ScenarioDeltas } from '../lib/engine2/types';
 
@@ -340,5 +341,77 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
     // richer entry, same exit ⇒ lower IRR
     expect(grid.irr[0][0]!).toBeGreaterThan(grid.irr[1][0]!);
     expect(grid.irr[2][0]!).toBeLessThan(grid.irr[1][0]!);
+  });
+});
+
+/**
+ * The INPUT surface's "Total leverage" field (AssumptionsPanel) and the OUTPUT surface's
+ * `derived.entry_gross_leverage_fy` must be the same number, and editing the field must be
+ * the §13 `leverage` axis. Both were broken (hostile sign-off of SPEC v1.1.2, finding F7):
+ * the panel read `x_ebitda` off the FIRST senior/unitranche tranche only — 3.0x beside a
+ * 4.5x headline on G3 — and its writer put the typed value on EVERY tranche, so typing 4.0
+ * on a two-tranche deal produced 8.0x of actual leverage under a field labelled "total".
+ */
+describe('entry leverage: one definition across the input and output surfaces (§11 v1.1.2)', () => {
+  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5'] as const) {
+    it(`${golden}: the panel's read ≡ derived.entry_gross_leverage_fy`, () => {
+      const { facts, assumptions } = GOLDEN_DEALS[golden];
+      const panel = entryGrossLeverageFromAssumptions(facts, assumptions);
+      const model = runModel(facts, assumptions).derived.entry_gross_leverage_fy;
+      expect(panel).not.toBeNull();
+      expect(panel!).toBeCloseTo(model, 12);
+    });
+  }
+
+  it('G3 (senior 3.0x + PIK note 1.5x) is the case the old reader got wrong: total is 4.5x, not 3.0x', () => {
+    const { facts, assumptions } = GOLDEN_DEALS.G3;
+    // the defect, reproduced exactly: first senior/unitranche tranche's x_ebitda
+    const firstTermOnly = assumptions.structure.tranches.find(
+      (t) => t.type === 'senior' || t.type === 'unitranche',
+    );
+    expect(firstTermOnly && 'size' in firstTermOnly ? firstTermOnly.size.x_ebitda : null).toBe(3.0);
+    // what the panel must actually show — and what the Summary tile shows
+    expect(entryGrossLeverageFromAssumptions(facts, assumptions)).toBeCloseTo(4.5, 12);
+    expect(runModel(facts, assumptions).derived.entry_gross_leverage_fy).toBeCloseTo(4.5, 12);
+  });
+
+  it('editing the field is the §13 leverage axis: typing X yields total leverage X, not X per tranche', () => {
+    for (const golden of ['G2', 'G3'] as const) {
+      const { facts, assumptions } = GOLDEN_DEALS[golden];
+      for (const typed of [3.0, 4.0, 5.5]) {
+        const next = applyAxis(facts, assumptions, 'leverage', typed);
+        // round-trip through the SAME reader the panel renders
+        expect(entryGrossLeverageFromAssumptions(facts, next), `${golden} typed ${typed}`).toBeCloseTo(typed, 12);
+        // and through the engine, so the input and output surfaces still agree after an edit
+        expect(runModel(facts, next).derived.entry_gross_leverage_fy).toBeCloseTo(typed, 12);
+        // proportional, not uniform: G3's 2:1 senior:PIK split must survive the rescale
+        const terms = next.structure.tranches.filter((t) => t.type !== 'revolver');
+        if (golden === 'G3') {
+          const [senior, pik] = terms.map((t) => ('size' in t ? t.size.x_ebitda! : 0));
+          expect(senior / pik).toBeCloseTo(2.0, 12);
+        }
+      }
+    }
+  });
+
+  it('the old writer is what a "total" field must never do: X on every tranche multiplies leverage', () => {
+    const { facts, assumptions } = GOLDEN_DEALS.G3;
+    const oldWriter = {
+      ...assumptions,
+      structure: {
+        ...assumptions.structure,
+        tranches: assumptions.structure.tranches.map((t) =>
+          t.type === 'revolver' || !('size' in t) || t.size.x_ebitda === undefined ? t : { ...t, size: { x_ebitda: 4.0 } },
+        ),
+      },
+    };
+    expect(entryGrossLeverageFromAssumptions(facts, oldWriter)).toBeCloseTo(8.0, 12); // typed 4.0 → 8.0x
+    expect(entryGrossLeverageFromAssumptions(facts, applyAxis(facts, assumptions, 'leverage', 4.0))).toBeCloseTo(4.0, 12);
+  });
+
+  it('non-positive FY EBITDA renders N/A, never a sentinel (§11/§15)', () => {
+    const { facts, assumptions } = GOLDEN_DEALS.G2;
+    expect(entryGrossLeverageFromAssumptions({ ...facts, fy_ebitda: 0 }, assumptions)).toBeNull();
+    expect(entryGrossLeverageFromAssumptions({ ...facts, fy_ebitda: -5 }, assumptions)).toBeNull();
   });
 });

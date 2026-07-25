@@ -59,6 +59,10 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).toContain('Suggest everything');
     expect(html).toContain('trades at ~8.2x'); // the D5 read-only anchor line
     expect(html).not.toContain('disabled'); // no missing facts ⇒ Build live
+    // §11 [v1.1.2]: the input field states its basis. It reads GROSS total leverage across
+    // ALL term tranches — the same number the Summary tile reports — so an unqualified
+    // "Total leverage" label is what let it disagree with the headline unnoticed.
+    expect(html).toContain('Total leverage (gross, x FY EBITDA)');
   });
 
   it('after build: hero IRR/MOIC render FORMATTED (no raw engine floats in the DOM)', () => {
