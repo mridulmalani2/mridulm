@@ -1,0 +1,17 @@
+{
+ "badge": "aging",
+ "case": "vii",
+ "ebitda": {
+  "as_of": "2024-12-31",
+  "basis": "fy",
+  "value": 250.0
+ },
+ "notes": [],
+ "refusal_reason": "EBITDA component OperInc absent on a canonical span \u21d2 single-basis pair fallback",
+ "revenue": {
+  "as_of": "2024-12-31",
+  "basis": "fy",
+  "value": 1000.0
+ },
+ "stitched": false
+}

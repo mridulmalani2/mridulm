@@ -1,0 +1,17 @@
+{
+ "badge": "aging",
+ "case": "iii",
+ "ebitda": {
+  "as_of": "2024-12-31",
+  "basis": "fy",
+  "value": 250.0
+ },
+ "notes": [],
+ "refusal_reason": "no interim filings (annual-only)",
+ "revenue": {
+  "as_of": "2024-12-31",
+  "basis": "fy",
+  "value": 1000.0
+ },
+ "stitched": false
+}
