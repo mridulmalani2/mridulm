@@ -282,6 +282,12 @@ def main():
         with open(os.path.join(dpath, "expected.json"), "w") as fh:
             json.dump(res, fh, indent=1, sort_keys=True)
             fh.write("\n")
+        # input.json — the companyfacts + import_date, the ONE committed input source the TS
+        # conformance test (step 3) and this reference both read.
+        with open(os.path.join(dpath, "input.json"), "w") as fh:
+            json.dump({"case": fx["case"], "import_date": fx["import_date"],
+                       "companyfacts": fx["companyfacts"]}, fh, indent=1, sort_keys=True)
+            fh.write("\n")
         print(f'{fx["case"]:>4}: stitched={res["stitched"]!s:5} rev={res["revenue"]["basis"]}:{res["revenue"]["value"]} '
               f'ebitda={res["ebitda"]["basis"]}:{res["ebitda"]["value"]} badge={res["badge"]} '
               f'{"| " + res["refusal_reason"] if res["refusal_reason"] else ""}')

@@ -88,6 +88,10 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     fy_revenue: revenue,
     fy_ebitda: ebitda,
     fy_ebitda_margin: revenue > 0 ? ebitda / revenue : 0,
+    // §1.1 sizing basis + staleness (Class-A provenance the UI renders as a badge) [G-2]
+    sizing_basis: raw.basis,
+    sizing_as_of: raw.as_of ?? raw.periodEnd,
+    sizing_staleness: raw.staleness ?? null,
     da_pct_revenue: req(raw.da_pct_revenue?.value, 'da_pct_revenue', 0.03),
     maint_capex_pct_revenue: req(raw.capex_pct_revenue?.value, 'maint_capex_pct_revenue', 0.03),
     net_ppe: raw.net_ppe?.value ?? null, // absent in the filing ⇒ §8 seeds 0 with its disclosed WARN

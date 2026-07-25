@@ -16,6 +16,7 @@
 import type { CompanyFacts, XbrlConcept, XbrlFactValue } from './client';
 import type { RawHistoricals, SourcedValue, Provenance } from './types';
 import { buildAnnualSeries, deriveSeries } from './history';
+import { stitchLtm } from './ltmStitch';
 
 const ANNUAL_FORMS = new Set(['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']);
 
@@ -220,6 +221,9 @@ export interface MapOptions {
   /** Include finance (capital) lease liabilities in gross/net debt (default true). Operating
    *  leases are always excluded (conventional US credit treatment). */
   includeFinanceLeasesInDebt?: boolean;
+  /** Reference date for the §1.1 LTM-stitch staleness badge (the import date). Default: today.
+   *  Injected by tests for determinism. */
+  asOfDate?: string;
 }
 
 export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): RawHistoricals {
@@ -292,9 +296,29 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   } else {
     gaps.push('FY EBITDA');
   }
-  const ebitda_margin = fy_ebitda && revenueVal > 0
+  const fyEbitdaMargin = fy_ebitda && revenueVal > 0
     ? sv(fy_ebitda.value / revenueVal, { source: 'edgar', detail: 'EBITDA ÷ revenue (derived)', tag: 'derived:EBITDAmargin', period: anchorEnd, fy: anchorFy, url: fy_ebitda.provenance.url })
     : null;
+
+  // ── §1.1 quarter-stitched LTM sizing basis [G-2, Tier B] ─────────────────────────────────
+  // The engine consumes ONE revenue + ONE EBITDA number; G-2 makes them the most-current
+  // trailing-twelve-months figure when interim filings allow, else the latest FY (disclosed).
+  // ONLY the sizing PAIR + its margin flip to LTM; da/capex/nwc stay FY-basis RATES (they are
+  // applied FORWARD to projected revenue — internally consistent, not corrupted by the flip).
+  // The stitch is unit-agnostic (raw XBRL vals); scale its output by M().
+  const asOfDate = opts.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const stitch = stitchLtm(facts, asOfDate, { taxonomy: 'us-gaap', revenue: REVENUE_TAGS, operatingIncome: OPERATING_INCOME_TAGS, da: DA_TAGS });
+  const stitched = stitch.stitched && stitch.revenue.value !== null && stitch.ebitda.value !== null;
+  const sizingBasis: 'FY' | 'LTM' = stitched ? 'LTM' : 'FY';
+  const sizing_as_of = (stitched ? stitch.revenue.as_of : anchorEnd) ?? anchorEnd;
+  let fy_revenue_out = fy_revenue, fy_ebitda_out = fy_ebitda, ebitda_margin = fyEbitdaMargin;
+  if (stitched) {
+    const ltmRev = M(stitch.revenue.value!), ltmEbitda = M(stitch.ebitda.value!);
+    const e = stitch.revenue.as_of ?? anchorEnd;
+    fy_revenue_out = sv(ltmRev, { source: 'edgar', detail: `LTM ending ${e} = FY + YTD − prior-YTD (§1.1)`, tag: 'derived:LTMrevenue', taxonomy: 'us-gaap', unit: revenue?.prov.unit, fy: anchorFy, period: e, url: revenue?.prov.url });
+    fy_ebitda_out = sv(ltmEbitda, { source: 'edgar', detail: `LTM EBITDA (OperInc + D&A) ending ${e} (§1.1)`, tag: 'derived:LTMebitda', taxonomy: 'us-gaap', unit: opinc?.prov.unit, fy: anchorFy, period: e, url: opinc?.prov.url });
+    ebitda_margin = ltmRev > 0 ? sv(ltmEbitda / ltmRev, { source: 'edgar', detail: 'LTM EBITDA ÷ LTM revenue (§1.1 single-basis pair)', tag: 'derived:EBITDAmargin', period: e, fy: anchorFy }) : null;
+  }
 
   const da_pct = da && revenueVal > 0
     ? sv(da.value / revenueVal, { ...da.provenance, detail: `${da.provenance.detail} ÷ revenue` })
@@ -608,9 +632,11 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     currency: opts.currency ?? detectedCcy ?? 'USD',
     fiscalYear: anchorFy,
     periodEnd: anchorEnd,
-    basis: 'FY',
-    fy_revenue,
-    fy_ebitda,
+    basis: sizingBasis,
+    as_of: sizing_as_of,
+    staleness: stitch.badge,
+    fy_revenue: fy_revenue_out,
+    fy_ebitda: fy_ebitda_out,
     ebitda_margin,
     da,
     da_pct_revenue: da_pct,
