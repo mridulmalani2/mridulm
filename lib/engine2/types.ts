@@ -197,6 +197,12 @@ export interface CovenantAssumption {
   fccr_min: number | number[] | null;
   /** Springing leverage test: applies only in years where drawn/commitment > trigger (SPEC §11). */
   springing: { metric: 'leverage'; max: number | number[]; revolver_draw_trigger_pct: number } | null;
+  /**
+   * Restricted-payment cash trap (SPEC §3.7 [v1.1.0]). null = no trap — rp_max is +∞ and
+   * only §3 step 7's two CASH caps bind. `'dscr'` is rejected in v1 (its numerator is the
+   * year's own FCF, which the payment does not change — a vacuous pro-forma test).
+   */
+  rp_trap: { metric: 'net_leverage'; level: number } | null;
 }
 
 export interface DealAssumptions {
@@ -214,6 +220,14 @@ export interface DealAssumptions {
     tranches: TrancheAssumption[]; // at most one revolver
     min_cash: number; // funded at close via cash-to-BS (SPEC §2, C-9)
     sweep: SweepAssumption;
+    /**
+     * Per-year REQUESTED interim distributions in $m (SPEC §3 step 7 [v1.1.0]); length
+     * hold_years, entries ≥ 0 (structural gate). null ≡ all-zero ≡ feature OFF, so every
+     * pre-v1.1.0 deal is byte-identical to before. What is actually PAID is
+     * `WaterfallYear.distribution_paid` — clipped by the two cash caps and the §3.7 trap;
+     * blocked capacity never accrues.
+     */
+    distributions: number[] | null;
   };
   operations: OperationsAssumption;
   tax: TaxAssumption;
@@ -224,7 +238,12 @@ export interface DealAssumptions {
   /** null = no promote. Promote pool only — sweet equity is a different instrument (SPEC §10). */
   mip: { pool_pct: number; hurdle_moic: number } | null;
   covenants: CovenantAssumption;
-  /** Display-only IRR option: interim flows at t−0.5, exit NEVER shifts; inert in v1 (SPEC §1). */
+  /**
+   * Display-only IRR option (SPEC §1): interim flows at t−0.5; t=0 and the EXIT flow never
+   * shift. Scoped to the SPONSOR-SIDE streams. Numerically inert while the distribution
+   * schedule is empty — that is when no interim sponsor flow exists [v1.1.1]. Selects which
+   * of `irr` / `irr_mid_year` the UI headlines; both are always computed.
+   */
   mid_year_irr: boolean;
 }
 
@@ -297,6 +316,18 @@ export interface WaterfallYear {
   sweep_pct_applied: number;
   sweep_applied_total: number;
   revolver_draw: number;
+  // ── §3 step 7 / §3.7 [v1.1.0] — interim distribution, AFTER the step-6 draw ──
+  /** `structure.distributions[t]` (0 when the schedule is null). */
+  distribution_requested: number;
+  /**
+   * §3.7 trap capacity: max(0, cash − (gross_debt_end − L × EBITDA_adj[t])). null = trap
+   * OFF (+∞ — N/A, never a sentinel §11/§15). NORMATIVE for all EBITDA_adj incl. ≤ 0.
+   */
+  rp_max: number | null;
+  /** max(0, min(requested, cash − min_cash, rp_max)) — never revolver-funded. */
+  distribution_paid: number;
+  /** §3.7: rp_max < min(requested, max(0, cash − min_cash)); ties ⇒ false. */
+  distribution_blocked: boolean;
   closing_cash: number;
   cash_floor_breach: boolean; // invariant §14.4/§14.6
 }
@@ -357,11 +388,29 @@ export interface ExitBlock {
   rollover_share: number;
 }
 
-/** The three locked return series (SPEC §9); cashflows are t0-anchored (length N+1). */
+/**
+ * The three locked return series (SPEC §9); cashflows are t0-anchored (length N+1).
+ * `irr` is ALWAYS the period-end convention. `irr_mid_year` is the §1 display alternative
+ * (interim flows at t−0.5; t=0 and the EXIT flow never shift) and exists only on the
+ * SPONSOR-SIDE streams — the unlevered stream always uses period-end times (§1 [v1.1.1]).
+ * Both are carried so the UI can disclose the timing effect rather than silently swap a
+ * headline number; the `mid_year_irr` assumption selects which one is headlined.
+ */
 export interface ReturnStreams {
-  sponsor_net: { irr: number | null; moic: number | null; cashflows: number[] };
+  sponsor_net: { irr: number | null; irr_mid_year: number | null; moic: number | null; cashflows: number[] };
   unlevered: { irr: number | null; moic: number | null; cashflows: number[] };
-  pre_promote: { irr: number | null; moic: number | null; cashflows: number[] };
+  pre_promote: { irr: number | null; irr_mid_year: number | null; moic: number | null; cashflows: number[] };
+  /**
+   * §9 [v1.1.0] DPI[t] = cumulative SPONSOR-share distributions through t ÷ the sponsor's
+   * t=0 check. Monotone non-decreasing (§14.18). Length hold_years (NOT t0-anchored).
+   */
+  dpi: number[];
+  /**
+   * §9 [v1.1.0] the first year (1-indexed) cumulative distributions ALONE reach the
+   * sponsor outflow; null = never reached inside the hold. Exit proceeds do NOT count —
+   * that is what made the old headline degenerate (ledger L-10).
+   */
+  payback_year: number | null;
 }
 
 export interface ValueBridge {
@@ -390,6 +439,18 @@ export interface ValueBridge {
     monitoring_leakage: number;
     mip: number;
     rollover_delta: number;
+    /**
+     * §12 [v1.1.0] "+ interim distributions (sponsor share)" — cumulative SPONSOR-share
+     * payments, ADDED back. They left via cash, so they already shrank the paydown bar;
+     * the rollover's slice is deliberately NOT added back (it is not sponsor money and it
+     * exits through the same smaller bar). 0 whenever the schedule is empty.
+     */
+    interim_distributions_sponsor: number;
+    /**
+     * §12 [v1.1.0] the sponsor-net TOTAL delta: sponsor_share + cumulative sponsor-share
+     * distributions − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
+     * no distribution is paid.
+     */
     sponsor_net_delta: number;
   };
   reconciliation_residual: number; // must be ~0 — invariant §14.9 (both identities)
@@ -405,7 +466,9 @@ export interface CoherenceFlag {
     | 'cash_floor_breach'
     | 'negative_ppe'
     | 'negative_goodwill'
-    | 'negative_sponsor_equity';
+    | 'negative_sponsor_equity'
+    /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
+    | 'distribution_blocked';
   severity: 'block' | 'warn';
   message: string;
 }
@@ -431,8 +494,16 @@ export interface ScenarioResult {
   deltas: ScenarioDeltas;
   returns: ReturnStreams;
   credit: CreditYear[];
-  /** Slim waterfall for the DR-5 credit dashboard (sweep/revolver behavior per §13). */
-  waterfall: Pick<WaterfallYear, 'revolver_draw' | 'revolver_repayment' | 'sweep_applied_total' | 'closing_cash' | 'cash_floor_breach'>[];
+  /**
+   * Slim waterfall for the DR-5 credit dashboard (sweep/revolver behavior per §13), plus
+   * distributions paid/blocked per year [v1.1.0] — a downside that traps the sponsor's
+   * distributions is precisely what the credit dashboard exists to show.
+   */
+  waterfall: Pick<
+    WaterfallYear,
+    | 'revolver_draw' | 'revolver_repayment' | 'sweep_applied_total' | 'closing_cash'
+    | 'cash_floor_breach' | 'distribution_paid' | 'distribution_blocked'
+  >[];
   covenant_breach_year: number | null;
   /** Sponsor-net IRR delta vs base. */
   irr_delta_vs_base: number | null;

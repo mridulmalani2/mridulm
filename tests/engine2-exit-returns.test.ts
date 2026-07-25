@@ -33,6 +33,10 @@ function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock
     unamortized_writeoff: core.exit_writeoff,
     invested_equity_total: core.sources_uses.sponsor_equity + core.sources_uses.rollover_equity,
     rollover_equity: core.sources_uses.rollover_equity,
+    // §10 [v1.1.0]: the hurdle base is exit equity PLUS cumulative TOTAL distributions.
+    // Passing 0 here gives G3-DIST a promote of 1.82 instead of 16.53 — the golden’s
+    // 9.1x discriminator caught exactly that while this gate was being extended.
+    cumulative_distributions: core.distributions_paid.reduce((a, b) => a + b, 0),
   };
   return buildExit(assumptions, inputs);
 }
@@ -43,6 +47,9 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
       (g): [string, DealAssumptions] => [g, GOLDEN_DEALS[g].assumptions],
     ),
     ['G2D', g2DownsideAssumptions()],
+    ['G2DIST', GOLDEN_DEALS.G2DIST.assumptions],
+    ['G3DIST', GOLDEN_DEALS.G3DIST.assumptions],
+    ['G2DISTD', GOLDEN_DEALS.G2DISTD.assumptions],
   ];
 
   for (const [golden, assumptions] of cases) {
@@ -64,6 +71,7 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
         enterprise_value: core.derived.enterprise_value,
         transaction_costs: core.sources_uses.transaction_costs,
         unlevered_fcf: core.unlevered_fcf,
+        distributions_paid: core.distributions_paid,
         exit,
         hold_years: assumptions.entry.hold_years,
       });
@@ -81,56 +89,37 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
         // §14.10: MOIC ≡ inflows / outflow, exact
         const inflows = mine.cashflows.reduce((s, c) => (c > 0 ? s + c : s), 0);
         expect(mine.moic!).toBeCloseTo(inflows / -mine.cashflows[0], 9);
+        // §1 [v1.1.1]: the mid-year alternative is carried on the SPONSOR-SIDE streams and
+        // ONLY there — the unlevered stream always uses period-end times.
+        if (streamName === 'unlevered') {
+          expect((mine as Record<string, unknown>).irr_mid_year).toBeUndefined();
+        } else {
+          expect((mine as { irr_mid_year: number | null }).irr_mid_year).not.toBeNull();
+          expect(Math.abs((mine as { irr_mid_year: number }).irr_mid_year - fix.irr_mid_year), `${golden} ${streamName} irr_mid_year`).toBeLessThan(IRR_TOL);
+        }
       }
-      // §14.16 mirror: final sponsor_net cashflow ≡ sponsor_share + the sponsor share of
-      // paid[N]. Every case here runs an EMPTY distribution schedule, so the second term is
-      // 0 and this is the amended identity's degenerate arm — the G-1 engine PR extends this
-      // to the DIST goldens, where paid[N] > 0 (hostile review finding 9, 2026-07-24).
-      expect(g.distributions.paid[g.distributions.paid.length - 1]).toBe(0);
-      expect(returns.sponsor_net.cashflows[returns.sponsor_net.cashflows.length - 1]).toBeCloseTo(exit.sponsor_share, 9);
+      // §9 [v1.1.0] DPI and payback — asserted against the fixtures, on every golden.
+      expect(returns.dpi).toHaveLength(g.returns.dpi.length);
+      for (let i = 0; i < g.returns.dpi.length; i++) {
+        expect(Math.abs(returns.dpi[i] - g.returns.dpi[i]), `${golden} dpi[${i}]`).toBeLessThan(5e-4);
+      }
+      expect(returns.payback_year, `${golden} payback_year`).toBe(g.returns.payback_year);
+      // §14.16 [v1.1.0]: final sponsor_net cashflow ≡ sponsor_share + the SPONSOR SHARE of
+      // paid[N] — one period-N flow, because a year-N distribution and the exit settle in
+      // the same annual period. Every golden runs rollover = 0, so the sponsor share is the
+      // full amount; the DIST goldens make the second term NON-ZERO and are what turns this
+      // from a degenerate restatement into a real assertion.
+      const paidN = g.distributions.paid[g.distributions.paid.length - 1];
+      expect(returns.sponsor_net.cashflows[returns.sponsor_net.cashflows.length - 1])
+        .toBeCloseTo(exit.sponsor_share + paidN, 6);
+      // and the interim flows ARE the paid distributions, in order
+      for (let t = 1; t < returns.sponsor_net.cashflows.length - 1; t++) {
+        expect(Math.abs(returns.sponsor_net.cashflows[t] - g.distributions.paid[t - 1]), `${golden} interim cf[${t}]`).toBeLessThan(TOL);
+      }
       // gp fee income: null when monitoring is OFF (§9 memo)
       expect(buildGpFeeIncome(assumptions.fees.monitoring, [], exit.monitoring_termination)).toBeNull();
     });
   }
-
-  /**
-   * SPEC §9/§10 [v1.1.0] output surfaces the GOLDEN EXTENSION committed ahead of the engine.
-   * Unlike the waterfall columns (guarded by PENDING_G1_KEYS in engine2-sequence.test.ts),
-   * the C6 gate above hard-codes cashflows/irr/moic per stream and would silently ignore
-   * these four forever [hostile review finding 4, 2026-07-24]. This guard fails the moment
-   * the engine emits any of them, forcing the gate to be extended rather than left behind.
-   */
-  const PENDING_G1_RETURN_SURFACES = ['dpi', 'payback_year'] as const;
-  const PENDING_G1_STREAM_FIELDS = ['irr_mid_year'] as const;
-
-  it('PENDING G-1 return surfaces: dpi / payback_year / irr_mid_year are still engine-side TODO (self-deleting guard)', () => {
-    const core = runCore(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
-    const exit = exitFromCore(core, GOLDEN_DEALS.G2.assumptions);
-    const returns = buildReturns(GOLDEN_DEALS.G2.assumptions, {
-      sponsor_equity: core.sources_uses.sponsor_equity,
-      rollover_equity: core.sources_uses.rollover_equity,
-      enterprise_value: core.derived.enterprise_value,
-      transaction_costs: core.sources_uses.transaction_costs,
-      unlevered_fcf: core.unlevered_fcf,
-      exit,
-      hold_years: GOLDEN_DEALS.G2.assumptions.entry.hold_years,
-    }) as unknown as Record<string, unknown>;
-    for (const k of PENDING_G1_RETURN_SURFACES) {
-      expect(returns[k], `buildReturns now emits ${k} — extend the C6 gate to assert it against the fixtures`).toBeUndefined();
-    }
-    for (const s of ['sponsor_net', 'pre_promote'] as const) {
-      for (const k of PENDING_G1_STREAM_FIELDS) {
-        expect((returns[s] as Record<string, unknown>)[k], `buildReturns now emits ${s}.${k} — extend the C6 gate`).toBeUndefined();
-      }
-    }
-    // The fixtures already carry all of them, on every golden — so the gate has something
-    // concrete to start asserting the moment the guard fires.
-    const fix = load('G2DIST');
-    expect(fix.returns.dpi).toHaveLength(5);
-    expect(fix.returns).toHaveProperty('payback_year');
-    expect(fix.returns.sponsor_net).toHaveProperty('irr_mid_year');
-    expect(fix.distributions.paid).toHaveLength(5);
-  });
 
   it('G3 §17 asserts: promote strictly in the money; PIK payoff at par + accrued', () => {
     const core = runCore(GOLDEN_DEALS.G3.facts, GOLDEN_DEALS.G3.assumptions);
@@ -152,6 +141,7 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
         enterprise_value: core.derived.enterprise_value,
         transaction_costs: core.sources_uses.transaction_costs,
         unlevered_fcf: core.unlevered_fcf,
+        distributions_paid: core.distributions_paid,
         exit,
         hold_years: 5,
       });
@@ -171,6 +161,7 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
     const base: ExitInputs = {
       exit_year_ebitda_adj: 100, last_growth: 0.03, debt_payoff: 200, closing_cash: 30,
       unamortized_writeoff: 0, invested_equity_total: 400, rollover_equity: 0,
+    cumulative_distributions: 0,
     };
     const a = (monitoring: DealAssumptions['fees']['monitoring']): DealAssumptions['fees'] =>
       ({ transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring });
@@ -193,7 +184,7 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
         { exit: { multiple: 1, basis: 'fy', fees_pct: 0 }, mip, fees: { transaction_pct_of_ev: 0, financing_pct_of_commitments: 0, monitoring: null } },
         {
           exit_year_ebitda_adj: exitEquityDriver, last_growth: 0, debt_payoff: 0, closing_cash: 0,
-          unamortized_writeoff: 0, invested_equity_total: 100, rollover_equity: 0,
+          unamortized_writeoff: 0, invested_equity_total: 100, rollover_equity: 0, cumulative_distributions: 0,
         },
       );
     // hurdle 2.0x on 100 invested = 200; exit equity 150 → out of the money
@@ -209,7 +200,7 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
       { exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: { pool_pct: 0.15, hurdle_moic: 1.5 }, fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null } },
       {
         exit_year_ebitda_adj: 120, last_growth: 0, debt_payoff: 300, closing_cash: 25,
-        unamortized_writeoff: 3, invested_equity_total: 400, rollover_equity: 100,
+        unamortized_writeoff: 3, invested_equity_total: 400, rollover_equity: 100, cumulative_distributions: 0,
       },
     );
     expect(exit.sponsor_share + exit.rollover_share + exit.mip_payout).toBeCloseTo(exit.exit_equity_pre_mip_total, 9);

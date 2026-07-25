@@ -35,11 +35,13 @@ function makeAssumptions(p: {
   growth_capex: number[]; nwc: DealAssumptions['operations']['nwc'];
   tax?: DealAssumptions['tax']; exit_multiple: number;
   mip?: DealAssumptions['mip'];
+  distributions?: number[] | null;
+  rp_trap?: DealAssumptions['covenants']['rp_trap'];
 }): DealAssumptions {
   return {
     deal_name: 'golden',
     entry: { driver: 'multiple', entry_multiple: p.multiple, enterprise_value: null, basis: 'fy', hold_years: 5 },
-    structure: { tranches: p.tranches, min_cash: p.min_cash, sweep: { base_pct: p.sweep_pct, grid: null } },
+    structure: { tranches: p.tranches, min_cash: p.min_cash, sweep: { base_pct: p.sweep_pct, grid: null }, distributions: p.distributions ?? null },
     operations: {
       growth: p.growth, target_margin: p.target_margin, margin_path: 'linear',
       da_pct_revenue: p.da_pct, maint_capex_pct_revenue: p.maint_pct,
@@ -50,7 +52,7 @@ function makeAssumptions(p: {
     rollover_equity: 0,
     exit: { multiple: p.exit_multiple, basis: 'fy', fees_pct: 0.015 },
     mip: p.mip ?? null,
-    covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null },
+    covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: p.rp_trap ?? null },
     mid_year_irr: false,
   };
 }
@@ -117,6 +119,42 @@ export const GOLDEN_DEALS: Record<string, { facts: DealFacts; assumptions: DealA
       growth: [0.1, 0.08, 0.06, 0.05, 0.04], target_margin: 0.2, da_pct: 0.04, maint_pct: 0.035,
       growth_capex: [6, 0, 0, 0, 0], nwc: { method: 'pct', pct_revenue: 0.12 },
     }),
+  },
+};
+
+// ── SPEC §17 [v1.1.1] Phase G-1 distribution variants ────────────────────────
+// Each holds its base golden constant and adds exactly two fields, so every difference
+// from the base is attributable to §3 step 7 / §3.7 alone.
+const G2_DIST_REQUESTS = [25, 25, 25, 10, 8];
+const G2_DIST_TRAP = { metric: 'net_leverage' as const, level: 2.75 };
+
+GOLDEN_DEALS.G2DIST = {
+  facts: GOLDEN_DEALS.G2.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G2.assumptions,
+    structure: { ...GOLDEN_DEALS.G2.assumptions.structure, distributions: G2_DIST_REQUESTS },
+    covenants: { ...GOLDEN_DEALS.G2.assumptions.covenants, rp_trap: G2_DIST_TRAP },
+  },
+};
+GOLDEN_DEALS.G3DIST = {
+  facts: GOLDEN_DEALS.G3.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G3.assumptions,
+    structure: { ...GOLDEN_DEALS.G3.assumptions.structure, distributions: [20, 15, 25, 22, 20] },
+    covenants: { ...GOLDEN_DEALS.G3.assumptions.covenants, rp_trap: null },
+  },
+};
+// §13: the request schedule and trap are structure/policy — FROZEN across scenarios. Only
+// the operating case moves, and with it whether the trap BINDS.
+GOLDEN_DEALS.G2DISTD = {
+  facts: GOLDEN_DEALS.G2.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G2DIST.assumptions,
+    operations: {
+      ...GOLDEN_DEALS.G2DIST.assumptions.operations,
+      growth: GOLDEN_DEALS.G2.assumptions.operations.growth.map((g) => g - 0.02),
+    },
+    exit: { ...GOLDEN_DEALS.G2DIST.assumptions.exit, multiple: 8.5 },
   },
 };
 

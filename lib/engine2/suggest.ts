@@ -147,6 +147,10 @@ export function suggestAssumptions(
       tranches,
       min_cash: 0.02 * facts.fy_revenue,
       sweep: { base_pct: 0.5, grid: null },
+    // §16: the suggestion layer proposes NEITHER distributions nor a trap — a distribution
+    // policy is a sponsor decision with no history/convention basis. Fields start OFF, so
+    // every suggested model is byte-identical to pre-v1.1.0.
+    distributions: null,
     },
     operations: {
       growth,
@@ -177,7 +181,7 @@ export function suggestAssumptions(
     rollover_equity: 0,
     exit: { multiple: entryMultiple, basis: 'fy', fees_pct: 0.015 },
     mip: { pool_pct: cv(['mip', 'poolPctOfFdEquity'], 0.15), hurdle_moic: cv(['mip', 'hurdleMoic'], 2.0) },
-    covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null },
+    covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: null },
     mid_year_irr: false,
   };
   b('fees', 'convention', 'buy-side 2.0% of EV; financing 1.5% of total commitments — conventions.json fees (DR-4 Cat.6)');
