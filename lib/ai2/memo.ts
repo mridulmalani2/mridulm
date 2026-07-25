@@ -30,8 +30,8 @@ export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): strin
   // false label there), and add the FY/LTM-canonical figure when NTM ("shows both, LTM canonical").
   const em = entryMultipleDisplay(o);
   const entryMultipleClause = em.fy_canonical === null
-    ? `${multiple(em.valuation)} FY EBITDA (${money(o.facts.fy_ebitda, ccy)})`
-    : `${multiple(em.valuation)} NTM EBITDA — ${multiple(em.fy_canonical)} on FY/LTM EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
+    ? `${multiple(em.valuation)} ${em.sizing_label} EBITDA (${money(o.facts.fy_ebitda, ccy)})`
+    : `${multiple(em.valuation)} NTM EBITDA — ${multiple(em.fy_canonical)} on ${em.sizing_label} EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
   const totalDebt = o.derived.total_debt_at_par;
   const capTotal = totalDebt + su.rollover_equity + su.sponsor_equity;
   const capRow = (name: string, amt: number) =>
@@ -71,7 +71,7 @@ FCF conversion: ${o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.
 
 ## Caveats
 ${o.coherence.length ? o.coherence.map((f) => `- ${f.severity === 'block' ? 'BLOCK' : 'WARN'}: ${f.message}`).join('\n') : '- No coherence flags on this run.'}
-- Entry leverage is GROSS (debt at par ÷ FY EBITDA — the quoted sizing basis, SPEC §11); the per-year credit statistics are NET of cash. The two are different bases, so entry and final-year leverage are not a single deleveraging series.
+- Entry leverage is GROSS (debt at par ÷ ${em.sizing_label} EBITDA — the quoted sizing basis, SPEC §11); the per-year credit statistics are NET of cash. The two are different bases, so entry and final-year leverage are not a single deleveraging series.
 - A model is a range, not a point — see the Sensitivity and Scenarios exhibits (SPEC §15).
 `;
 }

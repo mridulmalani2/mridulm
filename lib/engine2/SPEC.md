@@ -397,8 +397,10 @@ cash = opening_cash + FCF_pre_debt                    (FCF_pre_debt from §7 —
      sweepable    = sweep_pct × pool                   ← sweep % applies to the POOL
                     (DR-1 Item 2 confirms the modeling convention: % of cash flow available —
                      including beginning excess cash above the floor — never % of balance)
-     step-downs   : sweep_pct steps down on a net-leverage grid. The 50% base LEVEL and the
-                    lender-friendly grid 75% (>4.5x) → 50% (3.5–4.5x) → 0% (<3.5x) are
+     step-downs   : sweep_pct steps down on a net-leverage grid. Each tier is the leverage
+                    STRICTLY EXCEEDED (`above_net_leverage`, strict `>`), so a value exactly on a
+                    threshold takes the LOWER tier: 75% (>4.5x) → 50% (>3.5x, ≤4.5x) → 0% (≤3.5x).
+                    The 50% base LEVEL and this lender-friendly grid are
                     [CONFIRMED DR-4 Cat.5, LSTA via CT Acquisitions]; running the base preset
                     FLAT (no step-downs) is a [DECIDED] v1 simplification — DR-4's own
                     recommended base is 50% with step-downs, available via the grid preset
@@ -838,7 +840,10 @@ headroom signed (breach = negative). Step-downs optional per covenant. Springing
 test: applies only in years where revolver drawn/commitment exceeds the trigger
 (`springing_test_active` per year). Deleveraging
 subtotals [CONFIRMED DR-5 Item 5 — "make deleveraging first-class"]: **FCF conversion %
-(FCF/EBITDA)** and **cumulative debt paydown as % of entry debt** are first-class ModelOutput
+(FCF/EBITDA_adj** — the adjusted basis, consistent with every other §11 credit metric; the
+numerator FCF is already net of the monitoring fee, so numerator and denominator share ONE basis.
+Differs from raw FCF/EBITDA only when a monitoring fee is present [accuracy-audit clarification])
+and **cumulative debt paydown as % of entry debt** are first-class ModelOutput
 fields rendered on the debt-schedule footer. Covenant suggestions
 [DR-4 Cat.4]: BSL preset = cov-lite (>90% of new issue) with a springing revolver test at
 35–40% draw; MM preset = maintenance covenants at 30–35% EBITDA headroom to base case.

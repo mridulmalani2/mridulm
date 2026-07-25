@@ -27,14 +27,26 @@ import type { Engine2ModelOutput } from './facade';
  * LOGIC, not arithmetic: both numbers are already fully determined by existing `derived` fields,
  * so this introduces no second calculation path for any engine value.
  */
-export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'assumptions'>): {
+/**
+ * The SIZING basis label ('FY' or the §1.1 'LTM' quarter-stitch) — the ONE place this string is
+ * decided, so no surface hardcodes "FY EBITDA" against a fact that is actually the LTM stitch (the
+ * mislabel class that hit v1.1.2's "Entry net leverage" and v1.1.3's "Entry multiple (FY)"). Read
+ * off `DealFacts.sizing_basis`; default 'FY' (manual entry / pre-G-2). Distinct from the VALUATION
+ * basis (FY vs NTM) returned by `entryMultipleDisplay.basis_label`.
+ */
+export const sizingBasisLabel = (b?: 'FY' | 'LTM'): 'FY' | 'LTM' => (b === 'LTM' ? 'LTM' : 'FY');
+
+export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'assumptions' | 'facts'>): {
   basis_label: 'FY' | 'NTM';
+  sizing_label: 'FY' | 'LTM';
   valuation: number;
   fy_canonical: number | null;
 } {
   const ntm = o.assumptions.entry.basis === 'ntm';
   return {
     basis_label: ntm ? 'NTM' : 'FY',
+    // the leverage / FY-canonical figures size on entry_ebitda_for_sizing = the §1.1 sizing basis
+    sizing_label: sizingBasisLabel(o.facts.sizing_basis),
     valuation: o.derived.entry_multiple,
     fy_canonical: ntm ? o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing : null,
   };

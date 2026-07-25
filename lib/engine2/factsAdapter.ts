@@ -105,7 +105,7 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     effective_tax_rate: raw.effective_tax_rate?.value ?? 0.21,
     nol_carryforward_floor: raw.nol_carryforward?.value ?? null,
     implied_cost_of_debt: raw.implied_cost_of_debt?.value ?? null,
-    implied_trading_ev_ebitda: null, // D5 wiring pending — the coherence gate suppresses on null
+    implied_trading_ev_ebitda: null, // async D5 anchor (Finnhub) is injected at the store (engine2Model), not here — this synchronous adapter sees null; the coherence gate fires once the anchor resolves
     history,
   };
 
