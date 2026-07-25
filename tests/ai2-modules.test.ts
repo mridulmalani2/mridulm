@@ -105,8 +105,9 @@ describe('E4 — redline + memo', () => {
     expect(credit).toContain('final-year NET leverage');
     expect(md).not.toContain('Entry net leverage');
     // memoSkeleton output is a DOWNLOADED DELIVERABLE, not a prompt — an instruction here
-    // lands in the document handed to an IC, and MEMO_POLISH_SYSTEM would preserve it as
-    // content rather than obey it. The basis disclosure belongs in Caveats (hostile F3).
+    // would land in the document handed to an IC. The basis disclosure belongs in Caveats
+    // (hostile F3). The memo path is now LLM-free (the polish pass was deleted, owner
+    // decision 2026-07-25), so no prompt can leak into it in the first place.
     expect(credit).not.toMatch(/\bdo not present\b|\byou (must|should)\b|\bnote that\b/i);
     const caveats = md.slice(md.indexOf('## Caveats'));
     expect(caveats).toContain('Entry leverage is GROSS');
