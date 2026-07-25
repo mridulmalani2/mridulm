@@ -388,6 +388,55 @@ describe('kernel/waterfall — SPEC §3', () => {
     );
   });
 
+  it('§17 item (vii): the blocked FLAG uses min(request, cashCap), not cashCap alone — directed (accuracy audit C, 2026-07-25)', () => {
+    // The property test can't reliably hit rp_max STRICTLY BETWEEN the request and the cash
+    // cap, so a mutant `blocked = rpCap < max(0, cashCap)` (dropping the request term) went
+    // undetected by 402 tests. This pins it: cash 60, floor 10 ⇒ cashCap 50; one un-swept
+    // tranche of 100 ⇒ gross_debt_end 100; L 1 × EBITDA 70 ⇒ rp_max = 60 − (100 − 70) = 30,
+    // strictly between request 10 and cashCap 50. paid = request-capped 10; blocked FALSE
+    // (rp_max 30 ≥ min(10, 50) = 10). The mutant would read 30 < 50 = TRUE and mislabel it.
+    const out = waterfallYear({
+      opening_cash: 60, fcf_pre_debt: 0, min_cash: 10, sweep_pct: 0,
+      tranches: [{ name: 'T', outstanding: 100, scheduled_amort: 0, cash_interest: 0, sweep_participates: false, sweep_priority: 1 }],
+      revolver: null,
+      distribution_request: 10, rp_trap_level: 1, ebitda_adj: 70,
+    });
+    expect(out.rp_max).toBeCloseTo(30, 12);
+    expect(out.distribution_paid).toBeCloseTo(10, 12); // request-capped
+    expect(out.distribution_blocked).toBe(false);       // the trap did NOT clip below the request
+  });
+
+  it('§14.18 / §3.7 at EBITDA_adj < 0 WITH a payment (net-cash regime) — directed (accuracy audit D, 2026-07-25)', () => {
+    // The E ≤ 0 corner where a distribution still PAYS (net cash, so gross − cash < L·E even
+    // for negative E) is only ~1% likely per CI run under the generator. Pinned directly:
+    // no debt, cash 100, floor 10, E = −5, L 2 ⇒ rp_max = 100 − (0 − 2·(−5)) = 90; paid =
+    // request-capped 50. The money form holds with BOTH sides negative.
+    const out = waterfallYear({
+      opening_cash: 100, fcf_pre_debt: 0, min_cash: 10, sweep_pct: 0,
+      tranches: [], revolver: null,
+      distribution_request: 50, rp_trap_level: 2, ebitda_adj: -5,
+    });
+    expect(out.rp_max).toBeCloseTo(90, 12);
+    expect(out.distribution_paid).toBeCloseTo(50, 12);
+    const grossEnd = 0; // no tranches, no revolver
+    // §14.18 money form: post-payment net debt ≤ L × EBITDA_adj, both negative here
+    expect(grossEnd - out.closing_cash).toBeLessThanOrEqual(2 * -5 + 1e-9); // −50 ≤ −10 ✓
+    expect(out.distribution_blocked).toBe(false);
+  });
+
+  it('§3.7 at EBITDA_adj ≤ 0 with NO net-cash cushion is full lockdown (rp_max 0) — directed', () => {
+    // The lender-intent case the ratio form would invert: levered and loss-making ⇒ paid 0.
+    const out = waterfallYear({
+      opening_cash: 50, fcf_pre_debt: 0, min_cash: 5, sweep_pct: 0,
+      tranches: [{ name: 'T', outstanding: 200, scheduled_amort: 0, cash_interest: 0, sweep_participates: false, sweep_priority: 1 }],
+      revolver: null,
+      distribution_request: 30, rp_trap_level: 3, ebitda_adj: -10,
+    });
+    expect(out.rp_max).toBe(0);              // max(0, 50 − (200 − 3·(−10))) = max(0, 50 − 230) = 0
+    expect(out.distribution_paid).toBe(0);
+    expect(out.distribution_blocked).toBe(true); // cash alone (45 above floor) would have paid
+  });
+
   it('§14.4: closing cash ≥ min_cash OR the floor-breach flag is set with the revolver exhausted. Domain: any valid config', () => {
     fc.assert(
       fc.property(waterfallArb, (input) => {
