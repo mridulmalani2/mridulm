@@ -9,7 +9,7 @@
  */
 
 import ExcelJS from 'exceljs';
-import { entryMultipleDisplay, type Engine2ModelOutput } from './facade';
+import { entryMultipleDisplay, exitMultipleDisplay, type Engine2ModelOutput } from './facade';
 
 const MONEY = '#,##0.0';
 const MONEY2 = '#,##0.00';
@@ -58,7 +58,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ...(entryMult.fy_canonical !== null
       ? [['Entry multiple (FY/LTM, canonical)', entryMult.fy_canonical] as Cell[]]
       : []),
-    ['Exit multiple', o.exit.exit_ev / o.exit.exit_ebitda_basis_value],
+    ['Exit multiple', exitMultipleDisplay(o)],
     ['— SOURCES & USES —', null],
     ['Total uses', o.sources_uses.total_uses],
     ['Debt at par', o.derived.total_debt_at_par],

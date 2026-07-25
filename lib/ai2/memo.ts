@@ -18,13 +18,13 @@
  * exists because it was broken.]
  */
 
-import { entryMultipleDisplay, type Engine2ModelOutput } from '../engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay, type Engine2ModelOutput } from '../engine2/facade';
 import { money, multiple, num, pct } from '../format';
 import type { Engine2Currency } from '../format';
 
 export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): string {
   const su = o.sources_uses;
-  const exitMult = o.exit.exit_ev / o.exit.exit_ebitda_basis_value;
+  const exitMult = exitMultipleDisplay(o);
   // §11: state the entry multiple's ACTUAL basis (NTM under an NTM entry — "FY EBITDA" was a
   // false label there), and add the FY/LTM-canonical figure when NTM ("shows both, LTM canonical").
   const em = entryMultipleDisplay(o);

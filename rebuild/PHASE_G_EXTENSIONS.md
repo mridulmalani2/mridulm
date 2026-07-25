@@ -36,8 +36,12 @@ AND was outside the fence]:
 >   `lib/engine2/suggest.ts` + `lib/engine2/suggestions/**`. Golden-uncovered (never runs in
 >   `runModel`), so a new computed suggested value is ADJUDICATED like any Tier-B number.
 > - **DISPLAY-SURFACE SET** (renders numbers to a human) = `components/deal-engine/**` +
->   `lib/engine2/excelExport.ts` + `lib/ai2/memo.ts` + `lib/format/**`. (Explicitly includes
->   the Excel export and the downloaded memo — the exact surfaces that carried v1.1.2.)
+>   `lib/format/**` + `lib/engine2/excelExport.ts` + `lib/ai2/memo.ts`. (Explicitly includes
+>   the Excel export and the downloaded memo — the exact surfaces that carried v1.1.2.) The
+>   committed guard DERIVES its scan set by WALKING these roots
+>   (`tests/governance-display-surface.test.ts`), never a hand-maintained file list — a hardcoded
+>   4-file scan let a live §4 second-path in `AssumptionsPanel` sit green [R3-1]. A meta-test binds
+>   the walked roots to this line, so guard/doc drift is itself a red test.
 >
 > **Tier-B allowlist:** the PR's diff is CONFINED TO `lib/edgar/**`, `lib/engine2/factsAdapter.ts`,
 > the SUGGESTION PATH, purely-additive Class-A/C `types.ts` fields, the DISPLAY-SURFACE SET,
@@ -103,19 +107,35 @@ and were caught by ADJUDICATORS + directed MUTATION tests, never by goldens:
 **HARD ESCALATION + DISPLAY GATE (mechanical, checked against the diff):**
 - (a) **Source containment**: the git-diff over the engine arithmetic path AND `types.ts` is
   EMPTY. Fail ⇒ escalate (a new engine field ⇒ A; a new derived data value ⇒ B).
-- (b) **Every displayed value resolves to a NAMED `ModelOutput` field through `lib/format`** —
-  enforced by a COMMITTED CI CHECK, not a reviewer's grep [R2-2]:
-  `tests/governance-display-surface.test.ts` runs over the DISPLAY-SURFACE SET and fails on
-  (i) any import of an engine ARITHMETIC module into a display surface (recompute-via-import),
-  and (ii) any array AGGREGATION (`.reduce` / `Math.max` / `Math.min`) over a model value that
-  is not an explicitly-allowlisted PRESENTATIONAL derivation — a Σ-tranche-balances inline
-  instead of a ModelOutput field FAILS the build (proven by mutation). A new aggregation must
-  read a ModelOutput field or be allowlisted WITH a justification (reviewer-visible). HONEST
-  SCOPE: a benign RATIO of two named fields (a multiple = A/B) is a legitimate presentational
-  derivation and is NOT policed by the check — a blanket arithmetic ban would false-positive on
-  correct code; that residual is covered by gate (c)'s per-field label mutation tests + the
-  conformance diff-review. The check closes the two MECHANICAL second-path vectors; it does not
-  over-claim to close all of them.
+- (b) **Every displayed value resolves to a NAMED `ModelOutput` field (or the ONE facade display
+  helper), through `lib/format`** — enforced by a COMMITTED CI CHECK, not a reviewer's grep
+  [R2-2], GLOB-derived over the DISPLAY-SURFACE SET so it covers every current AND future display
+  file [R3-1]. `tests/governance-display-surface.test.ts` fails on:
+  - (i) an import of an engine ARITHMETIC module into a display surface, UNLESS it is a SANCTIONED
+    single-source primitive — a pure helper the engine ITSELF uses (`allInRate`,
+    `entryGrossLeverageFromAssumptions`, `rescaleTermTranchesToLeverage`), imported so an INPUT
+    panel's pre-build PREVIEW shares ONE definition with the engine. Importing the shared primitive
+    is the CURE for a second path; re-implementing its formula inline is the disease (this is
+    exactly what `AssumptionsPanel`'s `max(base,floor)+spread` was). Each sanctioned import is
+    enumerated with its reason — fail-closed: a NEW engine import fails until justified.
+  - (ii) any array AGGREGATION (`.reduce` / `Math.max` / `Math.min`) over a model value that is not
+    an allowlisted PRESENTATIONAL derivation — a Σ-tranche-balances inline instead of a ModelOutput
+    field FAILS the build.
+  - (iii) any inline reconstruction of a SINGLE-SOURCED derived number (registry-driven): the exit
+    EV/EBITDA multiple was reconstructed inline on THREE surfaces before `exitMultipleDisplay`; it
+    must now flow through that facade helper.
+
+  All three proven by mutation. **HONEST SCOPE [R3-2].** What is NOT regex-policed is scalar
+  arithmetic on named fields — net debt (par − cash), covenant headroom (EBITDA − threshold), a
+  multiple (A / B), an IRR (`Math.pow`) — because a blanket operator ban WOULD false-positive on
+  legitimate presentational math (the memo's cap table alone computes several %-of-cap and
+  ×-EBITDA cells from named fields). This residual is NOT "benign ratios," and it is NOT covered by
+  gate (c)'s label tests — those assert a field's LABEL, never that its displayed VALUE equals its
+  source. It is closed instead by: (1) SINGLE-SOURCING any derived number shown on >1 surface
+  through one facade helper — guard (iii) pins the known ones; (2) a VALUE-PROVENANCE test per
+  displayed derived number (recompute from named `ModelOutput` fields, assert equality — e.g. the
+  `entryMultipleDisplay` / `exitMultipleDisplay` tests); and (3) the conformance diff-review as the
+  human backstop. The guard closes the mechanically-closable vectors and names the one it does not.
 - (c) **LABEL COVERAGE**: every displayed field — new OR relabelled — carries a
   MUTATION-TESTED basis/label assertion (the v1.1.2/v1.1.3 lesson: "zero label assertions
   were added for a defect that WAS a label"). A feature that renders numbers ANNOTATED with a
@@ -135,6 +155,14 @@ at the new computation; Tier C adds no number and mutation-tests every label. A 
 means "the diff proves there is nothing here to adjudicate" — which is checkable — NOT "we
 adjudicated less." (The original doc's "byte-identity IS the evidence" claim was the exact
 vacuous-proof pattern G-1 spent three hostile rounds learning to distrust; it is retracted.)
+
+**The recurring enforcement failure — named, so it stops.** A hand-maintained ENUMERATED list
+has been the containment hole three rounds running: a DENYLIST that failed open (R1, `suggest.ts`
+outside the fence), then a HARDCODED display-scan list that covered 1 of 9 components while a live
+§4 second-path sat green under it (R3). The fix is the same each time: enforce by CONSTRUCTION, not
+by a list someone must remember to extend — a fail-closed positive allowlist for the diff fence, a
+GLOB-derived scan set for the display gate, a meta-test binding guard to doc. If a future gate is a
+hand-kept list of what to check, assume it already has a hole.
 
 ## Ordered backlog (re-derived from the audit + product review; owner may reorder)
 

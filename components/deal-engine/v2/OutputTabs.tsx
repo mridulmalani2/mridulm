@@ -9,7 +9,7 @@
  * add-ons, partial exits, ratchets, PIK elections, refi editors, distributions, trace.
  */
 import React, { useState } from 'react';
-import { entryMultipleDisplay, type Engine2ModelOutput } from '../../../lib/engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay, type Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -54,7 +54,7 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>MOIC</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.sponsor_net.moic)}</p></div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(o.exit.exit_ev / o.exit.exit_ebitda_basis_value)}</p>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}</p>
         {em.fy_canonical !== null && (
           <p className="text-[10px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
         )}</div>

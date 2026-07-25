@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { entryMultipleDisplay, runModel } from '../lib/engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay, runModel } from '../lib/engine2/facade';
 import { waterfallYear } from '../lib/engine2/kernel/waterfall';
 import { applyAxis, applyScenarioDeltas, buildSensitivityGrid, runModelWithScenarios, runScenario } from '../lib/engine2/scenarios';
 import { entryGrossLeverageFromAssumptions } from '../lib/engine2/sourcesUses';
@@ -651,5 +651,29 @@ describe('entryMultipleDisplay — §11 "shows both, LTM canonical"', () => {
     expect(em.fy_canonical!).toBeGreaterThan(em.valuation); // the two are NOT the same number
     // pins the mutation "hard-code basis_label 'FY'": that would make basis_label wrong here
     expect(em.basis_label).not.toBe('FY');
+  });
+});
+
+describe('exitMultipleDisplay — §9 single-source + value provenance', () => {
+  // The exit multiple was reconstructed inline as `exit_ev / exit_ebitda_basis_value` on THREE
+  // surfaces (OutputTabs, excelExport, memo); this pins the one helper they now share.
+  it('recovers the exit multiple ASSUMPTION exactly (provenance: exit_ev = multiple × basis)', () => {
+    for (const key of ['G1', 'G2', 'G3'] as const) {
+      const deal = GOLDEN_DEALS[key];
+      const o = runModel(deal.facts, deal.assumptions);
+      // exit.ts builds exit_ev = assumptions.exit.multiple × exit_ebitda_basis_value, so the
+      // displayed ratio traces to the exit multiple assumption — a value-provenance check, the
+      // thing label-mutation tests do NOT do (they assert the label, not that value == source).
+      expect(exitMultipleDisplay(o)).toBeCloseTo(deal.assumptions.exit.multiple, 10);
+    }
+  });
+
+  it('catches a reciprocal/wrong-field mutation (non-vacuous)', () => {
+    const o = runModel(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
+    const canonical = exitMultipleDisplay(o);
+    // a helper that divided basis ÷ ev (the reciprocal) would NOT recover the assumption
+    expect(o.exit.exit_ebitda_basis_value / o.exit.exit_ev).not.toBeCloseTo(GOLDEN_DEALS.G2.assumptions.exit.multiple, 2);
+    // and it is genuinely a >1x number here, so the reciprocal is a distinct value
+    expect(canonical).toBeGreaterThan(1);
   });
 });

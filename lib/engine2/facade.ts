@@ -52,6 +52,19 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
   };
 }
 
+/**
+ * §9 display helper — the exit EV/EBITDA multiple, single-sourced. `exit_ev` is built as
+ * `assumptions.exit.multiple × exit_ebitda_basis_value` (exit.ts), so this ratio recovers the
+ * exit multiple exactly; expressing it once here — rather than inline in OutputTabs, excelExport
+ * AND memo (three copies before this) — removes the drift risk of a derived number reconstructed
+ * on three surfaces. Its provenance is pinned by test (== `assumptions.exit.multiple`). Returns a
+ * finite number for every well-formed model (basis EBITDA > 0 by §9); a degenerate ≤0 basis is an
+ * upstream invariant breach, not something this display layer silently papers over.
+ */
+export function exitMultipleDisplay(o: Pick<Engine2ModelOutput, 'exit'>): number {
+  return o.exit.exit_ev / o.exit.exit_ebitda_basis_value;
+}
+
 /** Assemble the §9 exit block from the core (shared by facade and scenarios.ts). */
 export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock {
   const N = assumptions.entry.hold_years;
