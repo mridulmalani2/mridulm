@@ -329,10 +329,21 @@ independently, so a component absence refused for the wrong reason and risked a 
 Each adjudicator hand-derives the assigned cases from SPEC §1.1 and the raw fixture inputs, NOT
 from `ltm_stitch.py`'s algorithm, at the ±$0.005m / ±0.1bp bar.
 
-- [ ] **Adjudication pass 1 (IN FLIGHT):** PROCEEDS arithmetic (i, ii, viii) hand-derived
-  component-wise + badges; refusals (iii, iv). Recorded on completion.
-- [ ] **Adjudication pass 2 (IN FLIGHT):** refusal branches (v abutment, vi restatement, vii
-  component, ix vintage) + independent re-derivation of (i) and (viii) as a cross-check.
+- [x] **Adjudication pass 1 (2026-07-25, agent aa390b6): SIGNED.** Cases (i, ii, iii, iv, viii)
+  hand-derived from §1.1 + raw facts (no reuse of the reference algorithm): the PROCEEDS
+  arithmetic component-wise (i/viii rev 1080/1320, EBITDA 267/328), the badges, the (iii) FPI
+  and (iv) missing-component fallbacks. 5/5 EXACT (Δ=0.00), zero mismatches beyond ±$0.005m.
+  Confirmed the (iv) F4 discipline (revenue forced to FY 1000, not the individually-stitchable
+  1080) and that the 52/53 disclosure note attaches only to the genuine 7-day signature (ii),
+  not the 1-day leap artifact (i/viii) — the reference's reading is correct.
+- [x] **Adjudication pass 2 (2026-07-25, agent a51ab1b): SIGNED.** Refusal branches (v abutment,
+  vi restatement, vii component, ix vintage) + independent re-derivation of (i) and (viii). 6
+  EXACT (Δ=0.00). Verified the two self-review fixes hold: (vi) EBITDA = FY 250, NOT the stitched
+  267 (pair fallback recomputes FY — same in v=238, vii/ix=250); and refusals attributed to the
+  CORRECT gate (v=abutment only, vii=OperInc-absent), no misattribution. Every FY-fallback revenue
+  uses FY (vii 1000 not 1080; v 950 not 990), and every as_of anchors correctly (stitch→e,
+  fallback→FY period-end).
 
-**Status: g2ltm fixtures are the STEP-2 TARGET (regeneration-gated, directed-asserted); they
-become GOSPEL when both adjudication passes above are signed.**
+**Status: g2ltm fixtures (i)–(ix) are GOSPEL** (both independent passes signed, ±$0.005m). The
+step-3 extraction/adapter PR's TS stitch is wrong wherever it disagrees; disputes reopen only via
+a §1.1 amendment + re-derivation.
