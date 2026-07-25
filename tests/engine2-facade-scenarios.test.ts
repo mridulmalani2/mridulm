@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { runModel } from '../lib/engine2/facade';
+import { entryMultipleDisplay, runModel } from '../lib/engine2/facade';
 import { waterfallYear } from '../lib/engine2/kernel/waterfall';
 import { applyAxis, applyScenarioDeltas, buildSensitivityGrid, runModelWithScenarios, runScenario } from '../lib/engine2/scenarios';
 import { entryGrossLeverageFromAssumptions } from '../lib/engine2/sourcesUses';
@@ -614,5 +614,42 @@ describe('§17 golden-uncovered branches (the list each needs a fixture for)', (
     expect(b.credit[0].fcf_conversion).toBeCloseTo(a.credit[0].fcf_conversion!, 12);
     // net leverage DOES move — cash left the balance sheet, which is the honest effect
     expect(b.credit[0].net_leverage).toBeGreaterThan(a.credit[0].net_leverage!);
+  });
+});
+
+/**
+ * §11 entry-multiple basis display (ticket: 'Entry multiple (FY)' hard-coded but NTM-based
+ * under an NTM entry). NTM is golden-uncovered by design, so this is a directed test with a
+ * mutation partner. G2 growth[0] = 6%, so NTM EBITDA = FY × 1.06 and the two multiples must
+ * genuinely differ under an NTM entry.
+ */
+describe('entryMultipleDisplay — §11 "shows both, LTM canonical"', () => {
+  const ntm = (): DealAssumptions => ({
+    ...GOLDEN_DEALS.G2.assumptions,
+    entry: { ...GOLDEN_DEALS.G2.assumptions.entry, basis: 'ntm' },
+  });
+
+  it('FY entry: label FY, one figure, fy_canonical null (byte-identical to before)', () => {
+    const o = runModel(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
+    const em = entryMultipleDisplay(o);
+    expect(em.basis_label).toBe('FY');
+    expect(em.valuation).toBeCloseTo(o.derived.entry_multiple, 12);
+    expect(em.fy_canonical).toBeNull(); // FY ⇒ the two coincide ⇒ only one line shown
+    // and the canonical formula, if it were computed, equals the valuation for an FY deal
+    expect(o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing).toBeCloseTo(o.derived.entry_multiple, 12);
+  });
+
+  it('NTM entry: label NTM, valuation on NTM EBITDA, fy_canonical = EV ÷ FY EBITDA, genuinely different', () => {
+    const o = runModel(GOLDEN_DEALS.G2.facts, ntm());
+    const em = entryMultipleDisplay(o);
+    expect(em.basis_label).toBe('NTM');
+    // driver=multiple ⇒ the displayed valuation multiple is the user's 9x, applied to NTM EBITDA
+    expect(em.valuation).toBeCloseTo(9, 12);
+    expect(em.fy_canonical).not.toBeNull();
+    // FY-canonical = 9 × (NTM/FY) = 9 × 1.06 = 9.54 — the "9x NTM is 9.54x FY" honesty
+    expect(em.fy_canonical!).toBeCloseTo(9 * 1.06, 6);
+    expect(em.fy_canonical!).toBeGreaterThan(em.valuation); // the two are NOT the same number
+    // pins the mutation "hard-code basis_label 'FY'": that would make basis_label wrong here
+    expect(em.basis_label).not.toBe('FY');
   });
 });

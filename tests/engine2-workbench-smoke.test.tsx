@@ -129,6 +129,9 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     // (hostile review F6, 2026-07-24).
     expect(html).toContain('Entry gross leverage');
     expect(html).not.toMatch(/Entry\s+net\s+leverage/i);
+    // §11 [v1.1.3]: the entry-multiple tile is labelled by basis. The fixture is an FY
+    // entry ⇒ "Entry (FY) → exit", never a bare "Entry → exit" that hides the basis.
+    expect(html).toContain('Entry (FY) → exit');
     expect(html).not.toContain('9999');
     expect(html).not.toMatch(/\d\.\d{8,}/);
     // the §E2 removal list stays absent from the v2 tree

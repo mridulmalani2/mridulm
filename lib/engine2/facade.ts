@@ -25,6 +25,33 @@ import type { CreditYear, DealAssumptions, DealFacts, ExitBlock, ModelOutput, Re
 
 export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2ValueBridge };
 
+/**
+ * §11 display helper — the entry multiple's BASIS, and the FY/LTM-canonical figure to show
+ * alongside it under an NTM entry. `derived.entry_multiple` is the multiple on the
+ * VALUATION basis: EV ÷ FY EBITDA when `entry.basis === 'fy'`, but EV ÷ (FY × (1 + growth[0]))
+ * when `basis === 'ntm'` (§9). Labelling it "(FY)" unconditionally is therefore FALSE for an
+ * NTM entry — and §11 states that "leverage sizing and every covenant test use FY(LTM)
+ * EBITDA even when the valuation basis is NTM … if entry is NTM-based the UI shows both, LTM
+ * canonical." This returns the data every displayed surface needs to obey that: the basis
+ * label, the valuation multiple, and the FY-canonical multiple (EV ÷ `entry_ebitda_for_sizing`,
+ * which is ALWAYS FY) — `fy_canonical` is null under an FY entry, where the two coincide and
+ * only one line is shown (byte-identical to before for every FY deal). Pure display LOGIC,
+ * not arithmetic: both numbers are already fully determined by existing `derived` fields, so
+ * this introduces no second calculation path for any engine value.
+ */
+export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'assumptions'>): {
+  basis_label: 'FY' | 'NTM';
+  valuation: number;
+  fy_canonical: number | null;
+} {
+  const ntm = o.assumptions.entry.basis === 'ntm';
+  return {
+    basis_label: ntm ? 'NTM' : 'FY',
+    valuation: o.derived.entry_multiple,
+    fy_canonical: ntm ? o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing : null,
+  };
+}
+
 /** Assemble the §9 exit block from the core (shared by facade and scenarios.ts). */
 export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock {
   const N = assumptions.entry.hold_years;

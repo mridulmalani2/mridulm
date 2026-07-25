@@ -9,7 +9,7 @@
  * add-ons, partial exits, ratchets, PIK elections, refi editors, distributions, trace.
  */
 import React, { useState } from 'react';
-import type { Engine2ModelOutput } from '../../../lib/engine2/facade';
+import { entryMultipleDisplay, type Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -42,15 +42,22 @@ const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, 
   </div>
 );
 
-const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
+const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  // §11: label the entry multiple by its ACTUAL basis and show the FY/LTM-canonical figure
+  // alongside it under an NTM entry ("shows both, LTM canonical"); FY deals are unchanged.
+  const em = entryMultipleDisplay(o);
+  return (
   <div>
     <div className="flex gap-8 mb-4">
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Sponsor IRR</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{pct(o.returns.sponsor_net.irr)}</p></div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>MOIC</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.sponsor_net.moic)}</p></div>
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry → exit</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_multiple)} → {multiple(o.exit.exit_ev / o.exit.exit_ebitda_basis_value)}</p></div>
+      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(o.exit.exit_ev / o.exit.exit_ebitda_basis_value)}</p>
+        {em.fy_canonical !== null && (
+          <p className="text-[10px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
+        )}</div>
       {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
           per-year credit metrics on the other tabs are NET. */}
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
@@ -81,7 +88,8 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
       FCF conversion by year: {o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.fcf_conversion))).join(' · ')}
     </p>
   </div>
-);
+  );
+};
 
 const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
   <Table head={['Stream', 'Outflow', 'Final inflow', 'IRR', 'MOIC']}>

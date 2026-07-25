@@ -81,6 +81,20 @@ describe('E4 — redline + memo', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order); // R&P order preserved
     expect(md).not.toMatch(/\d\.\d{8,}/); // format boundary holds in the memo too
     expect(md).toContain('a range, not a point');
+    // §11: FY entry ⇒ the price line says "FY EBITDA", never "NTM"
+    expect(md).toContain('FY EBITDA');
+    expect(md).not.toContain('NTM');
+  });
+
+  it('§11 memo NTM entry: the price line states NTM and adds the FY/LTM-canonical multiple (directed — NTM golden-uncovered)', () => {
+    const ntm = { ...g2a, entry: { ...g2a.entry, basis: 'ntm' as const } };
+    const md = memoSkeleton(runModel(g2facts, ntm), 'USD');
+    const price = md.slice(md.indexOf('## Purchase price'), md.indexOf('## Sources'));
+    expect(price).toContain('NTM EBITDA');          // the true basis
+    expect(price).toContain('FY/LTM EBITDA');        // §11 "shows both, LTM canonical"
+    expect(price).toContain('canonical sizing basis');
+    // the false 'at X FY EBITDA' framing (multiple on NTM but labelled FY) must be gone
+    expect(price).not.toMatch(/at \d[\d.]*x FY EBITDA/);
   });
 
   it('memo: leverage bases are labelled, the basis caveat sits in Caveats, and no imperative leaks into the deliverable (§11 v1.1.2)', () => {

@@ -18,13 +18,19 @@
  * 2026-07-24 — this rule exists because it was broken.]
  */
 
-import type { Engine2ModelOutput } from '../engine2/facade';
+import { entryMultipleDisplay, type Engine2ModelOutput } from '../engine2/facade';
 import { money, multiple, num, pct } from '../format';
 import type { Engine2Currency } from '../format';
 
 export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): string {
   const su = o.sources_uses;
   const exitMult = o.exit.exit_ev / o.exit.exit_ebitda_basis_value;
+  // §11: state the entry multiple's ACTUAL basis (NTM under an NTM entry — "FY EBITDA" was a
+  // false label there), and add the FY/LTM-canonical figure when NTM ("shows both, LTM canonical").
+  const em = entryMultipleDisplay(o);
+  const entryMultipleClause = em.fy_canonical === null
+    ? `${multiple(em.valuation)} FY EBITDA (${money(o.facts.fy_ebitda, ccy)})`
+    : `${multiple(em.valuation)} NTM EBITDA — ${multiple(em.fy_canonical)} on FY/LTM EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
   const totalDebt = o.derived.total_debt_at_par;
   const capTotal = totalDebt + su.rollover_equity + su.sponsor_equity;
   const capRow = (name: string, amt: number) =>
@@ -34,7 +40,7 @@ export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): strin
   return `# ${o.facts.entity_name} — LBO summary (engine2)
 
 ## Purchase price & multiples
-Entry EV ${money(o.derived.enterprise_value, ccy)} at ${multiple(o.derived.entry_multiple)} FY EBITDA (${money(o.facts.fy_ebitda, ccy)}); exit at ${multiple(exitMult)} in year ${o.assumptions.entry.hold_years}.
+Entry EV ${money(o.derived.enterprise_value, ccy)} at ${entryMultipleClause}; exit at ${multiple(exitMult)} in year ${o.assumptions.entry.hold_years}.
 
 ## Sources & uses
 | Uses | | Sources | |
