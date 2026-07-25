@@ -120,6 +120,13 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     expect(missing).toContain('net_debt');
   });
 
+  it('display-only gross_debt/cash are honest NULL when absent, never a fabricated 0 (§15 no-silent-default)', () => {
+    // these two facts have no engine consumers; the adapter must not invent a 0 for them
+    const { facts } = adaptRawHistoricals({ entityName: 'X', currency: 'USD', basis: 'FY', days_notes: [], gaps: [] } as any);
+    expect(facts.gross_debt).toBeNull();
+    expect(facts.cash).toBeNull();
+  });
+
   it('unsupported currency propagates as a missing/blocking entry', () => {
     const raw = mapCompanyFacts(FIXTURE, {});
     const { missing } = adaptRawHistoricals({ ...raw, currency_unsupported: 'SEK' });

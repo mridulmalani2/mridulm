@@ -70,8 +70,11 @@ export interface DealFacts {
   dio: number | null;
   dpo: number | null;
 
-  gross_debt: number;
-  cash: number;
+  /** Gross debt / cash at entry. `net_debt` is the sizing figure the engine uses; these two are
+   *  carried for display only and are honest-null when extraction can't surface them separately —
+   *  NEVER a fabricated 0 (the no-silent-default invariant, §15). */
+  gross_debt: number | null;
+  cash: number | null;
   net_debt: number;
   effective_tax_rate: number;
   /** Extracted NOL is a FLOOR (companyfacts is non-dimensional — PHASE_D D6). */
