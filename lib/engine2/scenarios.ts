@@ -27,7 +27,7 @@
  */
 
 import { runModel, type Engine2ModelOutput } from './facade';
-import { deriveEntry } from './sourcesUses';
+import { deriveEntry, rescaleTermTranchesToLeverage } from './sourcesUses';
 import type {
   DealAssumptions,
   DealFacts,
@@ -35,7 +35,6 @@ import type {
   ScenarioResult,
   SensitivityAxis,
   SensitivityGrid,
-  TrancheAssumption,
 } from './types';
 import { covenantBreachYear } from './credit';
 
@@ -103,24 +102,10 @@ export function applyAxis(
     case 'entry_multiple': // entry-side: re-prices
       return { ...assumptions, entry: { ...assumptions.entry, driver: 'multiple', entry_multiple: value, enterprise_value: null } };
     case 'leverage': {
-      // entry-side: scale every TERM tranche proportionally to total = value × FY EBITDA
-      const currentTotal = assumptions.structure.tranches.reduce((s, t) => {
-        if (t.type === 'revolver') return s;
-        return s + (t.size.x_ebitda !== undefined ? t.size.x_ebitda * facts.fy_ebitda : t.size.amount);
-      }, 0);
-      if (currentTotal <= 0) {
-        throw new RangeError('scenarios: leverage axis needs at least one term tranche to scale');
-      }
-      const factor = (value * facts.fy_ebitda) / currentTotal;
-      const tranches: TrancheAssumption[] = assumptions.structure.tranches.map((t) => {
-        if (t.type === 'revolver') return t;
-        const size =
-          t.size.x_ebitda !== undefined
-            ? { x_ebitda: t.size.x_ebitda * factor }
-            : { amount: t.size.amount * factor };
-        return { ...t, size };
-      });
-      return { ...assumptions, structure: { ...assumptions.structure, tranches } };
+      // entry-side: scale every TERM tranche proportionally to total = value × FY EBITDA.
+      // Shared with the AssumptionsPanel's "Total leverage" field — one implementation, so
+      // the input and output surfaces cannot drift apart (§11 v1.1.2).
+      return rescaleTermTranchesToLeverage(facts, assumptions, value);
     }
     case 'exit_multiple': // operating-side (absolute)
       return { ...assumptions, exit: { ...assumptions.exit, multiple: value } };

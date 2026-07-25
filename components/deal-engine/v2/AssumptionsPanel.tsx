@@ -12,6 +12,7 @@ import { useEngine2Model } from '../../../store/engine2Model';
 import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/format';
 import BasisBadge from './BasisBadge';
 import type { DealAssumptions, CashPayTrancheAssumption } from '../../../lib/engine2/types';
+import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
@@ -81,7 +82,12 @@ const AssumptionsPanel: React.FC = () => {
   const term = a.structure.tranches.find(
     (t): t is CashPayTrancheAssumption => t.type === 'senior' || t.type === 'unitranche',
   );
-  const termLeverage = term && term.size.x_ebitda !== undefined ? term.size.x_ebitda : null;
+  // §11 [v1.1.2] GROSS entry leverage across ALL term tranches — the same quantity
+  // ModelOutput reports as `derived.entry_gross_leverage_fy`, read through the one shared
+  // definition rather than recomputed here. Previously this took `x_ebitda` off the FIRST
+  // senior/unitranche tranche only, so a deal with a PIK note or mezz (golden G3: senior
+  // 3.0x + PIK 1.5x) showed "3.0x" beside a 4.5x headline on the same screen.
+  const termLeverage = entryGrossLeverageFromAssumptions(facts, a);
   const blendedRate = term
     ? term.pricing.kind === 'floating'
       ? Math.max(term.pricing.base_rate, term.pricing.floor) + term.pricing.spread
@@ -101,11 +107,14 @@ const AssumptionsPanel: React.FC = () => {
           trades at ~{multiple(facts.implied_trading_ev_ebitda)} FY EBITDA (read-only anchor)
         </p>
       )}
-      <Row label="Total leverage" path="structure.tranches">
+      <Row label="Total leverage (gross, x FY EBITDA)" path="structure.tranches">
         <NumInput value={termLeverage === null ? 'n/a' : num(termLeverage, 1)} suffix="x" readOnly={termLeverage === null}
           onCommit={numCommit((v) => {
-            const tranches = a.structure.tranches.map((t) => (t.type === 'revolver' || !('size' in t) || t.size.x_ebitda === undefined ? t : { ...t, size: { x_ebitda: v } }));
-            return [{ ...a, structure: { ...a.structure, tranches } }, ['structure.tranches']];
+            // Rescale every term tranche PROPORTIONALLY so the total becomes v × FY EBITDA —
+            // via the SAME implementation the §13 `leverage` sensitivity axis uses.
+            // Writing v onto each tranche (the previous behaviour) MULTIPLIED leverage:
+            // typing 4.0 on a two-tranche deal produced 8.0x under a field labelled "total".
+            return [rescaleTermTranchesToLeverage(facts, a, v), ['structure.tranches']];
           })} />
       </Row>
       <Row label="Blended debt rate" path="structure.tranches">
