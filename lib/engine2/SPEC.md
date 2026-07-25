@@ -397,8 +397,10 @@ cash = opening_cash + FCF_pre_debt                    (FCF_pre_debt from §7 —
      sweepable    = sweep_pct × pool                   ← sweep % applies to the POOL
                     (DR-1 Item 2 confirms the modeling convention: % of cash flow available —
                      including beginning excess cash above the floor — never % of balance)
-     step-downs   : sweep_pct steps down on a net-leverage grid. The 50% base LEVEL and the
-                    lender-friendly grid 75% (>4.5x) → 50% (3.5–4.5x) → 0% (<3.5x) are
+     step-downs   : sweep_pct steps down on a net-leverage grid. Each tier is the leverage
+                    STRICTLY EXCEEDED (`above_net_leverage`, strict `>`), so a value exactly on a
+                    threshold takes the LOWER tier: 75% (>4.5x) → 50% (>3.5x, ≤4.5x) → 0% (≤3.5x).
+                    The 50% base LEVEL and this lender-friendly grid are
                     [CONFIRMED DR-4 Cat.5, LSTA via CT Acquisitions]; running the base preset
                     FLAT (no step-downs) is a [DECIDED] v1 simplification — DR-4's own
                     recommended base is 50% with step-downs, available via the grid preset
