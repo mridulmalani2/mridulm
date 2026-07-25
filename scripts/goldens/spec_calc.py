@@ -137,7 +137,11 @@ def run(golden):
     goodwill = (total_par + drawn + equity_bs) - (cash + nwc0 + ppe + dfc)  # §8 plug
 
     out = {"derived": {"enterprise_value": r2(ev), "sponsor_equity": r2(sponsor_equity),
-                       "total_debt_at_par": r2(total_par), "entry_net_leverage_fy": r4((total_par - 0) / ebitda0) if ebitda0 else None},
+                       "total_debt_at_par": r2(total_par),
+                       # §11 [v1.1.2]: entry leverage is GROSS — par ÷ FY EBITDA, the quoted
+                       # term-sheet number §17 sizes tranches on. Deliberately NOT netted
+                       # against the funded min-cash (that would be (par − min_cash)/EBITDA).
+                       "entry_gross_leverage_fy": r4(total_par / ebitda0) if ebitda0 else None},
            "sources_uses": {"enterprise_value": r2(ev), "transaction_costs": r2(txn),
                             "financing_fees": r2(finfees), "oid_funded": r2(oid_total),
                             "cash_to_balance_sheet": r2(min_cash), "total_uses": r2(uses),

@@ -65,8 +65,12 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Equity (sponsor + rollover)', o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity],
     ['Total capitalization', capTotal],
     ['— CREDIT STATISTICS —', null],
-    ['Entry net leverage (FY)', o.derived.entry_net_leverage_fy],
-    ['Final-year net leverage', o.credit[o.credit.length - 1]?.net_leverage ?? null],
+    // §11 [v1.1.2]: entry is GROSS, final-year is NET — two different bases, so both are
+    // labelled explicitly. They previously read 'Entry net leverage' / 'Final-year net
+    // leverage', which looked like one series and overstated deleveraging by the funded
+    // min-cash at the entry end.
+    ['Entry gross leverage (FY, par ÷ EBITDA)', o.derived.entry_gross_leverage_fy],
+    ['Final-year NET leverage', o.credit[o.credit.length - 1]?.net_leverage ?? null],
     ['Y1 DSCR', o.credit[0]?.dscr ?? null],
     ['— FREE CASH FLOW —', null],
     ...o.operating.map((y, i): Cell[] => [`FCF pre-debt Y${i + 1}`, y.fcf_pre_debt]),
@@ -120,8 +124,11 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     [null, MONEY2, MONEY2, MONEY2, MONEY2, MONEY2, MONEY, MONEY, MONEY, '0.000']);
 
   // ── Credit ──
+  // §11 [v1.1.2]: the basis is in the header, because the Summary sheet's entry figure is
+  // GROSS — a reader plotting Summary→Credit would otherwise read a deleveraging series
+  // that spans two definitions.
   sheetFromRows(wb, 'Credit',
-    ['Year', 'Net leverage', 'Senior net', 'ICR', 'FCCR', 'DSCR', 'FCF conversion', 'Cum. paydown %'],
+    ['Year', 'Net leverage (net of cash — entry figure on Summary is GROSS)', 'Senior net', 'ICR', 'FCCR', 'DSCR', 'FCF conversion', 'Cum. paydown %'],
     o.credit.map((c, i) => [`Y${i + 1}`, c.net_leverage, c.senior_net_leverage, c.icr, c.fccr, c.dscr, c.fcf_conversion, c.cumulative_paydown_pct_of_entry_debt]),
     [null, MULT, MULT, '0.00', '0.00', '0.00', PCT, PCT]);
 
@@ -162,6 +169,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Exit = entry multiple unless edited; §382 static; NOL usage not optimized across years', 'SPEC §6/§9/§15'],
     ['Exit-year fee write-off deducted uncapped; PP&E rolls mechanically (may go negative, warned)', 'SPEC §7/§8/§15'],
     ['BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions', 'SPEC §3/§15'],
+    ['Entry leverage is GROSS (debt at par ÷ FY EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series', 'SPEC §11'],
     ['A model is a range, not a point — the sensitivity/scenario exhibits are the primary caveat mechanism', 'SPEC §15'],
   ], [null, null]);
 

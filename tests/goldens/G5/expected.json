@@ -70,7 +70,7 @@
  "credit": [],
  "derived": {
   "enterprise_value": 112.0,
-  "entry_net_leverage_fy": 3.0,
+  "entry_gross_leverage_fy": 3.0,
   "sponsor_equity": 71.26,
   "total_debt_at_par": 48.0
  },

@@ -82,6 +82,22 @@ describe('E4 — redline + memo', () => {
     expect(md).not.toMatch(/\d\.\d{8,}/); // format boundary holds in the memo too
     expect(md).toContain('a range, not a point');
   });
+
+  it('memo: leverage bases are labelled, the basis caveat sits in Caveats, and no imperative leaks into the deliverable (§11 v1.1.2)', () => {
+    const md = memoSkeleton(runModel(g2facts, g2a), 'USD');
+    const credit = md.slice(md.indexOf('## Credit statistics'), md.indexOf('## Free cash flow'));
+    // Both bases labelled, and the old false label gone for good.
+    expect(credit).toContain('Entry GROSS leverage');
+    expect(credit).toContain('final-year NET leverage');
+    expect(md).not.toContain('Entry net leverage');
+    // memoSkeleton output is a DOWNLOADED DELIVERABLE, not a prompt — an instruction here
+    // lands in the document handed to an IC, and MEMO_POLISH_SYSTEM would preserve it as
+    // content rather than obey it. The basis disclosure belongs in Caveats (hostile F3).
+    expect(credit).not.toMatch(/\bdo not present\b|\byou (must|should)\b|\bnote that\b/i);
+    const caveats = md.slice(md.indexOf('## Caveats'));
+    expect(caveats).toContain('Entry leverage is GROSS');
+    expect(caveats).toContain('SPEC §11');
+  });
 });
 
 describe('E4 — goal-seek (pure, true inputs only)', () => {

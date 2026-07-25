@@ -193,7 +193,15 @@ section is signed):**
 Both passes independently flagged the same pre-existing, out-of-scope defect:
 `derived.entry_net_leverage_fy` is GROSS (par ÷ EBITDA) in all six pre-G-1 goldens while
 §11 defines net leverage as (gross − cash) ÷ EBITDA_adj. It is byte-identical across every
-golden and untouched by this extension, so it is ticketed separately rather than folded in.
+golden and untouched by this extension, so it was ticketed separately rather than folded in.
+**RESOLVED in SPEC v1.1.2** (owner-directed, own PR): the VALUE is correct and unchanged —
+gross is what the market quotes and what §17 sizes tranches on — so the fix was the NAME.
+The field is now `entry_gross_leverage_fy`; §11 states the convention with its rejected
+alternative; the fixture regeneration renamed exactly one key per golden with **changed=0**
+(9 removed / 9 added, every value identical). The adjudicators' find turned out to reach
+further than the type: the Excel export and the AI memo prompt both LABELLED the entry
+figure "net" directly above a genuinely-net final-year figure, so both read as one series
+across two bases and overstated deleveraging.
 
 **Independent hostile sign-off (spec-amendment rule — separate from the adjudications
 above; the adjudicators judge the NUMBERS, this pass judges whether the amendment is

@@ -51,8 +51,10 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.sponsor_net.moic)}</p></div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry → exit</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_multiple)} → {multiple(o.exit.exit_ev / o.exit.exit_ebitda_basis_value)}</p></div>
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry leverage · Y1 DSCR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_net_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
+      {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
+          per-year credit metrics on the other tabs are NET. */}
+      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_gross_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
     </div>
     <Table head={['Value bridge', money(0, ccy) === '' ? '' : '']}>
       {[
@@ -194,6 +196,7 @@ const BS: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy 
 );
 
 const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
+  <div>
   <Table head={['Year', 'Net lev', 'Senior net', 'ICR', 'FCCR', 'DSCR', 'Lev headroom', 'Springing']}>
     {o.credit.map((c, i) => (
       <tr key={i} style={rowB}>
@@ -208,6 +211,13 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
       </tr>
     ))}
   </Table>
+  {/* §11 [v1.1.2]: these are NET of cash; the Summary tab's entry figure is GROSS. Stated
+      on screen, because reading the two as one deleveraging series overstates it. */}
+  <p className="text-[10px] mt-2" style={label}>
+    Leverage here is NET of cash (SPEC §11). The Summary tab&apos;s entry leverage is GROSS
+    (debt at par ÷ FY EBITDA — the quoted sizing basis), so the two are not a single series.
+  </p>
+  </div>
 );
 
 const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {

@@ -42,6 +42,20 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
     };
     expect(cellByLabel('Sponsor IRR')).toBe(output.returns.sponsor_net.irr);
     expect(cellByLabel('Enterprise value')).toBe(output.derived.enterprise_value);
+    // §11 [v1.1.2] — the LABEL is the thing under test here, not just the number. This row
+    // used to read 'Entry net leverage (FY)' directly above a genuinely-net final-year row,
+    // so the workbook presented a deleveraging series spanning two bases. Nothing tested
+    // labels, so neither the defect nor its recurrence was detectable (hostile review F6).
+    expect(cellByLabel('Entry gross leverage (FY, par ÷ EBITDA)')).toBe(output.derived.entry_gross_leverage_fy);
+    const summaryLabels: string[] = [];
+    sum.eachRow((row) => summaryLabels.push(String(row.getCell(1).value ?? '')));
+    expect(summaryLabels).not.toContain('Entry net leverage (FY)');
+    expect(summaryLabels.some((l) => /entry.*\bnet\b.*leverage/i.test(l))).toBe(false);
+    // and the basis divergence is disclosed where §15 puts disclosures
+    const method = rb.getWorksheet('Methodology')!;
+    const methodText: string[] = [];
+    method.eachRow((row) => methodText.push(String(row.getCell(1).value ?? '')));
+    expect(methodText.some((t) => /Entry leverage is GROSS/.test(t))).toBe(true);
     // the R&P section order: price → S&U → returns → capitalization → credit → FCF
     const sections: string[] = [];
     sum.eachRow((row) => { const s = String(row.getCell(1).value ?? ''); if (s.startsWith('— ')) sections.push(s); });

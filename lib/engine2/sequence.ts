@@ -267,9 +267,14 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       entry_ebitda_for_sizing: entry.entry_ebitda_for_sizing,
       total_debt_at_par: sized.total_par,
       sponsor_equity: su.sponsor_equity,
-      // gross par / FY EBITDA — the CFDF frame: the target arrives with NO cash, min-cash
-      // is NEW money, so entry "net" debt ≡ par (reference derivation; §17 sizing quotes)
-      entry_net_leverage_fy: entry.entry_ebitda_for_sizing > 0 ? sized.total_par / entry.entry_ebitda_for_sizing : 0,
+      // §11 [v1.1.2]: GROSS by convention — total par ÷ FY EBITDA, the quoted term-sheet
+      // number and the basis §17 sizes every tranche on. Deliberately NOT netted against
+      // the funded min-cash; §11 records the rejected alternative and the reason.
+      // (The previous comment here justified this as "entry net debt ≡ par because min-cash
+      // is new money" — a FALSE premise: §2 does put min_cash on the t=0 balance sheet, so
+      // the §11 net figure would be (par − min_cash) ÷ EBITDA. The value is right; that
+      // argument for it was not, and the field was misnamed `entry_net_leverage_fy`.)
+      entry_gross_leverage_fy: entry.entry_ebitda_for_sizing > 0 ? sized.total_par / entry.entry_ebitda_for_sizing : 0,
     },
     sources_uses: su,
     operating,
