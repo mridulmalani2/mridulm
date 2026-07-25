@@ -4,8 +4,10 @@
 deletion tail owner-accelerated the same day — the one-clean-week soak was waived by
 owner decision, with tag `pre-deletion-lib-engine` + PR-revert as the rollback).
 `rebuild/DIFF_LEDGER.md` and `rebuild/F1_DIFFERENTIAL.md` are FROZEN historical records.
-Phase G (staged extensions) is the live program: G-1 (interim distributions + RP cash
-trap) SPEC v1.1.0 amendment is merged (PR #101); next is its golden extension.
+Phase G (staged extensions) is the live program. **G-1 (interim distributions + RP cash
+trap) is COMPLETE** through all five template steps: SPEC v1.1.0 (PR #101) → goldens
+G2-DIST/G3-DIST/G2-DIST-D + v1.1.1 (adjudication SIGNED, hostile sign-off GRANTED round 2)
+→ engine → UI. Next feature: G-2 (quarter-stitched LTM).
 
 This directory is the complete, self-contained plan for the ground-up overhaul of the LBO
 toolkit (mridulmalani.com/research/toolkit). It was produced by reverse-engineering the live
