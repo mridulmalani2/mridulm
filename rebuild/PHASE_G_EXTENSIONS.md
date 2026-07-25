@@ -16,7 +16,7 @@ Every deferred feature re-enters through the same template. **Never two features
 
 | # | Feature | Notes for its spec |
 |---|---|---|
-| 1 | **Interim distributions + cash trap** | Unlocks DPI/RVPI/TVPI + payback properly (ILPA defs from DR-2); the trap may create the first true same-year cycle → the solver returns HERE as its own spec'd module, or trap tests lag one year (decide in spec) |
+| 1 | ✅ **DONE 2026-07-25** — **Interim distributions + cash trap** | Unlocks DPI/RVPI/TVPI + payback properly (ILPA defs from DR-2); the feared same-year cycle DISSOLVED: §3.7's pro-forma test is linear in the payment, so rp_max has a closed form and the no-solver rule holds (SPEC v1.1.0 §5). Shipped as SPEC v1.1.0/v1.1.1 + goldens G2-DIST / G3-DIST / G2-DIST-D + engine + UI |
 | 2 | **Quarter-stitched LTM** | FY + YTD − prior-YTD, Q4 = FY − 9M, 52/53-week fixtures; FPI stays FY with staleness badge |
 | 3 | **Fund/LP overlay** | Net-to-LP after fees/carry (European/American), reuses old fundReturns spec knowledge; feeds a fourth return row clearly labelled fund-level |
 | 4 | **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |

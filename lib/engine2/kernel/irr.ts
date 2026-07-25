@@ -59,8 +59,22 @@ export function midYearTimes(flowCount: number): number[] {
  * step-7 interim distributions land), the ENDPOINT sign test governs: an ODD count of
  * in-bracket roots returns one of them (which one is unspecified — the bracket midpoint
  * path decides); an EVEN count is invisible to the endpoint test and returns null (N/A —
- * missed, never wrong). Sponsor streams with one outflow followed by inflows keep a
- * unique IRR; the G-1 engine PR must add multi-sign-change tests before shipping.
+ * missed, never wrong).
+ *
+ * THE GUARANTEE IS BACKWARD-ERROR, NOT RESIDUAL [2026-07-24, G-1 multi-sign-change test
+ * pass]: a returned rate is within ~1 ulp of a true sign change. Do NOT judge it by
+ * |NPV(r)|. As r → −1 the discount factors (1 + r)^t blow up and the NPV curve goes
+ * near-vertical, so a rate correct to 1e-15 relative can still show |NPV| of a few percent
+ * of Σ|cf|. Measured over 13,606 random multi-sign streams that returned an IRR: 14 had a
+ * large residual, ALL 14 were bracketed within 1e-15 relative, and ALL sat at
+ * r ∈ [−0.9997, −0.976] — deep-loss rates against the search floor, not wrong answers.
+ *
+ * §3 step 7 [v1.1.0] SAFETY: interim distributions are `max(0, …)` by construction, so the
+ * engine can never emit a NEGATIVE interim sponsor flow. A solvent deal's sponsor stream is
+ * therefore [−outflow, ≥0, …, ≥0, +exit] — exactly ONE sign change ⇒ Descartes gives a
+ * unique positive root and the multi-root policy never bites. Two sign changes appear only
+ * when the year-N flow is itself negative (a value wipeout), where N/A is the honest answer.
+ * Pinned in tests/engine2-kernel.test.ts (the accuracy audit's pre-ship requirement).
  */
 export function irr(cashflows: number[], times?: number[]): number | null {
   if (cashflows.length < 2) return null;

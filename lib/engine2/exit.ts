@@ -56,6 +56,12 @@ export interface ExitInputs {
   /** Sponsor equity + rollover — the §10 hurdle base (invested equity incl. fees, §2 plug). */
   invested_equity_total: number;
   rollover_equity: number;
+  /**
+   * §10 [v1.1.0] cumulative TOTAL interim distributions paid over the hold (§3 step 7).
+   * They count toward the hurdle — it tests total value RETURNED — but the promote is still
+   * computed and paid AT EXIT ONLY, out of exit proceeds.
+   */
+  cumulative_distributions: number;
 }
 
 export function buildExit(
@@ -69,12 +75,19 @@ export function buildExit(
   const exitEquityPreMip =
     exitEv - inputs.debt_payoff + inputs.closing_cash - exitFees - termination;
 
-  // §10 promote: carry above an MOIC hurdle, capped at available exit equity
+  // §10 promote: carry above an MOIC hurdle, capped at available exit equity.
+  // [v1.1.0] "pre-MIP TOTAL equity proceeds" INCLUDES cumulative interim distributions —
+  // the hurdle tests total value RETURNED, not just the residual left at exit. The promote
+  // is still computed and paid AT EXIT ONLY, from exit proceeds (no interim carry, no
+  // clawback machinery). Consequence, disclosed in §10: the exit-equity cap — previously
+  // unreachable for pool_pct ≤ 1 — can now genuinely bind (large cumulative distributions
+  // against a small exit residual) and TRUNCATES the promote with no accrual.
   let mip = 0;
   if (assumptions.mip) {
     const hurdleValue = assumptions.mip.hurdle_moic * inputs.invested_equity_total;
+    const totalProceeds = exitEquityPreMip + inputs.cumulative_distributions;
     mip = Math.min(
-      assumptions.mip.pool_pct * Math.max(0, exitEquityPreMip - hurdleValue),
+      assumptions.mip.pool_pct * Math.max(0, totalProceeds - hurdleValue),
       Math.max(0, exitEquityPreMip),
     );
   }

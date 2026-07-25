@@ -70,9 +70,35 @@
  "credit": [],
  "derived": {
   "enterprise_value": 84.0,
-  "entry_net_leverage_fy": 3.5,
+  "entry_gross_leverage_fy": 3.5,
   "sponsor_equity": 48.36,
   "total_debt_at_par": 42.0
+ },
+ "distributions": {
+  "blocked_years": [],
+  "cumulative_paid": 0.0,
+  "paid": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "requested": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "sponsor_share_paid": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "trap_level": null
  },
  "exit": {
   "cash_at_exit": 25.74,
@@ -165,6 +191,14 @@
   }
  ],
  "returns": {
+  "dpi": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "payback_year": null,
   "pre_promote": {
    "cashflows": [
     -48.36,
@@ -175,6 +209,7 @@
     291.52
    ],
    "irr": 0.432311,
+   "irr_mid_year": 0.432311,
    "moic": 6.0282
   },
   "sponsor_net": {
@@ -187,6 +222,7 @@
     291.52
    ],
    "irr": 0.432311,
+   "irr_mid_year": 0.432311,
    "moic": 6.0282
   },
   "unlevered": {
@@ -346,11 +382,15 @@
    "cash_interest_total": 3.61,
    "closing_cash": 4.88,
    "commitment_fees": 0.0,
+   "distribution_blocked": false,
+   "distribution_paid": 0.0,
+   "distribution_requested": 0.0,
    "fcf_pre_debt": 7.8,
    "mandatory_amort_total": 0.42,
    "opening_cash": 3.0,
    "revolver_draw": 0.0,
    "revolver_repayment": 0.0,
+   "rp_max": null,
    "sweep_applied_total": 1.88,
    "sweep_pct_applied": 0.5,
    "sweep_pool": 3.77
@@ -360,11 +400,15 @@
    "cash_interest_total": 3.41,
    "closing_cash": 7.85,
    "commitment_fees": 0.0,
+   "distribution_blocked": false,
+   "distribution_paid": 0.0,
+   "distribution_requested": 0.0,
    "fcf_pre_debt": 11.66,
    "mandatory_amort_total": 0.42,
    "opening_cash": 4.88,
    "revolver_draw": 0.0,
    "revolver_repayment": 0.0,
+   "rp_max": null,
    "sweep_applied_total": 4.85,
    "sweep_pct_applied": 0.5,
    "sweep_pool": 9.71
@@ -374,11 +418,15 @@
    "cash_interest_total": 2.96,
    "closing_cash": 11.52,
    "commitment_fees": 0.0,
+   "distribution_blocked": false,
+   "distribution_paid": 0.0,
+   "distribution_requested": 0.0,
    "fcf_pre_debt": 15.57,
    "mandatory_amort_total": 0.42,
    "opening_cash": 7.85,
    "revolver_draw": 0.0,
    "revolver_repayment": 0.0,
+   "rp_max": null,
    "sweep_applied_total": 8.52,
    "sweep_pct_applied": 0.5,
    "sweep_pool": 17.04
@@ -388,11 +436,15 @@
    "cash_interest_total": 2.19,
    "closing_cash": 15.61,
    "commitment_fees": 0.0,
+   "distribution_blocked": false,
+   "distribution_paid": 0.0,
+   "distribution_requested": 0.0,
    "fcf_pre_debt": 19.3,
    "mandatory_amort_total": 0.42,
    "opening_cash": 11.52,
    "revolver_draw": 0.0,
    "revolver_repayment": 0.0,
+   "rp_max": null,
    "sweep_applied_total": 12.61,
    "sweep_pct_applied": 0.5,
    "sweep_pool": 25.21
@@ -402,11 +454,15 @@
    "cash_interest_total": 1.07,
    "closing_cash": 25.74,
    "commitment_fees": 0.0,
+   "distribution_blocked": false,
+   "distribution_paid": 0.0,
+   "distribution_requested": 0.0,
    "fcf_pre_debt": 23.66,
    "mandatory_amort_total": 0.42,
    "opening_cash": 15.61,
    "revolver_draw": 0.0,
    "revolver_repayment": 0.0,
+   "rp_max": null,
    "sweep_applied_total": 12.03,
    "sweep_pct_applied": 0.5,
    "sweep_pool": 34.77

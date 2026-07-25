@@ -211,6 +211,103 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     expect(closedFormTwoFlowIrr(100, -1, 5)).toBeNull();
     expect(closedFormTwoFlowIrr(100, 100, 0)).toBeNull();
   });
+
+  // ── MULTI-SIGN-CHANGE POLICY ──────────────────────────────────────────────
+  // Required by the 2026-07-24 accuracy audit BEFORE SPEC §3 step-7 interim flows ship:
+  // until G-1, every sponsor stream was [−outflow, 0, …, 0, +exit] — one sign change, so
+  // Descartes guaranteed a unique IRR and the multi-root question never arose. irr.ts's
+  // documented policy: ODD in-bracket root count ⇒ one root is returned (WHICH one is
+  // unspecified); EVEN ⇒ invisible to the endpoint sign test ⇒ null. The product guarantee
+  // is "missed, never wrong" — a returned number is ALWAYS a root.
+
+  it('multi-root: an EVEN in-bracket root count returns null, never one of the roots', () => {
+    // −100, +230, −132 has exact roots at 10% and 20% (132x² − 230x + 100 = 0, x = 1/(1+r)).
+    // Both sit inside (−0.9999, 10], so the endpoint signs match and the bracket is blind.
+    const cfs = [-100, 230, -132];
+    expect(Math.abs(npv(0.1, cfs))).toBeLessThan(1e-9);
+    expect(Math.abs(npv(0.2, cfs))).toBeLessThan(1e-9);
+    expect(irr(cfs)).toBeNull(); // N/A — the honest answer when the IRR is ambiguous
+  });
+
+  it('multi-root: an ODD in-bracket root count returns a genuine root (NPV ≈ 0), not a bracket edge', () => {
+    // −100, +400, −500, +250: three sign changes but only ONE real root — 250x³ − 500x² +
+    // 400x − 100 has roots x = 0.4353208 and a complex pair, so r = 1/0.4353208 − 1 ≈ 129.71%.
+    const cfs = [-100, 400, -500, 250];
+    const r = irr(cfs);
+    expect(r).not.toBeNull();
+    expect(r!).toBeCloseTo(1 / 0.43532075 - 1, 6);
+    const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+    expect(Math.abs(npv(r!, cfs))).toBeLessThan(1e-6 * scale); // well-conditioned here
+    expect(r!).toBeGreaterThan(-0.9999);
+    expect(r!).toBeLessThan(10);
+  });
+
+  it('multi-sign-change: a returned IRR always satisfies the solver contract — converged residual OR a bracketed sign change', () => {
+    // The contract is a DISJUNCTION, and stating it as either half alone is false:
+    //   (a) |NPV(r)| ≤ 1e-12 · Σ|cf|  — the solver's own convergence test (early return); or
+    //   (b) r sits within ~1 ulp of a sign change — the bracket-exhaustion path.
+    // (b) alone fails for streams that converge early on the residual (r is then accurate to
+    // the residual tolerance, not to 1 ulp). (a) alone fails near the r → −1 pole, where the
+    // discount factors (1 + r)^t blow up and the NPV curve goes near-vertical: measured over
+    // 13,606 random multi-sign streams that returned an IRR, 14 showed |NPV| up to 6% of
+    // scale, yet ALL 14 were bracketed within 1e-15 relative and ALL sat at r ∈ [−0.9997,
+    // −0.976] — deep-loss rates against the search floor, not wrong answers.
+    // What the disjunction rules out is the thing that would actually hurt: a bracket edge or
+    // an unsolved Newton seed dressed up as an IRR.
+    fc.assert(
+      fc.property(fc.array(fc.double({ min: -500, max: 500, noNaN: true }), { minLength: 3, maxLength: 8 }), (cfs) => {
+        const signs = cfs.filter((c) => c !== 0).map((c) => Math.sign(c));
+        const changes = signs.reduce((n, s, i) => (i > 0 && s !== signs[i - 1] ? n + 1 : n), 0);
+        fc.pre(changes >= 2); // the regime that only exists once interim flows can be non-zero
+        const r = irr(cfs);
+        if (r === null) return; // N/A is always an acceptable answer
+        const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+        const converged = Math.abs(npv(r, cfs)) <= 1e-12 * Math.max(1, scale);
+        const d = Math.max(Math.abs(r) * 1e-12, Number.MIN_VALUE);
+        const bracketed =
+          npv(Math.max(-0.9999, r - d), cfs) * npv(Math.min(10, r + d), cfs) <= 0;
+        expect(converged || bracketed, `returned ${r} for ${JSON.stringify(cfs)}: neither converged nor bracketed`).toBe(true);
+        expect(r).toBeGreaterThan(-1); // never the RATE_LO edge dressed up as an answer
+      }),
+      { numRuns: 1000 },
+    );
+  });
+
+  it('§3 step 7 shape: distributions are ≥ 0 by construction, so a POSITIVE exit keeps the sponsor stream single-sign-change (unique IRR)', () => {
+    // paid[t] = max(0, min(…)) — the engine can never emit a negative interim sponsor flow.
+    // With a positive year-N flow the stream is [−out, ≥0, …, ≥0, +] : exactly one sign
+    // change ⇒ Descartes gives at most one positive root ⇒ the multi-root policy never bites
+    // on a solvent deal. This is the property that makes G-1 safe to ship.
+    fc.assert(
+      fc.property(
+        money(50, 1e3),
+        fc.array(money(0, 100), { minLength: 1, maxLength: 6 }),
+        money(1, 2e3),
+        (outflow, dists, exitFlow) => {
+          const cfs = [-outflow, ...dists, exitFlow];
+          const r = irr(cfs);
+          fc.pre(r !== null);
+          const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+          expect(Math.abs(npv(r!, cfs))).toBeLessThan(1e-6 * scale);
+          // and mid-year (§1) solves on the same stream without changing that guarantee
+          const m = irr(cfs, midYearTimes(cfs.length));
+          if (m !== null) expect(Math.abs(npv(m, cfs, midYearTimes(cfs.length)))).toBeLessThan(1e-6 * scale);
+        },
+      ),
+    );
+  });
+
+  it('§3 step 7 shape: a NEGATIVE year-N flow (value wipeout) after paid distributions is the one two-sign-change case — N/A, never a fabricated IRR', () => {
+    // [−587.22, +12.09, +15.34, +10, −5] — distributions paid, then the exit wipes out.
+    const cfs = [-587.22, 12.09, 15.34, 10, -5];
+    const r = irr(cfs);
+    if (r !== null) {
+      const scale = cfs.reduce((s, c) => s + Math.abs(c), 0);
+      expect(Math.abs(npv(r, cfs))).toBeLessThan(1e-6 * scale); // still a genuine root
+    }
+    // Either way the caller never receives a plausible-looking non-root.
+    expect(r === null || Number.isFinite(r)).toBe(true);
+  });
 });
 
 // ── waterfall (SPEC §3, invariants §14.3/4/5/15) ─────────────────────────────
@@ -243,12 +340,18 @@ const waterfallArb: fc.Arbitrary<WaterfallYearIn> = fc.record({
   fcf_pre_debt: fc.double({ min: -200, max: 300, noNaN: true }),
   min_cash: money(0, 50),
   sweep_pct: pct(1),
+  // §3 step 7 / §3.7 — generated, not pinned off: the waterfall properties below (§14.3
+  // conservation, §14.4 floor, §14.5 non-negative balances) must hold WITH a live
+  // distribution and a live trap, not only with the feature off.
+  distribution_request: money(0, 80),
+  rp_trap_level: fc.option(fc.double({ min: 0, max: 8, noNaN: true }), { nil: null }),
+  ebitda_adj: fc.double({ min: -50, max: 300, noNaN: true }),
   tranches: fc.array(trancheArb, { maxLength: 4 }),
   revolver: fc.option(revolverArb, { nil: null }),
 });
 
 describe('kernel/waterfall — SPEC §3', () => {
-  it('§14.3 running-cash conservation: closing = opening + FCF − interest − fees − amort − repay − sweep + draw, exact. Domain: any valid config', () => {
+  it('§14.3 running-cash conservation: closing = opening + FCF − interest − fees − amort − repay − sweep + draw − distribution, exact. Domain: any valid config', () => {
     fc.assert(
       fc.property(waterfallArb, (input) => {
         const out = waterfallYear(input);
@@ -260,9 +363,27 @@ describe('kernel/waterfall — SPEC §3', () => {
           out.mandatory_amort_total -
           out.revolver_repayment -
           out.sweep_applied_total +
-          out.revolver_draw;
-        const scale = Math.max(1, Math.abs(input.opening_cash) + Math.abs(input.fcf_pre_debt) + out.cash_interest_total + out.mandatory_amort_total + out.sweep_applied_total);
+          out.revolver_draw -
+          // §3 step 7 [v1.1.0]: the distribution is a real cash outflow and enters the
+          // conservation identity like every other step. Omitting it here is the shape of
+          // the bug where a payment leaves the balance sheet without leaving the waterfall.
+          out.distribution_paid;
+        const scale = Math.max(1, Math.abs(input.opening_cash) + Math.abs(input.fcf_pre_debt) + out.cash_interest_total + out.mandatory_amort_total + out.sweep_applied_total + out.distribution_paid);
         expect(Math.abs(out.closing_cash - identity)).toBeLessThan(1e-9 * scale);
+        // §14.18 under the same generated inputs (request, trap level and EBITDA_adj are
+        // all generated by waterfallArb, INCLUDING EBITDA_adj ≤ 0 — normative per §3.7):
+        expect(out.distribution_paid).toBeLessThanOrEqual(input.distribution_request + 1e-12);
+        expect(out.distribution_paid).toBeGreaterThanOrEqual(0);
+        // never revolver-funded: a payment can only spend cash ABOVE the floor
+        if (out.distribution_paid > 0) {
+          expect(out.closing_cash).toBeGreaterThanOrEqual(input.min_cash - 1e-9);
+        }
+        // the money form of the pro-forma test, for ALL EBITDA_adj including ≤ 0
+        if (input.rp_trap_level !== null && out.distribution_paid > 0) {
+          const grossEnd = out.tranches.reduce((a, t) => a + t.ending_outstanding, 0) + out.revolver_ending_drawn;
+          const scale2 = Math.max(1, Math.abs(grossEnd) + Math.abs(out.closing_cash));
+          expect(grossEnd - out.closing_cash).toBeLessThanOrEqual(input.rp_trap_level * input.ebitda_adj + 1e-9 * scale2);
+        }
       }),
     );
   });
@@ -371,6 +492,7 @@ describe('kernel/waterfall — SPEC §3', () => {
       fcf_pre_debt: 190,
       min_cash: 10,
       sweep_pct: 0.5,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         { name: 'A', outstanding: 40, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
         { name: 'B', outstanding: 20, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
@@ -393,6 +515,7 @@ describe('kernel/waterfall — SPEC §3', () => {
       fcf_pre_debt: 70,
       min_cash: 10,
       sweep_pct: 0.5,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         { name: 'A', outstanding: 40, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
         { name: 'B', outstanding: 20, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
@@ -448,6 +571,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: 0,
       min_cash: 0,
       sweep_pct: 1,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         { name: 'TLB', outstanding: 108.18633402746718, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
       ],
@@ -460,6 +584,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: 10,
       min_cash: 0,
       sweep_pct: 1,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         { name: 'TLB', outstanding: y1.tranches[0].ending_outstanding, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
       ],
@@ -476,6 +601,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: 0,
       min_cash: 0,
       sweep_pct: 1,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         { name: 'A', outstanding: a, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
         { name: 'B', outstanding: b, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1 },
@@ -496,6 +622,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
             fcf_pre_debt: 0,
             min_cash: 0,
             sweep_pct: 1,
+            distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
             tranches: balances.map((outstanding, k) => ({
               name: `T${k}`,
               outstanding,
@@ -514,6 +641,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
               fcf_pre_debt: 0,
               min_cash: 0,
               sweep_pct: 0,
+              distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
               tranches: [{ name: t.name, outstanding: t.ending_outstanding, scheduled_amort: 0, cash_interest: 0, sweep_participates: false, sweep_priority: 1 }],
               revolver: null,
             });
@@ -530,6 +658,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: -500,
       min_cash: 5,
       sweep_pct: 0,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [],
       revolver: { beginning_drawn: 20.550056167494116, commitment, cash_interest: 0, commitment_fee: 0 },
     });
@@ -542,6 +671,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: 0,
       min_cash: 5,
       sweep_pct: 0,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [],
       revolver: { beginning_drawn: y1.revolver_ending_drawn, commitment, cash_interest: 0, commitment_fee: 0 },
     });
@@ -572,6 +702,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: -50,
       min_cash: 5,
       sweep_pct: 0,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [],
       revolver: { beginning_drawn: 0, commitment: 10, cash_interest: 0, commitment_fee: 0 },
     });
@@ -584,6 +715,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: 10,
       min_cash: 5,
       sweep_pct: 0,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [],
       revolver: { beginning_drawn: y1.revolver_ending_drawn, commitment: 10, cash_interest: 0, commitment_fee: 0 },
     });
@@ -596,6 +728,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
       fcf_pre_debt: 40,
       min_cash: 5,
       sweep_pct: 0,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [],
       revolver: { beginning_drawn: y2.revolver_ending_drawn, commitment: 10, cash_interest: 0, commitment_fee: 0 },
     });

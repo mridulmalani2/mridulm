@@ -57,6 +57,16 @@ export interface BridgeInputs {
   sponsor_equity: number;
   /** Σ annual monitoring fees (memo only — inside the paydown bar). */
   monitoring_annual_total: number;
+  /**
+   * §12 [v1.1.0] cumulative SPONSOR-SHARE interim distributions. Paid amounts left via
+   * cash, so they already shrank the paydown bar (and, second-order, later sweeps — all
+   * truthfully inside ND₁, which is measured on the ACTUAL path). The walk-down adds the
+   * sponsor slice back and reconciles to the sponsor's TOTAL delta. The ROLLOVER's slice is
+   * deliberately never added back: it is not sponsor money and it left through the same
+   * smaller bar. 0 whenever the schedule is empty ⇒ the pre-v1.1.0 identity is the
+   * degenerate case.
+   */
+  interim_distributions_sponsor: number;
 }
 
 export function buildBridge(i: BridgeInputs): ValueBridge {
@@ -68,15 +78,28 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
   const paydown = i.entry_net_debt - i.exit_net_debt;
   const barSum = growth + multipleBar + interaction + paydown;
 
-  const sponsorNetDelta = i.sponsor_share - i.sponsor_equity;
+  // §12 [v1.1.0]: the sponsor's TOTAL delta — exit inflow PLUS cumulative sponsor-share
+  // distributions, less the outflow. Degenerates to the exit-only delta when none was paid.
+  const sponsorNetDelta =
+    i.sponsor_share + i.interim_distributions_sponsor - i.sponsor_equity;
   const rolloverDelta = i.rollover_share - i.rollover_equity;
-  // §14.9(a): bars ≡ pre-promote equity Δ grossed back for the two friction blocks
+  // §14.9(a): bars ≡ pre-promote equity Δ grossed back for the two friction blocks.
+  // Unchanged by distributions: ND₁ is measured on the ACTUAL path, so a payment shrinks
+  // the paydown bar and exit equity by the same amount and the identity is preserved.
   const residualA =
     barSum -
     (i.exit_equity_pre_mip_total - i.entry_equity_pre_promote_total + i.entry_costs + i.exit_costs);
-  // §14.9(b): the walk-down lands exactly on the sponsor
+  // §14.9(b): the walk-down lands exactly on the sponsor. Adding the sponsor slice back is
+  // EXACT by the same §9 algebra — barSum − costs ≡ exit equity total − entry equity total,
+  // and exit equity total = sponsor_share + rollover_share + mip.
   const residualB =
-    barSum - i.entry_costs - i.exit_costs - i.mip_payout - rolloverDelta - sponsorNetDelta;
+    barSum -
+    i.entry_costs -
+    i.exit_costs -
+    i.mip_payout -
+    rolloverDelta +
+    i.interim_distributions_sponsor -
+    sponsorNetDelta;
 
   return {
     entry_equity_pre_promote_total: i.entry_equity_pre_promote_total,
@@ -91,6 +114,7 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
       monitoring_leakage: i.monitoring_annual_total,
       mip: i.mip_payout,
       rollover_delta: rolloverDelta,
+      interim_distributions_sponsor: i.interim_distributions_sponsor,
       sponsor_net_delta: sponsorNetDelta,
     },
     reconciliation_residual: Math.max(Math.abs(residualA), Math.abs(residualB)),

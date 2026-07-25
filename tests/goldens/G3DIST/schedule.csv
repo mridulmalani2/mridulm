@@ -8,33 +8,33 @@ growth_capex,0.0,0.0,0.0,0.0,0.0
 delta_nwc,1.56,1.31,1.36,1.06,1.1
 fcf_pre_debt,68.73,71.79,74.65,77.22,80.27
 tax.ati,94.5,98.28,102.21,105.28,108.44
-tax.capped_interest_pool,38.41,37.91,36.74,35.14,33.21
+tax.capped_interest_pool,38.41,37.91,37.42,36.78,36.4
 tax.uncapped_deductions,0.83,0.83,0.83,0.83,3.76
 tax.deductible_capped_interest,28.35,29.48,30.66,31.58,32.53
-tax.s163j_carryforward_end,10.06,18.48,24.56,28.11,28.79
+tax.s163j_carryforward_end,10.06,18.48,25.23,30.43,34.3
 tax.taxable_before_nol,52.72,54.86,57.09,58.83,57.69
 tax.acquired_nol_used,0.0,0.0,0.0,0.0,0.0
 tax.postclose_nol_used,0.0,0.0,0.0,0.0,0.0
 tax.nol_banked,0.0,0.0,0.0,0.0,0.0
 tax.cash_tax,13.18,13.72,14.27,14.71,14.42
-Senior.beginning_balance,270.0,239.82,198.55,148.63,91.07
-Senior.cash_interest,21.87,19.43,16.08,12.04,7.38
+Senior.beginning_balance,270.0,239.82,206.89,168.98,130.46
+Senior.cash_interest,21.87,19.43,16.76,13.69,10.57
 Senior.pik_accrual,0.0,0.0,0.0,0.0,0.0
 Senior.mandatory_amort,13.5,13.5,13.5,13.5,13.5
-Senior.sweep_repayment,16.68,27.77,36.42,44.05,51.72
-Senior.ending_balance,239.82,198.55,148.63,91.07,25.85
+Senior.sweep_repayment,16.68,19.43,24.41,25.02,29.61
+Senior.ending_balance,239.82,206.89,168.98,130.46,87.35
 PIK Note.beginning_balance,135.0,151.2,169.34,189.67,212.43
 PIK Note.cash_interest,0.0,0.0,0.0,0.0,0.0
 PIK Note.pik_accrual,16.2,18.14,20.32,22.76,25.49
 PIK Note.mandatory_amort,0.0,0.0,0.0,0.0,0.0
 PIK Note.sweep_repayment,0.0,0.0,0.0,0.0,0.0
 PIK Note.ending_balance,151.2,169.34,189.67,212.43,237.92
-wf.opening_cash,8.0,24.68,35.77,44.42,52.05
-wf.sweep_pool,33.36,55.54,72.84,88.11,103.44
-wf.sweep_applied_total,16.68,27.77,36.42,44.05,51.72
-wf.closing_cash,24.68,35.77,44.42,52.05,59.72
-wf.distribution_requested,0.0,0.0,0.0,0.0,0.0
+wf.opening_cash,8.0,8.0,12.43,8.0,11.02
+wf.sweep_pool,33.36,38.86,48.82,50.04,59.22
+wf.sweep_applied_total,16.68,19.43,24.41,25.02,29.61
+wf.closing_cash,8.0,12.43,8.0,11.02,17.61
+wf.distribution_requested,20.0,15.0,25.0,22.0,20.0
 wf.rp_max,,,,,
-wf.distribution_paid,0.0,0.0,0.0,0.0,0.0
+wf.distribution_paid,16.68,15.0,24.41,22.0,20.0
 wf.distribution_blocked,False,False,False,False,False
-returns.dpi,0.0,0.0,0.0,0.0,0.0
+returns.dpi,0.0425,0.0808,0.1431,0.1992,0.2502

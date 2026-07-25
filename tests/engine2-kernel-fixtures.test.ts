@@ -142,6 +142,7 @@ describe('kernel/waterfall reproduces the golden debt blocks (B2 gate)', () => {
           fcf_pre_debt: wf.fcf_pre_debt,
           min_cash: spec.min_cash,
           sweep_pct: spec.sweep_pct,
+          distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
           tranches,
           revolver,
         });
@@ -186,6 +187,7 @@ describe('kernel/waterfall reproduces the golden debt blocks (B2 gate)', () => {
       fcf_pre_debt: g.waterfall[0].fcf_pre_debt,
       min_cash: spec.min_cash,
       sweep_pct: spec.sweep_pct,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         {
           name: 'Senior',
@@ -209,6 +211,7 @@ describe('kernel/waterfall reproduces the golden debt blocks (B2 gate)', () => {
       fcf_pre_debt: -30,
       min_cash: 5,
       sweep_pct: 0.5,
+      distribution_request: 0, rp_trap_level: null, ebitda_adj: 0,
       tranches: [
         { name: 'TL', outstanding: 50, scheduled_amort: 0, cash_interest: 3, sweep_participates: true, sweep_priority: 1 },
       ],

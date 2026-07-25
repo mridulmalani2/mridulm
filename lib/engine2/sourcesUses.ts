@@ -17,6 +17,65 @@ export function trancheSize(size: TrancheSize, fyEbitda: number): number {
   return size.amount;
 }
 
+/**
+ * Σ TERM-tranche par (the revolver is a commitment, never part of leverage at close).
+ * THE one definition — `sizeStructure`, the §13 `leverage` sensitivity axis and the input
+ * panel all read it, so "total debt at par" cannot mean two things in one product.
+ */
+export function totalTermParFromAssumptions(
+  facts: Pick<DealFacts, 'fy_ebitda'>,
+  assumptions: Pick<DealAssumptions, 'structure'>,
+): number {
+  return assumptions.structure.tranches.reduce(
+    (s, t) => (t.type === 'revolver' ? s : s + trancheSize(t.size, facts.fy_ebitda)),
+    0,
+  );
+}
+
+/**
+ * §11 [v1.1.2] entry leverage, GROSS: Σ term par ÷ FY EBITDA. Numerically identical to
+ * `ModelOutput.derived.entry_gross_leverage_fy` BY CONSTRUCTION — `entry_ebitda_for_sizing`
+ * is always `facts.fy_ebitda` (see `deriveEntry`) and `sizeStructure.total_par` is this same
+ * sum. Exists so the INPUT surface can show the leverage being chosen BEFORE a build exists,
+ * without inventing a second definition of the number the output surface reports.
+ * Returns null when FY EBITDA is non-positive — N/A, never a sentinel (§11/§15).
+ */
+export function entryGrossLeverageFromAssumptions(
+  facts: Pick<DealFacts, 'fy_ebitda'>,
+  assumptions: Pick<DealAssumptions, 'structure'>,
+): number | null {
+  if (!(facts.fy_ebitda > 0)) return null;
+  return totalTermParFromAssumptions(facts, assumptions) / facts.fy_ebitda;
+}
+
+/**
+ * Scale every TERM tranche PROPORTIONALLY so total par = `targetLeverage` × FY EBITDA,
+ * preserving the stack's relative shape (a 2:1 senior:PIK split stays 2:1). The inverse of
+ * `entryGrossLeverageFromAssumptions`, and the ONLY way to set total leverage: writing the
+ * target onto each tranche multiplies it by the tranche count.
+ * Lives here, not in scenarios.ts, so the §13 `leverage` axis and the input panel share one
+ * implementation without the UI importing the whole engine through `facade`.
+ */
+export function rescaleTermTranchesToLeverage<A extends Pick<DealAssumptions, 'structure'>>(
+  facts: Pick<DealFacts, 'fy_ebitda'>,
+  assumptions: A,
+  targetLeverage: number,
+): A {
+  const currentTotal = totalTermParFromAssumptions(facts, assumptions);
+  if (currentTotal <= 0) {
+    throw new RangeError('sourcesUses: rescaling total leverage needs at least one term tranche to scale');
+  }
+  const factor = (targetLeverage * facts.fy_ebitda) / currentTotal;
+  const tranches = assumptions.structure.tranches.map((t) => {
+    if (t.type === 'revolver') return t;
+    const size = t.size.x_ebitda !== undefined
+      ? { x_ebitda: t.size.x_ebitda * factor }
+      : { amount: t.size.amount * factor };
+    return { ...t, size };
+  });
+  return { ...assumptions, structure: { ...assumptions.structure, tranches } };
+}
+
 export interface EntryDerivation {
   enterprise_value: number;
   entry_multiple: number;

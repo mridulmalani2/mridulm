@@ -105,6 +105,7 @@ function derive(spec: GoldenSpec) {
     tranches: spec.tranches,
     min_cash: spec.min_cash,
     sweep: { base_pct: 0.5, grid: null },
+    distributions: null,
   };
   const sized = sizeStructure(structure, spec.fy_ebitda);
   const su = buildSourcesUses(entry, sized, {
@@ -126,10 +127,19 @@ describe('sourcesUses.ts + openingBalance.ts reproduce the golden t=0 columns (C
       expect(Math.abs(entry.enterprise_value - g.derived.enterprise_value), 'EV').toBeLessThan(TOL);
       expect(Math.abs(su.sponsor_equity - g.derived.sponsor_equity), 'sponsor equity').toBeLessThan(TOL);
       expect(Math.abs(sized.total_par - g.derived.total_debt_at_par), 'total par').toBeLessThan(TOL);
-      // entry leverage on FY EBITDA, gross par net of the target's (zero) pre-close cash —
-      // the CFDF frame: min-cash is NEW money, not acquired cash (reference derivation)
+      // §11 [v1.1.2]: entry leverage is GROSS — par ÷ FY EBITDA, deliberately NOT netted
+      // against the funded min-cash. §2 does put min_cash on the t=0 balance sheet, so the
+      // §11 net figure would be (par − cash_to_balance_sheet) ÷ EBITDA.
       if (spec.fy_ebitda > 0) {
-        expect(Math.abs(sized.total_par / spec.fy_ebitda - g.derived.entry_net_leverage_fy)).toBeLessThan(5e-5);
+        expect(Math.abs(sized.total_par / spec.fy_ebitda - g.derived.entry_gross_leverage_fy)).toBeLessThan(5e-5);
+        // Pin the GAP itself, sourced from the model rather than test literals. The gap is
+        // exactly cash_to_balance_sheet ÷ EBITDA, so this fires if the field ever drifts to
+        // the net definition — unlike a bare `net < gross`, which reduces algebraically to
+        // `min_cash > 0` and detects nothing (hostile review F2, 2026-07-24).
+        const entryNet = (su.debt_at_par.reduce((s, d) => s + d.amount, 0) - su.cash_to_balance_sheet) / spec.fy_ebitda;
+        expect(g.derived.entry_gross_leverage_fy - entryNet, `${golden} gross−net gap`)
+          .toBeCloseTo(su.cash_to_balance_sheet / spec.fy_ebitda, 9);
+        if (su.cash_to_balance_sheet > 0) expect(entryNet).toBeLessThan(g.derived.entry_gross_leverage_fy);
       }
 
       // sources & uses block
@@ -233,6 +243,7 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       tranches: r.tranches,
       min_cash: r.minCash,
       sweep: { base_pct: 0.5, grid: null },
+      distributions: null,
     };
     const sized = sizeStructure(structure, r.ebitda);
     const su = buildSourcesUses(entry, sized, {
@@ -334,10 +345,10 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       commitment_fee: 0.005, maturity_years: 6, drawn_at_close: drawn,
     });
     // §2 has no drawn-revolver source line — proceeds would vanish into the goodwill plug
-    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).toThrow(/drawn_at_close/);
-    expect(() => sizeStructure({ tranches: [rcf(0, -3)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).toThrow(/commitment/);
+    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100)).toThrow(/drawn_at_close/);
+    expect(() => sizeStructure({ tranches: [rcf(0, -3)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100)).toThrow(/commitment/);
     // drawn_at_close = 0 stays valid
-    expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).not.toThrow();
+    expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100)).not.toThrow();
   });
 
   it('v1 input gate (C5 review): duplicate tranche names are rejected — they key the write-off schedules and retirement reporting', () => {
@@ -346,10 +357,10 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.01, sweep: { participates: true, priority: 1 },
     });
     expect(() =>
-      sizeStructure({ tranches: [term('TL'), term('TL')], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100),
+      sizeStructure({ tranches: [term('TL'), term('TL')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100),
     ).toThrow(/duplicate tranche name/);
     expect(() =>
-      sizeStructure({ tranches: [term('TLA'), term('TLB')], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100),
+      sizeStructure({ tranches: [term('TLA'), term('TLB')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100),
     ).not.toThrow();
   });
 
@@ -358,7 +369,7 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       name, type: 'revolver', commitment: { amount: 10 }, pricing: { kind: 'fixed', rate: 0.07 },
       commitment_fee: 0.005, maturity_years: 5, drawn_at_close: 0,
     });
-    expect(() => sizeStructure({ tranches: [rcf('A'), rcf('B')], min_cash: 0, sweep: { base_pct: 0, grid: null } }, 100)).toThrow(RangeError);
+    expect(() => sizeStructure({ tranches: [rcf('A'), rcf('B')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100)).toThrow(RangeError);
     expect(() =>
       deriveEntry({ fy_ebitda: 0 }, {
         entry: { driver: 'multiple', entry_multiple: 8, enterprise_value: null, basis: 'fy', hold_years: 5 },

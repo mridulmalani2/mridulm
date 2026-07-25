@@ -127,13 +127,27 @@ export function runDebtYear(
   sized: SizedStructure,
   state: DebtState,
   lines: FinanceLines,
-  year: { opening_cash: number; fcf_pre_debt: number; min_cash: number; sweep_pct: number },
+  year: {
+    opening_cash: number;
+    fcf_pre_debt: number;
+    min_cash: number;
+    sweep_pct: number;
+    /** §3 step 7 — the year's requested distribution (0 when the schedule is null). */
+    distribution_request: number;
+    /** §3.7 trap level; null = OFF. */
+    rp_trap_level: number | null;
+    /** §3.7 metric input — may be ≤ 0 (normative). */
+    ebitda_adj: number;
+  },
 ): DebtYearOut {
   const out = waterfallYear({
     opening_cash: year.opening_cash,
     fcf_pre_debt: year.fcf_pre_debt,
     min_cash: year.min_cash,
     sweep_pct: year.sweep_pct,
+    distribution_request: year.distribution_request,
+    rp_trap_level: year.rp_trap_level,
+    ebitda_adj: year.ebitda_adj,
     tranches: sized.terms.map((t, i) => ({
       name: t.assumption.name,
       // repayment caps apply to balance + current-year PIK accrual (§3/§4, reference derivation)
@@ -195,6 +209,10 @@ export function runDebtYear(
       sweep_pct_applied: out.sweep_pct_applied,
       sweep_applied_total: out.sweep_applied_total,
       revolver_draw: out.revolver_draw,
+      distribution_requested: out.distribution_requested,
+      rp_max: out.rp_max,
+      distribution_paid: out.distribution_paid,
+      distribution_blocked: out.distribution_blocked,
       closing_cash: out.closing_cash,
       cash_floor_breach: out.cash_floor_breach,
     },

@@ -55,6 +55,21 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     });
   }
 
+  // §3.7: the restricted-payment trap clipped a distribution that CASH alone would have
+  // allowed. Raised once per run listing every blocked year — a sponsor plan that assumes
+  // its distributions get paid has to see this. WARN, not block: the model is coherent and
+  // the trap doing its job is a real-world outcome, not a broken input.
+  const blockedYears = x.waterfall
+    .map((w, i) => (w.distribution_blocked ? i + 1 : 0))
+    .filter((y) => y > 0);
+  if (blockedYears.length > 0) {
+    flags.push({
+      code: 'distribution_blocked',
+      severity: 'warn',
+      message: `Restricted-payment trap blocks distributions in year${blockedYears.length > 1 ? 's' : ''} ${blockedYears.join(', ')} — cash was available but the pro-forma net-leverage test was not met; blocked capacity does NOT carry forward (§3.7)`,
+    });
+  }
+
   const negativePpeYear = x.balance_sheet.findIndex((b) => b.ppe < 0);
   if (negativePpeYear >= 0) {
     flags.push({
