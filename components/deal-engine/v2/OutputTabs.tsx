@@ -66,6 +66,17 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
         <tr key={l as string} style={rowB}><td className="px-2 py-1">{l}</td><td className={td}>{money(v as number, ccy)}</td></tr>
       ))}
     </Table>
+    {/* §9 [v1.1.0]: DPI and payback are headline-eligible ONLY when a distribution was
+        actually paid. With none, DPI is identically zero and payback is N/A by
+        construction — showing them would be the degenerate headline §9 removed (L-10). */}
+    {o.waterfall.some((w) => w.distribution_paid > 0) && (
+      <div className="flex gap-8 mb-4">
+        <div><p className="text-[10px] uppercase tracking-widest" style={label}>DPI (distributions ÷ check)</p>
+          <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.dpi[o.returns.dpi.length - 1] ?? null)}</p></div>
+        <div><p className="text-[10px] uppercase tracking-widest" style={label}>Payback (distributions alone)</p>
+          <p className="text-2xl" style={{ fontFamily: mono }}>{o.returns.payback_year === null ? 'N/A' : `Y${o.returns.payback_year}`}</p></div>
+      </div>
+    )}
     <p className="text-[10px] mt-2" style={label}>
       FCF conversion by year: {o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.fcf_conversion))).join(' · ')}
     </p>
@@ -166,6 +177,29 @@ const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, cc
           </Table>
         </div>
       )}
+      {/* §3 step 7 / §3.7 [v1.1.0]: what was REQUESTED vs what was actually PAID, and why.
+          Rendered only when a schedule exists — with none, every row is zero and the table
+          would be noise. */}
+      {o.waterfall.some((w) => w.distribution_requested > 0) && (
+        <div className="mb-3">
+          <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Interim distributions</p>
+          <Table head={['Year', 'Requested', 'Cash above floor', 'RP capacity', 'Paid', 'Trap']}>
+            {o.waterfall.map((w, i) => (
+              <tr key={i} style={rowB}>
+                <td className="px-2 py-1">Y{i + 1}</td>
+                <td className={td}>{num(w.distribution_requested, 1)}</td>
+                <td className={td}>{num(Math.max(0, w.closing_cash + w.distribution_paid - o.assumptions.structure.min_cash), 1)}</td>
+                <td className={td}>{w.rp_max === null ? 'N/A' : num(w.rp_max, 1)}</td>
+                <td className={td}>{num(w.distribution_paid, 1)}</td>
+                <td className={td}>{w.distribution_blocked ? '■ blocked' : '—'}</td>
+              </tr>
+            ))}
+          </Table>
+          <p className="text-[10px] mt-1" style={label}>
+            RP capacity is N/A when no trap is set (§3.7). Blocked capacity does NOT carry forward.
+          </p>
+        </div>
+      )}
       {/* SPEC §11 deleveraging footer — first-class, never buried */}
       <p className="text-[10px] mt-1" style={label}>
         Cumulative paydown: {last?.cumulative_paydown_pct_of_entry_debt == null ? 'N/A' : pct(last.cumulative_paydown_pct_of_entry_debt)} of entry debt
@@ -252,10 +286,15 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
   if (!o.scenarios?.length) return <p className="text-[11px]" style={label}>Run “Build” to compute the scenario exhibits.</p>;
   return (
     <div>
-      <Table head={['Scenario', 'IRR', 'Δ vs base', 'MOIC', 'Min closing cash', 'Breach year', 'Floor breach']}>
+      <Table head={['Scenario', 'IRR', 'Δ vs base', 'MOIC', 'Min closing cash', 'Distributions paid', 'Blocked', 'Breach year', 'Floor breach']}>
         {o.scenarios.map((s) => {
           const minCash = Math.min(...s.waterfall.map((w) => w.closing_cash));
           const anyBreach = s.waterfall.some((w) => w.cash_floor_breach);
+          // §13 [v1.1.0]: the policy is frozen across scenarios — what varies is whether the
+          // trap BINDS. A downside that traps the sponsor's distributions is exactly what
+          // this dashboard exists to show.
+          const paid = s.waterfall.reduce((t, w) => t + w.distribution_paid, 0);
+          const blockedYears = s.waterfall.map((w, i) => (w.distribution_blocked ? i + 1 : 0)).filter(Boolean);
           return (
             <tr key={s.name} style={rowB}>
               <td className="px-2 py-1">{s.name}</td>
@@ -263,6 +302,8 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
               <td className={td}>{s.irr_delta_vs_base == null ? 'N/A' : pct(s.irr_delta_vs_base)}</td>
               <td className={td}>{multiple(s.returns.sponsor_net.moic)}</td>
               <td className={td}>{money(minCash, ccy)}</td>
+              <td className={td}>{paid === 0 ? '—' : money(paid, ccy)}</td>
+              <td className={td}>{blockedYears.length === 0 ? '—' : `Y${blockedYears.join(', Y')}`}</td>
               <td className={td}>{s.covenant_breach_year == null ? '—' : `Y${s.covenant_breach_year + 1}`}</td>
               <td className={td}>{anyBreach ? '■ yes' : '—'}</td>
             </tr>
