@@ -75,6 +75,34 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
     expect(bs.getCell(2, 7).value).toBe(output.balance_sheet[0].total_assets);
   });
 
+  it('§1.1 LTM sizing basis: the Excel entry-leverage row + Methodology name "LTM", not "FY" [audit fix — 4-surface mislabel]', async () => {
+    // the Excel export is a standalone deliverable (no HistoryTable badge travels with it)
+    const ltmFacts = { ...facts, fy_ebitda: 328, fy_revenue: 1320, fy_ebitda_margin: 328 / 1320, sizing_basis: 'LTM' as const };
+    const out = runModelWithScenarios(ltmFacts, assumptions, {});
+    const rb = await roundTrip(buildEngine2Workbook(out, 'USD'));
+    const labels: string[] = [];
+    rb.getWorksheet('Summary')!.eachRow((row) => labels.push(String(row.getCell(1).value ?? '')));
+    expect(labels).toContain('Entry gross leverage (LTM, par ÷ EBITDA)');
+    expect(labels).not.toContain('Entry gross leverage (FY, par ÷ EBITDA)'); // the mislabel this fix removes
+    const method: string[] = [];
+    rb.getWorksheet('Methodology')!.eachRow((row) => method.push(String(row.getCell(1).value ?? '')));
+    expect(method.some((t) => /debt at par ÷ LTM EBITDA/.test(t))).toBe(true);
+  });
+
+  it('scenario covenant breach year is displayed 1-indexed, NOT +1 [audit fix — off-by-one]', async () => {
+    // credit.ts::covenantBreachYear returns t+1 (already a 1-indexed hold year); the Excel/Summary
+    // display must render Y{value}, not Y{value+1} (which would put a year-N breach outside the hold).
+    const tight = { ...assumptions, covenants: { ...assumptions.covenants, leverage_max: 3.0 } };
+    const out = runModelWithScenarios(facts, tight, { scenarios: [{ name: 'Base', deltas: {} }] });
+    const breach = out.scenarios![0].covenant_breach_year;
+    expect(breach).not.toBeNull();
+    expect(breach).toBeGreaterThanOrEqual(1); // 1-indexed
+    const rb = await roundTrip(buildEngine2Workbook(out, 'USD'));
+    const sc = rb.getWorksheet('Scenarios')!;
+    // row 2 = first scenario; col 5 = "Covenant breach year"
+    expect(sc.getCell(2, 5).value).toBe(`Y${breach}`); // NOT `Y${breach + 1}`
+  });
+
   it('sensitivity sheet carries the engine grid verbatim incl. the base center cell', async () => {
     const rb = await roundTrip(buildEngine2Workbook(output, 'USD'));
     const ws = rb.getWorksheet('Sensitivity')!;

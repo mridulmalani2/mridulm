@@ -11,7 +11,7 @@
 
 import type { DealAssumptions, DealFacts, RevolverAssumption, SourcesUses, TermTrancheAssumption, TrancheSize } from './types';
 
-/** §16 single-driver sizing: x_ebitda × FY EBITDA (sizing ALWAYS uses FY — §11) or amount. */
+/** §16 single-driver sizing: x_ebitda × the §1.1 FY(LTM) sizing EBITDA (never NTM — §11) or amount. */
 export function trancheSize(size: TrancheSize, fyEbitda: number): number {
   if (size.x_ebitda !== undefined) return size.x_ebitda * fyEbitda;
   return size.amount;
@@ -79,7 +79,7 @@ export function rescaleTermTranchesToLeverage<A extends Pick<DealAssumptions, 's
 export interface EntryDerivation {
   enterprise_value: number;
   entry_multiple: number;
-  /** ALWAYS FY EBITDA — leverage sizing and covenants never use NTM (SPEC §11, C-14). */
+  /** the §1.1 FY(LTM) sizing basis (FY, or the LTM stitch) — never NTM; read facts.sizing_basis, not the "fy_" name (SPEC §11, §1.1, C-14) [G-2/M2]. */
   entry_ebitda_for_sizing: number;
   /** The valuation-basis EBITDA the multiple applies to (FY, or the §9-symmetric NTM proxy). */
   entry_ebitda_for_valuation: number;

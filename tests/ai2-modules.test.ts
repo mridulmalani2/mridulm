@@ -90,11 +90,22 @@ describe('E4 — redline + memo', () => {
     const ntm = { ...g2a, entry: { ...g2a.entry, basis: 'ntm' as const } };
     const md = memoSkeleton(runModel(g2facts, ntm), 'USD');
     const price = md.slice(md.indexOf('## Purchase price'), md.indexOf('## Sources'));
-    expect(price).toContain('NTM EBITDA');          // the true basis
-    expect(price).toContain('FY/LTM EBITDA');        // §11 "shows both, LTM canonical"
+    expect(price).toContain('NTM EBITDA');          // the true valuation basis
+    expect(price).toContain('on FY EBITDA');         // the SIZING basis (this deal is FY-sized), stated specifically
     expect(price).toContain('canonical sizing basis');
     // the false 'at X FY EBITDA' framing (multiple on NTM but labelled FY) must be gone
     expect(price).not.toMatch(/at \d[\d.]*x FY EBITDA/);
+  });
+
+  it('§1.1 memo LTM sizing basis: an LTM-stitched deal labels the sizing EBITDA "LTM", never "FY" [audit fix — 4-surface mislabel]', () => {
+    // the standalone memo deliverable travels WITHOUT the HistoryTable badge, so its basis label must be right
+    const ltmFacts = { ...g2facts, fy_ebitda: 328, fy_revenue: 1320, fy_ebitda_margin: 328 / 1320, sizing_basis: 'LTM' as const };
+    const md = memoSkeleton(runModel(ltmFacts, g2a), 'USD');
+    const price = md.slice(md.indexOf('## Purchase price'), md.indexOf('## Sources'));
+    expect(price).toContain('LTM EBITDA');         // the actual sizing basis
+    expect(price).not.toContain('FY EBITDA');       // the mislabel this fix removes
+    // and the GROSS-leverage caveat likewise names LTM, not FY
+    expect(md).toContain('debt at par ÷ LTM EBITDA');
   });
 
   it('memo: leverage bases are labelled, the basis caveat sits in Caveats, and no imperative leaks into the deliverable (§11 v1.1.2)', () => {

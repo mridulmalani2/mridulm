@@ -78,7 +78,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     // labelled explicitly. They previously read 'Entry net leverage' / 'Final-year net
     // leverage', which looked like one series and overstated deleveraging by the funded
     // min-cash at the entry end.
-    ['Entry gross leverage (FY, par ÷ EBITDA)', o.derived.entry_gross_leverage_fy],
+    [`Entry gross leverage (${entryMult.sizing_label}, par ÷ EBITDA)`, o.derived.entry_gross_leverage_fy],
     ['Final-year NET leverage', o.credit[o.credit.length - 1]?.net_leverage ?? null],
     ['Y1 DSCR', o.credit[0]?.dscr ?? null],
     ['— FREE CASH FLOW —', null],
@@ -166,7 +166,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
       ['Scenario', 'IRR', 'Δ vs base', 'MOIC', 'Covenant breach year', 'Floor breach'],
       o.scenarios.map((s) => [
         s.name, s.returns.sponsor_net.irr, s.irr_delta_vs_base, s.returns.sponsor_net.moic,
-        s.covenant_breach_year === null ? '—' : `Y${s.covenant_breach_year + 1}`,
+        s.covenant_breach_year === null ? '—' : `Y${s.covenant_breach_year}`,
         s.waterfall.some((w) => w.cash_floor_breach) ? 'YES' : '—',
       ]),
       [null, PCT, PCT, MULT, null, null]);
@@ -178,7 +178,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Exit = entry multiple unless edited; §382 static; NOL usage not optimized across years', 'SPEC §6/§9/§15'],
     ['Exit-year fee write-off deducted uncapped; PP&E rolls mechanically (may go negative, warned)', 'SPEC §7/§8/§15'],
     ['BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions', 'SPEC §3/§15'],
-    ['Entry leverage is GROSS (debt at par ÷ FY EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series', 'SPEC §11'],
+    [`Entry leverage is GROSS (debt at par ÷ ${entryMult.sizing_label} EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series`, 'SPEC §11'],
     ['A model is a range, not a point — the sensitivity/scenario exhibits are the primary caveat mechanism', 'SPEC §15'],
   ], [null, null]);
 

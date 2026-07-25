@@ -14,6 +14,7 @@ import BasisBadge from './BasisBadge';
 import type { DealAssumptions, CashPayTrancheAssumption } from '../../../lib/engine2/types';
 import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
+import { sizingBasisLabel } from '../../../lib/engine2/display';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
@@ -105,10 +106,10 @@ const AssumptionsPanel: React.FC = () => {
       </Row>
       {facts.implied_trading_ev_ebitda !== null && (
         <p className="text-[10px] mb-2 text-right" style={labelStyle}>
-          trades at ~{multiple(facts.implied_trading_ev_ebitda)} FY EBITDA (read-only anchor)
+          trades at ~{multiple(facts.implied_trading_ev_ebitda)} {sizingBasisLabel(facts.sizing_basis)} EBITDA (read-only anchor)
         </p>
       )}
-      <Row label="Total leverage (gross, x FY EBITDA)" path="structure.tranches">
+      <Row label={`Total leverage (gross, x ${sizingBasisLabel(facts.sizing_basis)} EBITDA)`} path="structure.tranches">
         <NumInput value={termLeverage === null ? 'n/a' : num(termLeverage, 1)} suffix="x" readOnly={termLeverage === null}
           onCommit={numCommit((v) => {
             // Rescale every term tranche PROPORTIONALLY so the total becomes v × FY EBITDA —

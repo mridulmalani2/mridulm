@@ -10,7 +10,7 @@
  */
 import React, { useState } from 'react';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
-import { entryMultipleDisplay, exitMultipleDisplay } from '../../../lib/engine2/display';
+import { entryMultipleDisplay, exitMultipleDisplay, sizingBasisLabel } from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -258,7 +258,7 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
       on screen, because reading the two as one deleveraging series overstates it. */}
   <p className="text-[10px] mt-2" style={label}>
     Leverage here is NET of cash (SPEC §11). The Summary tab&apos;s entry leverage is GROSS
-    (debt at par ÷ FY EBITDA — the quoted sizing basis), so the two are not a single series.
+    (debt at par ÷ {sizingBasisLabel(o.facts.sizing_basis)} EBITDA — the quoted sizing basis), so the two are not a single series.
   </p>
   </div>
 );
@@ -313,7 +313,7 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
               <td className={td}>{money(minCash, ccy)}</td>
               <td className={td}>{paid === 0 ? '—' : money(paid, ccy)}</td>
               <td className={td}>{blockedYears.length === 0 ? '—' : `Y${blockedYears.join(', Y')}`}</td>
-              <td className={td}>{s.covenant_breach_year == null ? '—' : `Y${s.covenant_breach_year + 1}`}</td>
+              <td className={td}>{s.covenant_breach_year == null ? '—' : `Y${s.covenant_breach_year}`}</td>
               <td className={td}>{anyBreach ? '■ yes' : '—'}</td>
             </tr>
           );
