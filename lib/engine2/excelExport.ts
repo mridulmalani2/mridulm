@@ -9,7 +9,8 @@
  */
 
 import ExcelJS from 'exceljs';
-import { entryMultipleDisplay, exitMultipleDisplay, type Engine2ModelOutput } from './facade';
+import { type Engine2ModelOutput } from './facade';
+import { entryMultipleDisplay, exitMultipleDisplay } from './display';
 
 const MONEY = '#,##0.0';
 const MONEY2 = '#,##0.00';

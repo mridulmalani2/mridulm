@@ -11,7 +11,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { entryMultipleDisplay, exitMultipleDisplay, runModel } from '../lib/engine2/facade';
+import { runModel } from '../lib/engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay } from '../lib/engine2/display';
 import { waterfallYear } from '../lib/engine2/kernel/waterfall';
 import { applyAxis, applyScenarioDeltas, buildSensitivityGrid, runModelWithScenarios, runScenario } from '../lib/engine2/scenarios';
 import { entryGrossLeverageFromAssumptions } from '../lib/engine2/sourcesUses';

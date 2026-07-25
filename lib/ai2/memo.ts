@@ -18,7 +18,8 @@
  * exists because it was broken.]
  */
 
-import { entryMultipleDisplay, exitMultipleDisplay, type Engine2ModelOutput } from '../engine2/facade';
+import { type Engine2ModelOutput } from '../engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay } from '../engine2/display';
 import { money, multiple, num, pct } from '../format';
 import type { Engine2Currency } from '../format';
 

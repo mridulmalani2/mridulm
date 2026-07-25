@@ -32,16 +32,23 @@ AND was outside the fence]:
 > **Reference sets.**
 > - **ENGINE ARITHMETIC PATH** (computes engine numbers) = `lib/engine2/kernel/**` +
 >   `lib/engine2/{operating,tax,debt,sequence,exit,returns,credit,bridge,sourcesUses,openingBalance,scenarios,facade,check}.ts`.
+>   `facade.ts` ASSEMBLES the model and does NO display math — display-derivation helpers live in
+>   the display layer (`lib/engine2/display.ts`), OFF this path, so a `facade.ts` diff still cleanly
+>   means "engine arithmetic changed" [round-4 (b)]. New `*Display` helpers go in the display layer.
 > - **SUGGESTION PATH** (computes DISPLAYED suggested values the user accepts INTO the model) =
 >   `lib/engine2/suggest.ts` + `lib/engine2/suggestions/**`. Golden-uncovered (never runs in
->   `runModel`), so a new computed suggested value is ADJUDICATED like any Tier-B number.
+>   `runModel`), so a new computed suggested value is ADJUDICATED like any Tier-B number. A display
+>   surface may not IMPORT it to recompute either — the import-scan fences it alongside `factsAdapter`
+>   [round-4 (4)].
 > - **DISPLAY-SURFACE SET** (renders numbers to a human) = `components/deal-engine/**` +
->   `lib/format/**` + `lib/engine2/excelExport.ts` + `lib/ai2/memo.ts`. (Explicitly includes
->   the Excel export and the downloaded memo — the exact surfaces that carried v1.1.2.) The
+>   `lib/format/**` + `lib/engine2/display.ts` + `lib/engine2/excelExport.ts` + `lib/ai2/memo.ts`. (Explicitly includes
+>   the Excel export, the downloaded memo, and the display-derivation module — the exact surfaces
+>   that carried v1.1.2, plus the ONE home where a display-only derived number (the entry/exit
+>   multiple) is computed and which every render surface IMPORTS rather than reconstructs.) The
 >   committed guard DERIVES its scan set by WALKING these roots
 >   (`tests/governance-display-surface.test.ts`), never a hand-maintained file list — a hardcoded
 >   4-file scan let a live §4 second-path in `AssumptionsPanel` sit green [R3-1]. A meta-test binds
->   the walked roots to this line, so guard/doc drift is itself a red test.
+>   this declared set to the walk in BOTH directions [round-4 (a)], so guard/doc drift is a red test.
 >
 > **Tier-B allowlist:** the PR's diff is CONFINED TO `lib/edgar/**`, `lib/engine2/factsAdapter.ts`,
 > the SUGGESTION PATH, purely-additive Class-A/C `types.ts` fields, the DISPLAY-SURFACE SET,

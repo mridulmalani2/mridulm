@@ -9,7 +9,8 @@
  * add-ons, partial exits, ratchets, PIK elections, refi editors, distributions, trace.
  */
 import React, { useState } from 'react';
-import { entryMultipleDisplay, exitMultipleDisplay, type Engine2ModelOutput } from '../../../lib/engine2/facade';
+import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
+import { entryMultipleDisplay, exitMultipleDisplay } from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 

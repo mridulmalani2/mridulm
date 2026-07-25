@@ -57,7 +57,17 @@ const DISPLAY_ROOTS: { dir: string; exts: string[] }[] = [
   { dir: 'components/deal-engine', exts: ['.tsx', '.ts'] },
   { dir: 'lib/format', exts: ['.ts'] },
 ];
-const DISPLAY_FILES_EXPLICIT = ['lib/engine2/excelExport.ts', 'lib/ai2/memo.ts'];
+const DISPLAY_FILES_EXPLICIT = ['lib/engine2/display.ts', 'lib/engine2/excelExport.ts', 'lib/ai2/memo.ts'];
+
+/**
+ * The display-derivation single-source HOME (tier-governance round 4): the ONE module where a
+ * registered derived number (the entry/exit multiples) is legitimately computed. Every OTHER
+ * display surface must import its helper, not reconstruct the ratio — so the FORBIDDEN_INLINE
+ * registry (below) scans every surface EXCEPT this one. It is still scanned by the import-scan and
+ * aggregation guards. It sits in the DISPLAY-SURFACE SET (walked) yet OFF the engine-arithmetic
+ * path, which is the whole point: display math lives here, not on facade.ts.
+ */
+const SINGLE_SOURCE_HOME = 'lib/engine2/display.ts';
 
 function walk(dir: string, exts: string[]): string[] {
   const out: string[] = [];
@@ -74,9 +84,14 @@ const DISPLAY_SURFACES = [
   ...DISPLAY_FILES_EXPLICIT,
 ].sort();
 
-/** Engine ARITHMETIC modules — importing one into a display surface is a second calc path unless sanctioned. */
+/**
+ * Engine ARITHMETIC + number-producing modules the containment fence keeps off-limits to a display
+ * surface — importing one to recompute is a second calc path unless sanctioned. Includes the
+ * arithmetic path AND `factsAdapter` / the suggestion path (round-4 residual 4: they produce
+ * displayed numbers the doc's fences already treat as off-limits to Tier C).
+ */
 const ENGINE_ARITHMETIC_MODULES =
-  /from ['"].*\/(kernel\/|operating|tax|debt|sequence|exit|returns|credit|bridge|sourcesUses|openingBalance|scenarios|check)['"]/;
+  /from ['"].*\/(kernel\/|operating|tax|debt|sequence|exit|returns|credit|bridge|sourcesUses|openingBalance|scenarios|check|factsAdapter|suggest|suggestions)['"]/;
 
 /**
  * SANCTIONED single-source imports — the ONLY engine-arithmetic imports allowed into a display
@@ -126,9 +141,9 @@ const ALLOWED_AGGREGATIONS: { file: string; snippet: string; why: string }[] = [
 ];
 
 /**
- * Single-source REGISTRY — derived numbers that MUST flow through one facade display helper. Their
- * inline reconstruction is forbidden in EVERY display surface (the facade, which is NOT a display
- * surface, is where the one definition lives). Fail-closed for the listed numbers.
+ * Single-source REGISTRY — derived numbers that MUST flow through one display helper. Their inline
+ * reconstruction is forbidden in every display surface EXCEPT the SINGLE_SOURCE_HOME (display.ts),
+ * which is where the one definition legitimately lives. Fail-closed for the listed numbers.
  */
 const FORBIDDEN_INLINE: { pattern: RegExp; helper: string; number: string }[] = [
   {
@@ -161,6 +176,20 @@ describe('governance gate (b): display surfaces cannot open a second calculation
     }
   });
 
+  it('the doc→guard direction binds too: the doc\'s declared DISPLAY-SURFACE SET equals the guard\'s roots+files [round-4 (a)]', () => {
+    // Parse the doc's declaration (between "DISPLAY-SURFACE SET … =" and "(Explicitly includes") and
+    // assert set-EQUALITY with the guard's roots+files — closing the gap where a root ADDED to the
+    // doc but not the guard would stay green (the R3 "guard lags doc" shape, in miniature).
+    const full = readFileSync(join(ROOT, DOC), 'utf8').replace(/\n/g, ' ');
+    const m = full.match(/DISPLAY-SURFACE SET\b.*?=(.*?)\(Explicitly includes/);
+    expect(m, `${DOC} must declare the DISPLAY-SURFACE SET enumeration ending "(Explicitly includes …"`).not.toBeNull();
+    const declared = [...m![1].matchAll(/`((?:components|lib)\/[^`]+)`/g)].map((x) => x[1]);
+    const declaredRoots = declared.filter((p) => p.endsWith('/**')).map((p) => p.replace(/\/\*\*$/, '')).sort();
+    const declaredFiles = declared.filter((p) => !p.endsWith('/**')).sort();
+    expect(declaredRoots, 'doc-declared glob roots must EQUAL the guard\'s DISPLAY_ROOTS (doc→guard bind)').toEqual(DISPLAY_ROOTS.map((r) => r.dir).sort());
+    expect(declaredFiles, 'doc-declared explicit files must EQUAL the guard\'s DISPLAY_FILES_EXPLICIT (doc→guard bind)').toEqual([...DISPLAY_FILES_EXPLICIT].sort());
+  });
+
   for (const rel of DISPLAY_SURFACES) {
     const src = readFileSync(join(ROOT, rel), 'utf8');
 
@@ -183,10 +212,12 @@ describe('governance gate (b): display surfaces cannot open a second calculation
     });
 
     it(`${rel}: no forbidden inline reconstruction of a single-sourced derived number`, () => {
+      // the single-source HOME is WHERE the one definition legitimately lives — exempt it, scan all others
+      if (rel === SINGLE_SOURCE_HOME) return;
       const hits = src.split('\n')
         .map((l, i) => [i + 1, l.trim()] as const)
-        .flatMap(([n, l]) => FORBIDDEN_INLINE.filter((f) => f.pattern.test(l)).map((f) => `  ${n}: ${l}  →  use ${f.helper}() (the ${f.number} is single-sourced there)`));
-      expect(hits, `${rel}: a derived number that must go through its facade helper is reconstructed inline:\n${hits.join('\n')}`).toEqual([]);
+        .flatMap(([n, l]) => FORBIDDEN_INLINE.filter((f) => f.pattern.test(l)).map((f) => `  ${n}: ${l}  →  use ${f.helper}() (the ${f.number} is single-sourced in ${SINGLE_SOURCE_HOME})`));
+      expect(hits, `${rel}: a derived number that must go through its display helper is reconstructed inline:\n${hits.join('\n')}`).toEqual([]);
     });
   }
 

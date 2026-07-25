@@ -196,8 +196,16 @@ earlier fail-open draft ("proceed UNLESS a divergence is caught," leaning on an
 over-refusing the normal case. Worked checks: (1) discontinued-ops reclassification — original 9M
 (760) and restated 9M (700) both retained, |Δ| = 7.9% > 1% ⇒ note fires ⇒ **refuse**; (2) normal
 grower — original and re-reported 9M agree within 1% ⇒ no note ⇒ **stitch**; (3) ESEF single-vintage
-— nothing to compare ⇒ **refuse**. The three spans are on a mutually-consistent vintage/basis, or
-the stitch is not taken.
+— nothing to compare ⇒ **refuse**. The vintage check detects comparative-RESTATING events (they
+leave a >1% footprint on a retained prior vintage). **Known bounded limitation [round-4 MINOR,
+disclosed not caught]:** a purely-PROSPECTIVE accounting-standard adoption applied to the current
+period WITHOUT restating comparatives (e.g. a modified-retrospective revenue/lease transition)
+leaves NO restatement footprint in tagged facts — so there is no numeric signal to fail-closed on,
+and the stitch may mix an old-basis prior stub with a new-basis current YTD over the ~one-quarter
+non-overlap. This is rare in the modelling window (ASC 606/842 predate 2026), bounded, and — like
+the day-count and static-rate simplifications — DISCLOSED in §15 rather than caught. So the three
+spans are on a mutually-consistent RESTATEMENT vintage, or the stitch is not taken; a prospective
+basis change with no comparative restatement is the disclosed exception.
 
 **Foreign private issuers (FPI) / no-interim filers.** A 20-F filer (e.g. SAP) files
 ANNUALLY only — no 10-Q, no YTD points — so the stitch is impossible and the basis is the
