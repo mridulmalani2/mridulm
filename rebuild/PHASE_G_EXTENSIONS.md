@@ -24,16 +24,33 @@ left every golden byte-identical (the §10 `total→share` hurdle mutation passe
 dropping the blocked-flag request term passed 402/402), and whole `runModel` regions are
 golden-uncovered by design (NTM basis, static-vs-forward rates, the §12 walk-down, EBITDA_adj
 ≤ 0). Byte-identity proves only "no GOLDEN-COVERED arithmetic moved." The real ticket is a
-**mechanical, coverage-independent git-diff**:
+**mechanical, coverage-independent git-diff, expressed as a POSITIVE ALLOWLIST so it fails
+CLOSED** [strengthened after review round 2 — a denylist "touch nothing on THIS path" fails
+OPEN: any number-computing file not enumerated escapes, e.g. `suggest.ts` is golden-uncovered
+AND was outside the fence]:
 
-> **The ENGINE ARITHMETIC PATH** = `lib/engine2/kernel/**` + the modules behind `facade.ts`
-> that compute numbers: `operating, tax, debt, sequence, exit, returns, credit, bridge,
-> sourcesUses, openingBalance, scenarios, facade, check`. A Tier-B PR touches ZERO lines of
-> this path (except purely-additive Class-A/Class-C type fields in `types.ts`); a Tier-C PR
-> touches zero lines of it AND zero lines of `types.ts`. Verified by `git diff origin/main --
-> <paths>` in the conformance review. Byte-identical goldens remain a REQUIRED secondary
-> check — but the git-diff is what actually distinguishes "data-side" from "golden-uncovered
-> engine edit."
+> **Reference sets.**
+> - **ENGINE ARITHMETIC PATH** (computes engine numbers) = `lib/engine2/kernel/**` +
+>   `lib/engine2/{operating,tax,debt,sequence,exit,returns,credit,bridge,sourcesUses,openingBalance,scenarios,facade,check}.ts`.
+> - **SUGGESTION PATH** (computes DISPLAYED suggested values the user accepts INTO the model) =
+>   `lib/engine2/suggest.ts` + `lib/engine2/suggestions/**`. Golden-uncovered (never runs in
+>   `runModel`), so a new computed suggested value is ADJUDICATED like any Tier-B number.
+> - **DISPLAY-SURFACE SET** (renders numbers to a human) = `components/deal-engine/**` +
+>   `lib/engine2/excelExport.ts` + `lib/ai2/memo.ts` + `lib/format/**`. (Explicitly includes
+>   the Excel export and the downloaded memo — the exact surfaces that carried v1.1.2.)
+>
+> **Tier-B allowlist:** the PR's diff is CONFINED TO `lib/edgar/**`, `lib/engine2/factsAdapter.ts`,
+> the SUGGESTION PATH, purely-additive Class-A/C `types.ts` fields, the DISPLAY-SURFACE SET,
+> `tests/**`, and docs — and is EMPTY over the ENGINE ARITHMETIC PATH. Any diff to a file
+> OUTSIDE the allowlist trips the gate (fail-closed) and forces re-justification or escalation.
+> New SUGGESTION-PATH arithmetic carries the full Tier-B adjudication (DERIVATION.md method).
+> **Tier-C allowlist:** diff CONFINED TO the DISPLAY-SURFACE SET + `tests/**` + docs — EMPTY
+> over the engine arithmetic path, the suggestion path, `types.ts`, `lib/edgar/**`, and
+> `factsAdapter.ts`. A new number-producing line anywhere escalates.
+>
+> Verified by `git diff origin/main --<allowlist>` (must be the WHOLE diff) in the conformance
+> review. Byte-identical goldens remain a REQUIRED secondary check — but the allowlist diff is
+> what actually distinguishes "data-side" from a golden-uncovered engine/suggestion edit.
 
 ### Tier A — touches ENGINE ARITHMETIC (adds/changes a number inside `runModel`)
 The full five steps, unchanged (this is exactly what G-1 ran):
@@ -57,7 +74,7 @@ goldens carry — "same rigour" means the MECHANISM, not the adjective:
    alternative + independent hostile sign-off.
 2. **Data-layer fixtures + independent adjudication BOUND TO THE `DERIVATION.md` METHOD
    VERBATIM**: a reference derivation in a DIFFERENT LANGUAGE with ZERO imports of the code
-   under test, TWO independent hand-derivation passes, the SAME ±$0.0125m / ±0.1bp bar,
+   under test, TWO independent hand-derivation passes, the SAME ±$0.005m / ±0.1bp golden-adjudication bar (§15),
    "gospel only after signed" — AND a **CI regeneration gate** for the new fixtures
    equivalent to `tests/goldens.test.ts` (a scheduled test re-runs the reference derivation
    and fails on any drift). An ordinary same-language fixture with no regeneration gate is
@@ -87,10 +104,18 @@ and were caught by ADJUDICATORS + directed MUTATION tests, never by goldens:
 - (a) **Source containment**: the git-diff over the engine arithmetic path AND `types.ts` is
   EMPTY. Fail ⇒ escalate (a new engine field ⇒ A; a new derived data value ⇒ B).
 - (b) **Every displayed value resolves to a NAMED `ModelOutput` field through `lib/format`** —
-  enforced, not asserted: no inline arithmetic in the render path (a UI cell computing
-  `EBITDA − threshold` is a SECOND CALCULATION PATH, forbidden by ENGINE_ARCHITECTURE §4).
-  The conformance review greps the changed render code for arithmetic operators on model
-  values; any hit escalates to B (adjudicate the derivation).
+  enforced by a COMMITTED CI CHECK, not a reviewer's grep [R2-2]:
+  `tests/governance-display-surface.test.ts` runs over the DISPLAY-SURFACE SET and fails on
+  (i) any import of an engine ARITHMETIC module into a display surface (recompute-via-import),
+  and (ii) any array AGGREGATION (`.reduce` / `Math.max` / `Math.min`) over a model value that
+  is not an explicitly-allowlisted PRESENTATIONAL derivation — a Σ-tranche-balances inline
+  instead of a ModelOutput field FAILS the build (proven by mutation). A new aggregation must
+  read a ModelOutput field or be allowlisted WITH a justification (reviewer-visible). HONEST
+  SCOPE: a benign RATIO of two named fields (a multiple = A/B) is a legitimate presentational
+  derivation and is NOT policed by the check — a blanket arithmetic ban would false-positive on
+  correct code; that residual is covered by gate (c)'s per-field label mutation tests + the
+  conformance diff-review. The check closes the two MECHANICAL second-path vectors; it does not
+  over-claim to close all of them.
 - (c) **LABEL COVERAGE**: every displayed field — new OR relabelled — carries a
   MUTATION-TESTED basis/label assertion (the v1.1.2/v1.1.3 lesson: "zero label assertions
   were added for a defect that WAS a label"). A feature that renders numbers ANNOTATED with a
