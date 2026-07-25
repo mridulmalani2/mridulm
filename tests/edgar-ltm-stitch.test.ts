@@ -65,4 +65,34 @@ describe('mapCompanyFacts integration — the stitch activates end-to-end', () =
     expect(raw.as_of).toBe('2025-09-30');
     expect(stalenessTier(raw.as_of, new Date('2027-06-01'))).toBe('stale'); // as_of vs a much later view
   });
+
+  it('cross-span revenue TAG mismatch (FY Revenues vs interim RevenueFromContract) refuses → FY [audit minor 2]', () => {
+    // FY resolves to `Revenues`; the interims resolve to the higher-priority
+    // `RevenueFromContractWithCustomer…` — the winning tag differs across the stitch spans, mixing
+    // two revenue DEFINITIONS. The stitch fails CLOSED. (Tested on stitchLtm directly — the unit
+    // under test — since mapXbrl's own anchor resolution has separate tag-priority quirks.)
+    const mixed = { cik: 1, entityName: 'MIX', facts: { 'us-gaap': {
+      Revenues: concept([f(...FY, 1000 * M, '2025-02-15', '10-K', 2024, 'FY')]),
+      RevenueFromContractWithCustomerExcludingAssessedTax: concept([
+        f(...C, 800 * M, '2025-11-01', '10-Q', 2025, 'Q3'),
+        f(...P, 720 * M, '2024-11-01', '10-Q', 2024, 'Q3'), f(...P, 720 * M, '2025-11-01', '10-Q', 2025, 'Q3')]),
+      OperatingIncomeLoss: concept([
+        f(...FY, 200 * M, '2025-02-15', '10-K', 2024, 'FY'), f(...C, 165 * M, '2025-11-01', '10-Q', 2025, 'Q3'),
+        f(...P, 150 * M, '2024-11-01', '10-Q', 2024, 'Q3'), f(...P, 150 * M, '2025-11-01', '10-Q', 2025, 'Q3')]),
+      DepreciationDepletionAndAmortization: concept([
+        f(...FY, 50 * M, '2025-02-15', '10-K', 2024, 'FY'), f(...C, 40 * M, '2025-11-01', '10-Q', 2025, 'Q3'),
+        f(...P, 38 * M, '2024-11-01', '10-Q', 2024, 'Q3'), f(...P, 38 * M, '2025-11-01', '10-Q', 2025, 'Q3')]),
+    } } } as unknown as CompanyFacts;
+    const r = stitchLtm(mixed, '2025-11-15', { taxonomy: 'us-gaap',
+      revenue: ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues'],
+      operatingIncome: ['OperatingIncomeLoss'], da: ['DepreciationDepletionAndAmortization'] });
+    expect(r.stitched).toBe(false); // fail-closed, NOT a silently mixed LTM
+    expect(r.revenue.basis).toBe('fy');
+    expect(r.refusal_reason).toMatch(/tag differs across stitch spans/);
+    // control: same tag on all spans DOES stitch (the mismatch, not the tags, is what refuses)
+    const same = stitchLtm(mixed, '2025-11-15', { taxonomy: 'us-gaap',
+      revenue: ['RevenueFromContractWithCustomerExcludingAssessedTax'], // FY absent on this tag ⇒ no full year
+      operatingIncome: ['OperatingIncomeLoss'], da: ['DepreciationDepletionAndAmortization'] });
+    expect(same.refusal_reason).not.toMatch(/tag differs/); // refuses for no-FY, not tag-mix
+  });
 });

@@ -154,8 +154,14 @@ mid-history fiscal-year changes make exact counts unreliable. The day-count wind
 accordingly and extend the existing history.ts full-year rule (350–380 days): full year
 350–380, 9-month YTD 250–285, 6-month YTD 165–200, quarter 80–100. A span whose duration
 falls in no window is not used for stitching (it stays a hole, honestly). Period identity
-remains END-DATE-keyed (D1 rule 3); tags resolve per-period (rule 1) and a component whose tag
-differs across the three stitch spans is flagged.
+remains END-DATE-keyed (D1 rule 3); tags resolve per-period (rule 1) and a stitching metric whose
+WINNING tag differs across the three stitch spans **REFUSES → FY** [accuracy audit tightening]: a
+mixed tag (e.g. `Revenues` at FY vs `RevenueFromContractWithCustomer…` at the interims) mixes two
+revenue DEFINITIONS in the sizing figure, so — like the vintage (F3) and single-basis-pair (F4)
+rules — it fails CLOSED rather than shipping a disclosed-but-possibly-wrong LTM. (The rule-1 "flag"
+is display-only; the SIZING basis needs the stricter refusal because its blast radius is the whole
+model. The goldens use single canonical tags; this bites only the production multi-tag path, which a
+directed conformance test pins.)
 
 **Cross-span vintage/basis consistency [F3 — per-period latest-vintage does NOT deliver it;
 this was a real hole].** `history.ts` resolves each `(start, end)` group to ITS OWN latest

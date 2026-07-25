@@ -220,7 +220,7 @@ export interface DealAssumptions {
     driver: 'multiple' | 'ev';
     entry_multiple: number | null;
     enterprise_value: number | null;
-    /** Valuation basis; leverage sizing & covenants ALWAYS use FY EBITDA (SPEC §11, C-14). */
+    /** Valuation basis; leverage sizing & covenants use the §1.1 FY(LTM) sizing EBITDA — never NTM (SPEC §11, §1.1, C-14). [G-2/M2] */
     basis: 'fy' | 'ntm';
     hold_years: number;
   };

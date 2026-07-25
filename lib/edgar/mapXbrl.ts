@@ -315,9 +315,14 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   if (stitched) {
     const ltmRev = M(stitch.revenue.value!), ltmEbitda = M(stitch.ebitda.value!);
     const e = stitch.revenue.as_of ?? anchorEnd;
-    fy_revenue_out = sv(ltmRev, { source: 'edgar', detail: `LTM ending ${e} = FY + YTD − prior-YTD (§1.1)`, tag: 'derived:LTMrevenue', taxonomy: 'us-gaap', unit: revenue?.prov.unit, fy: anchorFy, period: e, url: revenue?.prov.url });
-    fy_ebitda_out = sv(ltmEbitda, { source: 'edgar', detail: `LTM EBITDA (OperInc + D&A) ending ${e} (§1.1)`, tag: 'derived:LTMebitda', taxonomy: 'us-gaap', unit: opinc?.prov.unit, fy: anchorFy, period: e, url: opinc?.prov.url });
+    // F7/F10: any stitch disclosure (e.g. the ≤7d 52/53 approximation) travels in provenance — never silently absorbed.
+    const noteSuffix = stitch.notes.length ? ` · ${stitch.notes.join('; ')}` : '';
+    fy_revenue_out = sv(ltmRev, { source: 'edgar', detail: `LTM ending ${e} = FY + YTD − prior-YTD (§1.1)${noteSuffix}`, tag: 'derived:LTMrevenue', taxonomy: 'us-gaap', unit: revenue?.prov.unit, fy: anchorFy, period: e, url: revenue?.prov.url });
+    fy_ebitda_out = sv(ltmEbitda, { source: 'edgar', detail: `LTM EBITDA (OperInc + D&A) ending ${e} (§1.1)${noteSuffix}`, tag: 'derived:LTMebitda', taxonomy: 'us-gaap', unit: opinc?.prov.unit, fy: anchorFy, period: e, url: opinc?.prov.url });
     ebitda_margin = ltmRev > 0 ? sv(ltmEbitda / ltmRev, { source: 'edgar', detail: 'LTM EBITDA ÷ LTM revenue (§1.1 single-basis pair)', tag: 'derived:EBITDAmargin', period: e, fy: anchorFy }) : null;
+  } else if (stitch.refusal_reason && fy_ebitda_out) {
+    // disclose WHY the LTM stitch fell back to FY (F7/F10 — not silently absorbed)
+    fy_ebitda_out = sv(fy_ebitda_out.value, { ...fy_ebitda_out.provenance, detail: `${fy_ebitda_out.provenance.detail} · LTM stitch → FY: ${stitch.refusal_reason}` });
   }
 
   const da_pct = da && revenueVal > 0

@@ -164,6 +164,14 @@ export function stitchLtm(facts: CompanyFacts, importDate: string, tags: StitchT
       const p = at(pts, kk);
       if (p && p.note) return fyFallback(`${nm} ${spanName} restated >1% vs original — cross-vintage basis mix (${p.note})`, k);
     }
+    // Cross-span TAG consistency [§1.1 rule 1]: a stitching metric whose WINNING tag differs across
+    // FY/YTD_c/YTD_p mixes definitions (Revenues vs RevenueFromContractWithCustomer…) — a basis
+    // inconsistency in the sizing figure; refuse → FY (fail-closed, consistent with F3/F4). The
+    // goldens use single canonical tags, so this only bites the production multi-tag path.
+    const tags = [at(pts, k.fy), at(pts, k.cur!), at(pts, k.prior!)].filter(Boolean).map((p) => p!.tag);
+    if (tags.length === 3 && new Set(tags).size > 1) {
+      return fyFallback(`${nm} tag differs across stitch spans (${[...new Set(tags)].join(' / ')}) — mixed-basis; fail-closed`, k);
+    }
   }
 
   // ── availability on the canonical spans ──
