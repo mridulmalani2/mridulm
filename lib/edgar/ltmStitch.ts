@@ -16,6 +16,7 @@
  * refuses ⇒ BOTH → FY). FPI/annual-only (no interim) ⇒ FY + badge.
  */
 import type { CompanyFacts, XbrlFactValue } from './client';
+import { stalenessTier } from '../format';
 
 export type StitchBasis = 'ltm_stitched' | 'fy' | 'missing';
 export type StalenessBadge = 'fresh' | 'aging' | 'stale';
@@ -37,7 +38,6 @@ export interface StitchResult {
 const DAY = 86_400_000;
 const spanDays = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);
 const plus1d = (s: string) => new Date(Date.parse(s) + DAY).toISOString().slice(0, 10);
-const ageMonths = (asOf: string, importDate: string) => spanDays(asOf, importDate) / 30.44;
 const r2 = (x: number | null): number | null => (x === null ? null : Math.round((x + Number.EPSILON) * 100) / 100);
 
 // §1.1 widened day-count windows (52/53-week + FYE changes)
@@ -49,13 +49,9 @@ function classify(start: string | undefined, end: string): string | null {
   return null; // a span in no window is a HOLE (honestly unused)
 }
 
-// §1.1 staleness badge (filing-overdue cadence)
-function badge(asOf: string, importDate: string): StalenessBadge {
-  const a = ageMonths(asOf, importDate);
-  if (a <= 4.5) return 'fresh';
-  if (a <= 14.5) return 'aging';
-  return 'stale';
-}
+// §1.1 staleness badge — the ONE definition in lib/format, shared with the display so the
+// adjudicated goldens' badge and the UI badge cannot diverge.
+const badge = (asOf: string, importDate: string): StalenessBadge => stalenessTier(asOf, new Date(importDate)) ?? 'stale';
 
 interface Point { start: string | undefined; end: string; val: number; filed: string | null; tag: string; note: string | null; vintage_count: number; }
 type PointMap = Map<string, Point>;

@@ -9,6 +9,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { stitchLtm } from '../lib/edgar/ltmStitch';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
+import { stalenessTier } from '../lib/format';
 import type { CompanyFacts } from '../lib/edgar/client';
 
 const ROOT = join(__dirname, '..');
@@ -48,20 +49,20 @@ describe('mapCompanyFacts integration — the stitch activates end-to-end', () =
       f(...P, 38 * M, '2024-11-01', '10-Q', 2024, 'Q3'), f(...P, 38 * M, '2025-11-01', '10-Q', 2025, 'Q3')]),
   } } } as unknown as CompanyFacts;
 
-  it('LTM basis, fy_revenue 1080 / fy_ebitda 267 (millions), margin recomputed same-basis, fresh badge', () => {
+  it('LTM basis, fy_revenue 1080 / fy_ebitda 267 (millions), margin recomputed same-basis, as-of = anchor', () => {
     const raw = mapCompanyFacts(facts, { asOfDate: '2025-11-15' });
     expect(raw.basis).toBe('LTM');
     expect(raw.fy_revenue?.value).toBeCloseTo(1080, 6);   // 1000 + 800 − 720, M-scaled
     expect(raw.fy_ebitda?.value).toBeCloseTo(267, 6);     // (200+165−150) + (50+40−38)
     expect(raw.ebitda_margin?.value).toBeCloseTo(267 / 1080, 9); // LTM ÷ LTM, not FY
     expect(raw.as_of).toBe('2025-09-30');
-    expect(raw.staleness).toBe('fresh');
+    expect(stalenessTier(raw.as_of, new Date('2025-11-15'))).toBe('fresh'); // ~1.5m
   });
 
-  it('a stale import date ages the badge without moving the figures', () => {
-    const raw = mapCompanyFacts(facts, { asOfDate: '2027-06-01' });
-    expect(raw.basis).toBe('LTM');
+  it('the display tier ages from the as-of date, the figures do not move', () => {
+    const raw = mapCompanyFacts(facts, { asOfDate: '2025-11-15' });
     expect(raw.fy_ebitda?.value).toBeCloseTo(267, 6);
-    expect(raw.staleness).toBe('stale'); // as_of 2025-09-30 vs 2027-06 ≈ 20m
+    expect(raw.as_of).toBe('2025-09-30');
+    expect(stalenessTier(raw.as_of, new Date('2027-06-01'))).toBe('stale'); // as_of vs a much later view
   });
 });

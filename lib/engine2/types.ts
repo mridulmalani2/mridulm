@@ -54,10 +54,9 @@ export interface DealFacts {
 
   /** §1.1 sizing basis: 'LTM' when the quarter-stitch succeeded, else 'FY'. Default 'FY' (manual). */
   sizing_basis?: 'FY' | 'LTM';
-  /** As-of date of the sizing figures (LTM anchor `e`, or the FY period end). */
+  /** As-of date of the sizing figures (LTM anchor `e`, or the FY period end). The UI derives the
+   *  staleness tier (fresh/aging/stale) from this vs now — `lib/format.stalenessTier`. */
   sizing_as_of?: string;
-  /** Staleness tier of the sizing as-of vs import date — the UI badge (§1.1). */
-  sizing_staleness?: 'fresh' | 'aging' | 'stale' | null;
   da_pct_revenue: number;
   maint_capex_pct_revenue: number;
   /** Opening net PP&E seed for the BS roll (SPEC §8); null ⇒ seed 0 + disclosed note. */

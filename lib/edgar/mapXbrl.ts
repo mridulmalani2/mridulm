@@ -634,7 +634,6 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     periodEnd: anchorEnd,
     basis: sizingBasis,
     as_of: sizing_as_of,
-    staleness: stitch.badge,
     fy_revenue: fy_revenue_out,
     fy_ebitda: fy_ebitda_out,
     ebitda_margin,
