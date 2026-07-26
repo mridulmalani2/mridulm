@@ -23,12 +23,18 @@ Senior.pik_accrual,0.0,0.0,0.0,0.0,0.0
 Senior.mandatory_amort,13.5,13.5,13.5,13.5,13.5
 Senior.sweep_repayment,16.68,19.43,24.41,25.02,29.61
 Senior.ending_balance,239.82,206.89,168.98,130.46,87.35
+Senior.refinanced,False,False,False,False,False
+Senior.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+Senior.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
 PIK Note.beginning_balance,135.0,151.2,169.34,189.67,212.43
 PIK Note.cash_interest,0.0,0.0,0.0,0.0,0.0
 PIK Note.pik_accrual,16.2,18.14,20.32,22.76,25.49
 PIK Note.mandatory_amort,0.0,0.0,0.0,0.0,0.0
 PIK Note.sweep_repayment,0.0,0.0,0.0,0.0,0.0
 PIK Note.ending_balance,151.2,169.34,189.67,212.43,237.92
+PIK Note.refinanced,False,False,False,False,False
+PIK Note.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+PIK Note.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
 wf.opening_cash,8.0,8.0,12.43,8.0,11.02
 wf.sweep_pool,33.36,38.86,48.82,50.04,59.22
 wf.sweep_applied_total,16.68,19.43,24.41,25.02,29.61

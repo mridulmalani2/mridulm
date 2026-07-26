@@ -18,10 +18,21 @@ const ROOT = join(__dirname, '..');
 const load = (n: string) => JSON.parse(readFileSync(join(ROOT, 'tests/goldens', n, 'expected.json'), 'utf8'));
 const TOL = 0.0075;
 
+/**
+ * Self-deleting guard (SPEC §18 / DERIVATION.md G-5). The refinancing golden fixtures LEAD the
+ * engine: every `TrancheYear` row now carries `refinanced` / `refinancing_cash_cost` /
+ * `unamortized_writeoff` (§16 unconditional emission), but `sequence.ts` does not emit them until
+ * the G-5 ENGINE PR. Strip them from the C5 comparison until then. The guard test below probes a
+ * LIVE `runCore` emission (not absence on a no-op deal — the round-1 G-1 lesson) and FAILS the
+ * moment the engine emits any of them, forcing this list's removal and the columns' inclusion.
+ */
+const PENDING_G5_KEYS = new Set(['refinanced', 'refinancing_cash_cost', 'unamortized_writeoff']);
+
 function assertBlockMatches(actual: Record<string, unknown>[], fixture: Record<string, unknown>[], label: string, tol = TOL) {
   expect(actual.length, `${label} length`).toBe(fixture.length);
   for (let i = 0; i < fixture.length; i++) {
     for (const key of Object.keys(fixture[i])) {
+      if (PENDING_G5_KEYS.has(key)) continue; // engine lags the fixtures (removed in the G-5 engine PR)
       const f = fixture[i][key];
       const a = (actual[i] as Record<string, unknown>)[key];
       if (typeof f === 'number') {
@@ -73,6 +84,22 @@ describe('§7 early retirement — the deferred tax deduction lands in t+1 (accu
     expect(core.tax[t + 1].uncapped_deductions - scheduledPlusFees(t + 1)).toBeCloseTo(remainder, 9);
     // and the balance sheet closes at full precision through the retirement
     for (const bs of core.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(1e-9);
+  });
+});
+
+describe('PENDING_G5_KEYS — the refi columns lead the engine (self-deleting, SPEC §18)', () => {
+  it('the G6-REFI fixture carries the refi columns; runCore does NOT yet — remove this guard when it does', () => {
+    // The fixture LEADS: G6-REFI's refi year carries the three refi columns.
+    const g6 = load('G6REFI');
+    expect(Object.keys(g6.tranches['TLB'][2])).toEqual(expect.arrayContaining([...PENDING_G5_KEYS]));
+    expect(g6.tranches['TLB'][2].refinanced).toBe(true);
+    // The engine LAGS: runCore emits none of them on ANY deal today. The moment the G-5 engine
+    // PR makes runCore emit even one, THIS fails — forcing PENDING_G5_KEYS deleted and the C5
+    // comparison to stop stripping the columns (the G-1 self-deleting-guard discipline).
+    const core = runCore(DEALS.G2.facts, DEALS.G2.assumptions);
+    for (const key of PENDING_G5_KEYS) {
+      expect(core.tranches[0][0], `runCore now emits '${key}' — delete PENDING_G5_KEYS`).not.toHaveProperty(key);
+    }
   });
 });
 

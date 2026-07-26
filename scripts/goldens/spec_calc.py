@@ -82,6 +82,15 @@ def run(golden):
     assert all(d >= 0 for d in dist_request), "§16 gate: distribution requests must be ≥ 0"
     rp_trap = a.get("rp_trap")
     assert rp_trap is None or rp_trap["metric"] == "net_leverage", "§3.7: v1 metric is net_leverage"
+    # §18 refinancing events (list; null/[] ≡ feature OFF). Keyed by tranche_name; applied at
+    # the START of year R as a RETIREMENT of the old tranche + ORIGINATION of a new one at the
+    # SAME par (§18.2 par-for-par), plus a call premium. This is a FULL independent refi path
+    # (rate switch, OID/fee schedule swap on base B, deferred write-off, step-2R cash cost) — it
+    # reuses NONE of the engine's swap logic (sign-off round-2 residual 2).
+    refis = a.get("refinancing") or []
+    refi_by_year = {}
+    for ev in refis:
+        refi_by_year.setdefault(ev["year"], []).append(ev)
     # Rollover is 0 across every golden (asserted above) ⇒ the sponsor's pari-passu share of
     # each paid distribution is 100% (§9 membership row).
     sponsor_dist_share = 1.0
@@ -152,6 +161,7 @@ def run(golden):
     out["balance_sheet"].append(bs_row(cash, nwc0, ppe, dfc, goodwill, total_par + drawn, equity_bs))
 
     prev_nwc = nwc0
+    pending_ret_ded = 0.0      # §18.5/§7: deferred refi write-off+premium deduction (into current year)
     paid_by_year = []         # §3 step 7: distributions actually paid (total equity)
     ufcf_stream = []          # unlevered (§9): interim UFCF inflows
     u_acq, u_post = (a["tax"]["nol"]["acquired_opening"] if acq_usable else 0.0), 0.0  # unlevered NOL state
@@ -159,6 +169,40 @@ def run(golden):
 
     for t in range(N):
         exit_year = (t == N - 1)
+        R = t + 1
+        # ── §18 refinancing — applied at the START of year R, before interest accrues ──
+        # Par-for-par retirement + origination: new face = old beginning balance B (§18.2).
+        # The rate switch takes effect for the whole of year R (§18.3); the old unamortized
+        # OID/DFC write off (book, year R) + the call premium defer their TAX deduction to
+        # year R+1's uncapped pool (§18.5, EXPLICIT handling — the tranche does NOT retire, so
+        # this never routes through the early-retirement balance-crossing detection).
+        refi_cost_by_tr = {}      # per-tranche §18.4 cash cost (premium + new OID + new fees)
+        refi_wo_by_tr = {}        # per-tranche old unamortized OID+DFC written off at the refi
+        refi_book_charge = 0.0    # Σ (WO + call premium) — book loss on extinguishment (year R)
+        refi_dfc_delta = 0.0      # Σ (new OID + new fees) − WO (BS deferred-cost adjustment)
+        new_pending = 0.0         # this year's WO + premium — deducted NEXT year (§18.5)
+        for refi in refi_by_year.get(R, []):
+            name = refi["tranche_name"]
+            tr = next(tt for tt in terms if tt["name"] == name)
+            assert tr["type"] not in ("revolver", "pik_note"), "§18.2: cash-pay term tranches only"
+            B = bal[name]                          # par-for-par: new face = old beginning balance
+            WO = oid_rem[name] + fee_rem[name]     # §18.5 old unamortized OID + DFC
+            premium = refi["call_premium_pct"] * B
+            new_oid = refi["new_oid_pct"] * B
+            new_fees = refi["new_financing_fee_pct"] * B      # §18.4 basis = new_fee_pct × B (NOT re-allocated)
+            # reset the tranche to its new incarnation (pricing/maturity/amort/OID/fee schedules)
+            tr["pricing"] = refi["new_pricing"]
+            tr["maturity_years"] = refi["new_maturity_years"]
+            tr["amort_pct_of_face"] = refi["new_amort_pct_of_face"]
+            par[name] = B
+            oid_by_t[name] = new_oid; oid_rem[name] = new_oid   # stop OLD OID schedule, start NEW
+            fee_alloc[name] = new_fees; fee_rem[name] = new_fees
+            refi_cost_by_tr[name] = premium + new_oid + new_fees
+            refi_wo_by_tr[name] = WO
+            refi_book_charge += WO + premium
+            refi_dfc_delta += (new_oid + new_fees) - WO
+            new_pending += WO + premium
+        refi_cash_cost = sum(refi_cost_by_tr.values())
         rev_ = revenue[t]; m = margins[t]
         ebitda = rev_ * m; ebitda_adj = ebitda  # monitoring null (§7)
         if t == N - 1:
@@ -197,7 +241,7 @@ def run(golden):
         # §6 tax
         ati = ebitda_adj if a["tax"]["s163j"]["ati_basis"] == "ebitda" else ebitda_adj - da
         capped_pool = sum(cash_int.values()) + rev_int + sum(pik_acc.values()) + sum(oid_amort.values())
-        uncapped = sum(fee_amort.values()) + commit_fee + exit_writeoff
+        uncapped = sum(fee_amort.values()) + commit_fee + exit_writeoff + pending_ret_ded
         if not a["tax"]["interest_deductible"]:
             deductible, cf_new = 0.0, 0.0
         elif not a["tax"]["s163j"]["applies"]:
@@ -233,6 +277,7 @@ def run(golden):
         c = cash + fcf
         c -= sum(cash_int.values()) + rev_int
         c -= commit_fee
+        c -= refi_cash_cost          # §18.4 step 2R — mandatory financing use, before amort/sweep
         mand = {}
         for tr in terms:
             outstanding = bal[tr["name"]] + pik_acc[tr["name"]]
@@ -301,9 +346,13 @@ def run(golden):
 
         # §8 BS roll
         ppe = ppe + (mcap + gcap) - da
-        dfc = dfc - sum(oid_amort.values()) - sum(fee_amort.values()) - exit_writeoff
+        # §18.6: capitalize new OID/fees and write off the old (refi_dfc_delta), then the normal roll
+        dfc = dfc - sum(oid_amort.values()) - sum(fee_amort.values()) - exit_writeoff + refi_dfc_delta
+        # §18.6: the refi book charge (old write-off + call premium) is a loss on extinguishment
+        # in year R — expensed via NI so the equity leg = −(WO + premium); the new OID/fees are
+        # capitalized (in DFC), NOT expensed.
         ni = ebit - (sum(cash_int.values()) + rev_int + sum(pik_acc.values()) + sum(oid_amort.values())
-                     + sum(fee_amort.values()) + commit_fee + exit_writeoff) - tax
+                     + sum(fee_amort.values()) + commit_fee + exit_writeoff + refi_book_charge) - tax
         # A distribution leaves as cash and as book equity in the year paid — §14.2 (the BS
         # closes every year) forces it; §8 [v1.1.1] states it.
         equity_bs += ni - paid
@@ -326,12 +375,17 @@ def run(golden):
                            "acquired_nol_end": r2(acq_nol), "postclose_nol_end": r2(post_nol),
                            "cash_tax": r2(tax)})
         for tr in terms:
-            out["tranches"][tr["name"]].append({"beginning_balance": r2(bal[tr["name"]] - pik_acc[tr["name"]] + mand[tr["name"]] + sweep[tr["name"]]),
-                                                "cash_interest": r2(cash_int[tr["name"]]),
-                                                "pik_accrual": r2(pik_acc[tr["name"]]),
-                                                "mandatory_amort": r2(mand[tr["name"]]),
-                                                "sweep_repayment": r2(sweep[tr["name"]]),
-                                                "ending_balance": r2(bal[tr["name"]])})
+            nm = tr["name"]
+            out["tranches"][nm].append({"beginning_balance": r2(bal[nm] - pik_acc[nm] + mand[nm] + sweep[nm]),
+                                                "cash_interest": r2(cash_int[nm]),
+                                                "pik_accrual": r2(pik_acc[nm]),
+                                                "mandatory_amort": r2(mand[nm]),
+                                                "sweep_repayment": r2(sweep[nm]),
+                                                "ending_balance": r2(bal[nm]),
+                                                # §16/§18 [v1.3.0] — emitted UNCONDITIONALLY (0/false when no refi)
+                                                "refinanced": bool(nm in refi_cost_by_tr),
+                                                "refinancing_cash_cost": r2(refi_cost_by_tr.get(nm, 0.0)),
+                                                "unamortized_writeoff": r2(refi_wo_by_tr.get(nm, 0.0))})
         if rev_t is not None:
             out["revolver"].append({"beginning_drawn": r2(drawn + rev_repay - draw), "cash_interest": r2(rev_int),
                                     "commitment_fee": r2(commit_fee), "repayment": r2(rev_repay),
@@ -351,6 +405,7 @@ def run(golden):
                                  "distribution_blocked": bool(blocked)})
         out["balance_sheet"].append(row)
         cash = closing_cash; prev_nwc = nwc
+        pending_ret_ded = new_pending   # §18.5: this year's refi write-off+premium deducts NEXT year
 
         # unlevered stream (§9/§6): interest & monitoring = 0; tax base EBITDA; NOL/§382 apply
         u_taxable = ebitda - da
@@ -568,6 +623,25 @@ def g2_dist_downside():
     g["assumptions"]["exit"]["multiple"] = 8.5
     return g
 
+# G6-REFI — the Phase G-5 refinancing golden (§17/§18 [v1.3.0]). EVERY field IDENTICAL to G2
+# plus a single §18 refinancing event on the TLB at year R = 3: −100bp reprice (spread 375→275),
+# a 101 call premium (1.0%), a 6-year new maturity (absolute year 8 > hold 5), 0.5% new OID,
+# 1.0% new financing fee, 1.0% new amort on the new face. Every difference from G2 is
+# attributable to §18 alone (entry-frozen + unlevered-byte-identical asserts below), the same
+# variant discipline the DIST goldens use. Years 1–2 are byte-identical to G2 (the refi is a
+# year-3 event). The TLB carries OID = 0 at close, so the OLD-OID write-off/stop transition is
+# golden-uncovered here — §18.11(vi) requires a directed engine fixture with old_OID > 0.
+def g6_refi():
+    import copy
+    g = copy.deepcopy(GOLDENS["G2"])
+    g["assumptions"]["refinancing"] = [{
+        "tranche_name": "TLB", "year": 3,
+        "new_pricing": {"kind": "floating", "base_rate": 0.036, "spread": 0.0275, "floor": 0.0},
+        "call_premium_pct": 0.01, "new_maturity_years": 6,
+        "new_oid_pct": 0.005, "new_financing_fee_pct": 0.01, "new_amort_pct_of_face": 0.01,
+    }]
+    return g
+
 def write_csv(path, res):
     rows = []
     N = len(res["operating"])
@@ -581,7 +655,9 @@ def write_csv(path, res):
               "nol_banked", "cash_tax"]:
         series("tax." + k, res["tax"], k)
     for tname, sched in res["tranches"].items():
-        for k in ["beginning_balance", "cash_interest", "pik_accrual", "mandatory_amort", "sweep_repayment", "ending_balance"]:
+        for k in ["beginning_balance", "cash_interest", "pik_accrual", "mandatory_amort", "sweep_repayment", "ending_balance",
+                  # §18 [v1.3.0] — appended at the tail of each tranche block so the pre-existing rows are untouched
+                  "refinanced", "refinancing_cash_cost", "unamortized_writeoff"]:
             series(f"{tname}.{k}", sched, k)
     if res["revolver"] is not None:
         for k in ["beginning_drawn", "cash_interest", "commitment_fee", "repayment", "draw", "ending_drawn"]:
@@ -606,6 +682,14 @@ if __name__ == "__main__":
     results["G2-DIST"] = run(dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP))
     results["G3-DIST"] = run(dist_variant("G3", [20.0, 15.0, 25.0, 22.0, 20.0], None))
     results["G2-DIST-D"] = run(g2_dist_downside())
+    results["G6-REFI"] = run(g6_refi())
+    # §18 [v1.3.0]: the refi is post-close, so it cannot move entry (S&U byte-identical to G2);
+    # §9 is capital-structure-blind, so the unlevered stream is byte-identical to G2 as well.
+    assert results["G6-REFI"]["sources_uses"] == results["G2"]["sources_uses"], "G6-REFI entry not frozen!"
+    assert results["G6-REFI"]["returns"]["unlevered"] == results["G2"]["returns"]["unlevered"], "G6-REFI unlevered not byte-identical to G2!"
+    # §18.10: the refi is a year-3 event, so years 1–2 of every per-year block match G2 exactly.
+    for blk in ("operating", "tax", "waterfall"):
+        assert results["G6-REFI"][blk][:2] == results["G2"][blk][:2], f"G6-REFI {blk} Y1–2 not identical to G2!"
     # §13 [v1.1.1]: the request schedule and the trap are structure/policy — FROZEN across
     # scenarios. Only whether the trap BINDS may differ.
     assert (results["G2-DIST-D"]["distributions"]["requested"]
