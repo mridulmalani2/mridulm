@@ -434,8 +434,39 @@ in the reference), the direct empirical proof of §18.6's DFC/NI/cash algebra.
 this section is signed. Each adjudicator hand-derives the assigned values from SPEC §18 and the raw
 G2+refi inputs, NOT from `spec_calc.py`'s algorithm, at the ±$0.005m / ±0.1bp bar):**
 
-- [ ] **Adjudication pass 1 — G6-REFI year-3 refi mechanics + BS closure: PENDING.**
-- [ ] **Adjudication pass 2 — G6-REFI R+1 tax deferral + exit/returns + additivity: PENDING.**
+- [x] **Adjudication pass 1 — G6-REFI year-3 refi mechanics + BS closure (2026-07-26, independent
+  agent): SIGNED.** Hand-derived every year-3 refi quantity from §18 (+ §2/§3/§4/§7/§8/§14) plus the
+  signed G2 anchor, WITHOUT opening `spec_calc.py`. Reconstructed years 1–2 from scratch to pin
+  `B = 350.268977` (TLB Y2 ending balance) and Y3 opening cash 25.676204 — both byte-match G2.
+  Confirmed: new all-in 6.35% (−100bp); Y3 TLB interest 22.24 (falls from 25.74); new-face mandatory
+  amort 3.50 (vs G2's 4.40 on 440); refi cash cost 8.76 = premium 3.50 + new OID 1.75 + new fee 3.50;
+  old write-off 4.71 (old OID = 0, old DFC 6.60 − 2×0.9429); the §3 step-2R order (opening 25.68 + FCF
+  87.31 − interest 22.24 − commitment 0.28 − **refi 8.76** − amort 3.50 − sweep 51.15 = closing 27.05,
+  the refi shrinking the sweep pool); and §18.6 BS closure by TWO independent routes — assets−debt and
+  the §8 equity roll (NI carries the extinguishment loss WO+premium=8.22; new OID/fees capitalized in
+  DFC, not equity; Δdebt = 0 par-for-par) both giving equity 743.92/814.43/886.66 for Y3/Y4/Y5.
+  **Zero mismatches beyond ±$0.005m** (all residuals pure 2dp display rounding). Verdict: §18 was
+  unambiguous enough to derive every quantity with no reference to the script.
+- [x] **Adjudication pass 2 — G6-REFI R+1 tax deferral + exit/returns + additivity (2026-07-26,
+  independent agent): SIGNED.** Hand-derived the tax/exit/returns chain from §6/§9/§16/§17/§18 at FULL
+  precision (`B = 350.2689793`), WITHOUT opening `spec_calc.py`. Confirmed: **§18.5 deferral** — Y3
+  uncapped is only the ordinary pool (1.02, NO write-off/premium); the deferred 8.216975 (WO 4.714286
+  + premium 3.502690) lands in **Y4's uncapped pool (9.24)**, driving the Y4 cash-tax **dip** (20.76,
+  below the Y3→Y5 trend 20.88/24.08); R+1 = 4 < N = 5, so it does NOT merge into the exit deduction
+  (§18.11(i)). **§163(j) inert** — capped < 30%×EBITDA_adj every year, `s163j_carryforward_end = 0`
+  throughout, so the uncapped-premium simplification is genuinely inert here. **§9 exit** — payoff
+  152.21, exit EV 1227.54 (EBITDA path unchanged from G2), exit write-off 2.63 = ONLY the refinanced
+  TLB's residual new OID (0.876) + new fee (1.751) (the old TLB fee was already written off at the
+  refi — no double count), exit equity pre-MIP 1090.82. **Returns** — sponsor IRR 13.1852%, MOIC
+  1.8576; unlevered stream AND sources_uses byte-identical to G2. **Additivity** — the three
+  TrancheYear columns emit unconditional defaults on every pre-G5 golden (G2's 5 rows all
+  false/0/0, every pre-existing field unchanged), G6-REFI itself shows unconditional emission (Y1/2/4/5
+  false/0/0, only Y3 true/8.76/4.71). **Zero mismatches beyond ±$0.005m / ±0.1bp.** Load-bearing
+  finding: `B` is the FULL-PRECISION beginning balance, not the displayed 350.27 — the Y3 sweep display
+  (51.15 vs 51.16) discriminates it, confirming §15's intermediate-rounding discipline.
 
-**Status: G6-REFI is PENDING adjudication.** Until both passes sign, it is a candidate fixture, not
-gospel. The engine (G-5 step 3) will be held to it only after signing.
+**Status: G6-REFI is GOSPEL** (both independent passes signed, ±$0.005m / ±0.1bp, neither opening the
+reference script). Engine2 modules (G-5 step 3) are wrong wherever they disagree with this fixture;
+disputes reopen only via a §18 amendment + re-derivation. `tests/engine2-sequence.test.ts` carries a
+self-deleting `PENDING_G5_KEYS` list so the C5 gate stays green while the engine lags the fixture; the
+guard fails the moment `runCore` emits any refi column, forcing the list's removal.
