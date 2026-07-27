@@ -164,6 +164,39 @@ describe('§18.11(vii) — multiple independent refis accumulate additively', ()
     expect(core.tranches[1][2].unamortized_writeoff).toBeGreaterThan(0);
     expect(bsCloses(core)).toBe(true);
   });
+
+  // Accuracy-audit coverage note (2026-07-27): two refis landing in the SAME year both sum into
+  // that year's refiCashCostTotal / refiBookCharge / refiDeferral accumulators (`+=`). The SPEC
+  // treats same-year as "covered by construction"; pin it directly so the accumulation is not
+  // golden-uncovered.
+  const sameYear = withRefi(
+    'G2',
+    [REFI({ tranche_name: 'TLB', year: 2 }), REFI({ tranche_name: 'TLA', year: 2 })],
+    (a) => {
+      a.structure.tranches = [
+        { name: 'TLB', type: 'senior', size: { x_ebitda: 3 }, pricing: { kind: 'floating', base_rate: 0.036, spread: 0.0375, floor: 0 }, amort_pct_of_face: 0.01, maturity_years: 8, oid_pct: 0.01, sweep: { participates: true, priority: 1 } },
+        { name: 'TLA', type: 'senior', size: { x_ebitda: 1 }, pricing: { kind: 'floating', base_rate: 0.036, spread: 0.03, floor: 0 }, amort_pct_of_face: 0.01, maturity_years: 8, oid_pct: 0.01, sweep: { participates: true, priority: 1 } },
+      ];
+    },
+  );
+  it('two refis in the SAME year accumulate additively (both cash costs + both deferrals)', () => {
+    const c = runCore(sameYear.facts, sameYear.assumptions);
+    // both tranches flag year 2, and each carries its own cash cost + write-off
+    expect(c.tranches[0][1].refinanced).toBe(true);
+    expect(c.tranches[1][1].refinanced).toBe(true);
+    expect(c.tranches[0][1].refinancing_cash_cost).toBeGreaterThan(0);
+    expect(c.tranches[1][1].refinancing_cash_cost).toBeGreaterThan(0);
+    // year-3 uncapped carries the SUM of both write-offs + both premiums (both deferred to R+1=3)
+    const woPlusPrem = (rows: typeof c.tranches[number]) => {
+      const B = rows[1].beginning_balance;
+      return rows[1].unamortized_writeoff + 0.01 * B; // WO + premium (call_premium_pct 0.01)
+    };
+    const bothDeferred = woPlusPrem(c.tranches[0]) + woPlusPrem(c.tranches[1]);
+    // year-3 uncapped = ongoing fee amort + commitment fee + both deferrals; assert the deferral
+    // component by differencing against year 4 (no deferral lands in year 4).
+    expect(c.tax[2].uncapped_deductions).toBeGreaterThan(bothDeferred);
+    expect(bsCloses(c)).toBe(true);
+  });
 });
 
 describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, never computed defaults)', () => {

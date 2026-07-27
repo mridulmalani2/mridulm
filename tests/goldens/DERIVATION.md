@@ -467,6 +467,23 @@ G2+refi inputs, NOT from `spec_calc.py`'s algorithm, at the ±$0.005m / ±0.1bp 
 
 **Status: G6-REFI is GOSPEL** (both independent passes signed, ±$0.005m / ±0.1bp, neither opening the
 reference script). Engine2 modules (G-5 step 3) are wrong wherever they disagree with this fixture;
-disputes reopen only via a §18 amendment + re-derivation. `tests/engine2-sequence.test.ts` carries a
-self-deleting `PENDING_G5_KEYS` list so the C5 gate stays green while the engine lags the fixture; the
-guard fails the moment `runCore` emits any refi column, forcing the list's removal.
+disputes reopen only via a §18 amendment + re-derivation. The G-5 ENGINE PR reproduces it at full
+precision (C5 gate runs G6REFI); the self-deleting `PENDING_G5_KEYS` guard was removed once the engine
+caught up (it probed a live `runCore` emission and failed the moment the columns appeared).
+
+**Independent hostile ACCURACY AUDIT of the G-5 engine (2026-07-27): CLEAN.** A separate agent
+re-derived ~25 load-bearing G6-REFI values from SPEC §18 first principles — by hand AND via a throwaway
+Python re-implementation importing neither `spec_calc.py` nor the engine — and cross-checked the
+committed fixture and the engine at ±$0.005m / ±0.1bp. **Zero disagreed.** Confirmed: (1) all refi
+arithmetic (B 350.269, reprice interest 22.24, new-face amort 3.50, cash cost 8.76, write-off 4.71,
+Y4 uncapped deferral 9.24, §163(j) non-binding, exit write-off 2.63, IRR 0.131852, BS closes ~1e-13);
+(2) engine ≡ golden through the C5 gate, and the §18.6 equity extinguishment leg is load-bearing —
+dropping `refiBookCharge` from `netIncome` reddens the BS check by exactly WO+premium = 8.216975;
+(3) NO second path / NO solver / NO caller-assumption mutation — the engine mutates only the local
+`effectiveSized` clone, `assumptions` is byte-unchanged after `runCore`, scenario re-runs are stable;
+(4) the §18.11 directed fixtures are non-vacuous (the old-OID mutant reddens (vi); all seven rejection
+gates throw); (5) the refi columns are emitted unconditionally and trace to their SPEC sections, no
+rounded value re-enters arithmetic. **No wrong number; one minor COVERAGE note** — two refis in the
+SAME year (both summing into the year's accumulators) was not directly pinned; **now closed** by a
+directed fixture in `tests/engine2-refinancing.test.ts` (§18.11(vii) same-year case). All experimental
+edits reverted; tree clean.
