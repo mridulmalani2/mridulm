@@ -146,7 +146,8 @@ const SU: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy 
   </div>
 );
 
-const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+// Exported for the directed §18 display test (label/value provenance on the refi table).
+export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
   const last = o.credit[o.credit.length - 1];
   return (
     <div>
@@ -156,7 +157,8 @@ const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, cc
           <Table head={['Year', 'Beginning', 'Interest', 'PIK', 'Amort', 'Sweep', 'Ending']}>
             {rows.map((r, i) => (
               <tr key={i} style={rowB}>
-                <td className="px-2 py-1">Y{i + 1}</td>
+                {/* §18: mark the refi year — the tranche re-prices/re-terms at the start of it. */}
+                <td className="px-2 py-1">Y{i + 1}{r.refinanced ? ' ⟳' : ''}</td>
                 <td className={td}>{num(r.beginning_balance, 1)}</td>
                 <td className={td}>{num(r.cash_interest, 2)}</td>
                 <td className={td}>{num(r.pik_accrual, 2)}</td>
@@ -184,6 +186,35 @@ const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, cc
               </tr>
             ))}
           </Table>
+        </div>
+      )}
+      {/* §18 [v1.3.0]: the refinancing events — each reprices/re-terms a tranche at year R,
+          paying a call premium and writing off the old unamortized OID/fees (book that year, tax
+          deduction the FOLLOWING year — §18.5). Reads the named TrancheYear fields directly (no
+          aggregation, no engine import). Rendered only when a refi exists. */}
+      {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
+        <div className="mb-3">
+          <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Refinancing events (§18)</p>
+          <Table head={['Tranche', 'Year', 'Cash cost (premium + new OID + fees)', 'Old fees written off']}>
+            {o.tranches.flatMap((rows) =>
+              rows
+                .map((r, i) => ({ r, i, name: rows[0]?.name ?? '' }))
+                .filter((x) => x.r.refinanced)
+                .map((x) => (
+                  <tr key={`${x.name}-${x.i}`} style={rowB}>
+                    <td className="px-2 py-1">{x.name}</td>
+                    <td className={td}>Y{x.i + 1}</td>
+                    <td className={td}>{money(x.r.refinancing_cash_cost, ccy, 2)}</td>
+                    <td className={td}>{money(x.r.unamortized_writeoff, ccy, 2)}</td>
+                  </tr>
+                )),
+            )}
+          </Table>
+          <p className="text-[10px] mt-1" style={label}>
+            Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off is a
+            NON-cash book charge that year; its tax deduction lands the following year, uncapped (§18.5).
+            Par-for-par — leverage is unchanged at the refi and then deleverages on the new schedule.
+          </p>
         </div>
       )}
       {/* §3 step 7 / §3.7 [v1.1.0]: what was REQUESTED vs what was actually PAID, and why.
