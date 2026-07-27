@@ -270,7 +270,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
       operations: { ...GOLDEN_DEALS.G1.assumptions.operations, growth: [0.05, 0.05, 0.05, 0.05, 0.05] },
       structure: {
         min_cash: 0,
-        sweep: { base_pct: 0, grid: null }, distributions: null,
+        sweep: { base_pct: 0, grid: null }, distributions: null, refinancing: null,
         tranches: [
           {
             name: 'Bullet', type: 'senior', size: { x_ebitda: 1 }, pricing: { kind: 'fixed', rate: 0.03 },

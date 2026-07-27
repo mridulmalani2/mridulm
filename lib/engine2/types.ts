@@ -140,6 +140,31 @@ export interface RevolverAssumption {
 
 export type TrancheAssumption = TermTrancheAssumption | RevolverAssumption;
 
+/**
+ * A scheduled refinancing of ONE cash-pay term tranche (SPEC §18 [v1.3.0]). Modelled as a
+ * RETIREMENT of the old tranche + ORIGINATION of a new one at the SAME par (par-for-par — the
+ * new face = the tranche's beginning balance at the start of `year`), plus a call premium.
+ * NOT covenant/rate-condition-triggered (§18.1). At most ONE per tranche.
+ */
+export interface RefinancingEvent {
+  /** The cash-pay term tranche to refinance (not the revolver, not a pik_note — §18.2). */
+  tranche_name: string;
+  /** 1-indexed hold year the refi takes effect, at the START of the year (§18.3); 1 ≤ year ≤ hold_years − 1. */
+  year: number;
+  /** New pricing effective for the whole of the refi year (§18.3 — repricing). */
+  new_pricing: TranchePricing;
+  /** Call premium as % of the refinanced balance B; a cash use at §3 step 2R (§18.4). */
+  call_premium_pct: number;
+  /** New amortization/OID/fee straight-line horizon, measured from the refi year (§18.3). */
+  new_maturity_years: number;
+  /** New OID as % of B — funded/capitalized, §163(j)-capped amortization (§18.3/§18.4). */
+  new_oid_pct: number;
+  /** New financing fee as % of B (basis = B, NOT re-allocated from the §2 stack fee) (§18.4). */
+  new_financing_fee_pct: number;
+  /** New mandatory amortization: % of the NEW face B per year, capped at outstanding (§18.3/§14.15). */
+  new_amort_pct_of_face: number;
+}
+
 export interface SweepAssumption {
   /** ECF-pool percentage: sweepable = pct × max(0, cash − min_cash) after steps 1–4 (SPEC §3.5). */
   base_pct: number;
@@ -239,6 +264,14 @@ export interface DealAssumptions {
      * blocked capacity never accrues.
      */
     distributions: number[] | null;
+    /**
+     * Scheduled per-tranche refinancings (SPEC §18 [v1.3.0]); null ≡ [] ≡ feature OFF, so every
+     * pre-v1.3.0 deal is byte-identical to before. At most one event per tranche, on cash-pay term
+     * tranches only; structural gates (existence, cash-pay, one-per-tranche, 1 ≤ year ≤ hold−1,
+     * (year−1)+new_maturity > hold, pcts ≥ 0) are validated at Build (§16). The suggestion layer
+     * proposes NONE (a refi is a sponsor decision with no history/convention basis).
+     */
+    refinancing: RefinancingEvent[] | null;
   };
   operations: OperationsAssumption;
   tax: TaxAssumption;
@@ -304,6 +337,13 @@ export interface TrancheYear {
   mandatory_amort: number; // % of original face, capped (SPEC §3.3)
   sweep_repayment: number;
   ending_balance: number;
+  // ── §18 refinancing [v1.3.0] — emitted UNCONDITIONALLY (false/0/0 when no refi) ──
+  /** True only in the refi year for the refinanced tranche (SPEC §18). */
+  refinanced: boolean;
+  /** §18.4 call premium + new OID + new financing fees on the refinanced balance B (0 otherwise). */
+  refinancing_cash_cost: number;
+  /** §18.5 old unamortized OID + DFC written off at the refi — book year R (0 otherwise). */
+  unamortized_writeoff: number;
 }
 
 export interface RevolverYear {
