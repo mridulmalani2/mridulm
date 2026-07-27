@@ -195,7 +195,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
       {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
         <div className="mb-3">
           <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Refinancing events (§18)</p>
-          <Table head={['Tranche', 'Year', 'Cash cost (premium + new OID + fees)', 'Old fees written off']}>
+          <Table head={['Tranche', 'Year', 'Cash cost (premium + new OID + fees)', 'Old OID + fees written off']}>
             {o.tranches.flatMap((rows) =>
               rows
                 .map((r, i) => ({ r, i, name: rows[0]?.name ?? '' }))
@@ -211,8 +211,9 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
             )}
           </Table>
           <p className="text-[10px] mt-1" style={label}>
-            Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off is a
-            NON-cash book charge that year; its tax deduction lands the following year, uncapped (§18.5).
+            Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off (old
+            unamortized OID + financing fees) is a NON-cash book charge that year; its tax deduction
+            lands the following year, uncapped (§18.5).
             Par-for-par — leverage is unchanged at the refi and then deleverages on the new schedule.
           </p>
         </div>

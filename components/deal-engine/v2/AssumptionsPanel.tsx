@@ -276,7 +276,7 @@ const AssumptionsPanel: React.FC = () => {
                     <p className="text-[10px] text-right" style={labelStyle}>
                       {term.name} reprices to base {toPctInput(base.base_rate)}% + {bps(newSpread)} at year {refi.year};
                       a {toPctInput(refi.call_premium_pct)}% call premium is paid that year, the old unamortized
-                      fees write off (tax deduction the following year), maturity extends past the hold (§18).
+                      OID and fees write off (tax deduction the following year), maturity extends past the hold (§18).
                     </p>
                   </>
                 )}
