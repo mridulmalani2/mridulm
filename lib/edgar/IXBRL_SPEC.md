@@ -1,4 +1,4 @@
-# IXBRL_SPEC — uploaded-filing extraction (data-side, Tier B) — v1 r2, 2026-08-07
+# IXBRL_SPEC — uploaded-filing extraction (data-side, Tier B) — v1 r3, 2026-08-07
 
 Normative conventions for the in-browser iXBRL upload parser (`lib/edgar/ixbrl.ts`): a user
 drops a filing FILE and gets the SAME `RawHistoricals` the fetch routes produce, through the
@@ -95,14 +95,21 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
   `dei:EntityRegistrantName` / `uk-bus:EntityCurrentLegalOrRegisteredName` /
   `ifrs-full:NameOfReportingEntityOrOtherMeansOfIdentification` [round-1 minor 4];
   `dei:DocumentType`, `dei:DocumentFiscalYearFocus`, `dei:DocumentFiscalPeriodFocus`,
-  `dei:DocumentPeriodEndDate` (scope gate + §3 synthesis).
+  `dei:DocumentPeriodEndDate` (scope gate + §3 synthesis); and the PERIOD-END dates an FRC
+  filing actually carries [round-2 R2-1]: `uk-bus:BalanceSheetDate` /
+  `uk-bus:EndDateForPeriodCoveredByReport`. Identity DATE reads support exactly the date
+  transforms these classes use — TR2/TR3 `datedaymonthyearen`/`datedaymonthyear`, TR4/TR5
+  `date-day-month-year`, plain ISO `yyyy-mm-dd` text — and an unsupported date format skips
+  the read with a note (identity stays absent), never guesses.
 
 - **e. DEDUPLICATION — one order-independent, decimals-aware rule for ALL facts, single- or
   multi-file [round-1 B2: the real Apple 10-K carries 70 duplicate keys; one
   (`UnrecognizedTaxBenefits @ c-21`) has $22,000m @ decimals −8 AND $22,038m @ −6 — an
   order-dependent pick is off by $38m].** Group by (concept, resolved period, unit,
   dimensions). Within a group: round every value to the COARSEST `decimals` present
-  (`INF`/absent = most precise); if all rounded values agree, keep the MOST-precise member
+  (`INF`/absent = most precise; rounding is HALF-AWAY-FROM-ZERO, pinned so the TS parser
+  and the Python reference can never disagree at an exact half [round-2 minor 2]); if all
+  rounded values agree, keep the MOST-precise member
   (noting the collapse only when raw values differed); if they disagree even at the coarsest
   precision, DROP the whole group to a GAP with a note naming both values. Never a
   document-order pick.
@@ -110,10 +117,13 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
 ## 2. Output shape, routing, and honesty per class
 
 The parser emits the OIM-ish `XbrlJsonReport` (`lib/edgar/esef.ts` shape) INCLUDING
-`documentInfo.namespaces`. Routing [round-1 minor 3 — mirror the fetch route's threshold,
-`isIfrsCompanyFacts`]: count DIMENSION-FREE facts per standard taxonomy; **us-gaap route iff
-dimension-free us-gaap concepts ≥ 5 and us-gaap ≥ ifrs-full** (one stray us-gaap fact must
-not flip a 20-F); otherwise the OIM route.
+`documentInfo.namespaces`. Routing [adapted from the fetch route's `isIfrsCompanyFacts` threshold — round-2 minor 1]:
+count DISTINCT DIMENSION-FREE CONCEPTS per standard taxonomy (concepts, not fact rows, are
+the unit of BOTH comparisons); **us-gaap route iff (ifrs-full concepts = 0 AND us-gaap ≥ 1)
+OR (us-gaap concepts ≥ 5 AND us-gaap ≥ ifrs-full)** — one stray us-gaap fact must not flip
+a 20-F, and a us-gaap-only document routes us-gaap even when sparse; otherwise the OIM
+route. (Divergence from the fetch heuristic is toward honest gaps only, never a wrong
+number.)
 
 - **a. us-gaap route** → §3 CompanyFacts synthesis → `mapCompanyFacts` (the adjudicated
   D1/D2 mapper, reused as-is).
@@ -122,26 +132,35 @@ not flip a 20-F); otherwise the OIM route.
   - **FRC/Companies House**: `mapIfrs` classifies `frc.org.uk` namespaces as STANDARD
     taxonomies (deliberately excluded from its extension scan), and its anchor concepts are
     `ifrs-full`-only — so a pure-FRC filing resolves NO financial fields in v1. The upload
-    still imports honestly: entity name + period end from §1d, every financial field a GAP
+    still imports honestly: entity name + the balance-sheet date from §1d (ch-real pins
+    BOTH, and the staleness badge they drive), every financial field a GAP
     (red MISSING badges — the user confirms numbers off the accounts they are holding), plus
     a document-level note: `FRC (Companies House) accounts: v1 extracts identity only —
     financial fields surface as gaps; FRC alias mapping is a planned extension`. This is the
     manual-entry flow with the identity prefilled and the parse layer proven — not a silent
     failure, and NEVER a mislabel.
-- **c. Currency honesty [round-1 B7]**: when the mapper's own anchor-based currency
-  detection found no anchor (pure-FRC, sparse docs), the upload route sets
-  `RawHistoricals.currency` from the DOCUMENT's modal iso4217 unit (post-map fix-up);
-  a modelled currency lands as itself, an unmodelled one goes through the existing
-  `currency_unsupported` Build-block. The mapper's EUR default is never presented for a
-  document whose units say otherwise.
+- **c. Currency + period fix-ups [round-1 B7 / round-2 R2-1]**: when the mapper's own
+  anchor-based detection found no anchor (pure-FRC, sparse docs), the upload route's
+  post-map fix-up sets `RawHistoricals.currency` from the DOCUMENT's modal iso4217 unit
+  (a modelled currency lands as itself; an unmodelled one goes through the existing
+  `currency_unsupported` Build-block — the mapper's EUR default is never presented against
+  contrary units) AND sets `periodEnd`/`as_of`/`fiscalYear` from the §1d balance-sheet date
+  when the mapper left them unset — so an old FRC filing badges STALE off its own
+  balance-sheet date.
 - **d. Zero-fact uploads** (nothing parseable at all): a user-facing ERROR, not an empty
   import.
 
 **Provenance restamp [round-1 B6 — the mappers hardcode `source: 'edgar'`/`'esef'` and their
-audit details must survive].** The mappers are NOT edited. After mapping, `lib/edgar/ixbrl.ts`
-walks the produced `RawHistoricals` and (i) sets every `SourcedValue.provenance.source` to
-`'upload'`, (ii) APPENDS ` · uploaded <filename>` to each provenance `detail` (never
-replacing the mapper's audit string), (iii) sets `RawHistoricals.origin = 'upload'`. **All
+audit details must survive].** The restamp mechanism edits NO mapper (the one mapper change this feature ships is the
+separate, fixture-pinned `· 10-K` literal fix below). After mapping, `lib/edgar/ixbrl.ts`
+walks the produced `RawHistoricals` and, FOR EXACTLY the provenances whose
+`source ∈ {'edgar','esef'}` (the fetch-producer tags — the only other sources the two
+mappers emit), (i) sets `provenance.source` to `'upload'` and (ii) APPENDS
+` · uploaded <filename>` to the `detail` (never replacing the mapper's audit string);
+(iii) sets `RawHistoricals.origin = 'upload'`. **`source: 'default'` is left UNTOUCHED**
+[round-2 R2-2]: the statutory tax-rate fallback must keep its 'default' tag or
+`factsAdapter`'s template-badge downgrade dies and a 21%/25% statute would wear an
+uploaded-from-the-filing badge — the mislabel class again. **All
 THREE source unions gain `'upload'`**: `ProvenanceSource`, `RawHistoricals.origin`, and
 `DealFacts.source` (leaving origin unset would let `factsAdapter`'s legacy fallback stamp
 `'edgar'`/`'esef'` — a false Class-A source, the v1.1.2 mislabel class). Known pre-existing
@@ -149,9 +168,10 @@ latent folded in here: `mapXbrl`'s derived-EBITDA detail hardcodes `· 10-K`; th
 passes the REAL `dei:DocumentType`, and the hardcoded literal is corrected to use the fact's
 actual form (in-allowlist one-liner, fixture-pinned).
 
-**Staleness**: the anchored routes read the document's own period end — an old uploaded
-filing badges stale, honestly. An unanchored FRC import has no period-end fact to badge;
-`stalenessTier(undefined)` renders nothing, and the §2b note carries the story.
+**Staleness**: every route badges off the document's own period end — the anchored routes
+from the anchor period, an FRC import from its §1d balance-sheet date via the §2c fix-up.
+An old uploaded filing badges stale, honestly; only a document carrying NO readable date at
+all renders no tier (`stalenessTier(undefined)`), with the §2b note carrying the story.
 
 ## 3. CompanyFacts synthesis (us-gaap route only)
 
@@ -163,7 +183,9 @@ consolidated total: a silent wrong number, and a forged `vintage_count` for the 
 Group by `taxonomy:tag` and unit → `{val, start?, end, fy?, fp?, form?, filed?}` rows with
 `fy`/`fp` from the §1d focus facts and `form` from `dei:DocumentType` where tagged, else
 OMITTED (the consumers tolerate absence — `String(filed ?? '')` sorts; `accn` is required by
-the type and synthesized as `uploaded:<filename>`; absent `cik` keeps `filingUrl` undefined)
+the type and synthesized as `uploaded:<filename>`; the synthesis constructs the object
+literally with cik `0` where untagged — which keeps `filingUrl` undefined via the
+cik10-absent guard — no casts) [round-2 minor 5]
 [round-1 minor 1]. DOCUMENTED DEGRADATIONS (each fails toward gaps or fewer points, never
 wrong values):
 - **Vintage dedup (D1 rule 2)** degrades to single-vintage — one document, one filing; the
@@ -196,9 +218,11 @@ is EMPTY + MISSING-badged, never fabricated.
   trio: (agreeing coarse/precise pair → most-precise kept) + (disagreeing pair → GAP).
   Every expected number hand-computed in the adjudication record.
 - `tests/fixtures/ixbrl/aapl-10k-trimmed.htm` — the REAL Apple FY2024 10-K (full ix:header +
-  all 200+ facts the mappers read, markup untouched); expected headline facts hand-verified
-  against EDGAR-published figures; pins the REAL dup-key case (`UnrecognizedTaxBenefits`:
-  the $22,038m precise value must win).
+  every fact the mappers read PLUS the `UnrecognizedTaxBenefits` note facts, markup
+  untouched); expected headline facts hand-verified against EDGAR-published figures; pins
+  the REAL dup-key case in-fixture (`UnrecognizedTaxBenefits @ c-21`: decimals −8 $22,000m
+  vs −6 $22,038m — the precise value must win) [round-2 R2-3: the trim keep-set explicitly
+  includes this concept so the pin actually runs].
 - `tests/fixtures/ixbrl/ch-real.xhtml` — the REAL 19KB Companies House FRS filing, committed
   whole: pins the §2b truth — identity extracted, financial fields ALL gaps, the FRC note
   present, currency from the document's GBP units, and TR2 `numdotdecimal` recognized (the
