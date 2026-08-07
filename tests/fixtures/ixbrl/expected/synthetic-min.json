@@ -116,6 +116,16 @@
    "concept": "us-gaap:Revenues",
    "decimals": -6,
    "dims": {
+    "t1:ContractDurationAxis": "P3Y"
+   },
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 55000000.0
+  },
+  {
+   "concept": "us-gaap:Revenues",
+   "decimals": -6,
+   "dims": {
     "us-gaap:StatementBusinessSegmentsAxis": "t1:AlphaSegmentMember"
    },
    "period": "2024-01-01/2024-12-31",
@@ -170,7 +180,8 @@
   "unresolved contextRef/unitRef on us-gaap:Assets — fact dropped",
   "unsupported date transform ixt-sec:datequarterend on uk-bus:EndDateForPeriodCoveredByReport — identity read skipped",
   "unsupported transform ixt-sec:numwordsen on us-gaap:ConcentrationRiskPercentage1 — fact dropped",
-  "unsupported transform ixt:fixed-empty on t1:EmptyThing — fact dropped"
+  "unsupported transform ixt:fixed-empty on t1:EmptyThing — fact dropped",
+  "untransformable text on t1:SignedUnderTransform — fact dropped"
  ],
  "routing": "us-gaap"
 }

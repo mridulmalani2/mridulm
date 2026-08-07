@@ -26,6 +26,7 @@
       <xbrli:context id="c-dur"><xbrli:entity><xbrli:identifier scheme="http://example.com">SYN</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2024-01-01</xbrli:startDate><xbrli:endDate>2024-12-31</xbrli:endDate></xbrli:period></xbrli:context>
       <xbrli:context id="c-inst"><xbrli:entity><xbrli:identifier scheme="http://example.com">SYN</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:instant>2024-12-31</xbrli:instant></xbrli:period></xbrli:context>
       <xbrli:context id="c-dim"><xbrli:entity><xbrli:identifier scheme="http://example.com">SYN</xbrli:identifier><xbrli:segment><xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">t1:AlphaSegmentMember</xbrldi:explicitMember></xbrli:segment></xbrli:entity><xbrli:period><xbrli:startDate>2024-01-01</xbrli:startDate><xbrli:endDate>2024-12-31</xbrli:endDate></xbrli:period></xbrli:context>
+      <xbrli:context id="c-typed"><xbrli:entity><xbrli:identifier scheme="http://example.com">SYN</xbrli:identifier><xbrli:segment><xbrldi:typedMember dimension="t1:ContractDurationAxis"><t1:DurationValue>P3Y</t1:DurationValue></xbrldi:typedMember></xbrli:segment></xbrli:entity><xbrli:period><xbrli:startDate>2024-01-01</xbrli:startDate><xbrli:endDate>2024-12-31</xbrli:endDate></xbrli:period></xbrli:context>
       <xbrli:unit id="u-usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>
       <xbrli:unit id="u-eur"><xbrli:measure>iso4217:EUR</xbrli:measure></xbrli:unit>
       <xbrli:unit id="u-shares"><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unit>
@@ -49,6 +50,8 @@
 <p>scale -2 plain: <ix:nonFraction name="us-gaap:EffectiveIncomeTaxRateContinuingOperations" contextRef="c-dur" unitRef="u-pure" scale="-2" decimals="4">21</ix:nonFraction></p>
 <p>plain: <ix:nonFraction name="us-gaap:NetIncomeLoss" contextRef="c-dur" unitRef="u-usd" scale="0" decimals="2">1000.25</ix:nonFraction></p>
 <p>dimensional (kept in OIM facts, EXCLUDED from routing/synthesis): <ix:nonFraction name="us-gaap:Revenues" contextRef="c-dim" unitRef="u-usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">111</ix:nonFraction></p>
+<p>TYPED-dimensional (B1 pin: dims recorded verbatim, EXCLUDED from routing/synthesis — must NOT collide with the c-dur Revenues in dedup): <ix:nonFraction name="us-gaap:Revenues" contextRef="c-typed" unitRef="u-usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">55</ix:nonFraction></p>
+<p>signed text under a TRANSFORM (M5 pin: registry grammars admit no sign — drop + note): <ix:nonFraction name="t1:SignedUnderTransform" contextRef="c-inst" unitRef="u-usd" format="ixt:num-dot-decimal" scale="0">-42</ix:nonFraction></p>
 <p>unsupported transform: <ix:nonFraction name="us-gaap:ConcentrationRiskPercentage1" contextRef="c-dur" unitRef="u-pure" format="ixt-sec:numwordsen" scale="0">two</ix:nonFraction></p>
 <p>fixed-empty (drop, NOT zero): <ix:nonFraction name="t1:EmptyThing" contextRef="c-inst" unitRef="u-usd" format="ixt:fixed-empty" scale="0"></ix:nonFraction></p>
 <p>broken context: <ix:nonFraction name="us-gaap:Assets" contextRef="c-missing" unitRef="u-usd" format="ixt:num-dot-decimal" scale="6">999</ix:nonFraction></p>

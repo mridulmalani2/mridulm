@@ -76,13 +76,14 @@ export interface ParsedUpload {
 }
 
 // ── number/date parsing: EXACTLY the reference's semantics ───────────────────
-const NUM_RE = /^[-−]?\d+(\.\d+)?$/;
+const NUM_SIGNED = /^[-−]?\d+(\.\d+)?$/;
+const NUM_UNSIGNED = /^\d+(\.\d+)?$/; // M5: registry grammars admit no sign character
 function parseNumber(kind: NumKind | null, text: string): number | null {
   let t = text.trim();
   if (kind === 'zero') return 0;
   if (kind === 'dot') t = t.replace(new RegExp(`[${SPACES},]`, 'g'), '');
   else if (kind === 'comma') t = t.replace(new RegExp(`[${SPACES}.]`, 'g'), '').replace(/,/g, '.');
-  if (!NUM_RE.test(t)) return null;
+  if (!(kind === null ? NUM_SIGNED : NUM_UNSIGNED).test(t)) return null;
   return parseFloat(t.replace('−', '-'));
 }
 function parseDate(text: string): string | null {
@@ -153,6 +154,7 @@ function textMinusExclude(el: Element, excludeTags: Set<string>): string {
 
 function parseOneDocument(text: string, filename: string, out: {
   facts: ParsedFact[]; notes: string[]; identity: UploadIdentity; namespaces: Record<string, string>;
+  entities: Set<string>;
 }): void {
   const doc = parseDom(text);
   const nsmap = collectNs(doc);
@@ -169,6 +171,8 @@ function parseOneDocument(text: string, filename: string, out: {
     startDate: tagSet(xbrliPfx, 'startDate'), endDate: tagSet(xbrliPfx, 'endDate'),
     instant: tagSet(xbrliPfx, 'instant'), measure: tagSet(xbrliPfx, 'measure'),
     explicitMember: tagSet(xbrldiPfx, 'explicitMember'),
+    typedMember: tagSet(xbrldiPfx, 'typedMember'),
+    identifier: tagSet(xbrliPfx, 'identifier'),
   };
   const qname = (pfxname: string): string => {
     const i = pfxname.indexOf(':');
@@ -191,6 +195,9 @@ function parseOneDocument(text: string, filename: string, out: {
         else if (T.endDate.has(st) && Array.isArray(period)) period[1] = txt;
         else if (T.instant.has(st)) period = txt;
         else if (T.explicitMember.has(st)) dims[qname(sub.getAttribute('dimension') ?? '')] = qname(txt);
+        // §1a: typed members recorded VERBATIM (inner element text), never interpreted [B1]
+        else if (T.typedMember.has(st)) dims[qname(sub.getAttribute('dimension') ?? '')] = txt;
+        else if (T.identifier.has(st)) out.entities.add(txt); // M2: solely for the multi-entity note
       }
       scan.contexts.set(el.getAttribute('id') ?? '', {
         period: typeof period === 'string' ? period : period ? `${period[0]}/${period[1]}` : '',
@@ -267,7 +274,8 @@ function parseOneDocument(text: string, filename: string, out: {
 const dimsKey = (dims: Record<string, string>) => JSON.stringify(Object.fromEntries(Object.entries(dims).sort()));
 const INF = 1e9;
 
-function finish(raw: { facts: ParsedFact[]; notes: string[]; identity: UploadIdentity; namespaces: Record<string, string> }): ParsedUpload {
+function finish(raw: { facts: ParsedFact[]; notes: string[]; identity: UploadIdentity; namespaces: Record<string, string>; entities: Set<string> }): ParsedUpload {
+  if (raw.entities.size > 1) raw.notes.push('multiple entity identifiers in one upload — out of scope; facts merged per §1a note');
   const groups = new Map<string, ParsedFact[]>();
   for (const f of raw.facts) {
     const key = `${f.concept} ${f.period} ${f.unit} ${dimsKey(f.dims)}`;
@@ -314,13 +322,16 @@ function finish(raw: { facts: ParsedFact[]; notes: string[]; identity: UploadIde
 
 /** Parse an uploaded filing (single xhtml or ESEF-style zip) per IXBRL_SPEC §1/§2. */
 export function parseIxbrlUpload(filename: string, bytes: Uint8Array): ParsedUpload {
-  const raw = { facts: [] as ParsedFact[], notes: [] as string[], identity: {} as UploadIdentity, namespaces: {} as Record<string, string> };
+  const raw = { facts: [] as ParsedFact[], notes: [] as string[], identity: {} as UploadIdentity, namespaces: {} as Record<string, string>, entities: new Set<string>() };
   const isZip = filename.toLowerCase().endsWith('.zip') || (bytes.length > 3 && bytes[0] === 0x50 && bytes[1] === 0x4b);
   const decode = (b: Uint8Array) => new TextDecoder('utf-8').decode(b);
   if (isZip) {
     const entries = unzipSync(bytes);
     let reports = Object.keys(entries).filter((n) => /(^|\/)reports\/[^/]+\.xhtml$/.test(n)); // §Scope: nested at ANY depth
-    if (reports.length === 0) reports = Object.keys(entries).filter((n) => n.endsWith('.xhtml'));
+    if (reports.length === 0) {
+      reports = Object.keys(entries).filter((n) =>
+        n.endsWith('.xhtml') && decode(entries[n]).includes(':nonFraction')); // M6: facts-bearing only
+    }
     for (const n of reports.sort()) parseOneDocument(decode(entries[n]), n.split('/').pop() ?? n, raw);
   } else {
     parseOneDocument(decode(bytes), filename.split('/').pop() ?? filename, raw);

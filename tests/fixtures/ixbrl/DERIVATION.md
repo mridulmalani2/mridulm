@@ -30,6 +30,8 @@ gate (`tests/ixbrl-goldens.test.ts` re-runs the reference and byte-compares). Sa
 | unsupported transform / fixed-empty / broken contextRef | three drop notes, exact spec wording | ✓ |
 | identity + TR2 datedaymonthyearen | "31 December 2024" → 2024-12-31 (balanceSheetDate); unsupported date transform → skip + note | ✓ |
 | units | USD, EUR, shares, pure, divide "USD/shares"; modal currency USD (7+ USD vs 1 EUR) | ✓ |
+| TYPED member [r6/B1] | c-typed `xbrldi:typedMember` → dims `{t1:ContractDurationAxis: "P3Y"}` VERBATIM; Revenues 55 ×1e6 = 55,000,000 KEPT with dims (no collision with the c-dur or c-dim Revenues — three distinct §1e groups), EXCLUDED from routing/synthesis | ✓ |
+| signed text under a transform [r6/M5] | "-42" under `ixt:num-dot-decimal` → registry grammar admits no sign → DROP + "untransformable text on t1:SignedUnderTransform — fact dropped" | ✓ |
 | routing | dimension-free us-gaap ≥5, ifrs-full 0 → **us-gaap** | ✓ |
 
 **aapl-10k-trimmed.htm (REAL Workiva markup):** 210 `ix:nonFraction` + 6 top-level dei identity `ix:nonNumeric` elements = 216 kept top-level elements (nested fact occurrences serialize within their parents) [counts corrected/reconciled by pass 2] → 176 deduped facts; the
@@ -61,6 +63,10 @@ META-INF entry is ignored by the `**/reports/*.xhtml` glob.
 
 **Signed — pass 1 (2026-08-07): every expected value above re-derived by hand from the raw
 fixture bytes + IXBRL_SPEC r4 alone; zero mismatches against `expected/*.json`.**
+**Pass-1 r6 delta (2026-08-07, conformance-driven B1/M5 pins): synthetic gains the TWO rows
+above → 20 facts / 7 notes; routing still 16 distinct dimension-free us-gaap concepts (the
+typed Revenues is dimensional and does not vote); the other three goldens regenerated
+byte-identically (gate-verified). Values hand-derived as above; signed.**
 
 ## Pass 2 — independent hand-derivation (no access to ixbrl_ref.py or expected/)
 

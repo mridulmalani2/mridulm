@@ -1,4 +1,4 @@
-# IXBRL_SPEC — uploaded-filing extraction (data-side, Tier B) — v1 r4 (sign-off GRANTED @ fb8021e), 2026-08-07
+# IXBRL_SPEC — uploaded-filing extraction (data-side, Tier B) — v1 r6 (r4 sign-off GRANTED @ fb8021e; r5 adjudication-driven; r6 conformance-driven), 2026-08-07
 
 Normative conventions for the in-browser iXBRL upload parser (`lib/edgar/ixbrl.ts`): a user
 drops a filing FILE and gets the SAME `RawHistoricals` the fetch routes produce, through the
@@ -50,7 +50,12 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
   single uploaded document IS one entity; multi-entity documents are out of scope and
   surface as a note), period → OIM string `start/end` (duration) or `instant`, dimensions
   from `xbrldi:explicitMember` under `segment`/`scenario` → `{dimensionQName: memberQName}`
-  (typed members recorded verbatim, never interpreted).
+  (typed members recorded verbatim — `xbrldi:typedMember` → the inner element's text — never
+  interpreted; a typed-bearing context is DIMENSIONAL for every §2/§3 purpose, so a typed
+  segment row can never impersonate a consolidated total [r6, conformance B1]). The entity
+  identifier is recorded SOLELY for the multi-entity note (>1 distinct identifier → note;
+  per-fact OIM `entity` emission is deferred — a single uploaded document is one entity by
+  scope) [r6, conformance M2].
 - **b. Units** (`xbrli:unit` by `id`): single `xbrli:measure` → local unit string
   (`iso4217:USD` → `USD`, `xbrli:shares` → `shares`, `xbrli:pure` → `pure`). Divide units
   serialize as `NUM/DEN` with the consumers' exact spellings (`USD/shares` — the grammar
@@ -83,7 +88,10 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
     mark. Comma-decimal: strip spaces and dots; `,` becomes the decimal mark. `numcommadot`
     ≡ dot-decimal semantics; `numdotcomma` ≡ comma-decimal semantics. The →0 names map an
     accountant's dash (em/en/hyphen/minus or empty content) to exactly 0.
-    An ABSENT `format` parses `text` as a plain decimal (sign character permitted).
+    An ABSENT `format` parses `text` as a plain decimal (sign character permitted — and ONLY
+    there: the registry transform grammars admit no sign character, so signed text under any
+    transform DROPS with the untransformable note [r6, conformance M5]; filings express
+    negatives via `sign="-"` or parentheses, both already handled).
     **Everything else — including TR4/TR5 `fixed-empty` and TR2/TR3 `nocontent` (registry
     semantics: empty STRING, not zero — mapping them to 0 would fabricate a number), all
     date/text transforms, and `ixt-sec:*` word-numbers — DROPS the fact WITH a note**
@@ -106,7 +114,10 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
   The DATE-transform whitelist governs exactly these two uk-bus reads — TR2/TR3
   `datedaymonthyearen`/`datedaymonthyear`, TR4/TR5 `date-day-month-year`, plain ISO
   `yyyy-mm-dd` text — and an unsupported date format there skips the read with a note
-  (identity stays absent), never guesses.
+  (identity stays absent), never guesses. The three whitelisted date GRAMMARS (ISO,
+  day-monthname-year, numeric d-m-y) are accepted interchangeably under any whitelisted or
+  absent format — a lenient union that can only READ a well-formed date, never invent one
+  [r6, conformance M4].
 
 - **e. DEDUPLICATION — one order-independent, decimals-aware rule for ALL facts, single- or
   multi-file [round-1 B2: the real Apple 10-K carries 70 duplicate keys; one

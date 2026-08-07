@@ -75,7 +75,8 @@ def parse_number(kind, text):
         t = re.sub(f"[{SPACES}.]", "", t).replace(",", ".")
     else:  # plain (absent format): sign + decimal only
         t = t.strip()
-    if not re.fullmatch(r"[-−]?\d+(\.\d+)?", t):
+    sign_re = r"[-−]?" if kind is None else ""  # M5: registry grammars admit no sign character
+    if not re.fullmatch(sign_re + r"\d+(\.\d+)?", t):
         return None
     return float(t.replace("−", "-"))
 
@@ -151,6 +152,12 @@ def parse_file(data, filename, out):
                     period = sub.text.strip()
                 elif su == XBRLDI and sl == "explicitMember":
                     dims[qname(sub.attrib.get("dimension", ""))[0]] = qname((sub.text or "").strip())[0]
+                elif su == XBRLDI and sl == "typedMember":
+                    # §1a: typed members recorded VERBATIM (inner element text), never interpreted
+                    dims[qname(sub.attrib.get("dimension", ""))[0]] = "".join(sub.itertext()).strip()
+            for sub in el.iter():
+                if uri_of(sub.tag) == XBRLI and local(sub.tag) == "identifier":
+                    out.setdefault("entities", set()).add((sub.text or "").strip())
             contexts[cid] = {
                 "period": period if isinstance(period, str) else f"{period[0]}/{period[1]}",
                 "dims": dims,
@@ -258,6 +265,9 @@ def dedupe(out):
 
 def finish(out):
     dedupe(out)
+    if len(out.get("entities", set())) > 1:
+        out["notes"].append("multiple entity identifiers in one upload — out of scope; facts merged per §1a note")
+    out.pop("entities", None)
     free = [f for f in out["facts"] if not f["dims"]]
     ug = {f["concept"] for f in free if f["concept"].startswith("us-gaap:")}
     ifrs = {f["concept"] for f in free if f["concept"].startswith("ifrs-full:")}
@@ -278,7 +288,8 @@ def main():
         z = zipfile.ZipFile(path)
         reports = [n for n in z.namelist() if re.search(r"(^|/)reports/[^/]+\.xhtml$", n)]
         if not reports:
-            reports = [n for n in z.namelist() if n.endswith(".xhtml")]
+            reports = [n for n in z.namelist()
+                       if n.endswith(".xhtml") and b":nonFraction" in z.read(n)]  # M6: facts-bearing only
         for n in sorted(reports):
             parse_file(z.read(n), n.rsplit("/", 1)[-1], out)
     else:
