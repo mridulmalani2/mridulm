@@ -519,7 +519,9 @@ export interface CoherenceFlag {
     | 'negative_goodwill'
     | 'negative_sponsor_equity'
     /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
-    | 'distribution_blocked';
+    | 'distribution_blocked'
+    /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
+    | 'refi_noop';
   severity: 'block' | 'warn';
   message: string;
 }

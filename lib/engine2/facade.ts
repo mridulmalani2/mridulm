@@ -140,6 +140,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     credit,
     covenants: assumptions.covenants,
     ppe_seeded_at_zero: core.ppe_seeded_at_zero,
+    tranches: core.tranches, // §18.8 [v1.3.1] refi no-op flag reads named TrancheYear fields
   });
 
   const output: Engine2ModelOutput = {
