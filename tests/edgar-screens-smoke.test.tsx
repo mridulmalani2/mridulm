@@ -31,9 +31,10 @@ describe('SourceScreen SSR', () => {
     expect(html).toContain('the realistic path');
     expect(html).toContain('take-private screen');
     expect(html).toContain('fastest demo');
-    // upload path is visible but honestly marked as roadmap, not silently absent
+    // upload path is LIVE (IXBRL_SPEC v1) with the privacy promise on the card
     expect(html).toContain('Upload a filing');
-    expect(html).toContain('on the roadmap');
+    expect(html).toContain('parsed in your browser');
+    expect(html).toContain('never leaves your machine');
     // the filings search renders expanded by default
     expect(html).toContain('Company name or ticker');
     expect(html).toContain('open a saved model'); // the previous-engine load path

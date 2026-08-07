@@ -41,7 +41,7 @@ export interface HistoricalYear {
  */
 export interface DealFacts {
   entity_name: string;
-  source: 'edgar' | 'esef' | 'manual';
+  source: 'edgar' | 'esef' | 'manual' | 'upload';
   sector: string;
   currency: Engine2Currency;
   fiscal_year: number;

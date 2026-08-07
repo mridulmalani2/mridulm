@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { searchCompanies, parseEdgarUrl } from '../../../lib/edgar/client';
 import { searchEsefByName } from '../../../lib/edgar/esef';
+import { uploadedFilingToRaw } from '../../../lib/edgar/ixbrl';
 import ApiKeyInline from './ApiKeyInline';
 
 /**
@@ -14,7 +15,9 @@ import ApiKeyInline from './ApiKeyInline';
  *  2. PUBLIC FILINGS (SEC EDGAR / ESEF) — a real workflow too (take-private screens and
  *     "LBO floor" analyses run on listed names), and the fastest way to try the engine:
  *     filings are free, structured, and land with provenance.
- *  3. UPLOAD A FILING — next on the roadmap (deterministic iXBRL parser; then PDF CIMs).
+ *  3. UPLOAD A FILING — live [IXBRL_SPEC v1]: an ANNUAL iXBRL filing (10-K/20-F, ESEF .zip,
+ *     Companies House accounts) parsed ENTIRELY in the browser — the file never leaves the
+ *     machine. PDF CIM extraction remains the named next step.
  *
  * Every route feeds the SAME engine2 workbench (extraction → adapter → suggest → build).
  * Facts carry provenance; gaps stay gaps.
@@ -32,23 +35,40 @@ const LEI_RE = /^[A-Za-z0-9]{18,20}$/;
 const PathCard: React.FC<{
   tag: string; tagColor?: string; title: string; body: string;
   action?: () => void; actionLabel?: string; active?: boolean; disabled?: boolean;
-}> = ({ tag, tagColor = 'rgba(17,17,17,0.35)', title, body, action, actionLabel, active, disabled }) => (
-  <button type="button" onClick={action} disabled={disabled || !action}
-    className="text-left p-4 flex flex-col gap-2 transition-colors"
-    style={{
-      background: active ? '#fff' : 'transparent',
-      border: active ? '1px solid #111' : disabled ? '1px dashed rgba(17,17,17,0.15)' : '1px solid rgba(17,17,17,0.15)',
-      cursor: disabled ? 'default' : 'pointer',
-      opacity: disabled ? 0.75 : 1,
-    }}>
-    <span className="text-[9px] tracking-widest uppercase" style={{ color: tagColor, fontFamily: mono }}>{tag}</span>
-    <span className="text-[15px] font-bold" style={{ color: disabled ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: 'Playfair Display, serif' }}>{title}</span>
-    <span className="text-[11.5px]" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: 1.65 }}>{body}</span>
-    {actionLabel && (
-      <span className="mt-1 text-[10px] tracking-widest uppercase" style={{ color: disabled ? 'rgba(17,17,17,0.3)' : '#CC0000', fontFamily: mono }}>{actionLabel}</span>
-    )}
-  </button>
-);
+  fileAccept?: string; onFile?: (f: File) => void;
+}> = ({ tag, tagColor = 'rgba(17,17,17,0.35)', title, body, action, actionLabel, active, disabled, fileAccept, onFile }) => {
+  const inner = (
+    <>
+      <span className="text-[9px] tracking-widest uppercase" style={{ color: tagColor, fontFamily: mono }}>{tag}</span>
+      <span className="text-[15px] font-bold" style={{ color: disabled ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: 'Playfair Display, serif' }}>{title}</span>
+      <span className="text-[11.5px]" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: 1.65 }}>{body}</span>
+      {actionLabel && (
+        <span className="mt-1 text-[10px] tracking-widest uppercase" style={{ color: disabled ? 'rgba(17,17,17,0.3)' : '#CC0000', fontFamily: mono }}>{actionLabel}</span>
+      )}
+    </>
+  );
+  const frame: React.CSSProperties = {
+    background: active ? '#fff' : 'transparent',
+    border: active ? '1px solid #111' : disabled ? '1px dashed rgba(17,17,17,0.15)' : '1px solid rgba(17,17,17,0.15)',
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.75 : 1,
+  };
+  if (onFile) {
+    return (
+      <label className="text-left p-4 flex flex-col gap-2 transition-colors" style={frame}>
+        <input type="file" accept={fileAccept} className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+        {inner}
+      </label>
+    );
+  }
+  return (
+    <button type="button" onClick={action} disabled={disabled || !action}
+      className="text-left p-4 flex flex-col gap-2 transition-colors" style={frame}>
+      {inner}
+    </button>
+  );
+};
 
 const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const importFromEdgar = useDealEngineStore((s) => s.importFromEdgar);
@@ -58,6 +78,19 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const error = useDealEngineStore((s) => s.error);
 
   const [filingsOpen, setFilingsOpen] = useState(true);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const loadFromHistoricals = useDealEngineStore((st) => st.loadFromHistoricals);
+  const onUploadFile = async (f: File) => {
+    setUploadErr(null); setUploadBusy(true);
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      // IXBRL_SPEC v1: parsed entirely in the browser; same mappers as the fetch routes.
+      loadFromHistoricals(uploadedFilingToRaw(f.name, bytes));
+    } catch (e) {
+      setUploadErr((e as Error).message);
+    } finally { setUploadBusy(false); }
+  };
   const [mode, setMode] = useState<Mode>('sec');
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
@@ -132,12 +165,17 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
             active={filingsOpen}
           />
           <PathCard
-            tag="on the roadmap"
+            tag="annual ixbrl · parsed in your browser" tagColor="#CC0000"
             title="Upload a filing"
-            body="Drop in an iXBRL report — a 10-K, an ESEF package, or Companies House accounts (UK private companies file these). Deterministic parser next; PDF CIM extraction after."
-            disabled actionLabel="next up"
+            body="Drop in an annual iXBRL filing — a 10-K/20-F from EDGAR, an ESEF package (.zip), or Companies House accounts (UK private companies file these). Parsed entirely in your browser: the file never leaves your machine. PDF CIMs are next."
+            fileAccept=".htm,.html,.xhtml,.zip" onFile={onUploadFile}
+            actionLabel={uploadBusy ? 'parsing…' : 'choose a file →'}
           />
         </div>
+
+        {uploadErr && (
+          <p className="mb-4 text-xs" style={{ color: '#b91c1c', fontFamily: mono, lineHeight: 1.6 }}>Upload: {uploadErr}</p>
+        )}
 
         {filingsOpen && (
         <div className="p-6 lg:p-8" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>

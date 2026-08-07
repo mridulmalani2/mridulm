@@ -1,0 +1,187 @@
+{
+ "facts": [
+  {
+   "concept": "t1:ForeignThing",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "EUR",
+   "value": 10.0
+  },
+  {
+   "concept": "t1:LegacyDashThing",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:AssetsCurrent",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 500.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 9876.0
+  },
+  {
+   "concept": "us-gaap:CostOfRevenue",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 1234560.0
+  },
+  {
+   "concept": "us-gaap:EarningsPerShareBasic",
+   "decimals": 2,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD/shares",
+   "value": 6.67
+  },
+  {
+   "concept": "us-gaap:EffectiveIncomeTaxRateContinuingOperations",
+   "decimals": 4,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "pure",
+   "value": 0.21
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": -12500.0
+  },
+  {
+   "concept": "us-gaap:Liabilities",
+   "decimals": 1,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 1000.5
+  },
+  {
+   "concept": "us-gaap:LiabilitiesCurrent",
+   "decimals": 2,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 250.75
+  },
+  {
+   "concept": "us-gaap:LongTermDebtNoncurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:NetIncomeLoss",
+   "decimals": 2,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 1000.25
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 1234500.0
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:Revenues",
+   "decimals": -6,
+   "dims": {
+    "t1:ContractDurationAxis": "P3Y"
+   },
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 55000000.0
+  },
+  {
+   "concept": "us-gaap:Revenues",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "t1:AlphaSegmentMember"
+   },
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 111000000.0
+  },
+  {
+   "concept": "us-gaap:Revenues",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "USD",
+   "value": 2000000000.0
+  },
+  {
+   "concept": "us-gaap:StockholdersEquity",
+   "decimals": 0,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 5000.0
+  },
+  {
+   "concept": "us-gaap:UnrecognizedTaxBenefits",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-12-31",
+   "unit": "USD",
+   "value": 22038000000.0
+  },
+  {
+   "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+   "decimals": -3,
+   "dims": {},
+   "period": "2024-01-01/2024-12-31",
+   "unit": "shares",
+   "value": 1500000.0
+  }
+ ],
+ "identity": {
+  "balanceSheetDate": "2024-12-31",
+  "docType": "10-K",
+  "fp": "FY",
+  "fy": "2024",
+  "name": "Synthetic Min Corp",
+  "periodEnd": "2024-12-31"
+ },
+ "modal_currency": "USD",
+ "notes": [
+  "duplicate us-gaap:UnrecognizedTaxBenefits @ 2024-12-31: kept most precise",
+  "inconsistent duplicate us-gaap:AccountsPayableCurrent @ 2024-12-31: 100000000.0 vs 150000000.0 — dropped to gap",
+  "unresolved contextRef/unitRef on us-gaap:Assets — fact dropped",
+  "unsupported date transform ixt-sec:datequarterend on uk-bus:EndDateForPeriodCoveredByReport — identity read skipped",
+  "unsupported transform ixt-sec:numwordsen on us-gaap:ConcentrationRiskPercentage1 — fact dropped",
+  "unsupported transform ixt:fixed-empty on t1:EmptyThing — fact dropped",
+  "untransformable text on t1:SignedUnderTransform — fact dropped"
+ ],
+ "routing": "us-gaap"
+}

@@ -10,7 +10,7 @@
  *  falsely imply the user typed it). It appears only in the draft's `ProvenanceMap`, never inside
  *  a `RawHistoricals` (those stay null + recorded in `gaps`). Once the user fills it, the store
  *  flips the source to 'user'. */
-export type ProvenanceSource = 'edgar' | 'esef' | 'ai' | 'user' | 'default' | 'missing';
+export type ProvenanceSource = 'edgar' | 'esef' | 'upload' | 'ai' | 'user' | 'default' | 'missing';
 
 export interface Provenance {
   source: ProvenanceSource;
@@ -48,7 +48,7 @@ export interface RawHistoricals {
   /** Which producer built this: 'edgar' | 'esef' | 'manual'. Set explicitly by each mapper —
    *  the adapter must never infer it from currency/CIK (a USD manual deal is NOT 'edgar';
    *  DealFacts.source is a Class-A field and must tell the truth). */
-  origin?: 'edgar' | 'esef' | 'manual';
+  origin?: 'edgar' | 'esef' | 'manual' | 'upload';
   currency: string;            // reporting currency (USD for EDGAR)
   /** Fiscal year the headline figures are drawn from, and its period end. */
   fiscalYear?: number;
