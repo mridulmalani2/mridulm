@@ -673,6 +673,75 @@ def write_csv(path, res):
         for r in rows: w.writerow(r)
 
 
+
+# ── §19 fund/LP overlay (v1.4.0) — INDEPENDENT reference path ────────────────
+def fund_overlay(res, fund):
+    """§19.3-19.5 on the run's own sponsor-side outputs. Year-end order [r3/B8]:
+    (1) ACCRUE pref on the pre-draw state; (2) DRAW fee_t; (3) APPLY the distribution.
+    'european': fee draws enter unreturned + pref base; 'american': never (§19.4)."""
+    N = len(res["waterfall"])
+    se = res["sources_uses"]["sponsor_equity"]
+    rollover = res["sources_uses"].get("rollover_equity", 0.0)
+    share = se / (se + rollover) if (se + rollover) > 0 else 1.0  # §9 pari-passu (B1)
+    inflow = [res["waterfall"][t]["distribution_paid"] * share for t in range(N)]
+    inflow[N - 1] += res["exit"]["sponsor_share"]
+    basis = se if fund["fee_basis"] == "invested" else fund["committed_capital"]
+    gpi = res.get("gp_fee_income")  # goldens carry none -> offset inert (§19.9)
+    c, q = fund["carry_pct"], fund["catchup_pct"]
+    contributions = [se] + [0.0] * N
+    lp_dist, gp_carry, fees, dpi = [0.0] * N, [0.0] * N, [0.0] * N, [0.0] * N
+    unreturned, pref = se, 0.0
+    pref_paid = step3_paid = step4_lp = gp_cum = 0.0
+    payback = None
+    for t in range(1, N + 1):
+        pref += fund["pref_rate"] * (unreturned + pref)              # (1) accrue, pre-draw
+        offset = 0.0
+        if gpi is not None:
+            offset = fund["fee_offset_pct"] * (gpi["annual"][t - 1] + (gpi["termination"] if t == N else 0.0))
+        fee = max(0.0, fund["mgmt_fee_pct"] * basis - offset)        # (2) draw (floored)
+        fees[t - 1] = fee
+        contributions[t] = fee
+        if fund["waterfall"] == "european":
+            unreturned += fee                                        # fees in the base (european only)
+        D = inflow[t - 1]                                            # (3) distribute
+        pay = min(D, unreturned); unreturned -= pay; D -= pay; lp_dist[t - 1] += pay
+        pay = min(D, pref); pref -= pay; D -= pay; lp_dist[t - 1] += pay; pref_paid += pay
+        if D > 0 and q > 0:
+            rhs = pref_paid + step3_paid + step4_lp
+            x_needed = float("inf") if q - c <= 0 else max(0.0, (c * rhs - gp_cum) / (q - c))
+            x = min(D, x_needed)
+            gp_carry[t - 1] += q * x; gp_cum += q * x
+            lp_dist[t - 1] += (1.0 - q) * x
+            step3_paid += x; D -= x
+        if D > 0:
+            gp_carry[t - 1] += c * D; gp_cum += c * D
+            lp_dist[t - 1] += (1.0 - c) * D; step4_lp += (1.0 - c) * D
+            D = 0.0
+        cum_d = sum(lp_dist[:t]); cum_c = sum(contributions[:t + 1])
+        dpi[t - 1] = cum_d / cum_c if cum_c > 0 else 0.0
+        if payback is None and t < N and cum_d >= cum_c - 1e-12:     # interim-only (L-10 at the LP layer)
+            payback = t
+    paid_in = sum(contributions)
+    flows = [-contributions[0]] + [lp_dist[t] - contributions[t + 1] for t in range(N)]
+    return {
+        "lp_contributions": [r6(x) for x in contributions],
+        "lp_distributions": [r6(x) for x in lp_dist],
+        "gp_carry": [r6(x) for x in gp_carry],
+        "mgmt_fees_net": [r6(x) for x in fees],
+        "paid_in_total": r6(paid_in),
+        "committed_capital": r6(fund["committed_capital"] if fund["committed_capital"] is not None else paid_in),
+        "fund_lp_net": {
+            "irr": r6(irr(flows)) if irr(flows) is not None else None,
+            "moic": r6(sum(lp_dist) / paid_in),
+            "dpi": [r6(x) for x in dpi],
+            "payback_year": payback,
+        },
+    }
+
+G7_FUND = {"committed_capital": None, "mgmt_fee_pct": 0.02, "fee_basis": "invested",
+           "carry_pct": 0.20, "pref_rate": 0.08, "catchup_pct": 1.0,
+           "waterfall": "european", "fee_offset_pct": 1.0}
+
 if __name__ == "__main__":
     outdir = sys.argv[1] if len(sys.argv) > 1 else "tests/goldens"
     results = {}
@@ -683,6 +752,11 @@ if __name__ == "__main__":
     results["G3-DIST"] = run(dist_variant("G3", [20.0, 15.0, 25.0, 22.0, 20.0], None))
     results["G2-DIST-D"] = run(g2_dist_downside())
     results["G6-REFI"] = run(g6_refi())
+    # §19 [v1.4.0]: G7-FUND = G2-DIST + the fund-of-one overlay — a POST-ENGINE layer, so
+    # every non-fund block is byte-identical to G2-DIST by construction (asserted below).
+    g7 = dict(run(dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP)))
+    g7["fund"] = fund_overlay(g7, G7_FUND)
+    results["G7-FUND"] = g7
     # §18 [v1.3.0]: the refi is post-close, so it cannot move entry (S&U byte-identical to G2);
     # §9 is capital-structure-blind, so the unlevered stream is byte-identical to G2 as well.
     assert results["G6-REFI"]["sources_uses"] == results["G2"]["sources_uses"], "G6-REFI entry not frozen!"
@@ -702,6 +776,12 @@ if __name__ == "__main__":
     assert results["G2-DIST"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST entry not frozen!"
     assert results["G3-DIST"]["sources_uses"] == results["G3"]["sources_uses"], "G3-DIST entry not frozen!"
     assert results["G2-DIST-D"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST-D entry not frozen!"
+    # §19.6(c)/§19.7: the overlay is post-engine — every non-fund block byte-identical to G2-DIST.
+    for k in results["G2-DIST"]:
+        assert results["G7-FUND"][k] == results["G2-DIST"][k], f"G7-FUND {k} diverged from G2-DIST!"
+    _f = results["G7-FUND"]["fund"]
+    _si = sum(w["distribution_paid"] for w in results["G7-FUND"]["waterfall"]) + results["G7-FUND"]["exit"]["sponsor_share"]
+    assert abs(sum(_f["lp_distributions"]) + sum(_f["gp_carry"]) - _si) < 1e-6, "§19.6(a) conservation violated!"
     for name, res in results.items():
         d = os.path.join(outdir, name.replace("-", ""))
         os.makedirs(d, exist_ok=True)

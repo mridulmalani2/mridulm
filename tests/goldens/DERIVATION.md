@@ -487,3 +487,24 @@ rounded value re-enters arithmetic. **No wrong number; one minor COVERAGE note**
 SAME year (both summing into the year's accumulators) was not directly pinned; **now closed** by a
 directed fixture in `tests/engine2-refinancing.test.ts` (§18.11(vii) same-year case). All experimental
 edits reverted; tree clean.
+
+## G7-FUND (§19 v1.4.0, Phase-2 step 2) — adjudication record
+
+**Pass 1 (2026-08-08) — SIGNED.** The full fund-of-one walk was hand-derived from the
+G2-DIST fixture's sponsor rows + SPEC §19 r3 alone, BEFORE the reference path ran, then
+compared: **zero mismatches to the digit.** Derivation: invested 587.22; fee 2% × invested
+= 11.7444/yr; paid-in 645.942. Year-end order accrue → draw → distribute ('european': fees
+enter the base). Pref compounds: 46.9776 / 51.67536 / 55.78174 / 59.95663 / 64.89271 →
+279.28405 accrued by t=5 net of nothing (no interim year reaches step 2 — every interim
+distribution 12.09/15.34/10 is absorbed by step-1 return of capital). t=5 inflow 1052.06
+(8 + exit sponsor_share 1044.06): step 1 returns 608.512 (unreturned incl. all fees); step
+2 pays pref 279.2840475; step 3 catch-up x = 0.2×279.2840475/0.8 = 69.8210119 (q=1, all
+GP); step 4 splits 94.4429406 → GP 18.8885881 / LP 75.5543525. Totals: Σ LP 1000.7804;
+Σ GP 88.7096 = 0.2 × (Σprofits 443.548) — the §19.6(d) 'european' bound binding at
+EQUALITY; conservation Σ LP + Σ GP = 1089.49 = Σ sponsor inflows EXACT; moic 1000.7804 ÷
+645.942 = 1.549335 ≡ dpi[N]; dpi to-date [0, 0.019797, 0.044068, 0.059019, 1.549335];
+payback null (interim-only rule); LP net IRR 0.098059 < sponsor 0.133906 (§19.6(b)).
+Additivity: every non-fund block of G7FUND byte-identical to G2DIST (in-script assert +
+the gate's §19.7 block).
+
+**Pass 2 (blind, independent) — pending.**
