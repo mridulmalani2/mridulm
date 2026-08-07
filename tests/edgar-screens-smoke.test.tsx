@@ -20,28 +20,40 @@ import ManualFactsScreen from '../components/deal-engine/start/ManualFactsScreen
 const noop = () => {};
 
 describe('SourceScreen SSR', () => {
-  it('renders the search, URL path and the coming-soon upload', () => {
+  it('renders the three honest paths with the take-private/demo framing, plus the search', () => {
     holder.state = { importFromEdgar: noop, importFromEsef: noop, loadModel: noop, isCalculating: false, error: null };
     const html = renderToStaticMarkup(
       React.createElement(MemoryRouter, null, React.createElement(SourceScreen, { onManual: noop })),
     );
     expect(html).toContain('Source the target');
-    expect(html).toContain('Company name or ticker');
-    expect(html).toContain('coming soon');
+    // the honest sourcing map: manual = realistic private path; filings = take-private + demo
     expect(html).toContain('Manual entry');
+    expect(html).toContain('the realistic path');
+    expect(html).toContain('take-private screen');
+    expect(html).toContain('fastest demo');
+    // upload path is visible but honestly marked as roadmap, not silently absent
+    expect(html).toContain('Upload a filing');
+    expect(html).toContain('on the roadmap');
+    // the filings search renders expanded by default
+    expect(html).toContain('Company name or ticker');
     expect(html).toContain('open a saved model'); // the previous-engine load path
   });
 });
 
 describe('ManualFactsScreen SSR', () => {
-  it('renders the factual-inputs form mirroring the 10-K surface', () => {
+  it('renders the CIM-style multi-year form with the blank-stays-blank promise', () => {
     holder.state = { loadFromHistoricals: noop };
     const html = renderToStaticMarkup(React.createElement(ManualFactsScreen, { onBack: noop }));
     expect(html).toContain('Enter the facts');
-    expect(html).toContain('LTM Revenue');
-    expect(html).toContain('EBITDA Margin');
-    expect(html).toContain('Net Debt at Entry');
-    expect(html).toContain('Open the workbench');
+    expect(html).toContain('Operating history');
+    expect(html).toContain('Latest FY end');
+    expect(html).toContain('Implied margin');
+    expect(html).toContain('Sizing figures are');
+    expect(html).toContain('Gross Debt');
+    expect(html).toContain('Net PP&amp;E');
+    expect(html).toContain('Blank cells stay blank');
+    // empty form ⇒ the submit is GATED on the sizing pair (no silent 0-EBITDA submit)
+    expect(html).toContain('revenue &amp; EBITDA to continue');
   });
 });
 

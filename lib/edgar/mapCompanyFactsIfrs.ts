@@ -207,6 +207,7 @@ export function mapCompanyFactsIfrs(
 
   return {
     entityName: facts.entityName ?? 'Unknown',
+    origin: 'edgar', // SEC-filed 20-F (IFRS taxonomy, EDGAR source)
     cik10,
     currency: detectedCcy ?? anchorUnit ?? 'USD',
     currency_unsupported,

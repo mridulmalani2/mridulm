@@ -24,10 +24,15 @@ const HistoryTable: React.FC<{
   const ccy = facts.currency as Engine2Currency;
   const fmtMoney = (x: number) => (isoOverride ? moneyIso(x, isoOverride, 0) : money(x, ccy, 0));
   const rows = facts.history;
+  // Source-honest wording: a hand-entered history is NOT a "filing" (the mislabel class
+  // v1.1.2 taught us to test for) — facts.source names the producer.
+  const sourceNoun = facts.source === 'manual' ? 'entered' : 'filing';
   if (!rows.length) {
     return (
       <p className="text-[11px]" style={label}>
-        No usable multi-year history in the filing (≥3 full-year points are needed for a history-based suggestion).
+        {facts.source === 'manual'
+          ? 'No usable multi-year history was entered (≥3 full-year points are needed for a history-based suggestion).'
+          : 'No usable multi-year history in the filing (≥3 full-year points are needed for a history-based suggestion).'}
       </p>
     );
   }
@@ -35,7 +40,7 @@ const HistoryTable: React.FC<{
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-[10px] tracking-wider uppercase" style={label}>Filing history</span>
+        <span className="text-[10px] tracking-wider uppercase" style={label}>{sourceNoun === 'entered' ? 'Entered history' : 'Filing history'}</span>
         <span className="flex flex-col items-end gap-0.5">
           <span className="text-[10px]" style={label}>{staleness(facts.fiscal_year, facts.period_end, today)}</span>
           {/* §1.1: the SIZING basis (leverage + entry EBITDA) — the LTM quarter-stitch when interim

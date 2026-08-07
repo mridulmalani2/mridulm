@@ -6,10 +6,18 @@ import { searchEsefByName } from '../../../lib/edgar/esef';
 import ApiKeyInline from './ApiKeyInline';
 
 /**
- * Screen 1 — Source. Pull a target's ACTUAL financials from a free structured filing
- * source: SEC EDGAR (US issuers) or ESEF via filings.xbrl.org (EU/UK-listed). Every route
- * feeds the SAME engine2 workbench (extraction → adapter → suggest → build); a manual-entry
- * fallback remains for private targets. Facts carry provenance; gaps stay gaps.
+ * Screen 1 — Source. Three honest paths, framed the way targets are actually sourced:
+ *
+ *  1. MANUAL ENTRY — the realistic path. Most buyouts are of PRIVATE companies (founder
+ *     sales, sponsor secondaries, carve-outs) underwritten from a CIM/dataroom, not from
+ *     public filings.
+ *  2. PUBLIC FILINGS (SEC EDGAR / ESEF) — a real workflow too (take-private screens and
+ *     "LBO floor" analyses run on listed names), and the fastest way to try the engine:
+ *     filings are free, structured, and land with provenance.
+ *  3. UPLOAD A FILING — next on the roadmap (deterministic iXBRL parser; then PDF CIMs).
+ *
+ * Every route feeds the SAME engine2 workbench (extraction → adapter → suggest → build).
+ * Facts carry provenance; gaps stay gaps.
  */
 
 const mono = "'JetBrains Mono', monospace";
@@ -21,6 +29,27 @@ type Mode = 'sec' | 'esef';
 interface Match { id: string; title: string; tag: string; onPick: () => void }
 const LEI_RE = /^[A-Za-z0-9]{18,20}$/;
 
+const PathCard: React.FC<{
+  tag: string; tagColor?: string; title: string; body: string;
+  action?: () => void; actionLabel?: string; active?: boolean; disabled?: boolean;
+}> = ({ tag, tagColor = 'rgba(17,17,17,0.35)', title, body, action, actionLabel, active, disabled }) => (
+  <button type="button" onClick={action} disabled={disabled || !action}
+    className="text-left p-4 flex flex-col gap-2 transition-colors"
+    style={{
+      background: active ? '#fff' : 'transparent',
+      border: active ? '1px solid #111' : disabled ? '1px dashed rgba(17,17,17,0.15)' : '1px solid rgba(17,17,17,0.15)',
+      cursor: disabled ? 'default' : 'pointer',
+      opacity: disabled ? 0.75 : 1,
+    }}>
+    <span className="text-[9px] tracking-widest uppercase" style={{ color: tagColor, fontFamily: mono }}>{tag}</span>
+    <span className="text-[15px] font-bold" style={{ color: disabled ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: 'Playfair Display, serif' }}>{title}</span>
+    <span className="text-[11.5px]" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: 1.65 }}>{body}</span>
+    {actionLabel && (
+      <span className="mt-1 text-[10px] tracking-widest uppercase" style={{ color: disabled ? 'rgba(17,17,17,0.3)' : '#CC0000', fontFamily: mono }}>{actionLabel}</span>
+    )}
+  </button>
+);
+
 const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const importFromEdgar = useDealEngineStore((s) => s.importFromEdgar);
   const importFromEsef = useDealEngineStore((s) => s.importFromEsef);
@@ -28,6 +57,7 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
 
+  const [filingsOpen, setFilingsOpen] = useState(true);
   const [mode, setMode] = useState<Mode>('sec');
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
@@ -44,10 +74,10 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
       try {
         if (m === 'sec') {
           const r = await searchCompanies(q, 10);
-          setMatches(r.map((c) => ({ id: c.cik10, title: c.title, tag: c.ticker, onPick: () => { setQuery(`${c.title} (${c.ticker})`); setMatches([]); importFromEdgar(c.cik10); } })));
+          setMatches(r.map((cm) => ({ id: cm.cik10, title: cm.title, tag: cm.ticker, onPick: () => { setQuery(`${cm.title} (${cm.ticker})`); setMatches([]); importFromEdgar(cm.cik10); } })));
         } else {
           const r = await searchEsefByName(q, 10);
-          setMatches(r.map((e) => ({ id: e.lei, title: e.name, tag: `${e.lei.slice(0, 6)}…`, onPick: () => { setQuery(e.name); setMatches([]); importFromEsef(e.lei, { dealName: e.name }); } })));
+          setMatches(r.map((em) => ({ id: em.lei, title: em.name, tag: `${em.lei.slice(0, 6)}…`, onPick: () => { setQuery(em.name); setMatches([]); importFromEsef(em.lei, { dealName: em.name }); } })));
         }
       } catch (e) { setSearchErr((e as Error).message); setMatches([]); }
       finally { setSearching(false); }
@@ -73,16 +103,43 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
 
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ background: paper }}>
-      <div className="relative z-10 w-full max-w-2xl mx-auto px-6 py-12">
+      <div className="relative z-10 w-full max-w-3xl mx-auto px-6 py-12">
         <div className="mb-5">
           <Link to="/" className="text-[10px] tracking-widest uppercase" style={{ ...labelStyle, textDecoration: 'none' }}>← mridulmalani.com</Link>
         </div>
         <div className="border-t-[3px] border-[#111] mb-6" />
         <h1 className="font-playfair text-4xl lg:text-5xl font-bold mb-3" style={{ color: '#111' }}>Source the target</h1>
-        <p className="mb-8" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 460 }}>
-          Pull a listed company's actual financials straight from its regulatory filings — {isSec ? 'US issuers via SEC EDGAR' : 'EU/UK-listed via ESEF'}. Every extracted figure lands with its provenance, gaps are surfaced — never defaulted — and nothing is assumed without you seeing it.
+        <p className="mb-7" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 560 }}>
+          Most buyouts are of <em>private</em> companies — a founder sale, a sponsor-to-sponsor secondary, a
+          carve-out — underwritten from a CIM and dataroom, so manual entry is the realistic path. Listed
+          companies get bought too (take-privates; every bank runs an “LBO floor” on public names), and their
+          filings are free and structured — which also makes them the fastest way to try the engine.
         </p>
 
+        {/* The three paths */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          <PathCard
+            tag="private target · the realistic path"
+            title="Manual entry"
+            body="Type the numbers from a CIM, dataroom, or management accounts — multi-year history, every figure provenance-tagged as yours, gaps stay gaps."
+            action={onManual} actionLabel="enter the facts →"
+          />
+          <PathCard
+            tag="take-private screen · fastest demo" tagColor="#CC0000"
+            title="Public filings"
+            body="Pull a listed company's actual financials from SEC EDGAR (US) or ESEF (EU/UK) — the workflow behind take-private screens, and the quickest full demo."
+            action={() => setFilingsOpen((o) => !o)} actionLabel={filingsOpen ? 'search below ↓' : 'open the search →'}
+            active={filingsOpen}
+          />
+          <PathCard
+            tag="on the roadmap"
+            title="Upload a filing"
+            body="Drop in an iXBRL report — a 10-K, an ESEF package, or Companies House accounts (UK private companies file these). Deterministic parser next; PDF CIM extraction after."
+            disabled actionLabel="next up"
+          />
+        </div>
+
+        {filingsOpen && (
         <div className="p-6 lg:p-8" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
           <div className="border-t-[2px] border-[#111] mb-5" />
 
@@ -142,39 +199,27 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
           {(error || searchErr) && <p className="text-xs mt-4" style={{ color: '#b91c1c', fontFamily: mono, lineHeight: 1.6 }}>{error || searchErr}</p>}
           {isCalculating && <p className="text-xs mt-4" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: mono }}>Fetching filings from {sourceLabel}…</p>}
 
-          {/* Secondary paths */}
-          <div className="mt-6 pt-5 grid grid-cols-2 gap-3" style={{ borderTop: '1px solid rgba(17,17,17,0.08)' }}>
-            <button disabled title="10-K / PDF upload is coming soon."
-              className="py-2.5 text-[10px] tracking-widest uppercase"
-              style={{ background: 'transparent', color: 'rgba(17,17,17,0.3)', fontFamily: mono, border: '1px dashed rgba(17,17,17,0.15)', cursor: 'not-allowed' }}>
-              Upload 10-K · coming soon
-            </button>
-            <button onClick={onManual}
-              className="py-2.5 text-[10px] tracking-widest uppercase transition-colors hover:bg-[rgba(17,17,17,0.03)]"
-              style={{ background: 'transparent', color: 'rgba(17,17,17,0.5)', fontFamily: mono, border: '1px solid rgba(17,17,17,0.15)' }}>
-              Manual entry (private)
-            </button>
-          </div>
-
-          {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is
-              deleted — tag pre-deletion-lib-engine). Selecting one surfaces the honest
-              retirement notice + the re-import path. */}
-          <label className="block mt-3 text-[10px] tracking-widest uppercase text-center cursor-pointer"
-            style={{ color: 'rgba(17,17,17,0.35)', fontFamily: mono }}>
-            <input type="file" accept=".json" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadModel(f); e.target.value = ''; }} />
-            open a saved model (.json — previous engine)
-          </label>
-
-          {/* Optional AI key — reused by AI-suggest on the next screen */}
-          <ApiKeyInline />
+          <p className="mt-5 text-[10px]" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: mono, lineHeight: 1.7 }}>
+            Here the listed-company pull doubles as the demo path: filings are free and structured, so you see the
+            whole engine on real numbers in seconds. {isSec
+              ? 'US issuers file with the SEC. Foreign private issuers (20-F) may have sparse XBRL — gaps are surfaced for you to fill.'
+              : 'EU/UK-listed issuers file ESEF (IFRS). D&A, debt and working-capital coverage is often sparser than US filings — gaps are surfaced for you to fill.'}
+          </p>
         </div>
+        )}
 
-        <p className="mt-4 text-[10px]" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: mono, lineHeight: 1.7 }}>
-          {isSec
-            ? 'US issuers file with the SEC. Foreign private issuers (20-F) and private targets may have sparse or no XBRL — gaps are surfaced for you to fill.'
-            : 'EU/UK-listed issuers file ESEF (IFRS). Coverage of D&A, debt and working capital is often sparser than US filings — those gaps are surfaced for you to fill on the review screen.'}
-        </p>
+        {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is
+            deleted — tag pre-deletion-lib-engine). Selecting one surfaces the honest
+            retirement notice + the re-import path. */}
+        <label className="block mt-4 text-[10px] tracking-widest uppercase text-center cursor-pointer"
+          style={{ color: 'rgba(17,17,17,0.35)', fontFamily: mono }}>
+          <input type="file" accept=".json" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadModel(f); e.target.value = ''; }} />
+          open a saved model (.json — previous engine)
+        </label>
+
+        {/* Optional AI key — reused by AI-suggest on the next screen */}
+        <ApiKeyInline />
       </div>
     </div>
   );
