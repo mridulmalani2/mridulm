@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { runCore } from '../lib/engine2/sequence';
+import { runModel } from '../lib/engine2/facade';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import type { DealAssumptions, RefinancingEvent } from '../lib/engine2/types';
 
@@ -280,4 +281,72 @@ describe('§14.19 — refinancing invariants (par-for-par, BS close, R+1 uncappe
       for (const bs of core.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(1e-9);
     });
   }
+});
+
+describe('§18.11(viii) — the retired-balance no-op raises the §18.8 refi_noop WARN [v1.3.1]', () => {
+  // MUTANTS (each run RED during development, then reverted — the three directions §18.11(viii)
+  // names): (a) drop the flags.push in check.ts → the two positive asserts below redden;
+  // (b) drop the balance condition (flag every refi) → the G6-REFI negative + the C5
+  // coherence==[] gate redden; (c) tighten ε to 1e-9 → the DUST case (balance 0.002 > 1e-9,
+  // still ≤ RETIRED_TOL) reddens.
+
+  it('a tranche fully swept to zero before its refi year: stamped no-op + refi_noop WARN naming tranche and year', () => {
+    // Tiny 0.3x TLB + 100% sweep against G2 cash flows ⇒ swept to zero well before year 4.
+    const deal = withRefi('G2', [{
+      tranche_name: 'TLB', year: 4,
+      new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.02, floor: 0 },
+      call_premium_pct: 0.01, new_maturity_years: 6, new_oid_pct: 0, new_financing_fee_pct: 0,
+      new_amort_pct_of_face: 0,
+    }], (a) => {
+      a.structure.tranches = [
+        { name: 'TLB', type: 'senior', size: { x_ebitda: 0.3 }, pricing: { kind: 'floating', base_rate: 0.036, spread: 0.0375, floor: 0 }, amort_pct_of_face: 0.01, maturity_years: 8, oid_pct: 0, sweep: { participates: true, priority: 1 } },
+      ];
+      a.structure.sweep = { base_pct: 1, grid: null };
+    });
+    const o = runModel(deal.facts, deal.assumptions);
+    const y4 = o.tranches[0][3];
+    expect(y4.beginning_balance).toBeLessThanOrEqual(5e-3); // engine-retired before the refi year
+    expect(y4.refinanced).toBe(true);                        // stamped — the §18.8 no-op contract
+    expect(y4.refinancing_cash_cost).toBeLessThanOrEqual(0.01 * 5e-3); // ≤ pct × ε dust, zero new OID/fees
+    expect(y4.unamortized_writeoff).toBe(0);                 // §7 zeroed the schedules at retirement
+    const flags = o.coherence.filter((f) => f.code === 'refi_noop');
+    expect(flags.length).toBe(1);
+    expect(flags[0].severity).toBe('warn');
+    // label discipline (gate (c)): tranche, year, and the ~0-costs statement are all in the message
+    expect(flags[0].message).toContain('"TLB"');
+    expect(flags[0].message).toContain('year 4');
+    expect(flags[0].message).toContain('~0');
+  });
+
+  it('DUST case — engine-retired residual in (0, RETIRED_TOL]: the flag STILL fires (pins ε to the §7 tolerance)', () => {
+    // Amortization leaves exactly ~0.002 outstanding entering year 4 (3 years × amort_pct
+    // chosen so par·(1 − 3·pct) = 0.002); no sweep. The tranche crossed the §7 retired
+    // threshold in year 3 (write-off taken, dust persists) — §18.8: its refi is the no-op class.
+    const par = GOLDEN_DEALS.G2.facts.fy_ebitda; // x_ebitda 1 ⇒ par = FY-basis sizing EBITDA
+    const deal = withRefi('G2', [{
+      tranche_name: 'TLB', year: 4,
+      new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.02, floor: 0 },
+      call_premium_pct: 0.01, new_maturity_years: 6, new_oid_pct: 0, new_financing_fee_pct: 0,
+      new_amort_pct_of_face: 0,
+    }], (a) => {
+      a.structure.tranches = [
+        { name: 'TLB', type: 'senior', size: { x_ebitda: 1 }, pricing: { kind: 'floating', base_rate: 0.036, spread: 0.0375, floor: 0 }, amort_pct_of_face: (1 - 0.002 / par) / 3, maturity_years: 8, oid_pct: 0, sweep: { participates: false, priority: 1 } },
+      ];
+      a.structure.sweep = { base_pct: 0, grid: null };
+    });
+    const o = runModel(deal.facts, deal.assumptions);
+    const y4 = o.tranches[0][3];
+    expect(y4.beginning_balance).toBeGreaterThan(1e-9);      // genuinely NON-zero dust —
+    expect(y4.beginning_balance).toBeLessThanOrEqual(5e-3);  // — inside the retired tolerance
+    expect(y4.refinanced).toBe(true);
+    const flags = o.coherence.filter((f) => f.code === 'refi_noop');
+    expect(flags.length).toBe(1); // ε = RETIRED_TOL, not machine epsilon (mutant (c) reddens here)
+  });
+
+  it('NEGATIVE — a live-balance refi (G6-REFI) raises NO refi_noop', () => {
+    const { facts, assumptions } = GOLDEN_DEALS.G6REFI;
+    const o = runModel(facts, assumptions);
+    expect(o.tranches[0][2].refinanced).toBe(true); // the refi genuinely ran…
+    expect(o.coherence.some((f) => f.code === 'refi_noop')).toBe(false); // …and is not flagged
+  });
 });

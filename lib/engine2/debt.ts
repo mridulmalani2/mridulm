@@ -20,7 +20,7 @@ import type { SizedStructure } from './sourcesUses';
 import type { RefinancingEvent, RevolverYear, SweepAssumption, TrancheYear, WaterfallYear } from './types';
 
 /** Economically-retired threshold, matching the reference derivation (±$0.005m — §15). */
-const RETIRED_TOL = 5e-3;
+export const RETIRED_TOL = 5e-3;
 
 export interface DebtState {
   /** Term-tranche balances, §16 order (PIK accrued in at each year end). */

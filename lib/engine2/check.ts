@@ -15,7 +15,8 @@
  */
 
 import { covenantBreachYear } from './credit';
-import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, SourcesUses, WaterfallYear } from './types';
+import { RETIRED_TOL } from './debt';
+import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, SourcesUses, TrancheYear, WaterfallYear } from './types';
 
 export interface CoherenceInputs {
   facts: Pick<DealFacts, 'implied_trading_ev_ebitda'>;
@@ -28,6 +29,8 @@ export interface CoherenceInputs {
   covenants: CovenantAssumption;
   /** §8: PP&E seed fell back to 0 because facts.net_ppe was null — "else 0 with note". */
   ppe_seeded_at_zero: boolean;
+  /** §18.8 [v1.3.1]: per-tranche year rows — read for the refi no-op flag (named fields only). */
+  tranches: TrancheYear[][];
 }
 
 /** Entry multiple further above the trading anchor than this ⇒ warn (DR-4 Cat.7 discipline). */
@@ -37,6 +40,23 @@ const DAYS_MAX = { dso: 180, dio: 365, dpo: 180 };
 
 export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
   const flags: CoherenceFlag[] = [];
+
+  // §18.8 [v1.3.1]: a scheduled refi that hit an already-retired balance is a stamped NO-OP —
+  // and a scheduled structural event that did nothing must say so. POST-RUN read of named
+  // TrancheYear fields; ε = RETIRED_TOL (§7's economically-retired threshold, = §15's ±$0.005m),
+  // the ONE tolerance, so the flagged class ≡ the engine-retired class (sign-off round 1, B1).
+  for (const rows of x.tranches) {
+    for (let t = 0; t < rows.length; t++) {
+      const r = rows[t];
+      if (r.refinanced && r.beginning_balance <= RETIRED_TOL) {
+        flags.push({
+          code: 'refi_noop',
+          severity: 'warn',
+          message: `Refinancing of "${r.name}" scheduled for year ${t + 1} is a no-op — the tranche entered the year at/below the §7 retired tolerance (already repaid); the stamped premium, new OID/fees and write-off are ~0 (§18.8)`,
+        });
+      }
+    }
+  }
 
   if (x.sources_uses.sponsor_equity <= 0) {
     flags.push({
