@@ -55,7 +55,7 @@ IDENTITY_META = {"dei:DocumentType": "docType", "dei:DocumentFiscalYearFocus": "
 IDENTITY_DATES = {"uk-bus:BalanceSheetDate": "balanceSheetDate",
                   "uk-bus:EndDateForPeriodCoveredByReport": "endDateForPeriod"}
 
-SPACES = "    "
+SPACES = " \u00a0\u2009\u202f\t"  # space, NBSP, thin, narrow-NBSP, tab (spec 1c)
 
 
 def canonical_prefix(uri, doc_prefix):

@@ -289,7 +289,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   if (opinc && daRaw) {
     fy_ebitda = sv(opinc.value + daRaw.value, {
       source: 'edgar',
-      detail: `OperatingIncomeLoss + ${daRaw.tag} · FY${anchorFy ?? '—'} · 10-K`,
+      detail: `OperatingIncomeLoss + ${daRaw.tag} · FY${anchorFy ?? '—'} · ${opinc.prov.form ?? 'filing'}`, // form from the FACT, not a literal ('10-K' mislabelled 20-F fetches and uploads)
       tag: 'derived:EBITDA', taxonomy: 'us-gaap', unit: opinc.prov.unit, fy: anchorFy, period: anchorEnd,
       url: opinc.prov.url,
     });
