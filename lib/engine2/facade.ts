@@ -17,6 +17,7 @@
 
 import { buildBridge, type Engine2ValueBridge } from './bridge';
 import { runCoherence } from './check';
+import { buildFundOverlay, validateFund } from './fund';
 import { buildCreditYear, type CreditYearInputs } from './credit';
 import { buildExit, monitoringTermination, type ExitInputs } from './exit';
 import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './returns';
@@ -143,6 +144,20 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     tranches: core.tranches, // §18.8 [v1.3.1] refi no-op flag reads named TrancheYear fields
   });
 
+  // §19 [v1.4.0] — the fund-of-one overlay: a POST-ENGINE layer on sponsor-side outputs
+  // only (share rule + exit.sponsor_share + gp_fee_income); null ≡ OFF, byte-identity.
+  let fund = null as import('./types').FundBlock | null;
+  if (assumptions.fund) {
+    const fi = {
+      distributions_paid: core.distributions_paid,
+      exit_sponsor_share: exit.sponsor_share,
+      sources_uses: core.sources_uses,
+      gp_fee_income: gpFeeIncome,
+    };
+    validateFund(assumptions.fund); // structural gates; the committed-floor throws in the walk
+    fund = buildFundOverlay(assumptions.fund, fi);
+  }
+
   const output: Engine2ModelOutput = {
     facts,
     assumptions,
@@ -160,6 +175,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     gp_fee_income: gpFeeIncome,
     bridge,
     coherence,
+    fund,
     scenarios: null,
     sensitivity: null,
   };

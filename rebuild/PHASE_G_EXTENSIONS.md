@@ -31,7 +31,8 @@ AND was outside the fence]:
 
 > **Reference sets.**
 > - **ENGINE ARITHMETIC PATH** (computes engine numbers) = `lib/engine2/kernel/**` +
->   `lib/engine2/{operating,tax,debt,sequence,exit,returns,credit,bridge,sourcesUses,openingBalance,scenarios,facade,check}.ts`.
+>   `lib/engine2/{operating,tax,debt,sequence,exit,returns,credit,bridge,sourcesUses,openingBalance,scenarios,facade,check,fund}.ts`
+>   [fund.ts added v1.4.0 — the §19 overlay is engine arithmetic; the display-gate regex fences it identically].
 >   `facade.ts` ASSEMBLES the model and does NO display math — display-derivation helpers live in
 >   the display layer (`lib/engine2/display.ts`), OFF this path, so a `facade.ts` diff still cleanly
 >   means "engine arithmetic changed" [round-4 (b)]. New `*Display` helpers go in the display layer.

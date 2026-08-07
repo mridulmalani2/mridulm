@@ -273,21 +273,25 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
     }
   });
   it('the adjudicated fund walk (pass-1 hand-derivation, european/2%-invested/8%-pref/20%-carry/full catch-up)', () => {
-    expect(f.paid_in_total).toBeCloseTo(645.942, 6);          // 587.22 + 5 × 11.7444
-    expect(f.mgmt_fees_net.every((x: number) => Math.abs(x - 11.7444) < 1e-9)).toBe(true);
+    expect(f.paid_in_total).toBeCloseTo(645.9475, 4);         // 587.225 + 5 × 11.7445 = 1.1 × se, EXACT
+    expect(f.paid_in_total).toBeCloseTo(1.1 * f.lp_contributions[0], 6);
+    expect(f.mgmt_fees_net.every((x: number) => Math.abs(x - 11.7445) < 1e-6)).toBe(true);
     const lp = f.lp_distributions.reduce((a: number, b: number) => a + b, 0);
     const gp = f.gp_carry.reduce((a: number, b: number) => a + b, 0);
-    expect(lp).toBeCloseTo(1000.7804, 4);
-    expect(gp).toBeCloseTo(88.7096, 4);
-    expect(f.fund_lp_net.moic).toBeCloseTo(1.549335, 6);
-    expect(f.fund_lp_net.irr).toBeCloseTo(0.098059, 6);
+    expect(lp).toBeCloseTo(1000.783468, 4);
+    expect(gp).toBeCloseTo(88.708992, 4);
+    expect(f.fund_lp_net.moic).toBeCloseTo(1.549326, 6);
+    expect(f.fund_lp_net.irr).toBeCloseTo(0.098058, 6);
     expect(f.fund_lp_net.payback_year).toBeNull();            // interim-only rule: never repaid mid-hold
   });
   it('§19.6(a) conservation: LP + GP ≡ sponsor-share inflows, exact', () => {
     const lp = f.lp_distributions.reduce((a: number, b: number) => a + b, 0);
     const gp = f.gp_carry.reduce((a: number, b: number) => a + b, 0);
+    // the fixture's waterfall/exit rows are r2-DISPLAY values (±0.005 each); the fund block
+    // is full-precision-seeded (v1.0.3 rule) — compare at the display tolerance, and note the
+    // EXACT identity is asserted inside the reference itself at 1e-9 on the internals
     const inflows = g7.waterfall.reduce((a: number, w: any) => a + w.distribution_paid, 0) + g7.exit.sponsor_share;
-    expect(lp + gp).toBeCloseTo(inflows, 6);                  // 1089.49
+    expect(lp + gp).toBeCloseTo(inflows, 1);                  // ≈1089.49 at display precision
   });
   it("§19.6(d) 'european' GP-share bound BINDS with equality at full catch-up", () => {
     const lp = f.lp_distributions.reduce((a: number, b: number) => a + b, 0);
@@ -303,7 +307,7 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
     // the exact adjudicated to-date sequence (G7-FUND distributes EVERY year 2-5, so the
     // general non-monotonicity of dpi[] — §14.20(d)'s stated caveat — is not exercised
     // HERE; it is a spec-text truth, honestly not pinned by this golden)
-    for (const [i, v] of [0, 0.019797, 0.044068, 0.059019, 1.549335].entries()) {
+    for (const [i, v] of [0, 0.019796, 0.044069, 0.05902, 1.549326].entries()) {
       expect(dpi[i]).toBeCloseTo(v, 6);
     }
   });

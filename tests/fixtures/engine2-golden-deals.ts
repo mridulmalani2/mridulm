@@ -55,6 +55,7 @@ function makeAssumptions(p: {
     mip: p.mip ?? null,
     covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: p.rp_trap ?? null },
     mid_year_irr: false,
+  fund: null,
   };
 }
 
@@ -147,6 +148,21 @@ GOLDEN_DEALS.G3DIST = {
 };
 // §13: the request schedule and trap are structure/policy — FROZEN across scenarios. Only
 // the operating case moves, and with it whether the trap BINDS.
+GOLDEN_DEALS.G7FUND = {
+  facts: GOLDEN_DEALS.G2.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G2DIST.assumptions,
+    deal_name: 'G7-FUND',
+    // §19.9: the adjudicated overlay — european, 2% on invested, 8% pref, 20% carry,
+    // full catch-up; offset inert on this golden (G2-DIST carries no monitoring fees).
+    fund: {
+      committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested',
+      carry_pct: 0.20, pref_rate: 0.08, catchup_pct: 1.0,
+      waterfall: 'european', fee_offset_pct: 1.0,
+    },
+  },
+};
+
 GOLDEN_DEALS.G2DISTD = {
   facts: GOLDEN_DEALS.G2.facts,
   assumptions: {
