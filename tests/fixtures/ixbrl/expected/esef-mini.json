@@ -1,0 +1,36 @@
+{
+ "facts": [
+  {
+   "concept": "ifrs-full:Equity",
+   "decimals": -3,
+   "dims": {},
+   "period": "2025-12-31",
+   "unit": "EUR",
+   "value": 300000.0
+  },
+  {
+   "concept": "ifrs-full:ProfitLossFromOperatingActivities",
+   "decimals": -3,
+   "dims": {},
+   "period": "2025-01-01/2025-12-31",
+   "unit": "EUR",
+   "value": 200000.0
+  },
+  {
+   "concept": "ifrs-full:Revenue",
+   "decimals": -3,
+   "dims": {},
+   "period": "2025-01-01/2025-12-31",
+   "unit": "EUR",
+   "value": 1000000.0
+  }
+ ],
+ "identity": {
+  "name": "Mini ESEF Oy"
+ },
+ "modal_currency": "EUR",
+ "notes": [
+  "inconsistent duplicate ifrs-full:CashAndCashEquivalents @ 2025-12-31: 50000.0 vs 51000.0 — dropped to gap"
+ ],
+ "routing": "oim"
+}

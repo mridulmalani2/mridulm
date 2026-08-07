@@ -1,11 +1,11 @@
-# IXBRL_SPEC — uploaded-filing extraction (data-side, Tier B) — v1 r3, 2026-08-07
+# IXBRL_SPEC — uploaded-filing extraction (data-side, Tier B) — v1 r4 (sign-off GRANTED @ fb8021e), 2026-08-07
 
 Normative conventions for the in-browser iXBRL upload parser (`lib/edgar/ixbrl.ts`): a user
 drops a filing FILE and gets the SAME `RawHistoricals` the fetch routes produce, through the
 SAME mappers. Every rule here is fixture-pinned; the reference derivation
 (`scripts/goldens/ixbrl_ref.py`, Python stdlib, zero imports of the TypeScript under test)
-re-derives the expected facts for the CI regeneration gate. **Revisions r2/r3 applied every hostile
-sign-off finding (rounds 1–3: 9 + 3 blockers + minors)** — transform registry corrected
+re-derives the expected facts for the CI regeneration gate. **Revisions r2–r4 applied every hostile
+sign-off finding (rounds 1–3: 9 + 3 + 1 blockers + minors; round 4 GRANTED)** — transform registry corrected
 against BOTH real samples; order-independent decimals-aware dedup; dimensional exclusion;
 annual-documents scope; the stitch-refusal proof; the restamp mechanism (default-sparing,
 URL-honest); FRC truth-telling incl. the balance-sheet-date staleness story; the nested
@@ -188,7 +188,7 @@ OMITTED (the consumers tolerate absence — `String(filed ?? '')` sorts; `accn` 
 the type and synthesized as the EMPTY STRING — falsy, so `filingUrl`'s `!accession` guard
 short-circuits and NO sec.gov archive URL is ever fabricated for an upload (the
 uploaded-filename story travels in the restamped detail instead); `cik` is synthesized `0`
-purely to satisfy the required type, and the §2 fix-up walk CLEARS `RawHistoricals.cik10`
+purely to satisfy the required type, and the §2 restamp walk, item (iv), CLEARS `RawHistoricals.cik10`
 — a zero-padded pseudo-CIK must never present as a real one) [round-2 minor 5; round-3
 R3-1: JS `0 != null` is true, so a cik of 0 DOES produce `CIK0000000000` — the previous
 "cik10-absent guard" claim was code-false]

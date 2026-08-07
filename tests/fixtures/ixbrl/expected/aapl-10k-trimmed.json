@@ -1,0 +1,1701 @@
+{
+ "facts": [
+  {
+   "concept": "us-gaap:AccountsPayableCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 62611000000.0
+  },
+  {
+   "concept": "us-gaap:AccountsPayableCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 68960000000.0
+  },
+  {
+   "concept": "us-gaap:AccountsReceivableNetCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 29508000000.0
+  },
+  {
+   "concept": "us-gaap:AccountsReceivableNetCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 33410000000.0
+  },
+  {
+   "concept": "us-gaap:AssetsCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 143566000000.0
+  },
+  {
+   "concept": "us-gaap:AssetsCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 152987000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:EquitySecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:MoneyMarketFundsMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 481000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 481000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:AssetBackedSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:BankTimeDepositsMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 1034000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CommercialPaperMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CorporateDebtSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 20000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:ForeignGovernmentDebtSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USGovernmentAgenciesDebtSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 36000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USStatesAndPoliticalSubdivisionsMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USTreasurySecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 35000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 1125000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CashMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 28359000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 29965000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:MoneyMarketFundsMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 778000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:MutualFundMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 778000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:AssetBackedSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:BankTimeDepositsMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 387000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CommercialPaperMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 28000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CorporateDebtSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 26000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:ForeignGovernmentDebtSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 1158000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USGovernmentAgenciesDebtSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 155000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USStatesAndPoliticalSubdivisionsMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USTreasurySecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 212000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 1966000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CashMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 27199000000.0
+  },
+  {
+   "concept": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 29943000000.0
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-25",
+   "unit": "USD",
+   "value": 35929000000.0
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-24",
+   "unit": "USD",
+   "value": 24977000000.0
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 30737000000.0
+  },
+  {
+   "concept": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 29943000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ProductMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 201471000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ServiceMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 22075000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 223546000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ProductMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 189282000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ServiceMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 24855000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 214137000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ProductMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 185233000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ServiceMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 25119000000.0
+  },
+  {
+   "concept": "us-gaap:CostOfGoodsAndServicesSold",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 210352000000.0
+  },
+  {
+   "concept": "us-gaap:Depreciation",
+   "decimals": -8,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 8700000000.0
+  },
+  {
+   "concept": "us-gaap:Depreciation",
+   "decimals": -8,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 8500000000.0
+  },
+  {
+   "concept": "us-gaap:Depreciation",
+   "decimals": -8,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 8199999999.999999
+  },
+  {
+   "concept": "us-gaap:DepreciationDepletionAndAmortization",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 11104000000.0
+  },
+  {
+   "concept": "us-gaap:DepreciationDepletionAndAmortization",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 11519000000.0
+  },
+  {
+   "concept": "us-gaap:DepreciationDepletionAndAmortization",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 11445000000.0
+  },
+  {
+   "concept": "us-gaap:FinanceLeaseLiabilityCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 165000000.0
+  },
+  {
+   "concept": "us-gaap:FinanceLeaseLiabilityCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 144000000.0
+  },
+  {
+   "concept": "us-gaap:FinanceLeaseLiabilityNoncurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 859000000.0
+  },
+  {
+   "concept": "us-gaap:FinanceLeaseLiabilityNoncurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 752000000.0
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 119103000000.0
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 113736000000.0
+  },
+  {
+   "concept": "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 123485000000.0
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 19300000000.0
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 16741000000.0
+  },
+  {
+   "concept": "us-gaap:IncomeTaxExpenseBenefit",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 29749000000.0
+  },
+  {
+   "concept": "us-gaap:InventoryNet",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 6331000000.0
+  },
+  {
+   "concept": "us-gaap:InventoryNet",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 7286000000.0
+  },
+  {
+   "concept": "us-gaap:LiabilitiesCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 145308000000.0
+  },
+  {
+   "concept": "us-gaap:LiabilitiesCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 176392000000.0
+  },
+  {
+   "concept": "us-gaap:LongTermDebt",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 105103000000.0
+  },
+  {
+   "concept": "us-gaap:LongTermDebt",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 96662000000.0
+  },
+  {
+   "concept": "us-gaap:LongTermDebtCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 9822000000.0
+  },
+  {
+   "concept": "us-gaap:LongTermDebtCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 10912000000.0
+  },
+  {
+   "concept": "us-gaap:LongTermDebtNoncurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 95281000000.0
+  },
+  {
+   "concept": "us-gaap:LongTermDebtNoncurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 85750000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:EquitySecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 428000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:MoneyMarketFundsMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 428000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:AssetBackedSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 344000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:BankTimeDepositsMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 320000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CommercialPaperMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 608000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CorporateDebtSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 12627000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:ForeignGovernmentDebtSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 11332000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USGovernmentAgenciesDebtSecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 271000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USStatesAndPoliticalSubdivisionsMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 192000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USTreasurySecuritiesMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 5468000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 31162000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CashMember"
+   },
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 31590000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:MoneyMarketFundsMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:MutualFundMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 617000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel1Member"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 617000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:AssetBackedSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 1278000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:BankTimeDepositsMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 478000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CommercialPaperMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 1038000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CorporateDebtSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 16027000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:ForeignGovernmentDebtSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 10810000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USGovernmentAgenciesDebtSecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 703000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USStatesAndPoliticalSubdivisionsMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 190000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member",
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:USTreasurySecuritiesMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 4087000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FairValueByFairValueHierarchyLevelAxis": "us-gaap:FairValueInputsLevel2Member"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 34611000000.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:FinancialInstrumentAxis": "us-gaap:CashMember"
+   },
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "concept": "us-gaap:MarketableSecuritiesCurrent",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 35228000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 152895000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:AmericasSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 62683000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:EuropeSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 35233000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:GreaterChinaSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 31153000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:JapanSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 12257000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:RestOfAsiaPacificSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 11569000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 119437000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 150888000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:AmericasSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 60508000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:EuropeSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 36098000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:GreaterChinaSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 30328000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:JapanSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 11888000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:RestOfAsiaPacificSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 12066000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 114301000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 162044000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:AmericasSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 67656000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:EuropeSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 41790000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:GreaterChinaSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 27082000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:JapanSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 12454000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:RestOfAsiaPacificSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 13062000000.0
+  },
+  {
+   "concept": "us-gaap:OperatingIncomeLoss",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 123216000000.0
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 10708000000.0
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 10959000000.0
+  },
+  {
+   "concept": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 9447000000.0
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentNet",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 43715000000.0
+  },
+  {
+   "concept": "us-gaap:PropertyPlantAndEquipmentNet",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 45680000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:IPadMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 29292000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:IPhoneMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 205489000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:MacMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 40177000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:WearablesHomeandAccessoriesMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 41241000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ProductMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 316199000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ServiceMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 78129000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "aapl:OtherCountriesMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 172269000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "country:CN"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 74200000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "country:US"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 147859000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:AmericasSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 169658000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:EuropeSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 95118000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:GreaterChinaSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 74200000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:JapanSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 25977000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:RestOfAsiaPacificSegmentMember"
+   },
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 29375000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-26/2022-09-24",
+   "unit": "USD",
+   "value": 394328000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:IPadMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 28300000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:IPhoneMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 200583000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:MacMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 29357000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:WearablesHomeandAccessoriesMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 39845000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ProductMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 298085000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ServiceMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 85200000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "aapl:OtherCountriesMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 172153000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "country:CN"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 72559000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "country:US"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 138573000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:AmericasSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 162560000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:EuropeSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 94294000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:GreaterChinaSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 72559000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:JapanSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 24257000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:RestOfAsiaPacificSegmentMember"
+   },
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 29615000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-25/2023-09-30",
+   "unit": "USD",
+   "value": 383285000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:IPadMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 26694000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:IPhoneMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 201183000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:MacMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 29984000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "aapl:WearablesHomeandAccessoriesMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 37005000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ProductMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 294866000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:ProductOrServiceAxis": "us-gaap:ServiceMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 96169000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "aapl:OtherCountriesMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 181887000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "country:CN"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 66952000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "srt:StatementGeographicalAxis": "country:US"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 142196000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:AmericasSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 167045000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:EuropeSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 101328000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:GreaterChinaSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 66952000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:JapanSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 25052000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {
+    "us-gaap:StatementBusinessSegmentsAxis": "aapl:RestOfAsiaPacificSegmentMember"
+   },
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 30658000000.0
+  },
+  {
+   "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-10-01/2024-09-28",
+   "unit": "USD",
+   "value": 391035000000.0
+  },
+  {
+   "concept": "us-gaap:UnrecognizedTaxBenefits",
+   "decimals": -6,
+   "dims": {},
+   "period": "2021-09-25",
+   "unit": "USD",
+   "value": 15477000000.0
+  },
+  {
+   "concept": "us-gaap:UnrecognizedTaxBenefits",
+   "decimals": -6,
+   "dims": {},
+   "period": "2022-09-24",
+   "unit": "USD",
+   "value": 16758000000.0
+  },
+  {
+   "concept": "us-gaap:UnrecognizedTaxBenefits",
+   "decimals": -6,
+   "dims": {},
+   "period": "2023-09-30",
+   "unit": "USD",
+   "value": 19454000000.0
+  },
+  {
+   "concept": "us-gaap:UnrecognizedTaxBenefits",
+   "decimals": -6,
+   "dims": {},
+   "period": "2024-09-28",
+   "unit": "USD",
+   "value": 22038000000.0
+  }
+ ],
+ "identity": {
+  "docType": "10-K",
+  "fp": "FY",
+  "fy": "2024",
+  "name": "Apple Inc.",
+  "periodEnd": "September 28, 2024"
+ },
+ "modal_currency": "USD",
+ "notes": [
+  "duplicate us-gaap:UnrecognizedTaxBenefits @ 2023-09-30: kept most precise",
+  "duplicate us-gaap:UnrecognizedTaxBenefits @ 2024-09-28: kept most precise"
+ ],
+ "routing": "us-gaap"
+}

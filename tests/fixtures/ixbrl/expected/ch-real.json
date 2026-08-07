@@ -1,0 +1,128 @@
+{
+ "facts": [
+  {
+   "concept": "uk-core:Creditors",
+   "decimals": 2,
+   "dims": {
+    "uk-core:MaturitiesOrExpirationPeriodsDimension": "uk-core:WithinOneYear"
+   },
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 11649.0
+  },
+  {
+   "concept": "uk-core:Creditors",
+   "decimals": 2,
+   "dims": {
+    "uk-core:MaturitiesOrExpirationPeriodsDimension": "uk-core:WithinOneYear"
+   },
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 11907.0
+  },
+  {
+   "concept": "uk-core:CurrentAssets",
+   "decimals": 2,
+   "dims": {},
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 22109.0
+  },
+  {
+   "concept": "uk-core:CurrentAssets",
+   "decimals": 2,
+   "dims": {},
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 13078.0
+  },
+  {
+   "concept": "uk-core:Equity",
+   "decimals": 2,
+   "dims": {},
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 11010.0
+  },
+  {
+   "concept": "uk-core:Equity",
+   "decimals": 2,
+   "dims": {},
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 5408.0
+  },
+  {
+   "concept": "uk-core:FixedAssets",
+   "decimals": 2,
+   "dims": {},
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 550.0
+  },
+  {
+   "concept": "uk-core:FixedAssets",
+   "decimals": 2,
+   "dims": {},
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 4237.0
+  },
+  {
+   "concept": "uk-core:NetAssetsLiabilities",
+   "decimals": 2,
+   "dims": {},
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 11010.0
+  },
+  {
+   "concept": "uk-core:NetAssetsLiabilities",
+   "decimals": 2,
+   "dims": {},
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 5408.0
+  },
+  {
+   "concept": "uk-core:NetCurrentAssetsLiabilities",
+   "decimals": 2,
+   "dims": {},
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 10460.0
+  },
+  {
+   "concept": "uk-core:NetCurrentAssetsLiabilities",
+   "decimals": 2,
+   "dims": {},
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 1171.0
+  },
+  {
+   "concept": "uk-core:TotalAssetsLessCurrentLiabilities",
+   "decimals": 2,
+   "dims": {},
+   "period": "2017-05-31",
+   "unit": "GBP",
+   "value": 11010.0
+  },
+  {
+   "concept": "uk-core:TotalAssetsLessCurrentLiabilities",
+   "decimals": 2,
+   "dims": {},
+   "period": "2018-05-31",
+   "unit": "GBP",
+   "value": 5408.0
+  }
+ ],
+ "identity": {
+  "balanceSheetDate": "2018-05-31",
+  "endDateForPeriod": "2018-05-31",
+  "name": "PARR OFFSHORE LTD"
+ },
+ "modal_currency": "GBP",
+ "notes": [],
+ "routing": "oim"
+}
