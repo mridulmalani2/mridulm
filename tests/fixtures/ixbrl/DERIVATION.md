@@ -1,4 +1,4 @@
-# ixbrl fixtures — adjudication record (DERIVATION.md method; IXBRL_SPEC v1 r4, GRANTED @ fb8021e)
+# ixbrl fixtures — adjudication record (DERIVATION.md method; IXBRL_SPEC v1 r5 @ 1bdc566 — r4 GRANTED @ fb8021e + the pass-2-driven r5 clarifications)
 
 The committed `expected/*.json` are the parser's GOSPEL once BOTH independent passes below are
 signed: a reference derivation in a DIFFERENT LANGUAGE (`scripts/goldens/ixbrl_ref.py`, Python
@@ -32,7 +32,7 @@ gate (`tests/ixbrl-goldens.test.ts` re-runs the reference and byte-compares). Sa
 | units | USD, EUR, shares, pure, divide "USD/shares"; modal currency USD (7+ USD vs 1 EUR) | ✓ |
 | routing | dimension-free us-gaap ≥5, ifrs-full 0 → **us-gaap** | ✓ |
 
-**aapl-10k-trimmed.htm (REAL Workiva markup):** 210 `ix:nonFraction` + the dei identity `ix:nonNumeric` reads (216 kept elements) [element counts corrected by pass 2] → 176 deduped facts; the
+**aapl-10k-trimmed.htm (REAL Workiva markup):** 210 `ix:nonFraction` + 6 top-level dei identity `ix:nonNumeric` elements = 216 kept top-level elements (nested fact occurrences serialize within their parents) [counts corrected/reconciled by pass 2] → 176 deduped facts; the
 REAL dup pin `us-gaap:UnrecognizedTaxBenefits @ 2024-09-28` resolves to **22,038,000,000 @
 dec −6** (the $22.0bn dec −8 twin collapses; EDGAR-published figure 22,038) — the exact case
 sign-off round 2 verified arithmetically; second real pair 19,454 likewise; routing us-gaap;
@@ -64,4 +64,47 @@ fixture bytes + IXBRL_SPEC r4 alone; zero mismatches against `expected/*.json`.*
 
 ## Pass 2 — independent hand-derivation (no access to ixbrl_ref.py or expected/)
 
-_To be appended by the independent adjudicator._
+**Blindness ordering honored:** every value below was derived from IXBRL_SPEC + the raw
+fixture bytes ONLY and committed to a scratch record BEFORE `expected/*.json` was opened;
+`ixbrl_ref.py` was never consulted during derivation (opened only afterward, to audit the
+post-adjudication §1c strip-set delta); the Pass-1 section above was read last, after the
+comparison was already complete. Derive first, compare second.
+
+**Derived blind:**
+- **synthetic-min**: all 22 parsed facts with per-transform arithmetic (TR2 numcommadecimal
+  "1.234,56" → 1234.56 ×10³ = 1,234,560; sign "12.5" → −12.5 ×10³ = −12,500; scale −2
+  "21" → 0.21; ix:exclude "5,000⟨…999…⟩" → 5,000; →0 names → 0), the §1e trio (UTB agree:
+  coarsest −8 → 220 vs 220.38→220 → keep dec −6 = 22,038,000,000 + note; AccountsPayable
+  1.0e8 vs 1.5e8 → gap + note), the 3 drops, the identity block incl. the
+  ixt-sec:datequarterend skip+note, all 6 notes, routing us-gaap (16 kept dimension-free
+  us-gaap concepts, ifrs-full 0), modal USD (15 USD vs 1 EUR) → 19 kept facts.
+- **esef-mini**: both `reports/*.xhtml` merged; identical dups collapse silently → 1,000,000 /
+  200,000 / 300,000; cross-file Cash 50,000-vs-51,000 both dec −3 → disagree → gap + note;
+  identity "Mini ESEF Oy"; routing oim; modal EUR.
+- **ch-real**: all 14 facts (7 uk-core concepts × instants 2018-05-31 / 2017-05-31, Creditors
+  under the WithinOneYear member, parentheses outside the element → positive), identity name +
+  BalanceSheetDate (datedaymonthyearen) + EndDateForPeriodCoveredByReport (plain ISO), zero
+  parse notes, routing oim, modal GBP.
+- **aapl-10k-trimmed**: all 8 UnrecognizedTaxBenefits facts and their four §1e groups —
+  2024-09-28: 22.0e9 dec −8 vs 22,038e6 dec −6, /1e8 = 220.00 vs 220.38 → both 220 → keep
+  −6 = **22,038,000,000** + note; 2023-09-30: 19.5e9 dec −8 vs 19,454e6 dec −6 (×2), 195.00
+  vs 194.54→195 → keep **19,454,000,000** + note; 2022-09-24 identical pair → 16,758,000,000,
+  NO note; 2021-09-25 singleton 15,477,000,000. Spot checks at the dimension-free contexts:
+  Revenue 391,035e6, OperatingIncomeLoss 123,216e6, Cash @ 2024-09-28 29,943e6. All exact.
+
+**The one fork (r4) and its resolution (r5):** under r4's §1d grammar this pass derived
+`dei:DocumentPeriodEndDate` as a date read → aapl's `ixt:date-monthname-day-year-en` (outside
+the whitelist) → identity absent + note; the committed golden carries the verbatim text
+"September 28, 2024" (NBSP intact) with no note. Pass 2 refused to sign over that single
+divergence. Resolved SPEC-SIDE in r5 (@ 1bdc566), per this pass's own recommendation:
+dei periodEnd is recorded VERBATIM (metadata never consumed as a date; SEC staleness anchors
+from fact contexts), the date whitelist governs exactly the two uk-bus reads. Under r5 the
+divergence dissolves in the goldens' favor; no golden changed. Pass 2 also audited the
+post-adjudication one-line `ixbrl_ref.py` §1c fix (strip-set now space/NBSP/thin/narrow-NBSP/
+tab) and re-ran the reference on all four fixtures: output **byte-identical** to the committed
+`expected/*.json` — the fix is output-neutral here (no fixture numeric text carries a
+non-ASCII space; esef's "1 000" is ASCII).
+
+**Signed — pass 2 (2026-08-07): independent blind hand-derivation from the raw fixture bytes
++ IXBRL_SPEC (r4 at derivation time; adjudicated under r5 @ 1bdc566); ZERO mismatches against
+`expected/*.json` under r5. The committed goldens are GOSPEL.**

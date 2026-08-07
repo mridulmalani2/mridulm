@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ixbrl_ref.py — INDEPENDENT reference derivation for the uploaded-filing iXBRL parser
-(lib/edgar/IXBRL_SPEC.md v1 r4, sign-off GRANTED @ fb8021e). Python stdlib ONLY; imports
+(lib/edgar/IXBRL_SPEC.md v1 r5 @ 1bdc566; r4 sign-off GRANTED @ fb8021e). Python stdlib ONLY; imports
 NOTHING from the TypeScript tree. Reads a fixture (.xhtml/.htm or .zip), applies the SPEC's
 §1 parse pipeline + §2 routing/identity/modal-currency, and emits canonical JSON. The
 committed outputs under tests/fixtures/ixbrl/expected/ are GOSPEL once the two adjudication
