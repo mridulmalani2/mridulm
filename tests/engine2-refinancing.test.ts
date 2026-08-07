@@ -90,10 +90,22 @@ describe('§18.11(i) — refi with R+1 = N: the deferred deduction merges into t
     expect(core.tranches[0][3].refinancing_cash_cost).toBeGreaterThan(0);
     const wo = core.tranches[0][3].unamortized_writeoff;
     expect(wo).toBeGreaterThan(0);
-    // Year 5 uncapped includes BOTH the exit write-off AND the deferred (WO + premium). Year 4's
-    // own uncapped does not (the deferral is next year's). MUTANT — "deferral not deferred" would
-    // put wo+premium in year 4.
-    expect(core.tax[4].uncapped_deductions).toBeGreaterThan(core.exit_writeoff + wo);
+    // Year 5 uncapped is pinned EXACTLY (§6 composition: fee amortization + commitment fees +
+    // retirement pool, where at exit the pool = exit write-off ⊕ the deferred WO + premium —
+    // sequence.ts single-reads pendingRetirementDeduction into it). The former '>' bound let a
+    // merge DOUBLE-COUNT mutant (2× deferral) live; equality kills it. Premium = call_premium_pct
+    // × the year-R beginning balance (§18.4; REFI default 1%).
+    const premium = 0.01 * core.tranches[0][3].beginning_balance;
+    expect(core.tax[4].uncapped_deductions).toBeCloseTo(
+      core.operating[4].financing_fee_amortization + core.waterfall[4].commitment_fees +
+        core.exit_writeoff + wo + premium,
+      9,
+    );
+    // and year 4's own uncapped does NOT carry the deferral (it is next year's by §18.5)
+    expect(core.tax[3].uncapped_deductions).toBeCloseTo(
+      core.operating[3].financing_fee_amortization + core.waterfall[3].commitment_fees,
+      9,
+    );
     expect(bsCloses(core)).toBe(true);
   });
 });
@@ -224,6 +236,9 @@ describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, n
   });
   it('refi whose new maturity balloons inside the hold ((year−1)+new_maturity ≤ hold) → throws', () => {
     expect(bad([REFI({ tranche_name: 'TLB', year: 3, new_maturity_years: 2 })])).toThrow(/new maturity must exceed/);
+  });
+  it('refi with a NaN new maturity → throws at the gate (NaN passes < and ≤ checks — must not poison effMaturity)', () => {
+    expect(bad([REFI({ tranche_name: 'TLB', year: 3, new_maturity_years: NaN })])).toThrow(/new maturity must exceed/);
   });
   it('two refis on the same tranche → throws', () => {
     expect(bad([REFI({ tranche_name: 'TLB', year: 2 }), REFI({ tranche_name: 'TLB', year: 3 })])).toThrow(/more than once/);

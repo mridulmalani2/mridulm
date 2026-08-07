@@ -87,7 +87,9 @@ export function validateRefinancing(
         `debt: refinancing of "${ev.tranche_name}" at year ${ev.year} — the refi year must be 1..${holdYears - 1} (before the exit year; SPEC §18.3)`,
       );
     }
-    if (ev.new_maturity_years < 1 || ev.year - 1 + ev.new_maturity_years <= holdYears) {
+    // NaN-safe: NaN fails BOTH comparisons and would sail through to poison effMaturity —
+    // an input-gate field must reject non-finite input, not compute with it (§18.3).
+    if (!Number.isFinite(ev.new_maturity_years) || ev.new_maturity_years < 1 || ev.year - 1 + ev.new_maturity_years <= holdYears) {
       throw new RangeError(
         `debt: refinancing of "${ev.tranche_name}" — the new maturity must exceed the remaining hold ((year−1)+new_maturity_years > ${holdYears}); no balloon inside the hold (SPEC §18.3)`,
       );

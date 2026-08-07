@@ -50,6 +50,7 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
     ['G2DIST', GOLDEN_DEALS.G2DIST.assumptions],
     ['G3DIST', GOLDEN_DEALS.G3DIST.assumptions],
     ['G2DISTD', GOLDEN_DEALS.G2DISTD.assumptions],
+    ['G6REFI', GOLDEN_DEALS.G6REFI.assumptions], // §18: exit/returns value-compared engine-vs-fixture, not only transitively
   ];
 
   for (const [golden, assumptions] of cases) {

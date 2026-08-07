@@ -231,7 +231,10 @@ const AssumptionsPanel: React.FC = () => {
               extended past the hold, no new OID/fees); the full event schema (new OID/fee) is on
               the assumptions object for programmatic use. */}
           {term && term.pricing.kind === 'floating' && (() => {
-            const refi = a.structure.refinancing?.[0] ?? null;
+            // THIS tranche's event only — a programmatic multi-tranche schedule (§18.11(vii))
+            // must survive edits here; commits below preserve events on OTHER tranches.
+            const refiEvents = a.structure.refinancing ?? [];
+            const refi = refiEvents.find((e) => e.tranche_name === term.name) ?? null;
             const N = a.entry.hold_years;
             const base = term.pricing;
             const makeEvent = (over: Partial<RefinancingEvent>): RefinancingEvent => ({
@@ -247,8 +250,9 @@ const AssumptionsPanel: React.FC = () => {
               ...over,
             });
             // Each commit fn RETURNS [next, paths] — the store's set() does the write (basis YOU).
+            const otherEvents = refiEvents.filter((e) => e.tranche_name !== term.name);
             const withRefi = (over: Partial<RefinancingEvent>): [DealAssumptions, string[]] => [
-              { ...a, structure: { ...a.structure, refinancing: [makeEvent(over)] } },
+              { ...a, structure: { ...a.structure, refinancing: [...otherEvents, makeEvent(over)] } },
               ['structure.refinancing'],
             ];
             const newSpread = refi && refi.new_pricing.kind === 'floating' ? refi.new_pricing.spread : base.spread;
@@ -259,7 +263,7 @@ const AssumptionsPanel: React.FC = () => {
                     onCommit={numCommit((v) => {
                       // §18.3 gate: 1 ≤ year ≤ hold−1. 0/blank/out-of-range clears the refi.
                       const yr = Math.round(v);
-                      if (yr < 1 || yr > N - 1) return [{ ...a, structure: { ...a.structure, refinancing: null } }, ['structure.refinancing']];
+                      if (yr < 1 || yr > N - 1) return [{ ...a, structure: { ...a.structure, refinancing: otherEvents.length ? otherEvents : null } }, ['structure.refinancing']];
                       return withRefi({ year: yr });
                     })} />
                 </Row>

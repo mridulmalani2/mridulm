@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
-import { Debt } from '../components/deal-engine/v2/OutputTabs';
+import { Debt, Methodology } from '../components/deal-engine/v2/OutputTabs';
 import { runModel } from '../lib/engine2/facade';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import { money } from '../lib/format';
@@ -72,5 +72,16 @@ describe('§18 refi display surface — Debt tab', () => {
     const { html } = render('G2');
     expect(html).not.toContain('Refinancing events');
     expect(html).not.toContain('⟳');
+  });
+});
+
+describe('§18.8 — the v1 refi simplifications are LISTED on the methodology page (SPEC §15)', () => {
+  it('the Disclosures table carries the Refinancing row with the §18.5 deferral wording (label mutation-tested)', () => {
+    const html = renderToStaticMarkup(React.createElement(Methodology));
+    expect(html).toContain('Refinancing (§18)');
+    // the load-bearing clauses of the §15 sentence — a paraphrase drift reddens here
+    expect(html).toContain('par-for-par');
+    expect(html).toContain('deducted UNCAPPED the FOLLOWING year');
+    expect(html).toContain('no forward-curve or covenant-cure trigger');
   });
 });

@@ -371,9 +371,11 @@ const DISCLOSURES: [string, string][] = [
   ['PP&E roll', 'mechanical (capex − D&A); may go negative — warned, never clamped'],
   ['Post-2025 OBBBA sub-changes', 'no interest capitalization, no CFC modeling'],
   ['Call protection', 'BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions (Phase G)'],
+  // §18.8: the v1 refinancing simplifications are LISTED here — the SPEC sentence §15 carries verbatim-mirrored
+  ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted UNCAPPED the FOLLOWING year (vs the Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1yr)'],
 ];
 
-const Methodology: React.FC = () => (
+export const Methodology: React.FC = () => (
   <div>
     <p className="text-[10px] uppercase tracking-widest mb-2" style={label}>Assumptions & methodology (SPEC §15) — a model is a range, not a point</p>
     <Table head={['Simplification', 'Why it is immaterial or conservative']}>

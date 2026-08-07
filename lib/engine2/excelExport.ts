@@ -118,11 +118,13 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
   // ── Debt schedule ──
   const debtRows: Cell[][] = [];
   o.tranches.forEach((rows) => {
-    rows.forEach((r, i) => debtRows.push([r.name, `Y${i + 1}`, r.beginning_balance, r.cash_interest, r.pik_accrual, r.mandatory_amort, r.sweep_repayment, r.ending_balance]));
+    // §18: the refi event is DISCLOSED on the schedule (named TrancheYear fields — the ⟳ marker,
+    // the year's cash cost, and the old-book write-off; write-off also fires on §7 early retirement).
+    rows.forEach((r, i) => debtRows.push([r.name, `Y${i + 1}`, r.beginning_balance, r.cash_interest, r.pik_accrual, r.mandatory_amort, r.sweep_repayment, r.ending_balance, r.refinanced ? '⟳ refi' : '', r.refinancing_cash_cost || '', r.unamortized_writeoff || '']));
   });
-  if (o.revolver) o.revolver.forEach((r, i) => debtRows.push(['Revolver', `Y${i + 1}`, r.beginning_drawn, r.cash_interest, r.commitment_fee, r.draw, r.repayment, r.ending_drawn]));
-  sheetFromRows(wb, 'Debt', ['Tranche', 'Year', 'Beginning', 'Interest', 'PIK/Fee', 'Amort/Draw', 'Sweep/Repay', 'Ending'],
-    debtRows, [null, null, MONEY, MONEY2, MONEY2, MONEY2, MONEY2, MONEY]);
+  if (o.revolver) o.revolver.forEach((r, i) => debtRows.push(['Revolver', `Y${i + 1}`, r.beginning_drawn, r.cash_interest, r.commitment_fee, r.draw, r.repayment, r.ending_drawn, '', '', '']));
+  sheetFromRows(wb, 'Debt', ['Tranche', 'Year', 'Beginning', 'Interest', 'PIK/Fee', 'Amort/Draw', 'Sweep/Repay', 'Ending', 'Refi (§18)', 'Refi cash cost', 'Write-off (old OID+fees)'],
+    debtRows, [null, null, MONEY, MONEY2, MONEY2, MONEY2, MONEY2, MONEY, null, MONEY2, MONEY2]);
   const last = o.credit[o.credit.length - 1];
   wb.getWorksheet('Debt')!.addRow(['Deleveraging', '', 'Cumulative paydown % of entry debt', last?.cumulative_paydown_pct_of_entry_debt ?? 'N/A', 'FCF conversion (final yr)', last?.fcf_conversion ?? 'N/A', '', '']);
 
@@ -178,6 +180,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Exit = entry multiple unless edited; §382 static; NOL usage not optimized across years', 'SPEC §6/§9/§15'],
     ['Exit-year fee write-off deducted uncapped; PP&E rolls mechanically (may go negative, warned)', 'SPEC §7/§8/§15'],
     ['BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions', 'SPEC §3/§15'],
+    ['Refinancing: scheduled per-tranche event (one per tranche), par-for-par, cash-pay term tranches only; repricing effective for the whole refi year; old OID/DFC write-off + call premium deducted uncapped the FOLLOWING year (conservative vs Treas. Reg. §1.1001-3)', 'SPEC §18/§15'],
     [`Entry leverage is GROSS (debt at par ÷ ${entryMult.sizing_label} EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series`, 'SPEC §11'],
     ['A model is a range, not a point — the sensitivity/scenario exhibits are the primary caveat mechanism', 'SPEC §15'],
   ], [null, null]);
