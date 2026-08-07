@@ -85,3 +85,15 @@ describe('§18.8 — the v1 refi simplifications are LISTED on the methodology p
     expect(html).toContain('no forward-curve or covenant-cure trigger');
   });
 });
+
+describe('§15 — the v1.1.0 interim-distributions simplifications are LISTED on the methodology page', () => {
+  // Same class as the §18.8 row above (hostile review 2026-08-07): the §15 SPEC sentence has
+  // carried these clauses since v1.1.0 while neither methodology surface listed them.
+  it('the Disclosures table carries the Interim distributions row (label mutation-tested)', () => {
+    const html = renderToStaticMarkup(React.createElement(Methodology));
+    expect(html).toContain('Interim distributions (§3 step 7)');
+    expect(html).toContain('never revolver-funded');
+    expect(html).toContain('blocked capacity does not accrue');
+    expect(html).toContain('closed-form pro-forma net-leverage test');
+  });
+});

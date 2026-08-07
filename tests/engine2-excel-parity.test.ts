@@ -167,3 +167,14 @@ describe('§18 refinancing — Excel surfaces disclose the event (G6-REFI)', () 
     expect(zeroCells).toBe(0);
   });
 });
+
+describe('§15 completeness — the v1.1.0 interim-distributions row is on the Excel Methodology sheet', () => {
+  it('Methodology carries the distributions/RP-trap sentence (label mutation-tested)', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    const { facts, assumptions } = GOLDEN_DEALS.G2;
+    const rb = await roundTrip(buildEngine2Workbook(runModel(facts, assumptions), 'USD'));
+    const methodText: string[] = [];
+    rb.getWorksheet('Methodology')!.eachRow((row) => methodText.push(String(row.getCell(1).value ?? '')));
+    expect(methodText.some((l) => l.startsWith('Interim distributions:') && l.includes('no solver')), 'distributions Methodology row').toBe(true);
+  });
+});
