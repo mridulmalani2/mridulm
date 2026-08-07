@@ -507,4 +507,25 @@ payback null (interim-only rule); LP net IRR 0.098059 < sponsor 0.133906 (§19.6
 Additivity: every non-fund block of G7FUND byte-identical to G2DIST (in-script assert +
 the gate's §19.7 block).
 
-**Pass 2 (blind, independent) — pending.**
+**Pass 2 (2026-08-08, blind, independent) — SIGNED, zero mismatches.** Ordering honored:
+the full walk was hand-derived from SPEC §19 r3 + the G2-DIST sponsor rows (sponsor_equity
+587.22, rollover_equity ABSENT ⇒ share = 100%, distribution_paid [0, 12.09, 15.34, 10, 8],
+exit.sponsor_share 1044.06) and committed to a scratch file BEFORE opening spec_calc.py's
+fund path, the G7FUND fund block, the §19 test assertions, or the Pass-1 text above.
+Independently derived: fee 11.7444/yr (offset inert, gp_fee_income absent); paid-in
+645.942 (= derived committed_capital); pref accruals 46.9776 / 51.67536 / 55.7817408 /
+59.956632064 / 64.89271462912 → 279.28404749312 at t=5 (every interim distribution dies in
+step-1 RoC; state after y4: U 596.7676, P 214.391332864); t=5 D 1052.06 vs U 608.512
+(fee_5 drawn pre-distribution per B8) → RoC 608.512 / pref 279.28404749312 / catch-up
+c = 0.25 × pref = 69.82101187328 / terminal 94.4429406336 → LP 75.55435250688 + GP
+18.88858812672. lp_distributions [0, 12.09, 15.34, 10, 963.3504]; gp_carry [0,0,0,0,
+88.7096]; Σ LP 1000.7804, Σ GP 88.7096; §19.6(a) conservation 1089.49 ≡ 1089.49 diff 0;
+§19.6(d) bound 0.2 × 443.548 = 88.7096 binding at EQUALITY; moic 1.549334770 → 1.549335;
+dpi [0, 0.0197966691, 0.0440675701, 0.0590194602, 1.549335]; payback null (interim cum
+45.43 never reaches contributions); IRR by bisection on [−587.22, −11.7444, +0.3456,
++3.5956, −1.7444, +951.606] = 0.0980590690 → 0.098059 (single crossing on the scanned
+domain despite 3 sign changes). Every fixture value matched exactly (dollars) or within
+±0.5e-6 (6-dp ratios; max delta 4.6e-7 on dpi[4]). Conformance notes, no value impact:
+(i) §19.5 leaves the never-reached payback sentinel unstated — fixture uses null, concur;
+(ii) year-5 interim + exit riding step (3) as one D or sequentially is result-identical
+(the walk is path-independent within a year) — no spec change needed.

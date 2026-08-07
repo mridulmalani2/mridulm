@@ -1642,7 +1642,7 @@ and the stream `fund_lp_net: {irr, moic, dpi[], payback_year}` where:
   t)` — the ILPA to-date ratio on the GROWING paid-in, NOT ÷ paid_in_total [round-1 B6].
 - `payback_year` = the first year cumulative `lp_distributions` ≥ cumulative
   `lp_contributions` to date, counting INTERIM distributions only — the year-N exit inflow
-  does not count (the §9/L-10 rule, applied at the LP layer) [B6].
+  does not count (the §9/L-10 rule, applied at the LP layer) [B6]; null when never reached (the pass-2 sentinel pin).
 Labels carry the ILPA basis: "Net to LP — after fund fees & carry (fund-of-one overlay)".
 The §12 bridge is UNCHANGED (the overlay is value SHARING on the sponsor-LP boundary, not
 value creation — DR-2 Item 7); a memo line "less: fund fees & carry → net to LP" may render
