@@ -725,6 +725,7 @@ the item is IN the stream, as part of the t=0 OUTFLOW. **`excluded`** means the 
 in the stream at all. **`in (−)`** / **`in (+)`** are later-period flows. `n/a` means the
 concept does not exist for that stream. The two words are not synonyms — "out" is a
 direction, "excluded" is a membership decision.
+**Net-to-LP (§19) membership addendum [v1.4.0]:** management fees out (−, as drawn incl. year N); GP carry out (− at each carrying distribution); monitoring fees EXCLUDED from LP inflows (they OFFSET the fee draw — never re-added; the §5 sponsor-consolidation rule); sponsor share of §3-step-7 distributions in (+); `exit.sponsor_share` in (+) at N (already post-§10-promote — the promote is NOT re-deducted); rollover flows EXCLUDED entirely (§19.1); transaction/financing costs already inside the t=0 equity check (unchanged).
 
 | Item | (1) Sponsor net | (2) Unlevered | (3) Pre-promote |
 |---|---|---|---|
@@ -972,6 +973,15 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
     never in year R's; (d) **`refinancing_cash_cost[R] = call_premium + new_OID + new_fees`**
     and it is a cash use of that year's running-cash variable (§14.3 conservation includes it).
 
+20. Fund/LP overlay [v1.4.0 — §19] (domain: `fund` non-null; all trivially satisfied /
+    absent when null — §19.6(c) byte-identity): (a) sponsor-side conservation §19.6(a) at
+    1e-9; (b) `fund_lp_net.irr ≤ sponsor_net.irr` where both defined (§14.12/§14.14 root
+    policy; fee/carry > 0); (c) the PER-ELECTION GP-share bound §19.6(d) — 'european' on
+    paid-in, 'american' on invested capital (the single-bound form is FALSE under
+    'american': sign-off round 1, worked counterexample); (d) `dpi[]` monotone
+    non-decreasing between distributions on the to-date basis; (e) §19.6(e) is an explicit
+    NON-claim — no ordering between the elections' IRRs is asserted.
+
 ## §15 Units, precision, display [CONFIRMED DR-5 Item 6]
 
 Engine: float64 end-to-end, unit = millions of deal currency, **no intermediate rounding**.
@@ -990,7 +1000,7 @@ carryforwards out of scope; exit-year fee write-off deducted UNCAPPED; PP&E roll
 mechanically and may go negative (warned); post-2025 OBBBA §163(j) sub-changes out of
 scope; interim distributions [v1.1.0] pay at year-end after full debt service (never
 revolver-funded), blocked capacity does not accrue, and the RP trap is the closed-form
-pro-forma net-leverage test (§3.7 — no solver); refinancing [v1.3.0 — §18] is a SCHEDULED
+pro-forma net-leverage test (§3.7 — no solver); the fund/LP overlay [v1.4.0 — §19] is a FUND-OF-ONE on the sponsor side only (annual fee on a constant basis — no step-downs/NAV; no subscription line; no GP commitment; no clawback — nothing to claw back by construction; 'european' = all-contributions hurdle+pref base vs 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, never fund carry; year-N fee drawn after the final distribution); refinancing [v1.3.0 — §18] is a SCHEDULED
 per-tranche event (no forward-curve or covenant-cure trigger), one refi per tranche,
 par-for-par (no dividend recap / upsizing), cash-pay term tranches only (no PIK refi), the
 repricing effective for the whole of the refi year (no mid-year proration), and the old
@@ -1057,7 +1067,7 @@ is OFF ⇔ +∞** — N/A semantics, never a sentinel, per §11/§15), `distribu
 `distribution_blocked`. `ReturnStreams` gains `dpi: number[]` (length `hold_years`, NOT
 t0-anchored) and `payback_year: number | null` (1-indexed), and its two SPONSOR-SIDE streams
 gain `irr_mid_year: number | null`. `ValueBridge.walkdown` gains
-`interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8). [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
+`interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8). [v1.4.0] `assumptions.fund: FundOverlayAssumption | null` — `{committed_capital: number|null, mgmt_fee_pct: ≥0, fee_basis: 'committed'|'invested', carry_pct: [0,1), pref_rate: ≥0, catchup_pct: {0} ∪ [carry_pct, 1], waterfall: 'european'|'american', fee_offset_pct: [0,1]}; null ≡ OFF (byte-identity §19.6(c)). Input-gate REJECTIONS: committed_capital = null ∧ fee_basis = 'committed' (circular — §19.2); explicit committed below total contributions; every domain violation above. `ModelOutput.fund` (Class C): null when OFF; when ON, `{lp_contributions[], lp_distributions[], gp_carry[], mgmt_fees_net[], paid_in_total, committed_capital, fund_lp_net: {irr, moic, dpi[], payback_year}}` — named fields, unconditional emission within the non-null object. The suggestion layer proposes NO fund overlay (§19 preamble). [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
 `ScenarioResult.waterfall`'s slim block gains `distribution_paid` and `distribution_blocked`
 (§13). The reference derivation additionally records a top-level `distributions` block —
 `requested`, `paid`, `sponsor_share_paid`, `cumulative_paid`, `trap_level`, `blocked_years`
@@ -1523,128 +1533,177 @@ persists) — asserts the flag STILL fires, which pins ε to the §7 tolerance (
 machine epsilon, reddens it).
 
 
-## §19 Fund/LP overlay — net-to-LP returns on a fund-of-one [v1.4.0 — Phase 2 / backlog #3; Tier A, engine arithmetic] [DRAFT — pending independent hostile sign-off]
+## §19 Fund/LP overlay — net-to-LP returns on a fund-of-one [v1.4.0 — Phase 2 / backlog #3; Tier A, engine arithmetic] [DRAFT r2 — round 1 REFUSED (7 blocking), all applied; round 2 pending]
 
-The deal's sponsor-side cash flows become the portfolio flows of a HYPOTHETICAL single-asset
+The deal's SPONSOR-side cash flows become the portfolio flows of a HYPOTHETICAL single-asset
 fund ("fund-of-one"), and a fourth return stream — **net to LP after management fees and
 carried interest** — is computed per the ILPA definitions DR-2 pins (Net IRR = "net of
-management fees and carried interest"; TVPI/DPI on PAID-IN capital). Default
-`fund: null` = feature OFF ⇒ every pre-v1.4.0 model is byte-identical; the stream is ABSENT
-(never a zero row) when OFF.
+management fees and carried interest"; TVPI/DPI on PAID-IN capital). Default `fund: null` =
+feature OFF ⇒ every pre-v1.4.0 model is byte-identical; `ModelOutput.fund` is null and the
+stream is ABSENT (never a zero row) when OFF. **The suggestion layer proposes NO fund
+overlay** (a fund structure is an LP-agreement fact with no history/convention basis — the
+distributions/refinancing precedent); the §19.2 parenthetical conventions become field-level
+suggestion material only AFTER the user turns the overlay on [round-1 B7].
 
-**§19.1 The frame — fund-of-one [DECIDED v1-simple].** One deal, one fund: LP contributions
-fund the sponsor equity check at t=0 and the annual management fee as drawn; distributions to
-the fund are the deal's §3-step-7 interim distributions plus the §9 exit net equity proceeds.
-REJECTED alternatives: (a) a multi-deal fund with commitment pacing/recycling — a portfolio
-model, not a deal model (v2; the ILPA subscription-line with/without presentation goes with
-it, DISCLOSED as omitted); (b) treating the MIP/promote (§10) as fund carry — the §10 promote
-is PORTFOLIO-COMPANY-level management incentive, already deducted BEFORE sponsor net returns;
-fund carry is a DIFFERENT layer on the SPONSOR-to-LP boundary (DR-2's four-layer stack:
-unlevered → pre-promote → sponsor net → net-to-LP). Conflating them is the double-count DR-2
-Item 4 warns about.
+**§19.1 The frame — fund-of-one, SPONSOR side only [DECIDED v1-simple].** One deal, one
+fund: LP contributions fund the SPONSOR equity check at t=0 and the annual management fee as
+drawn; distributions to the fund are the SPONSOR SHARE of the §3-step-7 interim
+distributions plus the §9 SPONSOR exit proceeds (`exit.sponsor_share` — post-§10-promote,
+post-rollover). **Rollover holders are NOT LPs of the fund-of-one** — their pari-passu slice
+of every distribution (the §9/§10 v1.1.1 rule, `sponsorShareOfDistributions`) stays outside
+the overlay entirely [round-1 B1]. REJECTED alternatives: (a) a multi-deal fund with
+commitment pacing/recycling — a portfolio model, not a deal model (v2; ILPA's
+subscription-line with/without presentation goes with it, DISCLOSED as omitted); (b)
+treating the §10 MIP/promote as fund carry — the promote is PORTFOLIO-COMPANY-level
+management incentive, already deducted BEFORE `exit.sponsor_share` (exit.ts computes postMip
+before the rollover split); fund carry is a DIFFERENT layer on the sponsor-to-LP boundary
+(DR-2's four-layer stack: unlevered → pre-promote → sponsor net → net-to-LP). Conflating
+them is the double-count DR-2 Item 4 warns about; (c) overlaying the TOTAL equity
+distributions — credits the LP fund with the rollover holders' money [B1].
 
-**§19.2 Inputs (`fund` — §16 schema; all rates decimals).**
-`committed_capital: number | null` — null ⇒ committed = total LP contributions (invested
-equity + fees drawn; a fund-of-one has no unfunded reserve). Explicit values < required
-contributions are an input-gate REJECTION (§16).
-`mgmt_fee_pct` (convention 2.0%), `fee_basis: 'committed' | 'invested'` — the fee accrues
-ANNUALLY for hold years 1..N on the chosen basis (invested = the t=0 sponsor equity check,
-constant — v1 has no NAV step-down; fee step-down schedules and post-investment-period basis
-switches are REJECTED → v2, DISCLOSED).
-`carry_pct` (20%), `pref_rate` (8%, COMPOUNDED annually on unreturned capital),
-`catchup_pct: 0..1` (100% = full catch-up; 0 = no catch-up (hard hurdle)),
-`waterfall: 'european' | 'american'` (§19.4).
-`fee_offset_pct` (ILPA principle: 100%) — the §5 monitoring-fee income (`gp_fee_income`,
-annual + termination) offsets the management fee, floored at zero per year (an offset never
-becomes a negative fee).
+**§19.2 Inputs (`fund` — §16 schema below; all rates decimals).**
+`committed_capital: number | null` — null ⇒ committed is DERIVED for REPORTING as total LP
+contributions (invested equity + fees drawn). **Input gate [round-1 B5]: `committed_capital
+= null` ∧ `fee_basis = 'committed'` is REJECTED** — the fee would depend on committed which
+depends on fees drawn (a fixed point; §5's no-solver rule forbids resolving it). An explicit
+`committed_capital` below required contributions is likewise REJECTED (§16).
+`mgmt_fee_pct` (convention 2.0%; domain ≥ 0), `fee_basis: 'committed' | 'invested'`
+(invested = the t=0 sponsor equity check, constant — v1 has no NAV basis; fee step-down
+schedules and post-investment-period basis switches are REJECTED → v2, DISCLOSED).
+`carry_pct` (20%; domain [0, 1)), `pref_rate` (8%, COMPOUNDED annually; domain ≥ 0),
+`catchup_pct` — domain **{0} ∪ [carry_pct, 1]** [round-1 minor 2: a catch-up share below the
+carry share can never reach the step-3 target, silently stranding the waterfall in step 3
+with a GP profit share BELOW the hard-hurdle case; gated, not defaulted].
+`waterfall: 'european' | 'american'` (§19.4). `fee_offset_pct` (domain [0, 1]; ILPA
+principle: 1.0) — the §5 monitoring-fee income (`gp_fee_income.annual[t]`, plus
+`.termination` in year N) offsets the fee, FLOORED at zero per year (an offset never becomes
+a negative fee); `gp_fee_income = null` ⇒ offset 0 [round-1 minor 5].
 
-**§19.3 LP cash-flow assembly (annual, engine periods).**
-- t=0 outflow: `sponsor_equity` (§2 plug — the invested capital).
+**§19.3 LP cash-flow assembly (annual, engine periods; year-end order pinned in §19.4).**
+- t=0 outflow: `sources_uses.sponsor_equity` (§2 plug — the INVESTED capital).
 - Year t (1..N) outflow: `fee_t = max(0, mgmt_fee_pct × basis − fee_offset_pct ×
-  (gp_fee_income.annual[t] + [t=N] gp_fee_income.termination))` — fees are LP capital DRAWN
-  (they enter paid-in and, under 'european', the return-of-capital hurdle base).
-- Year t inflow: `distributions_paid[t]` (sponsor share — §3 step 7) and, at t=N, the §9
-  sponsor exit proceeds. (The §10 promote and §5 monitoring flows are already excluded from
-  sponsor net proceeds; nothing is re-added — §19.1(b).)
-- All flows year-end (§1); the §1 mid-year IRR display toggle applies to the LP stream the
-  same way it applies to the sponsor stream (display-only).
+  (gp_fee_income.annual[t] + [t=N] gp_fee_income.termination))`. `mgmt_fees_net[t] ≡ fee_t`
+  — the FLOORED draw (an unfloored "post-offset" reading breaks §19.6(a) exactly in a
+  floor-binding year) [round-1 minor 3]. Fees are LP capital DRAWN: they enter paid-in and,
+  under 'european' ONLY, the return-of-capital hurdle base and the pref-accrual base (§19.4).
+- Year t inflow: `sponsorShareOfDistributions(distributions_paid, sponsor_equity,
+  rollover_equity)[t]` — the SPONSOR share, never the total [B1] — and, at t=N additionally,
+  `exit.sponsor_share`.
+- All flows year-end (§1); the §1 mid-year IRR display toggle applies to the LP stream
+  exactly as to the sponsor streams (display-only; year-N flows never shift).
 
-**§19.4 The distribution waterfall (per distribution year, running state).**
-Running state: `unreturned` (paid-in not yet returned), `pref_accrued` (compounds at
-`pref_rate` on `unreturned + pref_accrued` at each year-end BEFORE that year's distribution
-is applied), `gp_carry_paid`, `lp_profit_paid`. Each year's distributable amount D walks:
-1. **Return of capital**: pay down `unreturned` (under 'european', ALL paid-in to date incl.
-   fee draws; under 'american', only the INVESTED capital — the deal's t=0 check — with fee
-   draws recovered at the END of the waterfall, step 5).
+**§19.4 The distribution waterfall (per year, running state; event order PINNED [B3]).**
+Running state per election: `unreturned` — 'european': ALL paid-in not yet returned
+(invested + fee draws); 'american': the INVESTED capital not yet returned (fee draws NEVER
+enter `unreturned` and NEVER accrue pref under 'american') [round-1 B3]. `pref_accrued`
+compounds at `pref_rate` on `(unreturned + pref_accrued)` — the election's own base.
+**Year-end event ORDER (each t): (1) ACCRUE pref on the pre-distribution state; (2) APPLY
+the year's distribution through the steps below; (3) DRAW `fee_t`** (it enters paid-in now,
+and — 'european' only — `unreturned`; it first accrues pref at the NEXT year-end). At t=N
+the exit proceeds ride step (2) and `fee_N` is still drawn at step (3) — a contribution the
+stream carries after the final inflow, well-defined and disclosed. [B3]
+Distribution walk (amount D):
+1. **Return of capital**: pay down `unreturned` (the election's own base, above).
 2. **Preferred return**: pay `pref_accrued`.
-3. **GP catch-up**: pay the GP `catchup_pct` of each marginal dollar until
-   `gp_carry_paid = carry_pct × (pref paid + catch-up paid + lp profit paid)` — i.e. the GP
-   reaches its carry share of PROFITS DISTRIBUTED SO FAR; `catchup_pct = 0` skips (hard
-   hurdle: carry only via step 4 on the excess).
-4. **Carry split**: remaining D splits `(1 − carry_pct)` LP / `carry_pct` GP.
-5. ('american' only) LP fee-draw recovery ranks LAST (after carry begins — the deliberate
-   difference: American carry is payable once the DEAL's capital + pref are back, before
-   fee draws are recovered; European makes ALL contributions whole first).
-REJECTED: (a) deal-by-deal carry with multiple deals (no second deal exists — for a
-fund-of-one the 'american' election reduces EXACTLY to the hurdle-base difference above,
-which is why it is spec'd that way rather than as a separate engine); (b) GP clawback
-mechanics (single deal, carry only ever paid on realized distributions in waterfall order —
-nothing to claw back by construction; DISCLOSED); (c) GP commitment (LPs are 100% external;
-v2).
+3. **GP catch-up**: the GP receives `catchup_pct` of each marginal dollar until
+   `gp_carry_paid = carry_pct × (pref paid + catch-up paid + lp profit paid)` — the GP
+   reaches its carry share of PROFITS DISTRIBUTED SO FAR (profits INCLUDE the pref — the
+   market-standard base; at catchup_pct = 1 this yields the classic `carry/(1−carry) × pref`
+   catch-up). `catchup_pct = 0` skips (hard hurdle). The LHS includes later step-4 carry
+   while the RHS is evaluated during step 3 — equivalent on every reachable state: step 4
+   only runs after the target is met, after which both sides grow in the carry ratio and the
+   pref base is extinguished, so no re-trigger exists [round-1 minor 7 — stated so an
+   implementer does not "fix" it].
+4. **Carry split**: remaining D splits `(1 − carry_pct)` LP / `carry_pct` GP. This tier is
+   TERMINAL — nothing ranks after it.
+**Under 'american' there is NO fee-recovery tier [round-1 B2]: fee draws are simply never
+part of the hurdle — the LP recovers them only through its profit share. That asymmetry IS
+the entire, deliberate difference between the elections for a single-asset fund** (carry
+becomes payable once the DEAL's capital + pref are back; European makes ALL contributions
+whole first). REJECTED: (a) deal-by-deal carry across multiple deals (no second deal
+exists); (b) GP clawback mechanics (single deal, carry paid only on realized distributions
+in waterfall order — nothing to claw back by construction; DISCLOSED); (c) GP commitment
+(LPs are 100% external; v2); (d) a fee-recovery tier junior to the terminal split (dead by
+construction — the round-1 B2 finding).
 
 **§19.5 Outputs (`ModelOutput.fund`, null when OFF).**
-`lp_contributions[t]`, `lp_distributions[t]`, `gp_carry[t]`, `mgmt_fees_net[t]` (post-offset),
-`paid_in_total`, and the stream `fund_lp_net: {irr, moic, dpi[t], payback_year}` where
-`moic = Σ lp_distributions ÷ paid_in_total` (TVPI ≡ DPI at exit — everything is REALIZED at
-N; no RVPI row exists, and the display labels the multiple "TVPI (= DPI — fully realized)" so
-no unrealized-marks ambiguity survives). Labels carry the ILPA basis: "Net to LP — after
-fund fees & carry (fund-of-one overlay)". The §12 bridge is UNCHANGED (the overlay is value
-SHARING on the sponsor-LP boundary, not value creation — DR-2 Item 7); a memo line
-"less: fund fees & carry → net to LP" may render on the returns surface only.
+`lp_contributions[t]` (t=0..N; [0] = sponsor equity), `lp_distributions[t]`, `gp_carry[t]`,
+`mgmt_fees_net[t]`, `paid_in_total`, `committed_capital` (echo, or derived-for-reporting),
+and the stream `fund_lp_net: {irr, moic, dpi[], payback_year}` where:
+- `moic = Σ lp_distributions ÷ paid_in_total` — TVPI ≡ DPI at exit (everything REALIZED at
+  N; no RVPI row exists; the display labels the multiple "TVPI (= DPI — fully realized)").
+- `dpi[t] = (cumulative lp_distributions through t) ÷ (cumulative lp_contributions through
+  t)` — the ILPA to-date ratio on the GROWING paid-in, NOT ÷ paid_in_total [round-1 B6].
+- `payback_year` = the first year cumulative `lp_distributions` ≥ cumulative
+  `lp_contributions` to date, counting INTERIM distributions only — the year-N exit inflow
+  does not count (the §9/L-10 rule, applied at the LP layer) [B6].
+Labels carry the ILPA basis: "Net to LP — after fund fees & carry (fund-of-one overlay)".
+The §12 bridge is UNCHANGED (the overlay is value SHARING on the sponsor-LP boundary, not
+value creation — DR-2 Item 7); a memo line "less: fund fees & carry → net to LP" may render
+on the returns surface only.
 
 **§19.6 Invariants (→ §14.20, domains stated).**
-(a) CONSERVATION: `Σ lp_distributions + Σ gp_carry + Σ mgmt_fees_net ≡ Σ sponsor-side
-inflows (distributions_paid + exit proceeds) + Σ fee draws` at 1e-9 — every dollar the deal
-pays the sponsor side lands with the LP, the GP, or as a fee (and fee draws round-trip).
-(b) `fund_lp_net.irr ≤ returns.sponsor_net.irr` whenever any fee or carry > 0 (domain:
-positive-profit deals; equality only when fees = carry = 0).
+(a) CONSERVATION [restated, round-1 minor 3]: `Σ lp_distributions + Σ gp_carry ≡
+Σ sponsor-share inflows (sponsor share of distributions_paid + exit.sponsor_share)` at 1e-9
+— every dollar the deal pays the SPONSOR side lands with the LP or the GP; fee draws are LP
+capital (they cancel identically between contribution and `mgmt_fees_net` and are therefore
+NOT in this identity — the offset money is GP fee income, not a deal flow).
+(b) `fund_lp_net.irr ≤ returns.sponsor_net.irr` whenever any fee or carry > 0. Domain: both
+IRRs defined per §14.12/§14.14's root-policy — LP streams with fee-only years carry extra
+sign changes; where `kernel/irr` returns null under its multi-root policy the comparison is
+N/A, never a fabricated pass [round-1 minor 4].
 (c) `fund = null` ⇒ `ModelOutput.fund = null` and every other output byte-identical.
-(d) `gp_carry_total ≤ carry_pct × max(0, Σ lp_distributions + Σ gp_carry − paid_in_total)`
-(the GP never takes more than its share of realized profits) at 1e-9.
+(d) GP-share bound, PER ELECTION [round-1 B4 — the single-bound form is FALSE under
+'american'; worked counterexample recorded in the sign-off]: 'european':
+`gp_carry_total ≤ carry_pct × max(0, Σ lp_distributions + Σ gp_carry − paid_in_total)`;
+'american': the same bound with `sources_uses.sponsor_equity` (INVESTED capital) in place of
+`paid_in_total`. Both at 1e-9.
 (e) 'american' net-to-LP IRR ≥ 'european' net-to-LP IRR is NOT an invariant (carry timing
 cuts both ways with interim distributions) — explicitly a non-claim.
 
-**§19.7 Composition.** Reads ONLY sponsor-side outputs (`distributions_paid`, §9 sponsor
-proceeds, `sources_uses.sponsor_equity`, `gp_fee_income`) — a POST-ENGINE layer inside
-`runModel` after §9/§10, before §16 coherence; touches NO waterfall/tax/BS arithmetic (the
-§14.19 refi invariants, §3.7 trap, §11 covenants are upstream and unaffected). Scenarios
-(§13) recompute the overlay per scenario from that scenario's sponsor flows; the §13 frozen-
-entry rule leaves paid-in identical across scenarios with committed = null only if fee_basis
-= 'invested' or committed explicit (a 'committed = null' + scenario-varying fee note is NOT
-needed: contributions depend only on entry-frozen sponsor equity and fixed fee schedules —
-stated so the sign-off can check it).
+**§19.7 Composition.** Reads ONLY sponsor-side outputs — `distributions_paid` WITH
+`sources_uses.{sponsor_equity, rollover_equity}` through the ONE share rule
+(`sponsorShareOfDistributions`), `exit.sponsor_share`, and `gp_fee_income` [B1] — a
+POST-ENGINE layer inside `runModel` after §9/§10, before §16 coherence; it touches NO
+waterfall/tax/BS arithmetic (the §14.19 refi invariants, §3.7 trap, §11 covenants are
+upstream and unaffected). Scenarios (§13) recompute the overlay per scenario from that
+scenario's sponsor flows; LP CONTRIBUTIONS are scenario-invariant in EVERY configuration
+[round-1 minor 5 — the carve-out the r1 draft carried was self-contradictory and is
+retracted]: sponsor_equity is entry-frozen (§13), the fee basis is a constant, and the
+offset's monitoring income is a FIXED annual dollar amount (§5) — none is touched by
+`ScenarioDeltas` (operations + exit_multiple only). LP DISTRIBUTIONS vary by scenario, as
+they must.
 
-**§19.8 Disclosure (§15).** One row: fund-of-one overlay; annual fee on a constant basis (no
-step-downs); no subscription line (ILPA's with/without presentation N/A); no GP commitment;
-no clawback (nothing to claw back by construction); European = all-contributions hurdle,
-American = invested-capital hurdle with fee recovery last; §10 promote is portfolio-level and
-NOT fund carry.
+**§19.8 Disclosure (§15 row).** Fund-of-one overlay; annual fee on a constant basis (no
+step-downs, no NAV basis); no subscription line (ILPA's with/without presentation N/A); no
+GP commitment; no clawback (nothing to claw back by construction); 'european' =
+all-contributions hurdle and pref base, 'american' = invested-capital hurdle and pref base
+with NO fee-recovery tier; the §10 promote is portfolio-level and NOT fund carry; year-N fee
+drawn after the final distribution.
 
 **§19.9 Golden plan.** New golden **G7-FUND** = G2-DIST (live interim distributions — the
-pref/return-of-capital ordering is exercised mid-hold, not only at exit) + overlay {2%
-committed (committed = null ⇒ derived), 20% carry, 8% pref, 100% catch-up, european,
-100% offset (G2-DIST has monitoring fees? if null ⇒ offset inert — the golden then pins the
-inert case and a DIRECTED fixture pins a live offset)}. `spec_calc.py` gains an independent
-fund-waterfall path. Regeneration of existing goldens: byte-identical (feature OFF
-everywhere else). Adjudication: the standard two independent passes.
+pref/return-of-capital ordering is exercised mid-hold, not only at exit) + overlay
+`{committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested' [B5 — the 'committed'
+election on a null committed is now input-gated], carry_pct: 0.20, pref_rate: 0.08,
+catchup_pct: 1.0, waterfall: 'european', fee_offset_pct: 1.0}`. **G2-DIST carries NO
+monitoring fees (verified: §17 G2 sets none; the fixture's monitoring_termination = 0.0), so
+the golden's offset is INERT by construction** [round-1 minor 1 — pinned, no question mark];
+the LIVE offset is §19.10(iv)'s directed fixture. `scripts/goldens/spec_calc.py` gains an
+independent fund-waterfall path. Regeneration of existing goldens: byte-identical (feature
+OFF everywhere else). Adjudication: the standard two independent passes.
 
 **§19.10 Golden-uncovered by design** (directed fixtures, mutation-tested): (i) 'american'
-vs 'european' on the SAME deal (the fee-draw hurdle-base difference must move a number);
-(ii) catchup_pct = 0 (hard hurdle) and a partial catch-up (0.5); (iii) a deal that never
-clears the pref (carry = 0 exactly; LP absorbs the shortfall); (iv) live fee offset
-(monitoring fees reduce the fee draw; floor at zero binds in at least one year);
-(v) committed_capital explicit > derived (fee-on-committed > fee-on-invested);
-(vi) fund = null byte-identity (§19.6(c), the C5-style gate).
+vs 'european' on the SAME deal — with fee draws > 0 the hurdle/pref-base difference must
+move BOTH the pref paid and the carry (well-defined under B2/B3's pinned mechanics);
+(ii) `catchup_pct = 0` (hard hurdle) and `catchup_pct = carry_pct` (the domain floor);
+(iii) a deal that never clears the pref (carry = 0 exactly; the LP absorbs the shortfall);
+(iv) LIVE fee offset (monitoring fees reduce the draw; the zero floor BINDS in at least one
+year, and §19.6(a) still holds through it); (v) `committed_capital` explicit >
+contributions with `fee_basis: 'committed'` (fee-on-committed > fee-on-invested) plus the
+TWO §16 rejections (null ∧ committed-basis; committed below contributions); (vi) `fund =
+null` byte-identity (§19.6(c), the C5-style gate); (vii) `rollover_equity > 0` with the
+overlay ON — the LP inflow must be the SPONSOR share (the B1 discriminator: a total-based
+mutant moves every fund number).
 
 ---
 
@@ -1652,7 +1711,7 @@ clears the pref (carry = 0 exactly; LP absorbs the shortfall); (iv) live fee off
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
-| v1.4.0 | 2026-08-07 | **PHASE-2 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — fund/LP overlay (backlog #3). TIER A.** §19 added: a fund-of-one overlay computing the FOURTH return stream (net-to-LP after management fees and carried interest, per the ILPA definitions DR-2 pins). LP flows = sponsor equity at t=0 + annual fee draws (2%/basis, ILPA 100% monitoring-fee offset, floored at 0) vs deal distributions + exit proceeds; waterfall = return-of-capital → 8% compounded pref → catch-up (0..1) → carry split, with 'european' (all-contributions hurdle) vs 'american' (invested-capital hurdle, fee recovery last) as the SPEC'D single difference for a single-asset fund. §10 promote explicitly NOT fund carry (different layer — the DR-2 double-count trap). Default `fund: null` = OFF ⇒ byte-identity; stream ABSENT when OFF. Invariants §19.6 incl. conservation across LP/GP/fees and the explicit NON-claim on american-vs-european ordering. Golden plan: G7-FUND on G2-DIST + six directed uncovered fixtures (§19.10). REJECTED: multi-deal funds, subscription lines, clawback (nothing to claw back by construction), GP commitment, fee step-downs — each disclosed (§19.8). | Phase-2 step 1 (Tier A template); hostile sign-off round 1 pending |
+| v1.4.0 | 2026-08-07 | **PHASE-2 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — fund/LP overlay (backlog #3). TIER A.** §19 added: a fund-of-one overlay computing the FOURTH return stream (net-to-LP after management fees and carried interest, per the ILPA definitions DR-2 pins). LP flows = sponsor equity at t=0 + annual fee draws (2%/basis, ILPA 100% monitoring-fee offset, floored at 0) vs deal distributions + exit proceeds; waterfall = return-of-capital → 8% compounded pref → catch-up (0..1) → carry split, with 'european' (all-contributions hurdle) vs 'american' (invested-capital hurdle, fee recovery last) as the SPEC'D single difference for a single-asset fund. §10 promote explicitly NOT fund carry (different layer — the DR-2 double-count trap). Default `fund: null` = OFF ⇒ byte-identity; stream ABSENT when OFF. Invariants §19.6 incl. conservation across LP/GP/fees and the explicit NON-claim on american-vs-european ordering. Golden plan: G7-FUND on G2-DIST + six directed uncovered fixtures (§19.10). REJECTED: multi-deal funds, subscription lines, clawback (nothing to claw back by construction), GP commitment, fee step-downs — each disclosed (§19.8). | Phase-2 step 1 (Tier A template); hostile sign-off round 1 REFUSED — 7 blocking (total-vs-sponsor-share LP inflow; dead 'american' fee-recovery tier; unpinned pref base/event order; §19.6(d) false under 'american' (worked counterexample); circular committed ∧ committed-basis under the golden; unbound dpi/payback; unwritten §14/§15/§16 integration + suggestion stance) — ALL applied in r2 with the four integration blocks written in-version; round 2 pending |
 | v1.3.2 | 2026-08-07 | **DATA-SIDE AMENDMENT (Tier B; engine arithmetic untouched) — uploaded-filing extraction.** The upload path goes live for ANNUAL documents (interim/10-Q uploads REJECTED up-front — the reused mapper would anchor nothing and the import would be all-gap): SEC 10-K/20-F iXBRL `.htm`, UK Companies House accounts iXBRL (THE private-company filing form; v1 extracts IDENTITY only — every financial field an honest gap the user confirms, FRC alias mapping a named later extension), and ESEF `.zip` packages (nested `**/reports/*.xhtml`), all parsed ENTIRELY in the browser (privacy: a private target's accounts never leave the machine — server-side parsing REJECTED on exactly that) into the OIM shape `mapIfrsReport` already consumes, or (us-gaap) into a synthesized CompanyFacts consumed by `mapCompanyFacts` VERBATIM — zero new mapping logic; the adjudicated mappers are reused as-is. New arithmetic is confined to transform/scale/sign evaluation and fact grouping, spec'd normatively in `lib/edgar/IXBRL_SPEC.md` (supported ixt subset with drop-with-note for the rest — a dropped fact can only produce a GAP, never a wrong number; fixture set incl. a REAL Apple FY2024 10-K trim + a REAL 19KB Companies House FRC filing; independent Python reference extraction + two adjudication passes + CI regeneration gate — the DERIVATION.md method). Schema: the THREE source unions gain `'upload'` (additive; provenance restamp appends `· uploaded <filename>` to mapper details, never replacing the audit strings). Dedup is decimals-aware and order-INDEPENDENT (the real Apple 10-K carries 70 duplicate keys — an order-dependent pick is $38m wrong on UnrecognizedTaxBenefits); only DIMENSION-FREE facts enter the CompanyFacts synthesis (segment members must never impersonate consolidated totals). Documented degradations vs fetch: single-vintage history (no restatement dedup), the §1.1 LTM stitch RUNS and REFUSES on three proven grounds → FY basis + staleness badge does the honest work. | Phase-1 upload parser (owner-approved formats 2026-08-07); Tier-B template rebuild/PHASE_G_EXTENSIONS.md; hostile sign-off round 1 REFUSED — 9 blocking (transform registry contradicted by BOTH real samples: TR2 unhyphenated names, TR5 namespace missing — two of three classes would extract ZERO; order-dependent dedup; dimensional leakage; 10-Q all-gap story; unproven stitch claim; provenance restamp + third union; FRC classification inverted; ESEF glob; allowlist deltas) — then rounds 2–3 REFUSED (3 + 1 further blockers: FRC period-end self-contradiction, restamp erasing the 'default' statutory tag, the un-runnable Apple dup pin, the JS 0!=null fabricated-URL/pseudo-CIK path) — ALL applied through IXBRL_SPEC r4; **round 4 GRANTED** (fingerprint-anchored @ fb8021e) |
 | v1.3.1 | 2026-08-07 | **§18.8 amendment — the retired-balance refi no-op gets a VOICE (post-#113 review NOTE-8, owner-approved).** A tranche can enter its scheduled refi year with a zero balance (swept/retired earlier — a model OUTCOME, unknowable at input time). Pre-v1.3.1 this ran as a SILENT no-op (stamped `refinanced: true`, all zeros). Now: the no-op semantics are UNCHANGED (still stamped; costs EXACTLY zero when swept to zero, ≤ pct × RETIRED_TOL dust on a retired residual; the terms swap runs on ≤-tolerance operands — nothing observable restarts, and no golden-covered number moves anywhere), and the §16 coherence gate emits a **`refi_noop` WARN** naming the tranche and year — a POST-RUN read of named `TrancheYear` fields (`refinanced` ∧ beginning balance ≤ **`RETIRED_TOL`** — §7's economically-retired threshold = §15's ±$0.005m; sign-off round 1 REFUSED for an unbound ε contradicting the gloss — a dust residual in (0, RETIRED_TOL] is engine-retired yet a machine-epsilon ε would run its refi "live"; pinned to the ONE existing tolerance so flag-class ≡ retired-class), consistent with check.ts's no-second-path charter. REJECTED: input-gate rejection (solver-shaped — needs the model's own sweep outcome); silent no-op (a per-run OUTCOME belongs on the §16 coherence surface, not in silence); `block` severity (economics aren't broken — the debt was simply repaid early). §16 schema: `CoherenceFlag.code` gains `refi_noop`. §18.11 gains (viii): the directed fixture, mutation-tested THREE ways (emission dropped ⇒ red; condition widened to every refi ⇒ the G6-REFI/live-balance negative reddens; a dust-balance deal pins ε = RETIRED_TOL ⇒ a tighter ε reddens). Goldens: byte-identical (no golden constructs a zero-balance refi; flags are not golden columns). | Post-merge NOTE-8 disposition (PR #113 review 2026-08-07); mini Tier-A (engine-path file check.ts + types.ts union); hostile sign-off round 1 REFUSED (B1: ε unbound) → fixes → round 2 GRANTED (2026-08-07, fingerprint-anchored) |
 | v1.3.0 | 2026-07-26 | **PHASE G-5 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — refinancing events. TIER A (touches engine arithmetic — full five-step template).** §18 added: a scheduled per-tranche refinancing modelled as a RETIREMENT of the old tranche + ORIGINATION of a new one at the SAME par, plus a call premium. Reuses §7 (early-retirement write-off) and §2/§7 (origination: OID/fees capitalized + amortized) verbatim. (1) **Trigger** = an explicit event `{tranche_name, year R, new_pricing, call_premium_pct, new_maturity_years, new_oid_pct, new_financing_fee_pct, new_amort_pct_of_face}` — NOT covenant/rate-condition-triggered (§18.1; forward-curve and covenant-cure triggers REJECTED → v2). (2) **Effective at the START of year R**: year-R interest at the NEW rate (repricing shown in the year it lands; mid-year proration REJECTED — §1 annual periods), new straight-line amort/OID/fee horizon = `new_maturity_years`, structural gate `(R−1)+new_maturity_years > hold_years` (§18.3). (3) **Par-for-par** — new face = old beginning balance `B` at year R; no upsizing (dividend-recap/upsizing REJECTED → §8/#9); cash-pay term tranches only (PIK refi REJECTED → v1 AHYDO interaction); one refi per tranche (§18.2). (4) **Cash cost** = `call_premium + new_OID + new_financing_fees`, a MANDATORY §3 **step 2R** use (after commitment fees, before mandatory amort), senior to sweep/distributions, never revolver-funded-by-a-distribution by construction (§18.4). (5) **Old write-off** (unamortized OID + DFC): BOOK in year R (NI/equity/§8), TAX deduction of the write-off AND the call premium in year **R+1**'s UNCAPPED §163(j) pool via the §7 `pendingRetirementDeduction` path (merges into the exit deduction if R+1=N); the §1.1001-3 same-year-capped reading is the technically-more-precise REJECTED alternative (v1 defers — ≤1yr, conservative, single code path, inert without a binding §163(j)) (§18.5). (6) **BS closes** in year R by construction (§18.6 algebra). (7) **Composition**: refi cost shrinks the sweep pool via the running-cash variable; par-for-par leaves `gross_debt_end` unchanged so the §3.7 RP trap composes automatically; §11 covenants read the new interest; §12's bridge embeds the refi costs in the paydown bar via closing cash (NO new bar/walk-down line — §14.9 unchanged); §9 exit unchanged (§18.7). (8) §16 schema `structure.refinancing: RefinancingEvent[] | null` + structural gates; §14.19 invariants (par-for-par at refi; BS close; write-off/premium in R+1 uncapped); §15 disclosure lines. **Golden re-derivation: purely ADDITIVE — every existing G1–G5/G2-D/G2-DIST/G3-DIST/G2-DIST-D fixture has 0 values changed / 0 removed**, only the new unconditionally-emitted `TrancheYear` columns (`refinanced`=false, `refinancing_cash_cost`=0, `unamortized_writeoff`=0) added (feature default OFF, no golden sets it — proved leaf-by-leaf in step 2); the feature is exercised by ONE new golden **G6-REFI** (= G2 + a TLB refi at year 3: −100bp, 101 premium, 6-yr maturity, 0.5% OID, 1% fee) plus directed engine fixtures for the golden-uncovered branches (§18.11: R+1=N merge, binding §163(j), refi-forced draw, refi+distribution, the structural-gate rejections, the **non-zero old-OID refi**, multi-tranche refis). **Independent hostile sign-off round 1 REFUSED** (2 blocking, both about COVERAGE/CONSISTENCY — "not disputing a single committed value"; the §18.6 BS algebra, §18.4 gross-up frame, §18.7 bridge/RP-trap composition and buildability were verified SOUND), all applied here: (B1) §18.11's golden-uncovered list omitted the **non-zero old-OID refi transition** — G6-REFI refis the OID=0 TLB, so a mutant that fails to write off / stop old OID ships green; added as §18.11(vi) with a mutation-tested directed fixture. (B2) §18.5 justified the R+1 deferral as "known post-waterfall like a sweep retirement" — FALSE (the refi is scheduled/pre-waterfall and par-for-par does NOT retire the tranche, so it never trips §7's `fully_retired` detection); restated as a deliberate CHOICE (single deferral code path + conservative ≤1yr timing) with explicit EXPLICIT-refi-handling wiring, not the retirement-detection path. Minors applied: additive-not-byte-identical phrasing (§18.9); the "conservative" label split into timing-conservative vs premium-uncapped-anti-conservative (§18.5); multi-tranche refis noted (§18.11(vii)); header marked decided-pending-sign-off. **Round 2 GRANTED (2026-07-26)** — both blocking closures verified INDEPENDENTLY against the on-disk text (not the summary); the §18.6 BS-closure algebra, §18.4 gross-up cash frame vs §2, §18.7 bridge/RP-trap composition, no-cycle buildability and Tier-A classification were confirmed sound in round 1 and undisturbed by the fixes. Four non-blocking residuals carried into steps 2–3: (1) the §18.11(vi) fixture must use old_OID>0 ∧ new_OID>0 on the SAME tranche with R+1<N (both schedule transitions + a discrete non-merged deferral year); (2) `scripts/goldens/spec_calc.py` gets a FULL independent refi path (rate switch, OID/fee schedule swap on base B, `pendingRetirementDeduction`, step-2R cash cost) — no reuse of the engine's swap logic; (3) `sequence.ts` `netIncome` gains a call-premium extinguishment-loss term for §18.6's equity leg (G6-REFI's BS-close assert discriminates a missing term); (4) the refi financing-fee basis is `new_fee_pct × B` (tranche face), NEVER re-allocated pro-rata from the §2 stack fee. | Phase G-5 template step 1 (Tier A, rebuild/PHASE_G_EXTENSIONS.md); backlog #5; pairs with the deferred call-protection module; hostile sign-off round 1 REFUSED → round 2 GRANTED |
