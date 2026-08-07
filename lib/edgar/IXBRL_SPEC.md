@@ -4,11 +4,12 @@ Normative conventions for the in-browser iXBRL upload parser (`lib/edgar/ixbrl.t
 drops a filing FILE and gets the SAME `RawHistoricals` the fetch routes produce, through the
 SAME mappers. Every rule here is fixture-pinned; the reference derivation
 (`scripts/goldens/ixbrl_ref.py`, Python stdlib, zero imports of the TypeScript under test)
-re-derives the expected facts for the CI regeneration gate. **r2 applies all nine blocking
-findings of hostile sign-off round 1** (transform registry corrected against BOTH real
-samples; order-independent decimals-aware dedup; dimensional exclusion; annual-documents
-scope; the stitch-refusal proof; the restamp mechanism; FRC truth-telling; the nested ESEF
-glob; allowlist re-justification).
+re-derives the expected facts for the CI regeneration gate. **Revisions r2/r3 applied every hostile
+sign-off finding (rounds 1–3: 9 + 3 blockers + minors)** — transform registry corrected
+against BOTH real samples; order-independent decimals-aware dedup; dimensional exclusion;
+annual-documents scope; the stitch-refusal proof; the restamp mechanism (default-sparing,
+URL-honest); FRC truth-telling incl. the balance-sheet-date staleness story; the nested
+ESEF glob; allowlist re-justification.
 
 **Scope (v1) — ANNUAL documents only.** Three upload forms, parsed ENTIRELY in the browser
 (a private target's accounts never leave the machine — server-side parsing REJECTED on
@@ -145,8 +146,8 @@ number.)
   (a modelled currency lands as itself; an unmodelled one goes through the existing
   `currency_unsupported` Build-block — the mapper's EUR default is never presented against
   contrary units) AND sets `periodEnd`/`as_of`/`fiscalYear` from the §1d balance-sheet date
-  when the mapper left them unset — so an old FRC filing badges STALE off its own
-  balance-sheet date.
+  when the mapper left them unset (`uk-bus:BalanceSheetDate` WINS when both §1d dates are
+  present and differ) — so an old FRC filing badges STALE off its own balance-sheet date.
 - **d. Zero-fact uploads** (nothing parseable at all): a user-facing ERROR, not an empty
   import.
 
@@ -157,7 +158,8 @@ walks the produced `RawHistoricals` and, FOR EXACTLY the provenances whose
 `source ∈ {'edgar','esef'}` (the fetch-producer tags — the only other sources the two
 mappers emit), (i) sets `provenance.source` to `'upload'` and (ii) APPENDS
 ` · uploaded <filename>` to the `detail` (never replacing the mapper's audit string);
-(iii) sets `RawHistoricals.origin = 'upload'`. **`source: 'default'` is left UNTOUCHED**
+(iii) sets `RawHistoricals.origin = 'upload'` and (iv) clears `RawHistoricals.cik10`
+[round-3 R3-1]. **`source: 'default'` is left UNTOUCHED**
 [round-2 R2-2]: the statutory tax-rate fallback must keep its 'default' tag or
 `factsAdapter`'s template-badge downgrade dies and a 21%/25% statute would wear an
 uploaded-from-the-filing badge — the mislabel class again. **All
@@ -183,9 +185,13 @@ consolidated total: a silent wrong number, and a forged `vintage_count` for the 
 Group by `taxonomy:tag` and unit → `{val, start?, end, fy?, fp?, form?, filed?}` rows with
 `fy`/`fp` from the §1d focus facts and `form` from `dei:DocumentType` where tagged, else
 OMITTED (the consumers tolerate absence — `String(filed ?? '')` sorts; `accn` is required by
-the type and synthesized as `uploaded:<filename>`; the synthesis constructs the object
-literally with cik `0` where untagged — which keeps `filingUrl` undefined via the
-cik10-absent guard — no casts) [round-2 minor 5]
+the type and synthesized as the EMPTY STRING — falsy, so `filingUrl`'s `!accession` guard
+short-circuits and NO sec.gov archive URL is ever fabricated for an upload (the
+uploaded-filename story travels in the restamped detail instead); `cik` is synthesized `0`
+purely to satisfy the required type, and the §2 fix-up walk CLEARS `RawHistoricals.cik10`
+— a zero-padded pseudo-CIK must never present as a real one) [round-2 minor 5; round-3
+R3-1: JS `0 != null` is true, so a cik of 0 DOES produce `CIK0000000000` — the previous
+"cik10-absent guard" claim was code-false]
 [round-1 minor 1]. DOCUMENTED DEGRADATIONS (each fails toward gaps or fewer points, never
 wrong values):
 - **Vintage dedup (D1 rule 2)** degrades to single-vintage — one document, one filing; the
