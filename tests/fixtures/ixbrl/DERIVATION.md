@@ -1,4 +1,4 @@
-# ixbrl fixtures — adjudication record (DERIVATION.md method; IXBRL_SPEC v1 r5 @ 1bdc566 — r4 GRANTED @ fb8021e + the pass-2-driven r5 clarifications)
+# ixbrl fixtures — adjudication record (DERIVATION.md method; IXBRL_SPEC v1 r6 @ d74275e — r4 GRANTED @ fb8021e; r5 adjudication-driven; r6 conformance-driven)
 
 The committed `expected/*.json` are the parser's GOSPEL once BOTH independent passes below are
 signed: a reference derivation in a DIFFERENT LANGUAGE (`scripts/goldens/ixbrl_ref.py`, Python
@@ -114,3 +114,20 @@ non-ASCII space; esef's "1 000" is ASCII).
 **Signed — pass 2 (2026-08-07): independent blind hand-derivation from the raw fixture bytes
 + IXBRL_SPEC (r4 at derivation time; adjudicated under r5 @ 1bdc566); ZERO mismatches against
 `expected/*.json` under r5. The committed goldens are GOSPEL.**
+
+**Pass-2 r6 delta (2026-08-07, same blindness ordering — derived from the r6 §1a/§1c spec
+text + the two new fixture lines and committed to scratch BEFORE opening the r6 golden,
+`ixbrl_ref.py` r6 diff, or the Pass-1 r6 note):** (1) typed pin — c-typed carries
+`xbrldi:typedMember` on `t1:ContractDurationAxis` wrapping `<t1:DurationValue>P3Y</…>` →
+dims recorded verbatim as the inner element's text `{t1:ContractDurationAxis: "P3Y"}`;
+Revenues "55" ×10⁶ = **55,000,000** dec −6, kept WITH dims; the three Revenues keys
+(dim-free 2.0e9 / explicit 111e6 / typed 55e6) differ in dims → three distinct §1e groups,
+zero dedup interaction; the typed fact does NOT vote (routing still us-gaap on the same 16
+distinct dimension-free us-gaap concepts) and single-identifier SYN means no multi-entity
+note. (2) sign-grammar pin — `t1:SignedUnderTransform` "-42" under `ixt:num-dot-decimal`:
+registry grammars admit no sign character → text fails its transform → fact DROPPED with
+the untransformable-text note. Predicted totals 20 facts / 7 notes / identity, routing,
+modal USD unchanged — the committed r6 golden matches on every item; the other three
+expected JSONs are diff-confirmed untouched (96b3d9d..d74275e touches only
+synthetic-min.json) and this pass re-ran the r6 reference on all FOUR fixtures:
+byte-identical. **ZERO mismatches under r6; the delta is signed.**
