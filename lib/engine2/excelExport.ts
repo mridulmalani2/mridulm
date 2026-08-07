@@ -180,6 +180,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Exit = entry multiple unless edited; §382 static; NOL usage not optimized across years', 'SPEC §6/§9/§15'],
     ['Exit-year fee write-off deducted uncapped; PP&E rolls mechanically (may go negative, warned)', 'SPEC §7/§8/§15'],
     ['BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions', 'SPEC §3/§15'],
+    ['Interim distributions: paid at year-end after full debt service (never revolver-funded); blocked capacity does not accrue; the RP trap is the closed-form pro-forma net-leverage test (§3.7 — no solver)', 'SPEC §3/§15'],
     ['Refinancing: scheduled per-tranche event (one per tranche), par-for-par, cash-pay term tranches only; repricing effective for the whole refi year; old OID/DFC write-off + call premium deducted uncapped the FOLLOWING year (conservative vs Treas. Reg. §1.1001-3)', 'SPEC §18/§15'],
     [`Entry leverage is GROSS (debt at par ÷ ${entryMult.sizing_label} EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series`, 'SPEC §11'],
     ['A model is a range, not a point — the sensitivity/scenario exhibits are the primary caveat mechanism', 'SPEC §15'],
