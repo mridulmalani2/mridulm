@@ -29,7 +29,10 @@ const G2_DOWNSIDE: ScenarioDeltas = {
 };
 
 describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', () => {
-  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5']) {
+  // G6REFI [v1.3.0] joins the mirror/bridge/coherence gate: a refinancing raises NO coherence
+  // flag by itself (§18.8), the §14.9 bridge STILL reconciles with the refi's cash costs embedded
+  // in the paydown bar (no new bar/walk-down line — §18.7), and gp_fee_income stays null.
+  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5', 'G6REFI']) {
     it(`${golden}: §14.16 mirror identities hold on the ASSEMBLED output; coherence is CLEAN`, () => {
       const { facts, assumptions } = GOLDEN_DEALS[golden];
       const out = runModel(facts, assumptions);
@@ -270,7 +273,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
       operations: { ...GOLDEN_DEALS.G1.assumptions.operations, growth: [0.05, 0.05, 0.05, 0.05, 0.05] },
       structure: {
         min_cash: 0,
-        sweep: { base_pct: 0, grid: null }, distributions: null,
+        sweep: { base_pct: 0, grid: null }, distributions: null, refinancing: null,
         tranches: [
           {
             name: 'Bullet', type: 'senior', size: { x_ebitda: 1 }, pricing: { kind: 'fixed', rate: 0.03 },

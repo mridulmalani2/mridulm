@@ -369,3 +369,121 @@ half. Dispositions:
   not fixed.** Each is unreachable with integer-valued XBRL facts / a literal Feb-29 interim end /
   pathological non-annual full-year data, or is the accepted v1 ESEF-FY simplification (M1 refuses the
   common single-vintage case anyway; the UI badge still derives from period-end).
+
+---
+
+## Phase G-5 — refinancing events golden (Tier A, SPEC §18 GRANTED)
+
+**What this adds**: ONE new golden, **G6-REFI** — G2 + a single §18 refinancing event on the TLB at
+year R = 3 (reprice −100bp: spread 375→275bps; call premium 1.0% = 101 soft call; new maturity
+6 years; new OID 0.5%; new financing fee 1.0%; new amort 1.0% of the new face). Every other field is
+IDENTICAL to G2, so every difference is attributable to §18 alone (the DIST-variant discipline). The
+reference derivation `scripts/goldens/spec_calc.py` gains a FULL, independent refi path (rate switch,
+per-tranche OID/fee schedule swap on the par-for-par base `B`, the `pending_ret_ded` R+1 deferral, the
+step-2R cash cost, the §18.6 DFC/NI legs) — it reuses NONE of the engine's swap logic (the engine has
+none yet), so it is genuine independent ground truth (sign-off round-2 residual 2).
+
+**Line → SPEC §18 mapping**: refi applied at the START of year R (before `financeLines`) = §18.3
+start-of-year effectiveness; `B = bal[name]` = §18.2 par-for-par; `WO = oid_rem + fee_rem` = §18.5
+old unamortized write-off; `premium/new_oid/new_fees` on `B` = §18.4 cash cost (basis `× B`, never
+re-allocated); `c -= refi_cash_cost` after commitment fees = §3 step 2R; `uncapped += pending_ret_ded`
++ `pending_ret_ded = new_pending` at year end = §18.5 R+1 UNCAPPED deferral; `dfc += refi_dfc_delta`
+and `ni -= refi_book_charge` = §18.6 BS-close legs.
+
+**Branch coverage** (what G6-REFI pins, and what it leaves to directed engine fixtures, §18.11):
+
+| Branch | Where | Committed values |
+|---|---|---|
+| Reprice effective the whole refi year | G6-REFI Y3 | TLB cash interest 25.74 (G2) → **22.24** = 350.27 × (3.60%+2.75%) |
+| New mandatory amort on the NEW face | G6-REFI Y3–5 | **3.50** = 1.0% × B 350.27 (vs G2's 4.40 = 1.0% × 440) |
+| New OID/fee amortization on the new schedule | G6-REFI Y3–5 | OID amort **0.29** = 0.5%×B / 6; TLB fee amort 0.5838 (+ revolver 0.165) |
+| Refi cash cost at step 2R | G6-REFI Y3 | `refinancing_cash_cost` **8.76** = premium 3.50 + new OID 1.75 + new fee 3.50 |
+| Old write-off (book Y3) | G6-REFI Y3 | `unamortized_writeoff` **4.71** (old TLB DFC remaining; OID = 0 in G2 — see §18.11(vi)) |
+| Write-off + premium tax deduction DEFERRED to R+1 UNCAPPED | G6-REFI Y4 | uncapped **9.24** = fee 0.75 + commit 0.28 + deferred (4.71 WO + 3.50 premium) 8.22 |
+| §163(j) stays non-binding (capped ≡ uncapped, simplification inert) | G6-REFI all years | `s163j_carryforward_end` 0 every year (lower post-refi interest widens the G2 headroom) |
+| Exit write-off includes the NEW tranche's residual new OID/fee | G6-REFI exit | `unamortized_fees_written_off` **2.63** (new-OID resid 0.88 + new-fee resid 1.75) |
+| Entry frozen by a post-close event | G6-REFI | `sources_uses` byte-identical to G2 |
+| §9 capital-structure-blind | G6-REFI | `returns.unlevered` byte-identical to G2 |
+| Years before the refi untouched | G6-REFI Y1–2 | operating / tax / waterfall / TLB rows byte-identical to G2 |
+
+**Golden-uncovered by design** (SPEC §18.11 records each with its reason; the G-5 ENGINE PR lands a
+directed kernel/module fixture for every one, mutation-tested against the exact wrong reading):
+(i) R+1 = N merge into the exit deduction; (ii) refi under a BINDING §163(j) (where the uncapped
+premium simplification MOVES tax); (iii) refi cash cost forcing a revolver draw / floor breach;
+(iv) refi + a live §3-step-7 distribution / RP trap; (v) the structural-gate rejections; **(vi) refi
+of a tranche with NON-ZERO unamortized OID** — G6-REFI refis the OID = 0 G2 TLB, so the OLD-OID
+write-off and OLD-OID-amortization-STOP sub-paths run with zero inputs; the directed fixture must
+carry old_OID > 0 AND new_OID > 0 with R+1 < N, mutation-tested against (a) old-OID-not-written-off
+and (b) old-OID-schedule-not-stopped (round-2 residual 1); (vii) multiple independent refis
+(additive accumulation into the single `pending_ret_ded`).
+
+**Movement in the pre-existing goldens: purely ADDITIVE — proved, not asserted.** A leaf-by-leaf
+comparison of every committed `expected.json` at HEAD against the regenerated tree reports
+**changed = 0, removed = 0, added = 150** across G1/G2/G3/G4/G5/G2-D/G2-DIST/G3-DIST/G2-DIST-D. Every
+added leaf is one of the three new unconditionally-emitted `TrancheYear` columns (`refinanced` =
+false, `refinancing_cash_cost` = 0, `unamortized_writeoff` = 0), one per term-tranche-year: G1 adds 0
+(no term tranche); G2/G4/G5/G2-D/G2-DIST/G2-DIST-D add 15 (1 tranche × 5 yr × 3); G3/G3-DIST add 30
+(2 tranches × 5 × 3). On every pre-G-5 golden they are trivially correct: `refinancing` is null, so
+no year is a refi year. `tests/goldens.test.ts` re-runs the reference and fails on any drift, and
+asserts the additive-columns-all-0/false claim in CI.
+
+**BS closure**: the §14.2 check is < $0.005m at every t on G6-REFI (machine-epsilon `[0,0,-0,0,-0,0]`
+in the reference), the direct empirical proof of §18.6's DFC/NI/cash algebra.
+
+**Adjudication (PHASE_B rule — two independent hand-derivation passes; a golden is gospel only after
+this section is signed. Each adjudicator hand-derives the assigned values from SPEC §18 and the raw
+G2+refi inputs, NOT from `spec_calc.py`'s algorithm, at the ±$0.005m / ±0.1bp bar):**
+
+- [x] **Adjudication pass 1 — G6-REFI year-3 refi mechanics + BS closure (2026-07-26, independent
+  agent): SIGNED.** Hand-derived every year-3 refi quantity from §18 (+ §2/§3/§4/§7/§8/§14) plus the
+  signed G2 anchor, WITHOUT opening `spec_calc.py`. Reconstructed years 1–2 from scratch to pin
+  `B = 350.268977` (TLB Y2 ending balance) and Y3 opening cash 25.676204 — both byte-match G2.
+  Confirmed: new all-in 6.35% (−100bp); Y3 TLB interest 22.24 (falls from 25.74); new-face mandatory
+  amort 3.50 (vs G2's 4.40 on 440); refi cash cost 8.76 = premium 3.50 + new OID 1.75 + new fee 3.50;
+  old write-off 4.71 (old OID = 0, old DFC 6.60 − 2×0.9429); the §3 step-2R order (opening 25.68 + FCF
+  87.31 − interest 22.24 − commitment 0.28 − **refi 8.76** − amort 3.50 − sweep 51.15 = closing 27.05,
+  the refi shrinking the sweep pool); and §18.6 BS closure by TWO independent routes — assets−debt and
+  the §8 equity roll (NI carries the extinguishment loss WO+premium=8.22; new OID/fees capitalized in
+  DFC, not equity; Δdebt = 0 par-for-par) both giving equity 743.92/814.43/886.66 for Y3/Y4/Y5.
+  **Zero mismatches beyond ±$0.005m** (all residuals pure 2dp display rounding). Verdict: §18 was
+  unambiguous enough to derive every quantity with no reference to the script.
+- [x] **Adjudication pass 2 — G6-REFI R+1 tax deferral + exit/returns + additivity (2026-07-26,
+  independent agent): SIGNED.** Hand-derived the tax/exit/returns chain from §6/§9/§16/§17/§18 at FULL
+  precision (`B = 350.2689793`), WITHOUT opening `spec_calc.py`. Confirmed: **§18.5 deferral** — Y3
+  uncapped is only the ordinary pool (1.02, NO write-off/premium); the deferred 8.216975 (WO 4.714286
+  + premium 3.502690) lands in **Y4's uncapped pool (9.24)**, driving the Y4 cash-tax **dip** (20.76,
+  below the Y3→Y5 trend 20.88/24.08); R+1 = 4 < N = 5, so it does NOT merge into the exit deduction
+  (§18.11(i)). **§163(j) inert** — capped < 30%×EBITDA_adj every year, `s163j_carryforward_end = 0`
+  throughout, so the uncapped-premium simplification is genuinely inert here. **§9 exit** — payoff
+  152.21, exit EV 1227.54 (EBITDA path unchanged from G2), exit write-off 2.63 = ONLY the refinanced
+  TLB's residual new OID (0.876) + new fee (1.751) (the old TLB fee was already written off at the
+  refi — no double count), exit equity pre-MIP 1090.82. **Returns** — sponsor IRR 13.1852%, MOIC
+  1.8576; unlevered stream AND sources_uses byte-identical to G2. **Additivity** — the three
+  TrancheYear columns emit unconditional defaults on every pre-G5 golden (G2's 5 rows all
+  false/0/0, every pre-existing field unchanged), G6-REFI itself shows unconditional emission (Y1/2/4/5
+  false/0/0, only Y3 true/8.76/4.71). **Zero mismatches beyond ±$0.005m / ±0.1bp.** Load-bearing
+  finding: `B` is the FULL-PRECISION beginning balance, not the displayed 350.27 — the Y3 sweep display
+  (51.15 vs 51.16) discriminates it, confirming §15's intermediate-rounding discipline.
+
+**Status: G6-REFI is GOSPEL** (both independent passes signed, ±$0.005m / ±0.1bp, neither opening the
+reference script). Engine2 modules (G-5 step 3) are wrong wherever they disagree with this fixture;
+disputes reopen only via a §18 amendment + re-derivation. The G-5 ENGINE PR reproduces it at full
+precision (C5 gate runs G6REFI); the self-deleting `PENDING_G5_KEYS` guard was removed once the engine
+caught up (it probed a live `runCore` emission and failed the moment the columns appeared).
+
+**Independent hostile ACCURACY AUDIT of the G-5 engine (2026-07-27): CLEAN.** A separate agent
+re-derived ~25 load-bearing G6-REFI values from SPEC §18 first principles — by hand AND via a throwaway
+Python re-implementation importing neither `spec_calc.py` nor the engine — and cross-checked the
+committed fixture and the engine at ±$0.005m / ±0.1bp. **Zero disagreed.** Confirmed: (1) all refi
+arithmetic (B 350.269, reprice interest 22.24, new-face amort 3.50, cash cost 8.76, write-off 4.71,
+Y4 uncapped deferral 9.24, §163(j) non-binding, exit write-off 2.63, IRR 0.131852, BS closes ~1e-13);
+(2) engine ≡ golden through the C5 gate, and the §18.6 equity extinguishment leg is load-bearing —
+dropping `refiBookCharge` from `netIncome` reddens the BS check by exactly WO+premium = 8.216975;
+(3) NO second path / NO solver / NO caller-assumption mutation — the engine mutates only the local
+`effectiveSized` clone, `assumptions` is byte-unchanged after `runCore`, scenario re-runs are stable;
+(4) the §18.11 directed fixtures are non-vacuous (the old-OID mutant reddens (vi); all seven rejection
+gates throw); (5) the refi columns are emitted unconditionally and trace to their SPEC sections, no
+rounded value re-enters arithmetic. **No wrong number; one minor COVERAGE note** — two refis in the
+SAME year (both summing into the year's accumulators) was not directly pinned; **now closed** by a
+directed fixture in `tests/engine2-refinancing.test.ts` (§18.11(vii) same-year case). All experimental
+edits reverted; tree clean.

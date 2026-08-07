@@ -37,11 +37,12 @@ function makeAssumptions(p: {
   mip?: DealAssumptions['mip'];
   distributions?: number[] | null;
   rp_trap?: DealAssumptions['covenants']['rp_trap'];
+  refinancing?: DealAssumptions['structure']['refinancing'];
 }): DealAssumptions {
   return {
     deal_name: 'golden',
     entry: { driver: 'multiple', entry_multiple: p.multiple, enterprise_value: null, basis: 'fy', hold_years: 5 },
-    structure: { tranches: p.tranches, min_cash: p.min_cash, sweep: { base_pct: p.sweep_pct, grid: null }, distributions: p.distributions ?? null },
+    structure: { tranches: p.tranches, min_cash: p.min_cash, sweep: { base_pct: p.sweep_pct, grid: null }, distributions: p.distributions ?? null, refinancing: p.refinancing ?? null },
     operations: {
       growth: p.growth, target_margin: p.target_margin, margin_path: 'linear',
       da_pct_revenue: p.da_pct, maint_capex_pct_revenue: p.maint_pct,
@@ -155,6 +156,31 @@ GOLDEN_DEALS.G2DISTD = {
       growth: GOLDEN_DEALS.G2.assumptions.operations.growth.map((g) => g - 0.02),
     },
     exit: { ...GOLDEN_DEALS.G2DIST.assumptions.exit, multiple: 8.5 },
+  },
+};
+
+// ── SPEC §17/§18 [v1.3.0] Phase G-5 refinancing golden ───────────────────────
+// G6-REFI holds G2 constant and adds exactly one refinancing event on the TLB at year 3, so
+// every difference from G2 is attributable to §18 alone (the DIST-variant discipline).
+GOLDEN_DEALS.G6REFI = {
+  facts: GOLDEN_DEALS.G2.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G2.assumptions,
+    structure: {
+      ...GOLDEN_DEALS.G2.assumptions.structure,
+      refinancing: [
+        {
+          tranche_name: 'TLB',
+          year: 3,
+          new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.0275, floor: 0 },
+          call_premium_pct: 0.01,
+          new_maturity_years: 6,
+          new_oid_pct: 0.005,
+          new_financing_fee_pct: 0.01,
+          new_amort_pct_of_face: 0.01,
+        },
+      ],
+    },
   },
 };
 

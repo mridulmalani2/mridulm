@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/format';
 import BasisBadge from './BasisBadge';
-import type { DealAssumptions, CashPayTrancheAssumption } from '../../../lib/engine2/types';
+import type { DealAssumptions, CashPayTrancheAssumption, RefinancingEvent } from '../../../lib/engine2/types';
 import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { sizingBasisLabel } from '../../../lib/engine2/display';
@@ -223,6 +223,70 @@ const AssumptionsPanel: React.FC = () => {
               {term.name}: base {toPctInput(term.pricing.base_rate)}% + {bps(term.pricing.spread)} (floor {toPctInput(term.pricing.floor)}%)
             </p>
           )}
+          {/* ── §18 [v1.3.0] refinancing — Class B, Advanced tier ──────────────────────
+              A scheduled repricing of the primary cash-pay term tranche: new spread + a call
+              premium at year R, effective the whole of that year (§18.3). The suggestion layer
+              proposes NONE (§16) — a refi is a sponsor decision, so the fields start OFF and wear
+              YOU the moment touched. v1 UI models a repricing refi (par-for-par, new maturity
+              extended past the hold, no new OID/fees); the full event schema (new OID/fee) is on
+              the assumptions object for programmatic use. */}
+          {term && term.pricing.kind === 'floating' && (() => {
+            // THIS tranche's event only — a programmatic multi-tranche schedule (§18.11(vii))
+            // must survive edits here; commits below preserve events on OTHER tranches.
+            const refiEvents = a.structure.refinancing ?? [];
+            const refi = refiEvents.find((e) => e.tranche_name === term.name) ?? null;
+            const N = a.entry.hold_years;
+            const base = term.pricing;
+            const makeEvent = (over: Partial<RefinancingEvent>): RefinancingEvent => ({
+              tranche_name: term.name,
+              year: refi?.year ?? (N > 1 ? N - 1 : 1),
+              // new maturity defaults PAST the hold so §18.3's no-balloon gate always passes.
+              new_maturity_years: refi?.new_maturity_years ?? N + 1,
+              new_pricing: refi?.new_pricing ?? { kind: 'floating', base_rate: base.base_rate, spread: base.spread, floor: base.floor },
+              call_premium_pct: refi?.call_premium_pct ?? 0.01,
+              new_oid_pct: refi?.new_oid_pct ?? 0,
+              new_financing_fee_pct: refi?.new_financing_fee_pct ?? 0,
+              new_amort_pct_of_face: refi?.new_amort_pct_of_face ?? term.amort_pct_of_face,
+              ...over,
+            });
+            // Each commit fn RETURNS [next, paths] — the store's set() does the write (basis YOU).
+            const otherEvents = refiEvents.filter((e) => e.tranche_name !== term.name);
+            const withRefi = (over: Partial<RefinancingEvent>): [DealAssumptions, string[]] => [
+              { ...a, structure: { ...a.structure, refinancing: [...otherEvents, makeEvent(over)] } },
+              ['structure.refinancing'],
+            ];
+            const newSpread = refi && refi.new_pricing.kind === 'floating' ? refi.new_pricing.spread : base.spread;
+            return (
+              <>
+                <Row label={`Refinance ${term.name} (year)`} path="structure.refinancing">
+                  <NumInput value={refi === null ? '' : String(refi.year)} suffix={`of ${N}`}
+                    onCommit={numCommit((v) => {
+                      // §18.3 gate: 1 ≤ year ≤ hold−1. 0/blank/out-of-range clears the refi.
+                      const yr = Math.round(v);
+                      if (yr < 1 || yr > N - 1) return [{ ...a, structure: { ...a.structure, refinancing: otherEvents.length ? otherEvents : null } }, ['structure.refinancing']];
+                      return withRefi({ year: yr });
+                    })} />
+                </Row>
+                {refi !== null && (
+                  <>
+                    <Row label="↳ new spread" path="structure.refinancing">
+                      <NumInput value={toPctInput(newSpread)} suffix="%"
+                        onCommit={pctCommit((v) => withRefi({ new_pricing: { kind: 'floating', base_rate: base.base_rate, spread: v, floor: base.floor } }))} />
+                    </Row>
+                    <Row label="↳ call premium" path="structure.refinancing">
+                      <NumInput value={toPctInput(refi.call_premium_pct)} suffix="%"
+                        onCommit={pctCommit((v) => withRefi({ call_premium_pct: v }))} />
+                    </Row>
+                    <p className="text-[10px] text-right" style={labelStyle}>
+                      {term.name} reprices to base {toPctInput(base.base_rate)}% + {bps(newSpread)} at year {refi.year};
+                      a {toPctInput(refi.call_premium_pct)}% call premium is paid that year, the old unamortized
+                      OID and fees write off (tax deduction the following year), maturity extends past the hold (§18).
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
       </details>
     </section>

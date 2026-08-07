@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.2.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.3.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -387,6 +387,9 @@ One **running cash variable** `cash` per year; every step depletes or feeds it e
 cash = opening_cash + FCF_pre_debt                    (FCF_pre_debt from §7 — after cash taxes)
 1. − cash interest (all tranches, §4)
 2. − commitment fees (undrawn revolver × fee)
+2R. − refinancing cash cost [v1.3.0 — §18.4]: for any tranche refinanced THIS year, a
+     mandatory financing use = call premium + new OID + new financing fees, senior to
+     mandatory amort/sweep/distributions (0 when no refi lands this year). See §18.
 3. − mandatory amortization: straight-line % of ORIGINAL FACE per schedule, capped at
      outstanding (DR-1 Item 7: amort is computed on original principal, never the declining
      balance — beginning-balance amort is a named reviewer flag)
@@ -488,9 +491,11 @@ the premium applies only to repricing/refinancing (a v2 feature). **Disclosed v1
 mandatory prepayments, and a change-of-control 101 put can bind at exit; v1 ignores both,
 stated on the assumptions page, with re-entry via the Phase G call-protection/refinancing
 module. HY make-whole likewise enters only with Phase G refinancing.
-**v1 structural constraint [v1.0.3]:** every term-tranche maturity must exceed
-`hold_years` (no balloon repayment or refinancing inside the hold until the Phase G
-refinancing module). Violation is an input-gate rejection, not a computed default.
+**v1 structural constraint [v1.0.3; refined v1.3.0]:** every term-tranche maturity must
+exceed `hold_years` — no balloon repayment inside the hold. A **refinancing** (§18) does NOT
+relax this: it re-terms a tranche mid-hold but the NEW maturity must still exceed the
+remaining hold (`(R−1) + new_maturity_years > hold_years`, §18.3). Violation is an input-gate
+rejection, not a computed default.
 
 ## §4 Interest & rates [CONFIRMED DR-1 — kept as disclosed minority convention]
 
@@ -637,7 +642,9 @@ treatment per §6 uncapped line); both flow to the interest line for book EBIT, 
 BOOK write-off lands in the retirement year; the TAX deduction enters the FOLLOWING
 year's uncapped pool (§5 strict sequentiality — retirement is only known post-waterfall,
 after that year's tax is computed). If retirement occurs in year N it merges into the
-exit-year deduction (§9).
+exit-year deduction (§9). **A §18 refinancing reuses this exact timing** — the old
+tranche's unamortized OID/DFC (and the call premium) write off in book year R with the
+tax deduction in year R+1's uncapped pool, merging into the exit deduction when R+1 = N.
 `FCF_pre_debt = EBITDA_adj − cash tax − capex − ΔNWC` (D&A and fee amortization non-cash;
 cash tax single-sourced from the §6 computation — mirror invariant §14.16).
 
@@ -953,6 +960,17 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
     capacity never accrues (paid[t] ≤ request[t] per year — no later catch-up above the
     year's own request); DPI monotone non-decreasing; distributions never enter
     DSCR/FCCR/ICR or the §11 FCF-conversion numerator (always).
+19. Refinancing [v1.3.0 — §18] (domain: a `structure.refinancing` event exists; the clauses
+    are trivially satisfied when the schedule is empty — the pre-v1.3.0 degenerate case):
+    (a) **par-for-par at the refi** — the refinanced tranche's ending balance in year R equals
+    its beginning balance in year R minus year-R mandatory amort and sweep, with NO principal
+    step from the refi itself (the new face = the old beginning balance `B`; the refi moves no
+    principal, only re-prices/re-terms); (b) **BS closes in the refi year**, |check| < $0.005m
+    (§14.2 already asserts this every year — restated as a refi-specific check because §18.6's
+    equity/DFC/cash legs must net exactly); (c) **the write-off + call-premium tax deduction is
+    in year R+1's UNCAPPED pool** (or merges into the year-N exit uncapped pool when R+1 = N),
+    never in year R's; (d) **`refinancing_cash_cost[R] = call_premium + new_OID + new_fees`**
+    and it is a cash use of that year's running-cash variable (§14.3 conservation includes it).
 
 ## §15 Units, precision, display [CONFIRMED DR-5 Item 6]
 
@@ -972,7 +990,13 @@ carryforwards out of scope; exit-year fee write-off deducted UNCAPPED; PP&E roll
 mechanically and may go negative (warned); post-2025 OBBBA §163(j) sub-changes out of
 scope; interim distributions [v1.1.0] pay at year-end after full debt service (never
 revolver-funded), blocked capacity does not accrue, and the RP trap is the closed-form
-pro-forma net-leverage test (§3.7 — no solver). Framing:
+pro-forma net-leverage test (§3.7 — no solver); refinancing [v1.3.0 — §18] is a SCHEDULED
+per-tranche event (no forward-curve or covenant-cure trigger), one refi per tranche,
+par-for-par (no dividend recap / upsizing), cash-pay term tranches only (no PIK refi), the
+repricing effective for the whole of the refi year (no mid-year proration), and the old
+OID/DFC write-off plus the call premium deducted UNCAPPED in the FOLLOWING year (vs the
+Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1-year, inert without a
+binding §163(j)), with sweep priority carried over unchanged. Framing:
 "a model is a range, not a point" — the sensitivity/scenario exhibits are themselves the
 primary caveat mechanism.
 
@@ -1008,6 +1032,25 @@ are Class B with basis badges; the suggestion layer proposes NEITHER (a distribu
 policy is a sponsor decision with no history/convention basis — fields start empty/off,
 badge TEMPLATE when touched via template paths, YOU when set by the user). Structural
 gate: `distributions` entries must be ≥ 0 and the array length must equal `hold_years`.
+Schema additions [v1.3.0 — G-5, §18]: `structure.refinancing: RefinancingEvent[] | null` —
+zero or more per-tranche refinancing events (null ≡ [] ≡ feature OFF, so every pre-v1.3.0 deal
+and every suggestion default is byte-identical to before). Each event =
+`{ tranche_name: string; year: number; new_pricing: TranchePricing; call_premium_pct: number;
+new_maturity_years: number; new_oid_pct: number; new_financing_fee_pct: number;
+new_amort_pct_of_face: number }`. Class B with basis badges; the suggestion layer proposes NO
+refinancing (a refi decision has no history/convention basis — starts empty, badge TEMPLATE via
+template paths, YOU when set). **Structural gates (validated at Build — input-gate REJECTIONS,
+never computed defaults, §18.1–§18.3):** `tranche_name` names an existing **cash-pay term**
+tranche (not the revolver, not a `pik_note`); **at most ONE event per tranche**;
+`1 ≤ year ≤ hold_years − 1`; `(year − 1) + new_maturity_years > hold_years` (no balloon inside
+the hold); `call_premium_pct`, `new_oid_pct`, `new_financing_fee_pct`, `new_amort_pct_of_face`
+each ≥ 0; `new_maturity_years ≥ 1`.
+**ModelOutput additions [v1.3.0 — G-5]:** `TrancheYear` gains `refinanced: boolean` (true only
+in the refi year for the refinanced tranche) and `refinancing_cash_cost: number` (the year's
+`call_premium + new_OID + new_fees`, 0 otherwise) and `unamortized_writeoff: number` (the old
+OID+DFC written off at the refi, 0 otherwise) — the DISPLAYED refi surface (§18.8) reads these
+named fields, never a recomputation. All Class C, emitted UNCONDITIONALLY (0/false when no refi),
+so pre-v1.3.0 goldens carry committed `0.0`/`false` columns exactly like the G-1 additions.
 **ModelOutput additions [v1.1.1 — stated here rather than left normative-by-fixture]:**
 `WaterfallYear` gains `distribution_requested`, `rp_max: number | null` (**null ⇔ the trap
 is OFF ⇔ +∞** — N/A semantics, never a sentinel, per §11/§15), `distribution_paid` and
@@ -1225,10 +1268,239 @@ rather than something discovered as a red test (found by the hostile sign-off, r
 
 ---
 
+## §18 Refinancing events [v1.3.0 — G-5; Tier A, engine arithmetic] [DECIDED — independent hostile sign-off round 1 REFUSED → round 2 GRANTED 2026-07-26]
+
+A **refinancing** re-prices, re-terms and (optionally) re-issues an existing cash-pay term
+tranche mid-hold, without changing the deal's leverage quantum. Economically it is a
+**RETIREMENT of the old tranche + ORIGINATION of a new one at the same par** — the exact two
+events §7 (early-retirement write-off) and §2/§7 (origination: OID/fees capitalized and
+amortized) already model, fired simultaneously in the refi year, plus a **call premium** paid
+in cash. This section reuses those primitives and states only what is genuinely new.
+
+**§18.1 The trigger — an explicit, scheduled event [DECIDED v1-simple].** A refinancing is an
+input assumption on a named cash-pay term tranche: `{ tranche_name, year R, new_pricing,
+call_premium_pct, new_maturity_years, new_oid_pct, new_financing_fee_pct, new_amort_pct_of_face }`
+(schema in §16). It is **not** covenant- or rate-condition-triggered. `R` is the 1-indexed
+hold year the refi takes effect. **At most ONE refinancing per tranche in v1** and **at most
+one refi per year across the structure is not required — each tranche's refi is independent**,
+but a tranche may be refinanced only once.
+REJECTED alternatives, each disclosed in §15: (a) a **forward-curve / rate-condition trigger**
+("refi when SOFR falls 100bp") — needs a forward base-rate path (backlog #10's Tier-A half) and
+a decision rule that is really an optimiser; v2. (b) a **covenant-breach-triggered refi**
+(refinance to cure a breach) — a solver-shaped feedback loop (the refi terms depend on the
+breach the refi is meant to fix); v2. (c) a **dividend-recap / upsizing refi** (new par > old
+outstanding, the excess distributed) — that CHANGES leverage and is really a re-leveraging +
+distribution, belonging with backlog #8/#9 and the §3-step-7 distribution machinery, not here;
+v1 refis are **par-for-par**. (d) **multiple refis per tranche** — no v1 need; the single-refi
+constraint keeps the write-off/origination bookkeeping a single event per tranche.
+
+**§18.2 Scope of what is refinanceable [DECIDED v1-simple].**
+- **Cash-pay term tranches only** (`senior` / `unitranche` / `mezzanine`). **PIK notes are NOT
+  refinanceable in v1** (a PIK refi interacts with the §6 AHYDO/accrual path and the payoff =
+  par + accrued-PIK identity; deferred, §15). The revolver is never refinanced this way.
+- **Par-for-par**: the new tranche's face = the OLD tranche's **beginning balance at the start
+  of year R** (post years 1..R−1 amortization/sweep). Call it `B`. No upsizing, no paydown
+  beyond what the year would do anyway.
+- **Sweep participation and priority are carried over UNCHANGED** by the refi (the refi
+  re-prices and re-terms; it does not re-rank the sweep). Disclosed §15.
+
+**§18.3 Timing — the refi takes effect at the START of year R [DECIDED].** Consequences,
+each a deliberate annual-period convention (§1):
+1. **Repricing is effective for the whole of year R.** Year-R cash interest = `B × new_all_in`
+   (floating: `max(new_base, new_floor) + new_spread`; §4). The refi year is the FIRST full
+   year at the new pricing — the point of a repricing feature is to SHOW the rate benefit in
+   the year it lands. REJECTED: mid-year proration of the rate (needs sub-annual periods —
+   out of scope with §1's annual periods; the whole-year convention is the same simplification
+   §4 already makes for beginning-balance interest).
+2. **Maturity extension** re-bases the straight-line schedules. The new tranche's amortization
+   horizon = `new_maturity_years` (measured from year R). New **mandatory amort** =
+   `new_amort_pct_of_face × B` per year, capped at outstanding (§14.15 — the "original face"
+   for the new incarnation is `B`). New **OID amortization** = `(new_oid_pct × B) /
+   new_maturity_years` (capped §163(j) interest, §6/§7). New **financing-fee amortization** =
+   `(new_financing_fee_pct × B) / new_maturity_years` (uncapped, §6/§7). All three amortize
+   starting in year R (a tranche originated at the start of year R amortizes from year R,
+   exactly as a close-originated tranche amortizes from year 1).
+   **Structural gate (§16):** `(R − 1) + new_maturity_years > hold_years` — the new tranche
+   must still mature AFTER the hold, preserving §3/§16's "no balloon inside the hold" rule for
+   the new incarnation. `1 ≤ R ≤ hold_years − 1` (a refi in the exit year is just the exit).
+
+**§18.4 The cash cost — a mandatory financing use in the year-R waterfall [DECIDED].** In the
+par-for-par gross-up frame §2 uses at close (debt raised at face; OID a separate USE), the
+company retires `B` of old par + `call_premium`, pays `new_financing_fees`, and raises only
+`B − new_OID` net from the new lenders. The cash it must fund from its OWN cash is therefore:
+
+```
+refinancing_cash_cost(R) = call_premium + new_OID + new_financing_fees
+  call_premium = call_premium_pct × B          (e.g. 0.01 = a 101 soft-call premium)
+  new_OID      = new_oid_pct × B               (funded, then capitalized — §2/§7 analogue)
+  new_fees     = new_financing_fee_pct × B      (paid, then capitalized — §2/§7 analogue)
+```
+
+This is a **mandatory** use, senior to the discretionary sweep (§3 step 5) and any interim
+distribution (§3 step 7). It is inserted as **§3 step 2R** — after commitment fees (step 2),
+before mandatory amortization (step 3): `cash −= refinancing_cash_cost`. Placement matters
+only when cash is scarce (it correctly shrinks the sweep pool and can pull cash toward a
+revolver draw / floor breach, §3 step 6 / §14.4); for a healthy deal it depletes the same
+running-cash variable as every other use, so §14.3 conservation holds unchanged. The cash cost
+is **never revolver-funded by construction of a distribution** — it PRECEDES the sweep and
+distribution, so if it forces a draw, that is a genuine liquidity event the floor-breach
+machinery reports, not a hidden one. REJECTED: funding the refi from a fresh sponsor equity
+check at R (v1 has no mid-hold equity injection — that is a follow-on, backlog #9-adjacent);
+netting OID/fees into the new debt's par (that is the net-of-OID sources error §2 already
+rejects — debt is carried at face).
+
+**§18.5 The old-tranche write-off — book in year R, tax deferred to R+1 [DECIDED; reuses §7].**
+At the start of year R the old tranche's **unamortized OID + unamortized financing fees** (the
+`oidRemaining`/`feeRemaining` balances after years 1..R−1) are written off. The **BOOK** charge
+lands in year R — it reduces deferred financing costs and flows through net income to equity
+(§8), together with the **call premium** (a loss on extinguishment, expensed in year R; the new
+OID/fees are NOT expensed — they are capitalized). The **TAX** deduction — of the write-off AND
+the call premium together — enters year **R+1**'s UNCAPPED §163(j) pool, via the SAME
+`pendingRetirementDeduction` mechanism §7 uses for early retirement. If `R + 1 = N` it merges
+into the exit-year deduction (§9), exactly as §7 already specifies for a year-N retirement.
+**The deferral is a deliberate CHOICE, not a sequencing necessity — stated plainly so it is
+neither over-justified nor mis-implemented.** The refi is SCHEDULED and its write-off amount
+(old unamortized OID + DFC after years 1..R−1) is deterministic and **known BEFORE the year-R
+waterfall** — exactly like the exit-year write-off (§9), which the engine computes pre-waterfall
+and deducts SAME-YEAR. A par-for-par refi does **not** retire the tranche (its balance continues
+at `B` — §14.19(a)/§18.2), so it **never trips §7's balance-crossing `fully_retired` detection**;
+the engine must add the refi write-off + premium to the year-R+1 `pendingRetirementDeduction`
+bucket by **EXPLICIT refi handling**, reusing only the deferral bucket — never the retirement-
+detection path. v1 chooses to defer (rather than deduct same-year like §9) for two reasons: a
+**single write-off deferral code path** (no third tax-timing branch beyond exit-same-year and
+retirement-deferred) and a **≤1-year deferral of a deduction, conservative on TIMING** (the same
+flavour of disclosed conservative bias as beginning-balance interest, §4). REJECTED — and this
+is the technically more precise reading, named so it is not mistaken for an oversight: under
+Treas. Reg. §1.1001-3 a repricing that moves yield materially is a "significant modification" =
+debt extinguishment, whose unamortized OID/DIC and repayment premium are deductible in the YEAR
+of the refi (year R, same-year, and the premium as capped §163(j) interest at that). v1 deducts
+them a year later and UNCAPPED. The two directions of the resulting bias, split honestly (the
+spec is otherwise scrupulous about this — §8/§11): the **timing** deferral (R vs R+1) is
+conservative (defers a deduction); the **uncapped** treatment of the call premium (vs the
+capped-§163(j) reading) is *anti-*conservative — it OVER-deducts — but ONLY when §163(j) binds
+AND the premium is large, and it is INERT otherwise. The refi golden (G6-REFI) is built with
+positive §163(j) headroom so capped ≡ uncapped there; the binding case is disclosed (§15) and
+exercised by the directed fixture §18.11(ii). Same-year, capped, pre-waterfall treatment would
+fork the §6 tax path for a ≤1-year difference. The write-off never reduces cash (it is non-cash
+— §9's rule); only the call premium and the new OID/fees move cash (§18.4).
+
+**§18.6 Balance-sheet coherence (the refi closes the BS in year R) [DECIDED].** With `WO =
+old_unamortized_OID + old_unamortized_DFC`:
+
+```
+Δcash    = −(call_premium + new_OID + new_fees)          (§18.4)
+Δdfc     = −WO + (new_OID + new_fees)                    (write-off out, new deferred cost in)
+Δdebt    = 0                                             (par-for-par: B → B)
+Δequity  = −(WO + call_premium)                          (book loss via NI — §8)
+⇒ ΔAssets (= Δcash + Δdfc) = −call_premium − WO = Δdebt + Δequity   ✓ §14.2 closes
+```
+
+The equity leg is the ordinary §8 roll (`equity += NI − distribution_paid`) with the refi's book
+loss already inside NI; no new equity rule. The new OID/fees are capitalized (they sit in DFC and
+amortize), so they do NOT hit equity directly — only the write-off and premium do.
+
+**§18.7 Composition with the rest of the model [DECIDED].**
+- **§3 cash sweep**: the refi cost (§18.4) is subtracted before the sweep, so it reduces the
+  sweep pool in year R by construction — no special coupling. The new (lower) mandatory amort
+  and interest change the pool from year R onward through the ordinary running-cash variable.
+- **§3.7 RP trap / §3 step 7 distributions**: the refi is **par-for-par**, so `gross_debt_end`
+  (the trap's debt term) is UNCHANGED by the refi itself; the trap and the distribution caps
+  compose automatically — the refi simply consumes cash earlier in the same waterfall, lowering
+  what sits above the floor. No amendment to §3.7's closed form.
+- **§11 covenants**: from year R the new pricing changes cash interest → ICR / FCCR / DSCR move;
+  net leverage is unchanged AT the refi (par-for-par) and then deleverages on the new schedule.
+  Covenant tests read the post-refi lines with no special handling.
+- **§12 value bridge**: the refi's cash costs leave via cash, so they are embedded in `ND₁ =
+  payoff − closing_cash` and shrink the **paydown bar** — exactly as the annual monitoring drag
+  and interim distributions are (§12 "second-order effects live truthfully inside the paydown
+  bar"). They are **NOT** a new walk-down line and add **no new bar**: the two §14.9 identities
+  hold unchanged because ND₁ is measured on the actual path. The non-cash write-off does not
+  touch the bars. (Disclosed: the refi's interest SAVING and its up-front cash cost both live
+  inside the paydown bar via closing cash; the bridge does not decompose "refi benefit" as its
+  own bar in v1 — a memo-level attribution is a v2 nicety.)
+- **§9 exit**: unchanged. Payoff = Σ balances + drawn (the new tranche's balance feeds in
+  naturally); the exit-year write-off is the remaining unamortized OID/fees on ALL tranches,
+  now including the new tranche's residual new_OID/new_fees. No §9 formula changes.
+
+**§18.8 Disclosure (§15) and the coherence surface.** A refinancing is a modelled structural
+event, not a warning, so it raises **no coherence flag by itself**; the refi year's premium,
+write-off and new-tranche terms are DISPLAYED (§18 output surface, UI PR). The v1 simplifications
+in §18.1–§18.5 are each listed on the assumptions & methodology page (§15): scheduled trigger
+only (no forward-curve/covenant trigger); single refi per tranche; par-for-par (no dividend
+recap); cash-pay term tranches only (no PIK refi); whole-year repricing at the start of year R
+(no mid-year proration); write-off + premium deducted UNCAPPED in year R+1 (vs the §1.1001-3
+same-year capped reading — conservative, ≤1-year, inert without a binding §163(j)); sweep
+priority carried over unchanged.
+
+**§18.9 Golden re-derivation plan [where numbers move].** The `refinancing` assumption defaults
+**absent/null** (feature OFF), and **no** existing §17 golden sets it, so the regeneration is
+**purely ADDITIVE** (the G-1 discipline, phrased as G-1 was): on every G1–G5 / G2-D / G2-DIST /
+G3-DIST / G2-DIST-D fixture **0 values change, 0 are removed**, and the only additions are the
+new unconditionally-emitted `TrancheYear` columns (`refinanced` = false, `refinancing_cash_cost`
+= 0, `unamortized_writeoff` = 0), proved leaf-by-leaf in the golden PR. **No pre-existing number
+moves.** The FEATURE is exercised by ONE new golden, **G6-REFI** (§18.10), plus directed engine
+fixtures for the golden-uncovered refi branches (§18.11).
+
+**§18.10 The refinancing golden — G6-REFI [built in G-5 step 2].** `G6-REFI` = **every field of
+G2 held constant** plus a single `refinancing` event on the **TLB at year R = 3**, so every
+difference from G2 is attributable to §18 alone (the G-1 variant discipline). Refi terms: new
+floating **base 3.60% + spread 275bps** (a 100bp repricing down from G2's 375bps), **call
+premium 1.0%** (101 soft call), **new maturity 6 years** (from the refi; absolute maturity year
+8 > hold 5), **new OID 0.5%**, **new financing fee 1.0%**, **new amort 1.0% of the new face**.
+Asserts: entry S&U byte-identical to G2 (§18 is post-close — the refi cannot re-price entry);
+years 1–2 byte-identical to G2 (the refi is a year-3 event); year-3 TLB cash interest FALLS
+(repricing) and the year-3 waterfall carries the refi cash cost (premium + new OID + new fees);
+the year-3 BOOK write-off of the old TLB's unamortized OID/fees lands in year 3 while its TAX
+deduction lands in year 4's uncapped pool; §163(j) never binds (positive headroom every year, so
+the capped/uncapped write-off treatment is inert — G2's property, preserved by the lower post-
+refi interest); the BS closes every year (§14.2); the unlevered stream is byte-identical to G2's
+(§9 is capital-structure-blind — a refinancing is a financing event). Check values are fixed by
+the reference derivation (`scripts/goldens/spec_calc.py`) and adjudicated at ±$0.005m / ±0.1bp.
+
+**§18.11 Golden-uncovered by design [v1.3.0]** — each covered by a directed kernel/module fixture
+in the G-5 engine PR, mutation-tested against the exact wrong reading it discriminates (the same
+discipline §17 [v1.1.1] applies to the distribution branches):
+(i) **refi where `R + 1 = N`** — the deferred write-off/premium deduction MERGES into the exit-
+year uncapped pool (§18.5 / §9); G6-REFI runs R = 3, N = 5, so the deduction lands cleanly in
+year 4 and never merges. A fixture must exercise the merge or the merge path is untested;
+(ii) **refi under a BINDING §163(j)** — where the year-R+1 uncapped write-off/premium deduction
+and the capped-vs-uncapped call-premium simplification (§18.5) actually MOVE cash tax; G6-REFI
+has positive headroom every year, so capped ≡ uncapped there and the simplification is inert —
+untested without a directed binding-headroom fixture;
+(iii) **refi cash cost forcing a revolver DRAW / floor breach** — §18.4's "senior to the sweep,
+can pull cash toward the floor" clause; G6-REFI stays well above the floor, so the interaction of
+the refi use with §3 step 6 is unexercised by the golden;
+(iv) **refi + a live §3-step-7 distribution / RP trap in the SAME deal** — §18.7's "composes
+automatically, par-for-par leaves `gross_debt_end` unchanged" claim; G6-REFI requests no
+distributions, so the joint path is untested by a golden;
+(v) **the structural gates** — `(R−1)+new_maturity_years ≤ hold_years` (balloon inside hold),
+`R = hold_years` (refi in the exit year), refi naming a PIK note or the revolver, refi naming a
+tranche that does not exist: each an input-gate REJECTION (§16), not a computed default, and none
+constructible inside a passing golden — pinned by directed rejection fixtures;
+(vi) **refi of a term tranche with a NON-ZERO unamortized OID balance** — G6-REFI refinances the
+G2 TLB, which carries **OID = 0** (§17), so at the refi the OLD-OID write-off and the
+OLD-OID-amortization-STOP sub-paths run with all-zero inputs. The engine keeps OID and financing
+fees in SEPARATE schedules (`oidRemaining` vs `feeRemaining`, `oid_amortization` vs
+`financing_fee_amortization`), so the OID side must be independently written off and stopped at
+the refi; G6-REFI exercises the FEE side (the TLB has a fee allocation) and the NEW-OID side (new
+OID 0.5% > 0, amortized then exit-written-off), but NOT the OLD-OID transition. A directed fixture
+MUST refinance an OID-bearing tranche and be mutation-tested against (a) **old unamortized OID not
+written off at the refi** and (b) **old OID amortization not stopped** (old + new OID
+double-amortizing) — both of which pass G6-REFI byte-for-byte. This is the mainstream case
+(TLBs at 99–99.5, unitranche — cf. G3/G4 OID) and closes the sign-off's blocking finding;
+(vii) **multiple independent refis in one deal** (§18.1 permits one refi per tranche across
+several tranches). The write-offs/premiums co-accumulate into the single year-R+1
+`pendingRetirementDeduction` and the cash costs sum at step 2R — additive and independent, the
+same summing the exit-year write-off already does across tranches. Covered by construction, but a
+one-line directed fixture (two tranches refinanced in different years) pins the accumulation.
+
+---
+
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.3.0 | 2026-07-26 | **PHASE G-5 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — refinancing events. TIER A (touches engine arithmetic — full five-step template).** §18 added: a scheduled per-tranche refinancing modelled as a RETIREMENT of the old tranche + ORIGINATION of a new one at the SAME par, plus a call premium. Reuses §7 (early-retirement write-off) and §2/§7 (origination: OID/fees capitalized + amortized) verbatim. (1) **Trigger** = an explicit event `{tranche_name, year R, new_pricing, call_premium_pct, new_maturity_years, new_oid_pct, new_financing_fee_pct, new_amort_pct_of_face}` — NOT covenant/rate-condition-triggered (§18.1; forward-curve and covenant-cure triggers REJECTED → v2). (2) **Effective at the START of year R**: year-R interest at the NEW rate (repricing shown in the year it lands; mid-year proration REJECTED — §1 annual periods), new straight-line amort/OID/fee horizon = `new_maturity_years`, structural gate `(R−1)+new_maturity_years > hold_years` (§18.3). (3) **Par-for-par** — new face = old beginning balance `B` at year R; no upsizing (dividend-recap/upsizing REJECTED → §8/#9); cash-pay term tranches only (PIK refi REJECTED → v1 AHYDO interaction); one refi per tranche (§18.2). (4) **Cash cost** = `call_premium + new_OID + new_financing_fees`, a MANDATORY §3 **step 2R** use (after commitment fees, before mandatory amort), senior to sweep/distributions, never revolver-funded-by-a-distribution by construction (§18.4). (5) **Old write-off** (unamortized OID + DFC): BOOK in year R (NI/equity/§8), TAX deduction of the write-off AND the call premium in year **R+1**'s UNCAPPED §163(j) pool via the §7 `pendingRetirementDeduction` path (merges into the exit deduction if R+1=N); the §1.1001-3 same-year-capped reading is the technically-more-precise REJECTED alternative (v1 defers — ≤1yr, conservative, single code path, inert without a binding §163(j)) (§18.5). (6) **BS closes** in year R by construction (§18.6 algebra). (7) **Composition**: refi cost shrinks the sweep pool via the running-cash variable; par-for-par leaves `gross_debt_end` unchanged so the §3.7 RP trap composes automatically; §11 covenants read the new interest; §12's bridge embeds the refi costs in the paydown bar via closing cash (NO new bar/walk-down line — §14.9 unchanged); §9 exit unchanged (§18.7). (8) §16 schema `structure.refinancing: RefinancingEvent[] | null` + structural gates; §14.19 invariants (par-for-par at refi; BS close; write-off/premium in R+1 uncapped); §15 disclosure lines. **Golden re-derivation: purely ADDITIVE — every existing G1–G5/G2-D/G2-DIST/G3-DIST/G2-DIST-D fixture has 0 values changed / 0 removed**, only the new unconditionally-emitted `TrancheYear` columns (`refinanced`=false, `refinancing_cash_cost`=0, `unamortized_writeoff`=0) added (feature default OFF, no golden sets it — proved leaf-by-leaf in step 2); the feature is exercised by ONE new golden **G6-REFI** (= G2 + a TLB refi at year 3: −100bp, 101 premium, 6-yr maturity, 0.5% OID, 1% fee) plus directed engine fixtures for the golden-uncovered branches (§18.11: R+1=N merge, binding §163(j), refi-forced draw, refi+distribution, the structural-gate rejections, the **non-zero old-OID refi**, multi-tranche refis). **Independent hostile sign-off round 1 REFUSED** (2 blocking, both about COVERAGE/CONSISTENCY — "not disputing a single committed value"; the §18.6 BS algebra, §18.4 gross-up frame, §18.7 bridge/RP-trap composition and buildability were verified SOUND), all applied here: (B1) §18.11's golden-uncovered list omitted the **non-zero old-OID refi transition** — G6-REFI refis the OID=0 TLB, so a mutant that fails to write off / stop old OID ships green; added as §18.11(vi) with a mutation-tested directed fixture. (B2) §18.5 justified the R+1 deferral as "known post-waterfall like a sweep retirement" — FALSE (the refi is scheduled/pre-waterfall and par-for-par does NOT retire the tranche, so it never trips §7's `fully_retired` detection); restated as a deliberate CHOICE (single deferral code path + conservative ≤1yr timing) with explicit EXPLICIT-refi-handling wiring, not the retirement-detection path. Minors applied: additive-not-byte-identical phrasing (§18.9); the "conservative" label split into timing-conservative vs premium-uncapped-anti-conservative (§18.5); multi-tranche refis noted (§18.11(vii)); header marked decided-pending-sign-off. **Round 2 GRANTED (2026-07-26)** — both blocking closures verified INDEPENDENTLY against the on-disk text (not the summary); the §18.6 BS-closure algebra, §18.4 gross-up cash frame vs §2, §18.7 bridge/RP-trap composition, no-cycle buildability and Tier-A classification were confirmed sound in round 1 and undisturbed by the fixes. Four non-blocking residuals carried into steps 2–3: (1) the §18.11(vi) fixture must use old_OID>0 ∧ new_OID>0 on the SAME tranche with R+1<N (both schedule transitions + a discrete non-merged deferral year); (2) `scripts/goldens/spec_calc.py` gets a FULL independent refi path (rate switch, OID/fee schedule swap on base B, `pendingRetirementDeduction`, step-2R cash cost) — no reuse of the engine's swap logic; (3) `sequence.ts` `netIncome` gains a call-premium extinguishment-loss term for §18.6's equity leg (G6-REFI's BS-close assert discriminates a missing term); (4) the refi financing-fee basis is `new_fee_pct × B` (tranche face), NEVER re-allocated pro-rata from the §2 stack fee. | Phase G-5 template step 1 (Tier A, rebuild/PHASE_G_EXTENSIONS.md); backlog #5; pairs with the deferred call-protection module; hostile sign-off round 1 REFUSED → round 2 GRANTED |
 | v1.2.0 | 2026-07-25 | **PHASE G-2 FEATURE AMENDMENT (spec-first; NO engine/UI/data code in this version) — quarter-stitched LTM sizing basis. DATA-SIDE (Tier B): the ENGINE arithmetic is unchanged; only the extraction layer changes WHAT `fy_ebitda`/`fy_revenue` is. Admission ticket = an EMPTY git-diff over the engine arithmetic path (byte-identical goldens are a necessary SECONDARY check, not the proof — corrected after the tier-governance review).** §1.1 added: the sizing EBITDA/revenue becomes the most-current trailing-twelve-months figure — `LTM(M) = FY(M) + YTD_current(M) − YTD_prior(M)` (normative), telescoping to the 12 months ending at the latest interim period end `e`; Q4-standalone stub `= FY − YTD_9M` for the display series; derived EBITDA stitches PER COMPONENT (OI + D&A) and refuses (→ FY fallback + note) if any component is absent at any of the three spans (D1 no-fake-total rule). Spans identified by fiscal-period ROLE with widened day-count windows (full year 350–380, 9M 250–285, 6M 165–200, quarter 80–100) for 52/53-week filers and fiscal-year changes; END-date keyed, per-period tag resolution (history.ts D1 rules reused), and a CROSS-SPAN vintage/basis-consistency REFUSAL (per-period latest-vintage does not by itself keep the three spans consistent — see F3). FPI / annual-only filers (20-F, e.g. SAP) cannot stitch ⇒ latest FY with an as-of and a **staleness badge** (fresh ≤4.5m / aging 4.5–14.5m / stale >14.5m — filing-overdue cadence, cited, not a magic number). Provenance records the three filed spans (or the FY-fallback age); no value is invented — a metric the stitch cannot build stays FY or MISSING, never a default. §11's "FY(LTM)" is now realized by §1.1. Rejected: latest-FY-only (status quo, up to ~15m stale); annualize a partial period ×4 (ignores seasonality); average 4 standalone quarters (fragile — filers report YTD); change the engine to quarterly periods (that is the Tier-A deferral, a different change). Adjudicated by DATA-LAYER fixtures (US-GAAP mid-year stitch / 52-53-week / FPI-fallback / missing-component refusal / span-hole), independently hand-derived; engine goldens NOT regenerated. **Independent hostile sign-off round 1 REFUSED** — the Tier-B classification and the (corrected) admission ticket were CONFIRMED SOUND, but the STITCH arithmetic had 3 BLOCKING silent-wrong-number bugs on ordinary corporate events, all now fixed: (F1) no abutment guard — a fiscal-year-end change left the latest full-year FY non-adjacent to the current partial and produced a >12-month garbage LTM that the day-count windows could not catch; now an executable precondition (`Y_end+1d = C_start`, no YTD crosses a FYE) refuses → FY. (F3) my restated-vintage fixture claim was FALSE — per-period latest-vintage CREATES a cross-vintage mix (inclusive FY 10-K vs continuing-only restated prior-YTD in a newer 10-Q, ~12% overstatement); now the stitch refuses on a >1% restatement note or FY/prior-YTD vintage divergence. (F4) revenue (single tag) could stitch while EBITDA (component-derived) fell back, giving `FY_EBITDA ÷ LTM_revenue` and a trajectory projected off LTM revenue but sized on FY EBITDA; now a single-basis-pair rule drops BOTH to FY if either refuses. Minors also applied: interim-D&A is the load-bearing EBITDA reliability gate (F5); staleness re-glossed FILING-OVERDUE with 13.5→14.5m annual (F6); YTD_prior is role+END-date matched, not calendar −365, ≤1-week 52/53 disclosed (F7); the `fy_*`-holds-LTM naming reconciled with ledger L-11/C-6, basis inseparable from the value, no consumer reads basis from the field name (F8); blast-radius stated — this fact is the base of the WHOLE model (F9); provenance structured-fields authoritative, string display-only, Q4-stub refusable (F10). Fixtures (i)–(vii) rewritten so the REFUSAL branches are pinned. **Round 2 REFUSED** — round-1's F1/F3/F4 confirmed genuinely fixed (F1 abutment proven fail-safe, F3 discontinued-ops caught by the restatement-note rule, F4 pair-consistency sound), but one BLOCKING interaction the fixes EXPOSED plus minors, all now applied: (B1) the LTM flip collides with §9/§11's NTM valuation base `FY × (1+growth[0])` — DECIDED: `growth[0]` is an annualized FY-over-FY rate (verified: `history.ts::yoyGrowths`/`cagrOverTrueSpan` over consecutive year-ends), so `LTM × (1+growth[0])` = "the twelve months following the anchor" — MORE literal-NTM than the old FY base, not an over-projection; §9/§11 cross-referenced, `entry_ebitda_for_sizing` "always FY" comment flagged for the data PR, directed NTM fixture (viii) added. (M1) the F3 vintage check was fail-OPEN (proceed-unless-caught, leaning on a prior-year Q4 stub US-GAAP filers don't file) — inverted to FAIL-CLOSED (stitch only if the three spans are POSITIVELY one vintage-era; else refuse), the same fail-open posture R2-1 rejected for the tier ticket. (M2) `entry_ebitda_for_sizing`'s and `entryMultipleDisplay`'s "ALWAYS FY" OUTPUT-side comments flagged for the data PR (F8 caught only the input `fy_*` comment). (M3) the F6 "looser bound" gloss corrected — 14.5m is built on the 10-K's 2.5m lag, CONSERVATIVE for the 20-F's 4m. (Q1) the 52/53-week tolerance pinned to EXACTLY 7 days (>7d refuses). **Round 3 REFUSED** — B1 CONFIRMED correctly resolved and sound (annualized-growth[0] decision code-verified), M2/M3/Q1 closed, but the M1 rewrite OVER-corrected: fail-closed condition (a) was formalized as `filed`-date EQUALITY, which is UNSATISFIABLE (a 10-K full year and a 10-Q prior-year interim never share a filing; the prior-YTD's winning vintage always post-dates the FY 10-K — the normal state), so the stitch would ALWAYS refuse and G-2 would ship as a silent FY-only no-op. FIXED: condition (a) re-formalized as vintage-PRESENCE (is the restatement check EVALUABLE — original vintage retained alongside latest?), not filed-equality; operative rule = stitch iff (b)'s >1% restatement note is meaningfully evaluable AND does not fire. Worked checks pinned (discontinued-ops restatement → refuse; normal grower → stitch; ESEF single-vintage → refuse); fixture (i) now asserts the normal case PROCEEDS (no-op regression guard) and (ix) added for the ESEF refusal. Re-sent for round 4; no code until GRANTED. | Phase G-2 template step 1 (Tier B, rebuild/PHASE_G_EXTENSIONS.md); backlog #2; hostile sign-off rounds 1–3 REFUSED → fixes |
 | v1.1.3 | 2026-07-25 | **DISPLAY-ONLY LABEL FIX — zero arithmetic change, no golden touched.** The entry multiple was hard-labelled `'Entry multiple (FY)'` in the Excel Summary sheet and stated as `at X FY EBITDA` in the downloaded memo, but `derived.entry_multiple` is on the VALUATION basis — NTM-based under an NTM entry (§9), where those labels are FALSE (same defect class as the v1.1.2 entry-leverage rename: the value is correct, the label was not). §11 already decided the convention ("if entry is NTM-based the UI shows both, LTM canonical"); this IMPLEMENTS it via one shared display helper `entryMultipleDisplay` (`facade.ts`) used by all three surfaces (Excel, memo, Summary tile): the multiple is labelled by its actual basis, and under NTM the FY/LTM-canonical figure (EV ÷ `entry_ebitda_for_sizing`, always FY) is shown alongside. FY deals are byte-identical. NTM is golden-uncovered (§9), so it is pinned by DIRECTED tests + mutation on each surface (hard-coding the basis label, dropping the canonical row, and reverting the memo clause each turn a test red). No spec GAP — §11 was already decided; this is code catching up to it. | Open ticket (pre-existing, deferred from G-1); no amendment needed (implements existing §11) |
 | v1.1.2 | 2026-07-24 | **NAMING + LABEL CORRECTION — zero arithmetic change; every golden VALUE byte-identical (one fixture KEY renamed, proved leaf-by-leaf: 1 removed / 1 added per golden, 0 changed).** `derived.entry_net_leverage_fy` was named "net" but always computed GROSS (total par ÷ FY EBITDA). Both Phase G-1 adjudicators flagged it independently. **The value is correct and stays** — gross is what the market quotes and what §17 sizes tranches on — so this is option (a), a rename, not a re-derivation: field → **`entry_gross_leverage_fy`**, and §11 now states the convention with its rejected alternative (netting against funded min-cash) and the reason. **The defect reached three DISPLAYED surfaces, two of them falsely**: the Excel export row `'Entry net leverage (FY)'` and the same line in the DOWNLOADED IC MEMO (`memoSkeleton` → `<Entity>_memo.md`; **not** a prompt — the first draft of this row called it one, which the hostile sign-off corrected) each sat directly above a genuinely-net final-year figure, so both read as one series across two bases and OVERSTATED deleveraging by the min-cash artifact (G2 would show 4.0x → 0.86x where the like-for-like gross entry figure is 4.0x and the net entry figure is 3.909x). All three labels now say GROSS, the basis divergence is disclosed in the memo's `## Caveats` section, on the Excel `Methodology` sheet and in the Credit tab/sheet headers, and all three labels are now ASSERTED by tests — they were not, which is why the original defect was undetectable. **The old code comment is also corrected**: it justified the value by asserting that in the cash-free/debt-free frame "entry net debt ≡ par because min-cash is new money" — a false premise (the t=0 BS holds the cash; being newly funded explains why it is there, not why it is not cash). §11 records the remaining disclosed gap: ModelOutput carries no entry-date NET leverage; §11 now also states that the deferral is a product call about headline surfaces, not a measure of effort (the numerator already exists in `facade.ts` and is already displayed via §12's paydown bar). **Hostile sign-off round 1 REFUSED** with 5 blocking findings, all applied: the displayed number had ZERO engine-side test coverage (proved by mutation — the net definition AND a hard-coded 99.0 sentinel both passed 373/373); the added assertion reduced algebraically to `min_cash > 0`; the memo 'fix' wrote an IMPERATIVE into a user-facing deliverable; a second copy of the false-premise comment survived; §11's new labelling rule was breached by the very artifacts this change shipped; and zero label assertions were added for a defect that WAS a label. §11's rejection also gained its strongest argument (minimum operating cash is not surplus cash — credit agreements net only unrestricted cash, and §3.7 already treats floor cash as unavailable), the first two reasons having been circular and secondary. **Round 2 GRANTED (2026-07-25)** — an independent reviewer reproduced every fix on an isolated tree: both round-1 mutations (net definition AND the 99.0 sentinel) now go RED through the new C5-gate assertion; the imperative is out of the downloaded memo; the false-premise duplicate is gone; all three labels are mutation-tested; the zero-arithmetic claim reproduces (changed=0, one key renamed per golden). Three new residuals, all cosmetic and non-blocking: F2's gap assertion is algebraically a `gross == Σpar/EBITDA` test (insensitive to the cash VALUE, though it decisively catches the net-definition drift it targets); the fc210d3 message said "nine goldens" where the C5 loop is 8 (G2-D shares G2's entry S&U, covered by the C2 gate); the UI Credit tab header is still bare "Net lev" with the basis in the note directly below. | Independently flagged by BOTH Phase G-1 adjudicating agents, 2026-07-24 (adjudication passes 4a and 4b, `tests/goldens/DERIVATION.md`); owner-directed fix; independent hostile sign-off round 1 REFUSED → round 2 GRANTED |

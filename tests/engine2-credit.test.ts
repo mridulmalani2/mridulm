@@ -32,9 +32,10 @@ const TYPES: Record<string, Record<string, string>> = {
   G3: { Senior: 'senior', 'PIK Note': 'pik_note' },
   G4: { Unitranche: 'unitranche' },
   G5: { Senior: 'senior' },
+  G6REFI: { TLB: 'senior' }, // §18: G2 held constant + TLB refi (par-for-par — entry structure unchanged)
 };
-const RCF_COMMITMENT: Record<string, number> = { G1: 0, G2: 55, G2D: 55, G3: 0, G4: 0, G5: 20 };
-const ENTRY_DEBT: Record<string, number> = { G1: 0, G2: 440, G2D: 440, G3: 405, G4: 42, G5: 48 };
+const RCF_COMMITMENT: Record<string, number> = { G1: 0, G2: 55, G2D: 55, G3: 0, G4: 0, G5: 20, G6REFI: 55 };
+const ENTRY_DEBT: Record<string, number> = { G1: 0, G2: 440, G2D: 440, G3: 405, G4: 42, G5: 48, G6REFI: 440 };
 
 function inputsFromFixture(g: any, golden: string, y: number): CreditYearInputs {
   return {
@@ -52,7 +53,7 @@ function inputsFromFixture(g: any, golden: string, y: number): CreditYearInputs 
 }
 
 describe('credit.ts — §11 formulas on the gospel golden columns (C7 gate)', () => {
-  for (const golden of ['G2', 'G2D', 'G3', 'G4', 'G5']) {
+  for (const golden of ['G2', 'G2D', 'G3', 'G4', 'G5', 'G6REFI']) {
     it(`${golden}: leverage (net, senior-by-TYPE), ICR, FCCR, DSCR on scheduled service, deleveraging subtotals — every year`, () => {
       const g = load(golden);
       for (let y = 0; y < g.waterfall.length; y++) {

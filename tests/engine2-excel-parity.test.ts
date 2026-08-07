@@ -136,3 +136,34 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
     expect(found9999).toBe(false);
   });
 });
+
+describe('§18 refinancing — Excel surfaces disclose the event (G6-REFI)', () => {
+  it('Methodology sheet carries the §18/§15 refinancing row; Debt sheet shows the ⟳ event from NAMED TrancheYear fields', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    const { facts, assumptions } = GOLDEN_DEALS.G6REFI;
+    const out = runModel(facts, assumptions);
+    const rb = await roundTrip(buildEngine2Workbook(out, 'USD'));
+
+    const methodText: string[] = [];
+    rb.getWorksheet('Methodology')!.eachRow((row) => methodText.push(String(row.getCell(1).value ?? '')));
+    expect(methodText.some((l) => l.startsWith('Refinancing:') && l.includes('uncapped the FOLLOWING year')), 'refi Methodology row').toBe(true);
+
+    const debt = rb.getWorksheet('Debt')!;
+    const header = (debt.getRow(1).values as unknown[]).map(String);
+    expect(header).toContain('Refi (§18)');
+    expect(header).toContain('Refi cash cost');
+    expect(header).toContain('Write-off (old OID+fees)');
+    let refiRow: unknown[] | null = null;
+    debt.eachRow((row) => { if (String(row.getCell(9).value ?? '') === '⟳ refi') refiRow = [...(row.values as unknown[])]; });
+    expect(refiRow, 'exactly the refi year row carries the marker').not.toBeNull();
+    // value provenance: the two money cells ARE the named fields (no recomputation)
+    const y3 = out.tranches[0][2];
+    expect(refiRow![2]).toBe('Y3');
+    expect(refiRow![10]).toBe(y3.refinancing_cash_cost);
+    expect(refiRow![11]).toBe(y3.unamortized_writeoff);
+    // and non-refi rows keep the event columns EMPTY (blank ≠ fabricated 0)
+    let zeroCells = 0;
+    debt.eachRow((row) => { if (row.getCell(10).value === 0 || row.getCell(11).value === 0) zeroCells += 1; });
+    expect(zeroCells).toBe(0);
+  });
+});

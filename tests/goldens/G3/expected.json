@@ -344,7 +344,10 @@
     "ending_balance": 151.2,
     "mandatory_amort": 0.0,
     "pik_accrual": 16.2,
-    "sweep_repayment": 0.0
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 0.0,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 151.2,
@@ -352,7 +355,10 @@
     "ending_balance": 169.34,
     "mandatory_amort": 0.0,
     "pik_accrual": 18.14,
-    "sweep_repayment": 0.0
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 0.0,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 169.34,
@@ -360,7 +366,10 @@
     "ending_balance": 189.67,
     "mandatory_amort": 0.0,
     "pik_accrual": 20.32,
-    "sweep_repayment": 0.0
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 0.0,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 189.67,
@@ -368,7 +377,10 @@
     "ending_balance": 212.43,
     "mandatory_amort": 0.0,
     "pik_accrual": 22.76,
-    "sweep_repayment": 0.0
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 0.0,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 212.43,
@@ -376,7 +388,10 @@
     "ending_balance": 237.92,
     "mandatory_amort": 0.0,
     "pik_accrual": 25.49,
-    "sweep_repayment": 0.0
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 0.0,
+    "unamortized_writeoff": 0.0
    }
   ],
   "Senior": [
@@ -386,7 +401,10 @@
     "ending_balance": 239.82,
     "mandatory_amort": 13.5,
     "pik_accrual": 0.0,
-    "sweep_repayment": 16.68
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 16.68,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 239.82,
@@ -394,7 +412,10 @@
     "ending_balance": 198.55,
     "mandatory_amort": 13.5,
     "pik_accrual": 0.0,
-    "sweep_repayment": 27.77
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 27.77,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 198.55,
@@ -402,7 +423,10 @@
     "ending_balance": 148.63,
     "mandatory_amort": 13.5,
     "pik_accrual": 0.0,
-    "sweep_repayment": 36.42
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 36.42,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 148.63,
@@ -410,7 +434,10 @@
     "ending_balance": 91.07,
     "mandatory_amort": 13.5,
     "pik_accrual": 0.0,
-    "sweep_repayment": 44.05
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 44.05,
+    "unamortized_writeoff": 0.0
    },
    {
     "beginning_balance": 91.07,
@@ -418,7 +445,10 @@
     "ending_balance": 25.85,
     "mandatory_amort": 13.5,
     "pik_accrual": 0.0,
-    "sweep_repayment": 51.72
+    "refinanced": false,
+    "refinancing_cash_cost": 0.0,
+    "sweep_repayment": 51.72,
+    "unamortized_writeoff": 0.0
    }
   ]
  },

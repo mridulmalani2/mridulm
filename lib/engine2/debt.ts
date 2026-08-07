@@ -17,7 +17,7 @@ import { scheduledAmort } from './kernel/amort';
 import { allInRate, cashInterest, commitmentFee, pikAccrual } from './kernel/rates';
 import { waterfallYear } from './kernel/waterfall';
 import type { SizedStructure } from './sourcesUses';
-import type { RevolverYear, SweepAssumption, TrancheYear, WaterfallYear } from './types';
+import type { RefinancingEvent, RevolverYear, SweepAssumption, TrancheYear, WaterfallYear } from './types';
 
 /** Economically-retired threshold, matching the reference derivation (±$0.005m — §15). */
 const RETIRED_TOL = 5e-3;
@@ -48,6 +48,59 @@ export function validateStructureForHold(sized: SizedStructure, holdYears: numbe
       throw new RangeError(
         `debt: ${t.assumption.name} matures in year ${t.assumption.maturity_years}, inside the ${holdYears}-year hold — v1 has no refinancing/balloon module (SPEC §3 scope; Phase G)`,
       );
+    }
+  }
+}
+
+/**
+ * §16/§18 structural gates for refinancing events (input-gate REJECTIONS, never computed
+ * defaults — §18.1–§18.3). Validated at Build. Each event: names an EXISTING cash-pay TERM
+ * tranche (not the revolver, not a pik_note); at most ONE per tranche; 1 ≤ year ≤ hold−1;
+ * (year−1)+new_maturity > hold (the new incarnation survives the hold — no balloon); all
+ * percentages ≥ 0; new_maturity ≥ 1.
+ */
+export function validateRefinancing(
+  sized: SizedStructure,
+  refinancing: RefinancingEvent[] | null,
+  holdYears: number,
+): void {
+  if (!refinancing || refinancing.length === 0) return;
+  const seen = new Set<string>();
+  for (const ev of refinancing) {
+    const term = sized.terms.find((t) => t.assumption.name === ev.tranche_name);
+    if (!term) {
+      throw new RangeError(
+        `debt: refinancing names "${ev.tranche_name}", which is not a term tranche — v1 refinances cash-pay term tranches only (not the revolver) (SPEC §18.2)`,
+      );
+    }
+    if (term.assumption.type === 'pik_note') {
+      throw new RangeError(
+        `debt: refinancing names "${ev.tranche_name}", a pik_note — PIK notes are not refinanceable in v1 (SPEC §18.2)`,
+      );
+    }
+    if (seen.has(ev.tranche_name)) {
+      throw new RangeError(`debt: tranche "${ev.tranche_name}" is refinanced more than once — at most one refi per tranche in v1 (SPEC §18.1)`);
+    }
+    seen.add(ev.tranche_name);
+    if (!Number.isInteger(ev.year) || ev.year < 1 || ev.year > holdYears - 1) {
+      throw new RangeError(
+        `debt: refinancing of "${ev.tranche_name}" at year ${ev.year} — the refi year must be 1..${holdYears - 1} (before the exit year; SPEC §18.3)`,
+      );
+    }
+    // NaN-safe: NaN fails BOTH comparisons and would sail through to poison effMaturity —
+    // an input-gate field must reject non-finite input, not compute with it (§18.3).
+    if (!Number.isFinite(ev.new_maturity_years) || ev.new_maturity_years < 1 || ev.year - 1 + ev.new_maturity_years <= holdYears) {
+      throw new RangeError(
+        `debt: refinancing of "${ev.tranche_name}" — the new maturity must exceed the remaining hold ((year−1)+new_maturity_years > ${holdYears}); no balloon inside the hold (SPEC §18.3)`,
+      );
+    }
+    for (const [k, v] of [
+      ['call_premium_pct', ev.call_premium_pct],
+      ['new_oid_pct', ev.new_oid_pct],
+      ['new_financing_fee_pct', ev.new_financing_fee_pct],
+      ['new_amort_pct_of_face', ev.new_amort_pct_of_face],
+    ] as const) {
+      if (!(v >= 0)) throw new RangeError(`debt: refinancing of "${ev.tranche_name}" — ${k} must be ≥ 0 (SPEC §18.1)`);
     }
   }
 }
@@ -138,6 +191,8 @@ export function runDebtYear(
     rp_trap_level: number | null;
     /** §3.7 metric input — may be ≤ 0 (normative). */
     ebitda_adj: number;
+    /** §3 step 2R / §18.4 — total refi cash cost this year (absent ≡ 0; sequence.ts always passes it). */
+    refinancing_cash_cost?: number;
   },
 ): DebtYearOut {
   const out = waterfallYear({
@@ -146,6 +201,7 @@ export function runDebtYear(
     min_cash: year.min_cash,
     sweep_pct: year.sweep_pct,
     distribution_request: year.distribution_request,
+    refinancing_cash_cost: year.refinancing_cash_cost ?? 0,
     rp_trap_level: year.rp_trap_level,
     ebitda_adj: year.ebitda_adj,
     tranches: sized.terms.map((t, i) => ({
@@ -179,6 +235,12 @@ export function runDebtYear(
     mandatory_amort: out.tranches[i].mandatory_amort,
     sweep_repayment: out.tranches[i].sweep_repayment,
     ending_balance: out.tranches[i].ending_outstanding,
+    // §18 refi columns default OFF here; sequence.ts overrides them in the refi year (it owns
+    // the refi application — the retirement/origination spans schedule/tax/BS state debt.ts
+    // does not carry). Emitted unconditionally (§16).
+    refinanced: false,
+    refinancing_cash_cost: 0,
+    unamortized_writeoff: 0,
   }));
 
   const fullyRetired = sized.terms

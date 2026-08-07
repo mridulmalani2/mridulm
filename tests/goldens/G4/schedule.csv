@@ -23,6 +23,9 @@ Unitranche.pik_accrual,0.0,0.0,0.0,0.0,0.0
 Unitranche.mandatory_amort,0.42,0.42,0.42,0.42,0.42
 Unitranche.sweep_repayment,1.88,4.85,8.52,12.61,12.03
 Unitranche.ending_balance,39.7,34.42,25.48,12.45,0.0
+Unitranche.refinanced,False,False,False,False,False
+Unitranche.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+Unitranche.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
 wf.opening_cash,3.0,4.88,7.85,11.52,15.61
 wf.sweep_pool,3.77,9.71,17.04,25.21,34.77
 wf.sweep_applied_total,1.88,4.85,8.52,12.61,12.03

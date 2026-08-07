@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);
@@ -26,10 +26,10 @@ describe('golden agreement check', () => {
 });
 
 describe('SPEC §17 committed assertions', () => {
-  let g1: any, g2: any, g3: any, g4: any, g5: any, g2d: any, g2dist: any, g3dist: any, g2distd: any;
+  let g1: any, g2: any, g3: any, g4: any, g5: any, g2d: any, g2dist: any, g3dist: any, g2distd: any, g6refi: any;
   beforeAll(() => {
-    [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd] =
-      ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD'].map(load);
+    [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd, g6refi] =
+      ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI'].map(load);
   });
 
   it('G1 closed-form check values (§14.14)', () => {
@@ -208,8 +208,55 @@ describe('SPEC §17 committed assertions', () => {
     expect(g2distd.returns.sponsor_net.irr).toBeLessThanOrEqual(g2dist.returns.sponsor_net.irr);
   });
 
-  it('balance sheet closes every year, every golden (§14.2)', () => {
+  it('G6-REFI (§18): a TLB refi at year 3 — reprice, premium, extend, write-off deferred to Y4', () => {
+    const tlb = g6refi.tranches['TLB'];
+    // §18 is post-close, so it cannot re-price entry; §9 is capital-structure-blind.
+    expect(g6refi.sources_uses).toEqual(g2.sources_uses);
+    expect(g6refi.returns.unlevered).toEqual(g2.returns.unlevered);
+    // The refi is a YEAR-3 event: years 1–2 of every per-year block are byte-identical to G2.
+    for (const blk of ['operating', 'tax', 'waterfall'] as const) {
+      expect(g6refi[blk].slice(0, 2)).toEqual(g2[blk].slice(0, 2));
+    }
+    expect(tlb.slice(0, 2)).toEqual(g2.tranches['TLB'].slice(0, 2));
+    // Year 3 carries the refi: the flag, the cash cost (premium 3.50 + new OID 1.75 + new fee
+    // 3.50 = 8.76 on B = 350.27), and the old unamortized DFC write-off (4.71). Only year 3.
+    expect(tlb[2].refinanced).toBe(true);
+    expect(tlb[2].refinancing_cash_cost).toBeCloseTo(8.76, 2);
+    expect(tlb[2].unamortized_writeoff).toBeCloseTo(4.71, 2);
+    for (const i of [0, 1, 3, 4]) {
+      expect(tlb[i].refinanced).toBe(false);
+      expect(tlb[i].refinancing_cash_cost).toBe(0);
+      expect(tlb[i].unamortized_writeoff).toBe(0);
+    }
+    // §18.3 repricing: year-3 TLB cash interest FALLS vs G2 (100bp off 350.27 ≈ 3.5 lower) and
+    // year-3 mandatory amort is on the NEW face 350.27 (1% = 3.50), below G2's 4.40 on 440.
+    expect(tlb[2].cash_interest).toBeLessThan(g2.tranches['TLB'][2].cash_interest - 3);
+    expect(tlb[2].cash_interest).toBeCloseTo(350.27 * (0.036 + 0.0275), 1);
+    expect(tlb[2].mandatory_amort).toBeCloseTo(3.5, 2);
+    // §18.5 tax deferral: the write-off (4.71) + call premium (3.50) hit year 4's UNCAPPED pool,
+    // NOT year 3's. Year-3 uncapped is only the ongoing fee amort + commitment fee.
+    expect(g6refi.tax[3].uncapped_deductions).toBeCloseTo(9.24, 2); // 0.75 fee + 0.28 commit + 8.22 deferred
+    expect(g6refi.tax[3].uncapped_deductions - g6refi.tax[2].uncapped_deductions).toBeCloseTo(8.22, 1);
+    // §18.5: G6-REFI is built with §163(j) positive headroom every year, so capped ≡ uncapped
+    // (the write-off/premium-uncapped simplification is inert here — the binding case is a
+    // directed engine fixture, §18.11(ii)).
+    for (const t of g6refi.tax) expect(t.s163j_carryforward_end).toBe(0);
+    // §18.7/§9: the exit-year write-off now includes the NEW tranche's residual new OID + new fee.
+    expect(g6refi.exit.unamortized_fees_written_off).toBeCloseTo(2.63, 2);
+    // The refi field defaults OFF on every pre-v1.3.0 golden: additive columns, all 0/false.
     for (const g of [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd]) {
+      for (const name of Object.keys(g.tranches)) {
+        for (const row of g.tranches[name]) {
+          expect(row.refinanced).toBe(false);
+          expect(row.refinancing_cash_cost).toBe(0);
+          expect(row.unamortized_writeoff).toBe(0);
+        }
+      }
+    }
+  });
+
+  it('balance sheet closes every year, every golden (§14.2)', () => {
+    for (const g of [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd, g6refi]) {
       for (const row of g.balance_sheet) expect(Math.abs(row.check)).toBeLessThan(0.005);
     }
   });

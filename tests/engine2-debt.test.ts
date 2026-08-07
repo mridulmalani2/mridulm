@@ -71,6 +71,7 @@ function sized(golden: string) {
     min_cash: spec.min_cash,
     sweep: { base_pct: spec.sweep_pct, grid: null },
     distributions: null,
+    refinancing: null,
   };
   return sizeStructure(structure, spec.fy_ebitda);
 }
@@ -213,6 +214,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
               min_cash: 5,
               sweep: { base_pct: 0.5, grid: null },
               distributions: null,
+              refinancing: null,
             },
             100,
           );
@@ -237,6 +239,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
         min_cash: 0,
         sweep: { base_pct: 1, grid: null },
         distributions: null,
+        refinancing: null,
       },
       100,
     );
@@ -259,6 +262,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
         min_cash: 2,
         sweep: { base_pct: 0, grid: null },
         distributions: null,
+        refinancing: null,
       },
       100,
     );
@@ -292,7 +296,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
       commitment_fee: 0.005, maturity_years: 5, drawn_at_close: 0,
     };
     const structureWith = (t: TrancheAssumption) =>
-      sizeStructure({ tranches: [t, rcf], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null }, 100);
+      sizeStructure({ tranches: [t, rcf], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100);
     expect(() => validateStructureForHold(structureWith(term(5)), 5)).toThrow(RangeError);
     expect(() => validateStructureForHold(structureWith(term(4)), 5)).toThrow(RangeError);
     expect(() => validateStructureForHold(structureWith(term(6)), 5)).not.toThrow();

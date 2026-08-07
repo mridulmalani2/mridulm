@@ -71,6 +71,14 @@ export interface WaterfallYearIn {
   revolver: WaterfallRevolverIn | null;
   /** §3 step 7: the year's REQUESTED distribution ($m, ≥ 0). 0 ≡ feature off. */
   distribution_request: number;
+  /**
+   * §3 step 2R / §18.4 — total refinancing cash cost this year (call premium + new OID + new
+   * financing fees, summed over every tranche refinanced this year). A MANDATORY financing use,
+   * subtracted after commitment fees and before mandatory amortization, senior to sweep/
+   * distributions. Optional; absent ≡ 0 ≡ no refi this year (byte-identical to pre-v1.3.0). The
+   * engine path (debt.ts) always passes it explicitly; only refi-agnostic kernel fixtures omit it.
+   */
+  refinancing_cash_cost?: number;
   /** §3.7 trap level L on net leverage; null = trap OFF (rp_max = +∞). May be ≤ 0. */
   rp_trap_level: number | null;
   /**
@@ -128,6 +136,10 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
   // 2. commitment fee
   const commitmentFees = revolver?.commitment_fee ?? 0;
   cash -= commitmentFees;
+
+  // 2R. refinancing cash cost (§18.4) — mandatory financing use, before amort/sweep/distributions
+  const refinancingCashCost = input.refinancing_cash_cost ?? 0;
+  cash -= refinancingCashCost;
 
   // 3. mandatory amortization, capped at outstanding (§14.15)
   const mandatory = input.tranches.map((t) => capAtOutstanding(t.scheduled_amort, t.outstanding));
@@ -266,6 +278,8 @@ function validate(input: WaterfallYearIn): void {
   // §3 step 7 / §16 gate: requests are ≥ 0 (a "negative distribution" would be a capital
   // call — a different instrument, deliberately not modelled).
   assertNonNegative(input.distribution_request, 'distribution_request');
+  // §18.4 the refi cash cost is a use ≥ 0 (a "negative" cost would be a source — not modelled).
+  if (input.refinancing_cash_cost !== undefined) assertNonNegative(input.refinancing_cash_cost, 'refinancing_cash_cost');
   // ebitda_adj is NOT range-checked: §3.7 is normative for EBITDA_adj ≤ 0 (the money form
   // yields rp_max = 0 there). The trap LEVEL is likewise only required to be finite.
   assertFinite(input.ebitda_adj, 'ebitda_adj');

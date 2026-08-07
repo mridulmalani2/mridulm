@@ -33,6 +33,7 @@ import {
   openingDebtState,
   resolveSweepPct,
   runDebtYear,
+  validateRefinancing,
   validateStructureForHold,
   type DebtState,
 } from './debt';
@@ -83,6 +84,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   const entry = deriveEntry(facts, assumptions);
   const sized = sizeStructure(assumptions.structure, entry.entry_ebitda_for_sizing);
   validateStructureForHold(sized, N);
+  validateRefinancing(sized, assumptions.structure.refinancing, N); // §16/§18 input-gate rejections
   const su = buildSourcesUses(entry, sized, assumptions);
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
@@ -113,6 +115,17 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   const feeRemaining = build.cost_schedules.map((s) => s.fee_allocated);
   const scheduleIndex = new Map(build.cost_schedules.map((s, i) => [s.name, i]));
 
+  // §18 refinancing state. A refi re-terms a tranche mid-hold (new pricing/maturity/amort/OID/
+  // fee on the par-for-par base B). We NEVER mutate the caller's assumptions (scenarios re-run
+  // runModel and must see the original terms) — instead a local CLONE of the sized structure and
+  // the OID/fee schedule numerators carry the new incarnation for years ≥ R. The amort/interest
+  // loops read these effective copies, so pre-v1.3.0 deals (empty refinancing) are byte-identical.
+  const effectiveSized = { ...sized, terms: sized.terms.map((t) => ({ ...t })) };
+  const effOidAmount = build.cost_schedules.map((s) => s.oid_amount);
+  const effFeeAllocated = build.cost_schedules.map((s) => s.fee_allocated);
+  const effMaturity = costInputs.map((c) => c.maturity_years);
+  const termIndex = new Map(effectiveSized.terms.map((t, i) => [t.assumption.name, i]));
+
   let debtState = openingDebtState(sized);
   let taxState = openingTaxState(assumptions.tax);
   let unleveredTaxState = openingTaxState(assumptions.tax);
@@ -136,14 +149,59 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     const exitYear = t === N - 1;
     const y = build.years[t];
 
-    // ── rates → interest & fees from opening balances (§4/§5) ──
-    const lines = financeLines(sized, debtState);
+    // ── §18 refinancing — applied at the START of year R = t+1, before interest accrues ──
+    // Par-for-par retirement + origination: new face B = the tranche's beginning balance. The
+    // rate switch takes effect for the whole of year R (§18.3); the old unamortized OID/DFC
+    // write off (book, year R) + the call premium defer their TAX deduction to year R+1's
+    // UNCAPPED pool (§18.5) via `pendingRetirementDeduction` — EXPLICIT handling, never the
+    // early-retirement balance-crossing path (the tranche does NOT retire — it continues at B).
+    let refiCashCostTotal = 0;
+    let refiBookCharge = 0; // Σ (WO + call premium) — book loss on extinguishment (§18.6)
+    let refiDfcDelta = 0; // Σ (new OID + new fees) − WO (BS deferred-cost adjustment)
+    let refiDeferral = 0; // this year's WO + premium — deducted NEXT year (§18.5)
+    const refiThisYear = new Map<number, { cost: number; writeoff: number }>();
+    for (const ev of assumptions.structure.refinancing ?? []) {
+      if (ev.year !== t + 1) continue;
+      const ti = termIndex.get(ev.tranche_name)!; // validated: exists + cash-pay term
+      const ci = scheduleIndex.get(ev.tranche_name)!;
+      const B = debtState.term_balances[ti]; // par-for-par: new face = beginning balance
+      const WO = oidRemaining[ci] + feeRemaining[ci]; // §18.5 old unamortized OID + DFC
+      const premium = ev.call_premium_pct * B;
+      const newOid = ev.new_oid_pct * B;
+      const newFees = ev.new_financing_fee_pct * B; // §18.4 basis = new_fee_pct × B (NOT re-allocated)
+      const asmt = effectiveSized.terms[ti].assumption;
+      if (asmt.type === 'pik_note') throw new RangeError('unreachable: refi validated cash-pay only');
+      // local clone only — the caller's assumptions object is never touched (scenario re-runs)
+      effectiveSized.terms[ti].assumption = {
+        ...asmt,
+        pricing: ev.new_pricing,
+        amort_pct_of_face: ev.new_amort_pct_of_face,
+        maturity_years: ev.new_maturity_years,
+      };
+      effectiveSized.terms[ti].par = B; // amort face for the new incarnation (§14.15/§18.3)
+      effMaturity[ci] = ev.new_maturity_years;
+      effOidAmount[ci] = newOid; // stop OLD OID schedule, start NEW (§18.3)
+      effFeeAllocated[ci] = newFees;
+      oidRemaining[ci] = newOid;
+      feeRemaining[ci] = newFees;
+      refiCashCostTotal += premium + newOid + newFees;
+      refiBookCharge += WO + premium;
+      refiDfcDelta += newOid + newFees - WO;
+      refiDeferral += WO + premium;
+      refiThisYear.set(ti, { cost: premium + newOid + newFees, writeoff: WO });
+    }
+
+    // ── rates → interest & fees from opening balances (§4/§5; effectiveSized carries any refi) ──
+    const lines = financeLines(effectiveSized, debtState);
     // scheduled amortization this year, on the LIVE remaining balances (§7)
-    const oidAmort = build.cost_schedules.map((s, i) =>
-      s.oid_amount > 0 ? Math.min(oidRemaining[i], s.oid_amount / costInputs[i].maturity_years) : 0,
+    // §18.3: after a refi the OID/fee numerators and the straight-line horizon are the NEW
+    // incarnation's (effOidAmount/effFeeAllocated/effMaturity); pre-refi they equal the close-time
+    // schedule, so non-refi deals are byte-identical.
+    const oidAmort = effOidAmount.map((amt, i) =>
+      amt > 0 ? Math.min(oidRemaining[i], amt / effMaturity[i]) : 0,
     );
-    const feeAmort = build.cost_schedules.map((s, i) =>
-      s.fee_allocated > 0 ? Math.min(feeRemaining[i], s.fee_allocated / costInputs[i].maturity_years) : 0,
+    const feeAmort = effFeeAllocated.map((amt, i) =>
+      amt > 0 ? Math.min(feeRemaining[i], amt / effMaturity[i]) : 0,
     );
     for (let i = 0; i < oidAmort.length; i++) {
       oidRemaining[i] -= oidAmort[i];
@@ -178,7 +236,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     const openingGross =
       debtState.term_balances.reduce((a, b) => a + b, 0) + debtState.revolver_drawn;
     const sweepPct = resolveSweepPct(assumptions.structure.sweep, openingGross, cash, y.ebitda_adj);
-    const debtOut = runDebtYear(sized, debtState, lines, {
+    const debtOut = runDebtYear(effectiveSized, debtState, lines, {
       opening_cash: cash,
       fcf_pre_debt: fcf,
       min_cash: assumptions.structure.min_cash,
@@ -187,8 +245,18 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       distribution_request: assumptions.structure.distributions?.[t] ?? 0,
       rp_trap_level: assumptions.covenants.rp_trap?.level ?? null,
       ebitda_adj: y.ebitda_adj,
+      // §3 step 2R / §18.4 — mandatory refi financing use (0 when no refi lands this year)
+      refinancing_cash_cost: refiCashCostTotal,
     });
-    debtOut.tranche_rows.forEach((row, i) => trancheRows[i].push(row));
+    // §18: stamp the refi columns on the refinanced tranche's row (debt.ts defaulted them off).
+    debtOut.tranche_rows.forEach((row, i) => {
+      const refi = refiThisYear.get(i);
+      trancheRows[i].push(
+        refi
+          ? { ...row, refinanced: true, refinancing_cash_cost: refi.cost, unamortized_writeoff: refi.writeoff }
+          : row,
+      );
+    });
     if (revolverRows && debtOut.revolver_row) revolverRows.push(debtOut.revolver_row);
     waterfall.push(debtOut.waterfall_row);
 
@@ -212,6 +280,10 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
         feeRemaining[i] = 0;
       }
     }
+    // §18.5: the refi write-off + call premium defer their tax deduction to next year's UNCAPPED
+    // pool — the SAME bucket the early-retirement path above uses (merges into the exit deduction
+    // when R+1 = N). 0 in a non-refi year and in the exit year (a refi is validated to year ≤ N−1).
+    pendingRetirementDeduction += refiDeferral;
 
     // ── operating row (fcf now known — §14.16 single source) ──
     operating.push({
@@ -232,7 +304,11 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
 
     // ── §8 BS roll ──
     ppe = ppe + (y.maint_capex + y.growth_capex) - y.da;
-    dfc = dfc - oidAmortTotal - feeAmortTotal - bookWriteoff;
+    // §18.6: capitalize the new OID/fees and write off the old (refiDfcDelta), then the normal roll.
+    dfc = dfc - oidAmortTotal - feeAmortTotal - bookWriteoff + refiDfcDelta;
+    // §18.6: the refi book charge (old write-off + call premium) is an extinguishment loss in
+    // year R — expensed via NI so the equity leg = −(WO + premium); the new OID/fees are
+    // capitalized (they sit in DFC), NOT expensed. 0 in a non-refi year.
     const netIncome =
       y.ebit -
       (lines.cash_interest_total +
@@ -240,7 +316,8 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
         oidAmortTotal +
         feeAmortTotal +
         lines.commitment_fee +
-        bookWriteoff) -
+        bookWriteoff +
+        refiBookCharge) -
       taxResult.row.cash_tax;
     // §8 [v1.1.1]: a paid distribution leaves as cash AND as book equity in the same year.
     // It is a return of capital, never an expense — it never touches NI, EBIT or tax; the

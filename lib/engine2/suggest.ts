@@ -149,8 +149,10 @@ export function suggestAssumptions(
       sweep: { base_pct: 0.5, grid: null },
     // §16: the suggestion layer proposes NEITHER distributions nor a trap — a distribution
     // policy is a sponsor decision with no history/convention basis. Fields start OFF, so
-    // every suggested model is byte-identical to pre-v1.1.0.
+    // every suggested model is byte-identical to pre-v1.1.0. §18: refinancing is likewise a
+    // sponsor decision with no history/convention basis — proposed OFF (null).
     distributions: null,
+    refinancing: null,
     },
     operations: {
       growth,

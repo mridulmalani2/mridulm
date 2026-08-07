@@ -23,6 +23,9 @@ TLB.pik_accrual,0.0,0.0,0.0,0.0,0.0
 TLB.mandatory_amort,4.4,4.4,4.4,4.4,4.4
 TLB.sweep_repayment,33.9,47.03,46.02,47.86,57.09
 TLB.ending_balance,401.7,350.27,299.85,247.58,186.09
+TLB.refinanced,False,False,False,False,False
+TLB.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+TLB.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
 revolver.beginning_drawn,0.0,0.0,0.0,0.0,0.0
 revolver.cash_interest,0.0,0.0,0.0,0.0,0.0
 revolver.commitment_fee,0.28,0.28,0.28,0.28,0.28

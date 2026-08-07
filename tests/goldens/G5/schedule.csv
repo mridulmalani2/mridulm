@@ -23,6 +23,9 @@ Senior.pik_accrual,0.0,0.0,0.0,0.0,0.0
 Senior.mandatory_amort,4.8,4.8,4.8,4.8,4.8
 Senior.sweep_repayment,0.0,0.0,2.33,4.14,5.63
 Senior.ending_balance,43.2,38.4,31.27,22.33,11.89
+Senior.refinanced,False,False,False,False,False
+Senior.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+Senior.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
 revolver.beginning_drawn,0.0,3.62,0.15,0.0,0.0
 revolver.cash_interest,0.0,0.27,0.01,0.0,0.0
 revolver.commitment_fee,0.1,0.08,0.1,0.1,0.1
