@@ -30,13 +30,16 @@ describe('import routes feed the engine2 store (the single modeling path)', () =
 
   it('manual entry (private target) flows through the SAME feeder — sector pick included', () => {
     useDealEngineStore.getState().loadFromHistoricals(manualHistoricals({
-      dealName: 'Handmade Co', sector: 'Industrials', currency: 'EUR',
-      ltmRevenue: 300, ebitdaMargin: 0.22, daPctRevenue: 0.03, capexPctRevenue: 0.03,
-      nwcPctRevenue: 0.1, netDebt: 40, taxRate: 0.25, nol: 0,
+      dealName: 'Handmade Co', sector: 'Industrials', currency: 'EUR', basis: 'FY', ltm: null,
+      years: [{ end: '2025-12-31', revenue: 300, ebitda: 66, da: 9, capex: 9 }],
+      nwc: 30, grossDebt: null, cash: null, netDebt: 40, netPpe: null, taxRate: 0.25, nol: null,
     }));
     const s = useEngine2Model.getState();
     expect(s.facts?.entity_name).toBe('Handmade Co');
     expect(s.facts?.currency).toBe('EUR');
+    // a USD-or-otherwise manual deal is 'manual', never 'edgar' (origin is stamped by the
+    // producer — the old currency/CIK heuristic mislabelled this exact case)
+    expect(s.facts?.source).toBe('manual');
     // the USER'S sector pick reaches facts.sector (F-tail review MAJOR: a provenance
     // label — "Manually entered — Sector" — must never stand in for the user's choice)
     expect(s.facts?.sector).toBe('Industrials');

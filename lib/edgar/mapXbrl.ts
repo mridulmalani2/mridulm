@@ -633,6 +633,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     implied_cost_of_debt,
     currency_unsupported,
     entityName: facts.entityName ?? 'Unknown',
+    origin: 'edgar',
     cik10,
     currency: opts.currency ?? detectedCcy ?? 'USD',
     fiscalYear: anchorFy,

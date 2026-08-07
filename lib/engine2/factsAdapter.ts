@@ -80,7 +80,9 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
 
   const facts: DealFacts = {
     entity_name: raw.entityName,
-    source: raw.currency === 'USD' || raw.cik10 ? 'edgar' : 'esef',
+    // Producers stamp their origin; the legacy currency/CIK heuristic survives only as a
+    // fallback for origin-less payloads (it mislabelled USD manual deals as 'edgar').
+    source: raw.origin ?? (raw.currency === 'USD' || raw.cik10 ? 'edgar' : 'esef'),
     sector: raw.sector?.provenance.detail?.replace(/^SIC:\s*/, '') ?? 'Other',
     currency: (MODELLED.has(raw.currency) ? raw.currency : 'USD') as Engine2Currency & DealFacts['currency'],
     fiscal_year: raw.fiscalYear ?? 0,

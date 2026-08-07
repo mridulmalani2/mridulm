@@ -448,6 +448,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
 
   return {
     entityName: opts.entityName ?? 'Unknown',
+    origin: 'esef',
     currency,
     currency_unsupported,
     fiscalYear: anchorFy ?? undefined,

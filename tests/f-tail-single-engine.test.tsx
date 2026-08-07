@@ -21,8 +21,9 @@ const page = () => renderToStaticMarkup(
 
 const MANUAL = {
   dealName: 'Single Engine Co', sector: 'Industrials', currency: 'USD' as const,
-  ltmRevenue: 400, ebitdaMargin: 0.25, daPctRevenue: 0.03, capexPctRevenue: 0.03,
-  nwcPctRevenue: 0.1, netDebt: 50, taxRate: 0.25, nol: 0,
+  basis: 'FY' as const, ltm: null,
+  years: [{ end: '2025-12-31', revenue: 400, ebitda: 100, da: 12, capex: 12 }],
+  nwc: 40, grossDebt: null, cash: null, netDebt: 50, netPpe: null, taxRate: 0.25, nol: null,
 };
 
 beforeEach(() => {

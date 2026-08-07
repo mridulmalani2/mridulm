@@ -45,6 +45,10 @@ export interface SourcedValue {
 export interface RawHistoricals {
   entityName: string;
   cik10?: string;
+  /** Which producer built this: 'edgar' | 'esef' | 'manual'. Set explicitly by each mapper —
+   *  the adapter must never infer it from currency/CIK (a USD manual deal is NOT 'edgar';
+   *  DealFacts.source is a Class-A field and must tell the truth). */
+  origin?: 'edgar' | 'esef' | 'manual';
   currency: string;            // reporting currency (USD for EDGAR)
   /** Fiscal year the headline figures are drawn from, and its period end. */
   fiscalYear?: number;
