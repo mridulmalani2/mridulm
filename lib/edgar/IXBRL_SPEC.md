@@ -56,7 +56,8 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
   serialize as `NUM/DEN` with the consumers' exact spellings (`USD/shares` — the grammar
   `mapXbrl.monetaryFacts`' non-currency set actually contains; round-1 minor 2). Only
   single-measure iso4217 units are "currency" anywhere downstream; the upload route derives
-  the DOCUMENT currency as the modal iso4217 measure across kept monetary facts (§2c).
+  the DOCUMENT currency as the modal iso4217 measure across kept post-§1e monetary facts
+  (dimensional included — a currency is a currency; ties break alphabetically) [r5] (§2c).
 
 - **c. Facts** (`ix:nonFraction`, BOTH the 2008 and 2013 `ix` namespaces):
   concept = `name` (QName resolved against the in-scope map; prefixes NORMALIZED to canonical
@@ -96,12 +97,16 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
   `dei:EntityRegistrantName` / `uk-bus:EntityCurrentLegalOrRegisteredName` /
   `ifrs-full:NameOfReportingEntityOrOtherMeansOfIdentification` [round-1 minor 4];
   `dei:DocumentType`, `dei:DocumentFiscalYearFocus`, `dei:DocumentFiscalPeriodFocus`,
-  `dei:DocumentPeriodEndDate` (scope gate + §3 synthesis); and the PERIOD-END dates an FRC
-  filing actually carries [round-2 R2-1]: `uk-bus:BalanceSheetDate` /
-  `uk-bus:EndDateForPeriodCoveredByReport`. Identity DATE reads support exactly the date
-  transforms these classes use — TR2/TR3 `datedaymonthyearen`/`datedaymonthyear`, TR4/TR5
-  `date-day-month-year`, plain ISO `yyyy-mm-dd` text — and an unsupported date format skips
-  the read with a note (identity stays absent), never guesses.
+  `dei:DocumentPeriodEndDate` (scope gate; recorded VERBATIM as tagged text — metadata the
+  pipeline never consumes AS A DATE: the SEC route's staleness anchor comes from fact
+  contexts, and parsing it would spuriously note every real 10-K, whose standard spelling
+  `ixt:date-monthname-day-year-en` is deliberately outside the whitelist) [r5 — pass-2
+  adjudication fork, resolved spec-side]; and the PERIOD-END dates an FRC filing actually
+  carries [round-2 R2-1]: `uk-bus:BalanceSheetDate` / `uk-bus:EndDateForPeriodCoveredByReport`.
+  The DATE-transform whitelist governs exactly these two uk-bus reads — TR2/TR3
+  `datedaymonthyearen`/`datedaymonthyear`, TR4/TR5 `date-day-month-year`, plain ISO
+  `yyyy-mm-dd` text — and an unsupported date format there skips the read with a note
+  (identity stays absent), never guesses.
 
 - **e. DEDUPLICATION — one order-independent, decimals-aware rule for ALL facts, single- or
   multi-file [round-1 B2: the real Apple 10-K carries 70 duplicate keys; one
@@ -110,7 +115,8 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
   dimensions). Within a group: round every value to the COARSEST `decimals` present
   (`INF`/absent = most precise; rounding is HALF-AWAY-FROM-ZERO, pinned so the TS parser
   and the Python reference can never disagree at an exact half [round-2 minor 2]); if all
-  rounded values agree, keep the MOST-precise member
+  rounded values agree, keep the MOST-precise member — equal-precision equal-value members:
+  any of them, indistinguishable by construction [r5] —
   (noting the collapse only when raw values differed); if they disagree even at the coarsest
   precision, DROP the whole group to a GAP with a note naming both values. Never a
   document-order pick.
@@ -120,7 +126,8 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
 The parser emits the OIM-ish `XbrlJsonReport` (`lib/edgar/esef.ts` shape) INCLUDING
 `documentInfo.namespaces`. Routing [adapted from the fetch route's `isIfrsCompanyFacts` threshold — round-2 minor 1]:
 count DISTINCT DIMENSION-FREE CONCEPTS per standard taxonomy (concepts, not fact rows, are
-the unit of BOTH comparisons); **us-gaap route iff (ifrs-full concepts = 0 AND us-gaap ≥ 1)
+the unit of BOTH comparisons; counted over the KEPT post-§1e facts — a concept whose only
+facts dropped to a gap does not vote) [r5]; **us-gaap route iff (ifrs-full concepts = 0 AND us-gaap ≥ 1)
 OR (us-gaap concepts ≥ 5 AND us-gaap ≥ ifrs-full)** — one stray us-gaap fact must not flip
 a 20-F, and a us-gaap-only document routes us-gaap even when sparse; otherwise the OIM
 route. (Divergence from the fetch heuristic is toward honest gaps only, never a wrong
@@ -240,7 +247,9 @@ is EMPTY + MISSING-badged, never fabricated.
   `expected.json` per fixture; committed outputs are GOSPEL after TWO independent
   adjudication passes (DERIVATION.md method, ±$0.005m where money is compared);
   `tests/ixbrl-goldens.test.ts` re-runs the reference via `python3` in CI (the goldens
-  regeneration-gate mechanism) and fails on drift.
+  regeneration-gate mechanism) and fails on drift. The expected JSONs carry PARSE-level
+  notes only (§1); route/mapper-time notes — the §2b FRC document note, mapper gap labels —
+  are asserted in the TS integration tests, outside the reference's scope [r5].
 
 ## Tier claim: B — with the allowlist deltas NAMED [round-1 B9]
 

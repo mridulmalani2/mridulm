@@ -23,7 +23,7 @@ gate (`tests/ixbrl-goldens.test.ts` re-runs the reference and byte-compares). Sa
 | sign="-" then scale ×10³ | "12.5" → −12.5 → −12,500 | ✓ |
 | scale −2, absent format | "21" → 0.21 | ✓ |
 | plain decimal | "1000.25" → 1000.25 | ✓ |
-| DIMENSIONAL fact kept in OIM with dims, excluded from routing counts | Revenues 111e6 dims≠{} present; routing counted 13 dimension-free us-gaap concepts | ✓ |
+| DIMENSIONAL fact kept in OIM with dims, excluded from routing counts | Revenues 111e6 dims≠{} present; routing counted 16 distinct dimension-free us-gaap concepts [corrected by pass 2 — a signed record must be exact] | ✓ |
 | ix:exclude subtree removed | "5,000\<exclude…999…\>" → 5,000 (999 ignored) | ✓ |
 | §1e dedup AGREE (Apple-mirror) | 22.0 ×1e9 dec −8 vs 22,038 ×1e6 dec −6: coarsest −8 → half-away 2.20e10 ≡ 2.20e10 → keep −6 = **22,038,000,000** + "kept most precise" note | ✓ |
 | §1e dedup DISAGREE | 100e6 dec −6 vs 150e6 dec −6 → 1.0e8 ≠ 1.5e8 → NO fact + "inconsistent duplicate … dropped to gap" note | ✓ |
@@ -32,7 +32,7 @@ gate (`tests/ixbrl-goldens.test.ts` re-runs the reference and byte-compares). Sa
 | units | USD, EUR, shares, pure, divide "USD/shares"; modal currency USD (7+ USD vs 1 EUR) | ✓ |
 | routing | dimension-free us-gaap ≥5, ifrs-full 0 → **us-gaap** | ✓ |
 
-**aapl-10k-trimmed.htm (REAL Workiva markup):** 216 kept elements → 176 deduped facts; the
+**aapl-10k-trimmed.htm (REAL Workiva markup):** 210 `ix:nonFraction` + the dei identity `ix:nonNumeric` reads (216 kept elements) [element counts corrected by pass 2] → 176 deduped facts; the
 REAL dup pin `us-gaap:UnrecognizedTaxBenefits @ 2024-09-28` resolves to **22,038,000,000 @
 dec −6** (the $22.0bn dec −8 twin collapses; EDGAR-published figure 22,038) — the exact case
 sign-off round 2 verified arithmetically; second real pair 19,454 likewise; routing us-gaap;
