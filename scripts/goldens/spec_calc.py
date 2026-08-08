@@ -219,8 +219,21 @@ def run(golden):
         for tr in terms:
             b = bal[tr["name"]]
             if tr["type"] == "pik_note":
-                cash_int[tr["name"]] = b * tr["cash_coupon"]
-                pik_acc[tr["name"]] = b * tr["pik_coupon"]
+                # §20 [v1.5.0]: the per-year WHOLE-coupon election — 'cash' pays
+                # cash_coupon with NO accrual; 'pik' accrues pik_coupon with NO cash;
+                # elections None ≡ the v1 FIXED both-legs note (§20.3). The loop is
+                # 0-indexed, so elections[t] is year t+1's election.
+                el = tr.get("elections")
+                if el is not None:
+                    if el[t] == "cash":
+                        cash_int[tr["name"]] = b * tr["cash_coupon"]
+                        pik_acc[tr["name"]] = 0.0
+                    else:
+                        cash_int[tr["name"]] = 0.0
+                        pik_acc[tr["name"]] = b * tr["pik_coupon"]
+                else:
+                    cash_int[tr["name"]] = b * tr["cash_coupon"]
+                    pik_acc[tr["name"]] = b * tr["pik_coupon"]
             else:
                 cash_int[tr["name"]] = b * all_in(tr["pricing"])
                 pik_acc[tr["name"]] = 0.0
@@ -509,11 +522,12 @@ def r4(x): return round(x + 0.0, 4)
 def r6(x): return round(x + 0.0, 6)
 
 # ── golden inputs — EXACTLY SPEC §17 ─────────────────────────────────────────
-def T(name, typ, x, pricing, amort, mat, prio=1, oid=0.0, participates=True, cash_coupon=None, pik=None):
+def T(name, typ, x, pricing, amort, mat, prio=1, oid=0.0, participates=True, cash_coupon=None, pik=None, elections=None):
     d = {"name": name, "type": typ, "size_x_ebitda": x, "amort_pct_of_face": amort,
          "maturity_years": mat, "sweep_priority": prio, "sweep_participates": participates, "oid_pct": oid}
     if typ == "pik_note":
         d["cash_coupon"], d["pik_coupon"] = cash_coupon, pik
+        d["elections"] = elections  # §20 [v1.5.0]; None ≡ the fixed both-legs note
     else:
         d["pricing"] = pricing
     return d
@@ -620,6 +634,20 @@ def dist_variant(base, requests, trap):
 # precisely what §13 says the credit dashboard exists to show.
 G2_DIST_REQUESTS = [25.0, 25.0, 25.0, 10.0, 8.0]
 G2_DIST_TRAP = {"metric": "net_leverage", "level": 2.75}
+
+# G8-PIKT — the §20 [v1.5.0] PIK-toggle golden (§20.9). Facts, entry structure, financing
+# and operating case are IDENTICAL to G3; the ONLY changed fields are the note's two
+# election rates (cash 9%, pik 12%) and the per-year elections [pik,pik,cash,cash,pik] —
+# so every difference from G3 is attributable to §20 alone (entry-frozen + operating-frozen
+# asserts below, the dist_variant discipline). Closed forms (§20.9): payoff 135 × 1.12³ =
+# 189.665280; each 'cash' year pays 0.09 × 169.3440 = 15.240960.
+def g8_pikt():
+    import copy
+    g = copy.deepcopy(GOLDENS["G3"])
+    note = next(tr for tr in g["assumptions"]["tranches"] if tr["type"] == "pik_note")
+    note["cash_coupon"], note["pik_coupon"] = 0.09, 0.12
+    note["elections"] = ["pik", "pik", "cash", "cash", "pik"]
+    return g
 
 def g2_dist_downside():
     g = dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP)
@@ -761,6 +789,10 @@ if __name__ == "__main__":
     g7g = dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP)
     g7g["fund"] = G7_FUND
     results["G7-FUND"] = run(g7g)
+    # §20 [v1.5.0]: G8-PIKT = G3 + the per-year election. Coupon mechanics are post-close,
+    # so entry CANNOT move (S&U byte-identical to G3), and the operating build is
+    # capital-structure-blind (byte-identical too) — every other difference is §20's alone.
+    results["G8-PIKT"] = run(g8_pikt())
     # §18 [v1.3.0]: the refi is post-close, so it cannot move entry (S&U byte-identical to G2);
     # §9 is capital-structure-blind, so the unlevered stream is byte-identical to G2 as well.
     assert results["G6-REFI"]["sources_uses"] == results["G2"]["sources_uses"], "G6-REFI entry not frozen!"
@@ -779,6 +811,8 @@ if __name__ == "__main__":
     assert results["G2-D"]["sources_uses"] == results["G2"]["sources_uses"], "G2-D entry not frozen!"
     assert results["G2-DIST"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST entry not frozen!"
     assert results["G3-DIST"]["sources_uses"] == results["G3"]["sources_uses"], "G3-DIST entry not frozen!"
+    assert results["G8-PIKT"]["sources_uses"] == results["G3"]["sources_uses"], "G8-PIKT entry not frozen!"
+    assert results["G8-PIKT"]["operating"] == results["G3"]["operating"], "G8-PIKT operating diverged from G3!"
     assert results["G2-DIST-D"]["sources_uses"] == results["G2"]["sources_uses"], "G2-DIST-D entry not frozen!"
     # §19.6(c)/§19.7: the overlay is post-engine — every non-fund block byte-identical to G2-DIST.
     for k in results["G2-DIST"]:
