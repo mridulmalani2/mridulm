@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.5.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.4.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -986,20 +986,31 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
     §14.18 monotone-DPI claim does not port to a growing base); (e) §19.6(e) is an explicit
     NON-claim — no ordering between the elections' IRRs is asserted.
 
-21. PIK toggle [v1.5.0 — §20] (domain: a `pik_note` with `elections` non-null; all
-    trivially satisfied when null — §20.6(c) byte-identity): (a) the toggle balance closed
-    form B_t = face × Π_{s≤t, e_s='pik'} (1 + pik_coupon) — DOMAIN: amort = 0 ∧ sweep off
-    (with either configured, the closed form yields to the §3 walk and only pik_accrual_t =
-    0 in cash years is pinned); (b) cash_interest_t = B_{t−1} × cash_coupon × [e_t='cash']
-    (fixed mode: unconditional); (c) `elections: null` ⇒ byte-identity with the v1.4.0
-    engine on EVERY output (the C5-class gate); (d) the §6 capped pool's per-year PIK term
-    = the year's accrual (zero in cash years) and its cash term includes the note's cash
-    interest (zero in pik years) — §14.13's pool mirror extended per election; (e) the
+21. PIK toggle [v1.5.0 — §20] (domains PER CLAUSE [round-1 B2 — a blanket non-null domain
+    contradicted (b)/(c)/(e), and check.ts coded to it would never flag fixed notes]):
+    (a) [domain: elections non-null ∧ amort = 0 ∧ sweep off] the toggle balance closed form
+    B_t = face × Π_{s≤t, e_s='pik'} (1 + pik_coupon) — with amort or sweep configured the
+    closed form yields to the §3 walk and only pik_accrual_t = 0 in cash years is pinned;
+    (b) [domain: both modes] cash_interest_t = B_{t−1} × cash_coupon × [e_t='cash'] in
+    toggle mode; fixed mode: unconditional; (c) [domain: elections NULL — the load-bearing
+    compatibility gate, nothing trivial about it] every NUMERIC output and every serialized
+    fixture byte is IDENTICAL to the v1.4.0 engine; the ONE carve-out is `coherence`, which
+    gains `ahydo_shape` on qualifying fixed notes (G3/G3-DIST — the §20.9 spec-side-decided
+    exception) [round-1 B1]; (d) [domain: elections non-null] the §6 capped pool's per-year
+    PIK term = the year's accrual (zero in cash years) and its cash term includes the
+    note's cash interest (zero in pik years) — the §6 capped-pool DEFINITION extended per
+    election [round-1 B3 — the prior "§14.13 pool mirror" citation was dangling; §6.1's
+    pool line is the real anchor]; (e) [domain: ANY `pik_note`, elections null or not] the
     `ahydo_shape` flag fires exactly on `maturity_years > 5` ∧ (an accruing year exists:
-    elections null ∧ pik_coupon > 0, OR any e_t = 'pik') — structural legs only, the §163(i)
-    yield leg stated in the flag text, never tested (needs the monthly AFR); (f) an explicit
-    NON-claim: no ordering between all-cash and all-PIK sponsor IRRs (cash elections drain
-    sweep fuel while PIK compounds the exit payoff — the §19.6(e) precedent).
+    elections null ∧ pik_coupon > 0, OR any e_t = 'pik') — structural legs only: the
+    §163(i) YIELD leg is stated in the flag text, never tested (needs the monthly AFR), and
+    the SIGNIFICANT-OID leg is likewise PROXIED by "an accruing year" — over-fires
+    conservatively on small coupons (a WARN, the safe direction) and under-fires only on
+    issue-OID-only cash tranches (immaterial at v1's ≤2.5% OID scale) [round-1 M3];
+    (f) [domain: elections non-null] an explicit NON-claim: no ordering between all-cash
+    and all-PIK sponsor IRRs (both directions constructed numerically in the round-1
+    sign-off — cash elections drain sweep fuel while PIK compounds the exit payoff; the
+    §19.6(e) precedent).
 
 ## §15 Units, precision, display [CONFIRMED DR-5 Item 6]
 
@@ -1086,7 +1097,7 @@ is OFF ⇔ +∞** — N/A semantics, never a sentinel, per §11/§15), `distribu
 `distribution_blocked`. `ReturnStreams` gains `dpi: number[]` (length `hold_years`, NOT
 t0-anchored) and `payback_year: number | null` (1-indexed), and its two SPONSOR-SIDE streams
 gain `irr_mid_year: number | null`. `ValueBridge.walkdown` gains
-`interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8; [v1.5.0] `ahydo_shape` — §20.6(e), WARN class, per qualifying pik_note). [v1.4.0] `assumptions.fund: FundOverlayAssumption | null` — `{committed_capital: number|null, mgmt_fee_pct: ≥0, fee_basis: 'committed'|'invested', carry_pct: [0,1), pref_rate: ≥0, catchup_pct: {0} ∪ [carry_pct, 1], waterfall: 'european'|'american', fee_offset_pct: [0,1]}; null ≡ OFF (byte-identity §19.6(c)). Input-gate REJECTIONS: committed_capital = null ∧ fee_basis = 'committed' (circular — §19.2); explicit committed below total contributions; every domain violation above. `ModelOutput.fund` (Class C): null when OFF; when ON, `{lp_contributions[], lp_distributions[], gp_carry[], mgmt_fees_net[], paid_in_total, committed_capital, fund_lp_net: {irr, moic, dpi[], payback_year}}` — named fields, unconditional emission within the non-null object; `lp_contributions` length N+1 (t=0..N), the other four arrays length N (years 1..N, NOT t0-anchored), `payback_year` 1-indexed or null (the v1.1.1 contract precedent). The suggestion layer proposes NO fund overlay (§19 preamble). [v1.5.0] `PikNoteAssumption` gains `elections: ('cash' | 'pik')[] | null` (default null ≡ the v1 FIXED both-legs note — byte-identity §20.6(c)). Input-gate REJECTIONS (§20.2): non-null length ≠ `hold_years`; any entry outside the union; non-null ∧ `cash_coupon ≤ 0` (a 0%-cash toggle year is a free coupon holiday no term sheet grants — the FIXED cash-0 note stays available as null); non-null ∧ `pik_coupon < cash_coupon` (the PIK premium is non-negative — market shape, DR-3.4). NO new ModelOutput fields — `TrancheYear.{cash_interest, pik_accrual}` already carry the per-year split. The suggestion layer proposes NO elections (D7 structures carry no pik_note; a user-added note starts null — the toggle is opt-in per year). [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
+`interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8; [v1.5.0] `ahydo_shape` — §20.6(e), WARN class, per qualifying pik_note). [v1.4.0] `assumptions.fund: FundOverlayAssumption | null` — `{committed_capital: number|null, mgmt_fee_pct: ≥0, fee_basis: 'committed'|'invested', carry_pct: [0,1), pref_rate: ≥0, catchup_pct: {0} ∪ [carry_pct, 1], waterfall: 'european'|'american', fee_offset_pct: [0,1]}; null ≡ OFF (byte-identity §19.6(c)). Input-gate REJECTIONS: committed_capital = null ∧ fee_basis = 'committed' (circular — §19.2); explicit committed below total contributions; every domain violation above. `ModelOutput.fund` (Class C): null when OFF; when ON, `{lp_contributions[], lp_distributions[], gp_carry[], mgmt_fees_net[], paid_in_total, committed_capital, fund_lp_net: {irr, moic, dpi[], payback_year}}` — named fields, unconditional emission within the non-null object; `lp_contributions` length N+1 (t=0..N), the other four arrays length N (years 1..N, NOT t0-anchored), `payback_year` 1-indexed or null (the v1.1.1 contract precedent). The suggestion layer proposes NO fund overlay (§19 preamble). [v1.5.0] `PikNoteAssumption` gains `elections: ('cash' | 'pik')[] | null` (default null ≡ the v1 FIXED both-legs note — byte-identity §20.6(c)). Input-gate REJECTIONS (§20.2): non-null length ≠ `hold_years`; any entry outside the union; non-null ∧ `cash_coupon ≤ 0` (a 0%-cash toggle year is a free coupon holiday no term sheet grants — the FIXED cash-0 note stays available as null); non-null ∧ `pik_coupon < cash_coupon` (the PIK premium is non-negative — market shape, DR-3.4). NO new ModelOutput fields — `TrancheYear.{cash_interest, pik_accrual}` already carry the per-year split. The suggestion layer proposes NO elections [rescoped, round-1 M2]: the D7 ASSEMBLY builds no pik_note, but the layer's own data ships one — conventions.json's `mm-senior-mezz` template carries a Mezzanine Note (pik_note, cash 10% + PIK 3%, NO elections) — so a template-built mezz deal whose note matures past year 5 wears `ahydo_shape` permanently (template badge ≠ suggested badge, so §14.13's all-SUGGESTED-clean invariant is untouched); either way no elections are ever proposed and a user-added note starts null (the toggle is opt-in per year). [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
 `ScenarioResult.waterfall`'s slim block gains `distribution_paid` and `distribution_blocked`
 (§13). The reference derivation additionally records a top-level `distributions` block —
 `requested`, `paid`, `sponsor_share_paid`, `cumulative_paid`, `trap_level`, `blocked_years`
@@ -1826,7 +1837,11 @@ bridge: unchanged (net-debt paydown reads closing balances incl. accrued PIK). �
 scenarios: elections are STRUCTURE/POLICY — FROZEN across scenarios (the
 distribution-schedule precedent); what varies by scenario is whether cash-election years
 strain the min-cash floor. §19 fund overlay: composes unchanged (reads sponsor-side
-outputs only). §10 MIP: unchanged (reads exit equity).
+outputs only). §10 MIP: unchanged (reads exit equity). §9 RETURN-STREAM MEMBERSHIP:
+UNCHANGED — a toggle 'cash' coupon is ordinary §3-step-1 cash interest, which the fixed
+note's cash leg already produces today; nothing new enters or leaves any stream, so no
+membership addendum exists (unlike §19, which added a stream) [round-1 dimension-8
+adjudication, recorded].
 
 **§20.6 Invariants (→ §14.21, domains stated).**
 (a) Toggle balance closed form — DOMAIN: elections non-null ∧ amort = 0 ∧ sweep off:
@@ -1834,16 +1849,25 @@ outputs only). §10 MIP: unchanged (reads exit equity).
 closed form yields to the §3 walk, and only `pik_accrual_t = 0 in cash years` stays pinned.
 (b) Cash-interest identity: `cash_interest_t = B_{t−1} × cash_coupon × [e_t = 'cash']`
 (toggle mode); fixed mode: unconditional.
-(c) `elections: null` ⇒ BYTE-IDENTITY with the v1.4.0 engine on every output (the C5-class
-gate; every existing golden regenerates byte-identically — no golden sets elections).
-(d) Capped-pool membership per §20.4 — §14.13's pool mirror extended per election: the
-pool's PIK term is the year's accrual (zero in cash years); its cash term includes the
-note's cash interest (zero in pik years).
-(e) `ahydo_shape` (WARN, per qualifying tranche, deterministic on terms alone):
-fires exactly on `maturity_years > 5` ∧ (an accruing year exists — elections null ∧
-pik_coupon > 0, OR any `e_t = 'pik'`). The §163(i) YIELD leg (YTM ≥ AFR + 5pts) requires
-the monthly AFR and is STATED in the flag text, never tested; the text also names the
-assumed contractual catch-up cure. Boundary: `> 5`, not `≥ 5` (§163(i)(1)).
+(c) `elections: null` ⇒ every NUMERIC output and every SERIALIZED FIXTURE byte identical to
+the v1.4.0 engine (the C5-class gate; every existing golden regenerates byte-identically —
+no golden sets elections, and fixtures serialize neither assumptions nor coherence). The
+ONE deliberate carve-out [round-1 B1]: `ModelOutput.coherence` gains `ahydo_shape` on
+qualifying FIXED notes — G3 and G3-DIST emit it from v1.5.0 on (maturity 8, accreting);
+the exception is DECIDED here, spec-side (§20.9), never discovered as a red test.
+(d) Capped-pool membership per §20.4 — the §6 capped-pool DEFINITION extended per election
+[round-1 B3: the anchor is §6.1's pool line, not §14.13]: the pool's PIK term is the year's
+accrual (zero in cash years); its cash term includes the note's cash interest (zero in pik
+years).
+(e) `ahydo_shape` (WARN, per qualifying tranche — elections null or not — deterministic on
+terms alone): fires exactly on `maturity_years > 5` ∧ (an accruing year exists — elections
+null ∧ pik_coupon > 0, OR any `e_t = 'pik'`). TWO of the three §163(i) legs are handled
+without external data: the YIELD leg (YTM ≥ AFR + 5pts) requires the monthly AFR and is
+STATED in the flag text, never tested; the SIGNIFICANT-OID leg is PROXIED by "an accruing
+year" — over-firing conservatively on small coupons (a WARN, the safe direction) and
+under-firing only on issue-OID-only cash tranches (immaterial at v1's ≤2.5% OID scale)
+[round-1 M3]. The text also names the assumed contractual catch-up cure. Boundary: `> 5`,
+not `≥ 5` (§163(i)(1)).
 (f) Explicit NON-claim: no ordering between all-cash and all-PIK sponsor IRRs — cash
 elections drain the sweep pool's fuel while PIK compounds the exit payoff; the direction
 depends on the rate stack vs the deal's deleveraging profile (the §19.6(e) precedent).
@@ -1859,8 +1883,10 @@ v2); elections frozen across scenarios; PIK deducted as ACCRUED with AHYDO
 (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the
 disqualified-portion disallowance are NOT modeled; the `ahydo_shape` flag marks every
 qualifying note structurally (maturity > 5y + an accruing year), with the yield leg stated
-as untested (needs the monthly AFR) and the contractual catch-up cure named as assumed;
-PIK notes remain non-refinanceable (§18.2) and sweep-exempt by default (§4).
+as untested (needs the monthly AFR), the significant-OID leg stated as PROXIED
+(conservatively over-firing — a WARN, the safe direction [round-1 M3]), and the
+contractual catch-up cure named as assumed; PIK notes remain non-refinanceable (§18.2) and
+sweep-exempt by default (§3).
 
 **§20.9 Golden plan.** New golden **G8-PIKT** = G3's facts and structure with the pik note
 toggled: `{cash_coupon: 0.09, pik_coupon: 0.12, elections: ['pik','pik','cash','cash','pik']}`
@@ -1874,19 +1900,30 @@ commit). Regeneration of existing goldens: byte-identical (elections null everyw
 §20.6(c)). Reference: `scripts/goldens/spec_calc.py` gains the election branch in ITS OWN
 debt walk (no engine reuse — the independence rule). Adjudication: the standard two
 independent passes.
+**COHERENCE EXCEPTION — decided HERE, spec-side, never discovered as a red test (the
+v1.1.1 round-2(b) convention; round-1 B1):** from v1.5.0 the fixed accreting notes in
+**G3 and G3-DIST** (maturity 8, pik 12%, elections null) EMIT `ahydo_shape`, and so does
+**G8-PIKT**; every other golden stays coherence-clean. The committed coherence-clean
+asserts (the facade-scenarios G-loop and the G3-DIST check) are AMENDED in step 3 to
+expect EXACTLY this flag on EXACTLY these goldens — any other coherence delta on any
+golden remains a red test.
 
 **§20.10 Golden-uncovered by design** (directed fixtures, mutation-tested):
 (i) all-'cash' elections — the note behaves as a bullet cash tranche (accrual identically
 zero; payoff = par); (ii) all-'pik' at rate r vs the FIXED cash-0 note at the SAME r —
-EQUAL on every output (the two shapes coincide exactly when the fixed note's cash leg is
-0); then cash_coupon > 0 breaks the equality via the fixed note's second leg (the
-both-legs discriminator — kills a sugar-for-all-pik mutant); (iii) the FOUR §16 rejections
-(length ≠ hold; out-of-union entry; cash_coupon ≤ 0 with elections; pik < cash);
+EQUAL on every COMPUTED output (the assumption echoes riding ModelOutput differ by
+construction [round-1 M6]; the two shapes coincide exactly when the fixed note's cash leg
+is 0 — verified numerically in the round-1 sign-off); then cash_coupon > 0 breaks the
+equality via the fixed note's second leg (the both-legs discriminator — kills a
+sugar-for-all-pik mutant); (iii) the FOUR §16 rejections (length ≠ hold; out-of-union
+entry; cash_coupon ≤ 0 with elections; pik < cash);
 (iv) elections on a note WITH mandatory amort — a 'cash' year pays coupon + amort and the
 balance DECREASES; a 'pik' year accrues AND amortizes (the §20.6(a) domain edge);
 (v) `ahydo_shape`: fires on maturity 8 ∧ any 'pik' year; fires on the FIXED accreting note
 (G3's shape — null elections, pik_coupon > 0, maturity 8); does NOT fire on maturity 5
-(boundary: > 5) nor on an all-'cash' toggle; (vi) §163(j) pool composition flips between
+(boundary: > 5 — NOTE the negative fixture needs hold ≤ 4, since §16's maturity > hold
+gate makes a maturity-5 note unbuildable on a 5-year hold [round-1 M5]) nor on an
+all-'cash' toggle; (vi) §163(j) pool composition flips between
 legs — a directed fixture where the cap BINDS in a 'pik' year and RELEASES in a 'cash'
 year (the pool-membership mutant discriminator: a mutant deducting the wrong leg moves
 cash tax); (vii) elections ∧ sweep participation — the balance DECREASES through accrual
@@ -1898,7 +1935,7 @@ years via the sweep (the closed form correctly yields to the walk).
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
-| v1.5.0 | 2026-08-08 | **PHASE-3 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — PIK toggle (backlog #6). TIER A.** §20 added: a per-year WHOLE-coupon cash/PIK ELECTION on the `pik_note` — 'cash' pays `beginning × cash_coupon` with NO accrual, 'pik' accrues `beginning × pik_coupon` with NO cash, `elections: null` ≡ the v1 FIXED both-legs note ⇒ byte-identity on every existing model (§20.6(c)). §16 gates: non-null length ≡ hold_years; entries in the union; `cash_coupon > 0` ∧ `pik_coupon ≥ cash_coupon` when non-null (a 0%-cash toggle is a free coupon holiday; the PIK premium is non-negative — DR-3.4 market shape). Tax: the §6 machine unchanged, the capped pool's per-year composition follows the elected leg (§20.4); **AHYDO stays a DISCLOSED omission** plus the new STRUCTURAL `ahydo_shape` WARN — fires on maturity > 5y ∧ an accruing year, yield leg (AFR + 5pts) stated-not-tested, the assumed contractual catch-up cure named (§20.6(e)/§20.8). Composition unchanged by construction: §5 order (elections are data), §3/§4 sweep-exemption + amort, §18.2 non-refinanceability (gate reads TYPE, not election), §9 par+accrued payoff, §13 elections FROZEN across scenarios, §19 unaffected. NO new ModelOutput fields (`TrancheYear` already splits cash/PIK). Invariants §14.21 (a)–(f) incl. the closed-form balance (domain-scoped), the null-elections byte-identity gate, the per-election pool mirror, and the all-cash-vs-all-PIK IRR NON-claim. Golden plan: **G8-PIKT** (= G3 + `{cash 9%, pik 12%, elections [pik,pik,cash,cash,pik]}`; payoff closed form 135 × 1.12³ = 189.665280; cash years pay 15.240960; the §6 binding pattern ADJUDICATED, not ported from G3) + SEVEN directed uncovered fixtures (§20.10 (i)–(vii), incl. the both-legs discriminator, the pool-membership flip, and the ahydo_shape boundary set). REJECTED: partial/50-50 elections (v2, disclosed), a `pik_premium` field, election optimizers, fixed-note-as-all-pik sugar — each recorded with its reason (§20.1). | Phase-3 step 1 (Tier A template, rebuild/PHASE_G_EXTENSIONS.md); backlog #6; hostile sign-off round 1 PENDING |
+| v1.5.0 | 2026-08-08 | **PHASE-3 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — PIK toggle (backlog #6). TIER A.** §20 added: a per-year WHOLE-coupon cash/PIK ELECTION on the `pik_note` — 'cash' pays `beginning × cash_coupon` with NO accrual, 'pik' accrues `beginning × pik_coupon` with NO cash, `elections: null` ≡ the v1 FIXED both-legs note ⇒ every NUMERIC output and serialized fixture byte identical, with the ONE spec-side-decided coherence carve-out: G3/G3-DIST (fixed accreting, maturity 8) EMIT the new `ahydo_shape` WARN from v1.5.0 on (§20.6(c)/§20.9 — decided here, never a discovered red test). §16 gates: non-null length ≡ hold_years; entries in the union; `cash_coupon > 0` ∧ `pik_coupon ≥ cash_coupon` when non-null (a 0%-cash toggle is a free coupon holiday; the PIK premium is non-negative — DR-3.4 market shape). Tax: the §6 machine unchanged, the capped pool's per-year composition follows the elected leg (§20.4); **AHYDO stays a DISCLOSED omission** plus the new STRUCTURAL `ahydo_shape` WARN — fires on maturity > 5y ∧ an accruing year, yield leg (AFR + 5pts) stated-not-tested, the assumed contractual catch-up cure named (§20.6(e)/§20.8). Composition unchanged by construction: §5 order (elections are data), §3/§4 sweep-exemption + amort, §18.2 non-refinanceability (gate reads TYPE, not election), §9 par+accrued payoff, §13 elections FROZEN across scenarios, §19 unaffected. NO new ModelOutput fields (`TrancheYear` already splits cash/PIK). Invariants §14.21 (a)–(f) incl. the closed-form balance (domain-scoped), the null-elections byte-identity gate, the per-election pool mirror, and the all-cash-vs-all-PIK IRR NON-claim. Golden plan: **G8-PIKT** (= G3 + `{cash 9%, pik 12%, elections [pik,pik,cash,cash,pik]}`; payoff closed form 135 × 1.12³ = 189.665280; cash years pay 15.240960; the §6 binding pattern ADJUDICATED, not ported from G3) + SEVEN directed uncovered fixtures (§20.10 (i)–(vii), incl. the both-legs discriminator, the pool-membership flip, and the ahydo_shape boundary set). REJECTED: partial/50-50 elections (v2, disclosed), a `pik_premium` field, election optimizers, fixed-note-as-all-pik sugar — each recorded with its reason (§20.1). | Phase-3 step 1 (Tier A template, rebuild/PHASE_G_EXTENSIONS.md); backlog #6; hostile sign-off round 1 REFUSED — 3 blocking ((B1) the §20.6(c) "byte-identity on every output" claim was CONTRADICTED by §20.6(e) with the counterexample already committed as G3/G3-DIST — coherence gains `ahydo_shape` on null-elections deals and two committed coherence-clean tests would red undecided; rescoped to numeric/fixture identity + the spec-side-decided exception per the v1.1.1 convention; (B2) §14.21's blanket non-null domain preamble was FALSE on clauses (b)/(c)/(e) — replaced with per-clause domains; (B3) the "§14.13 pool mirror" citation was DANGLING — re-anchored to §6.1's capped-pool definition) — ALL applied in r2 with minors (header un-bumped to v1.4.0 until grant per the 01f0ec8 precedent; the suggestion-layer premise rescoped to the conventions.json mezz template; the significant-OID proxy leg named as proxied; the §3 sweep cite; the maturity-5 negative fixture's hold ≤ 4 note; "every COMPUTED output" on §20.10(ii); the §9 membership-unchanged adjudication recorded); round 2 PENDING |
 | v1.4.0 | 2026-08-07 | **PHASE-2 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — fund/LP overlay (backlog #3). TIER A.** §19 added: a fund-of-one overlay computing the FOURTH return stream (net-to-LP after management fees and carried interest, per the ILPA definitions DR-2 pins). LP flows = sponsor equity at t=0 + annual fee draws (2%/basis, ILPA 100% monitoring-fee offset, floored at 0) vs deal distributions + exit proceeds; waterfall = return-of-capital → 8% compounded pref → catch-up (domain {0} ∪ [carry_pct, 1]) → TERMINAL carry split, with 'european' (all-contributions hurdle + pref base; year-N fee drawn before the final distribution) vs 'american' (invested-capital hurdle + pref base; NO fee-recovery tier — fees recovered only through the LP profit share) as the SPEC'D single difference for a single-asset fund. §10 promote explicitly NOT fund carry (different layer — the DR-2 double-count trap). Default `fund: null` = OFF ⇒ byte-identity; stream ABSENT when OFF. Invariants §19.6 incl. the LP+GP ≡ sponsor-share-inflows conservation (fee draws cancel identically; the offset is GP fee income, not a deal flow) and the explicit NON-claim on american-vs-european ordering. Golden plan: G7-FUND on G2-DIST + SEVEN directed uncovered fixtures (§19.10 (i)–(vii), incl. the rollover sponsor-share discriminator). REJECTED: multi-deal funds, subscription lines, clawback (nothing to claw back by construction), GP commitment, fee step-downs — each disclosed (§19.8). | Phase-2 step 1 (Tier A template); hostile sign-off round 1 REFUSED — 7 blocking (total-vs-sponsor-share LP inflow; dead 'american' fee-recovery tier; unpinned pref base/event order; §19.6(d) false under 'american' (worked counterexample); circular committed ∧ committed-basis under the golden; unbound dpi/payback; unwritten §14/§15/§16 integration + suggestion stance) — ALL applied in r2; round 2 REFUSED (3 closure-of-closure: the draw-after fee order broke the 'european' GP bound via fee_N — order flipped to accrue→draw→distribute; the Change column still described r1 — resynced; §14.20(d)'s dpi monotonicity false on the to-date basis — replaced with cum-dist monotone + dpi[N] ≡ moic) — ALL applied in r3; **round 3 GRANTED** (fingerprint-anchored @ 01f0ec8, zero conditions; both GP-share bounds machine-verified to EQUALITY on the reviewer's worked deal under both elections). **Post-grant step-3 accuracy-audit dispositions applied IN-VERSION (2026-08-08, commit 6d611d3; conformance-ruled no-new-version — normative surface untouched):** §19.4 minor-7 equivalence note RESCOPED on a worked 'european' re-trigger counterexample (the normative stop-equation UNCHANGED; the implementation already conformed); §19.5 layer note + §19.7 v1-reality note added; §19.10 extended (viii)–(x) (event-order, pref-magnitude, re-trigger pins — two of the three close audit coverage holes θ/δ). The granted text is @ 01f0ec8; audit deltas are annotated inline with their finding tags |
 | v1.3.2 | 2026-08-07 | **DATA-SIDE AMENDMENT (Tier B; engine arithmetic untouched) — uploaded-filing extraction.** The upload path goes live for ANNUAL documents (interim/10-Q uploads REJECTED up-front — the reused mapper would anchor nothing and the import would be all-gap): SEC 10-K/20-F iXBRL `.htm`, UK Companies House accounts iXBRL (THE private-company filing form; v1 extracts IDENTITY only — every financial field an honest gap the user confirms, FRC alias mapping a named later extension), and ESEF `.zip` packages (nested `**/reports/*.xhtml`), all parsed ENTIRELY in the browser (privacy: a private target's accounts never leave the machine — server-side parsing REJECTED on exactly that) into the OIM shape `mapIfrsReport` already consumes, or (us-gaap) into a synthesized CompanyFacts consumed by `mapCompanyFacts` VERBATIM — zero new mapping logic; the adjudicated mappers are reused as-is. New arithmetic is confined to transform/scale/sign evaluation and fact grouping, spec'd normatively in `lib/edgar/IXBRL_SPEC.md` (supported ixt subset with drop-with-note for the rest — a dropped fact can only produce a GAP, never a wrong number; fixture set incl. a REAL Apple FY2024 10-K trim + a REAL 19KB Companies House FRC filing; independent Python reference extraction + two adjudication passes + CI regeneration gate — the DERIVATION.md method). Schema: the THREE source unions gain `'upload'` (additive; provenance restamp appends `· uploaded <filename>` to mapper details, never replacing the audit strings). Dedup is decimals-aware and order-INDEPENDENT (the real Apple 10-K carries 70 duplicate keys — an order-dependent pick is $38m wrong on UnrecognizedTaxBenefits); only DIMENSION-FREE facts enter the CompanyFacts synthesis (segment members must never impersonate consolidated totals). Documented degradations vs fetch: single-vintage history (no restatement dedup), the §1.1 LTM stitch RUNS and REFUSES on three proven grounds → FY basis + staleness badge does the honest work. | Phase-1 upload parser (owner-approved formats 2026-08-07); Tier-B template rebuild/PHASE_G_EXTENSIONS.md; hostile sign-off round 1 REFUSED — 9 blocking (transform registry contradicted by BOTH real samples: TR2 unhyphenated names, TR5 namespace missing — two of three classes would extract ZERO; order-dependent dedup; dimensional leakage; 10-Q all-gap story; unproven stitch claim; provenance restamp + third union; FRC classification inverted; ESEF glob; allowlist deltas) — then rounds 2–3 REFUSED (3 + 1 further blockers: FRC period-end self-contradiction, restamp erasing the 'default' statutory tag, the un-runnable Apple dup pin, the JS 0!=null fabricated-URL/pseudo-CIK path) — ALL applied through IXBRL_SPEC r4; **round 4 GRANTED** (fingerprint-anchored @ fb8021e) |
 | v1.3.1 | 2026-08-07 | **§18.8 amendment — the retired-balance refi no-op gets a VOICE (post-#113 review NOTE-8, owner-approved).** A tranche can enter its scheduled refi year with a zero balance (swept/retired earlier — a model OUTCOME, unknowable at input time). Pre-v1.3.1 this ran as a SILENT no-op (stamped `refinanced: true`, all zeros). Now: the no-op semantics are UNCHANGED (still stamped; costs EXACTLY zero when swept to zero, ≤ pct × RETIRED_TOL dust on a retired residual; the terms swap runs on ≤-tolerance operands — nothing observable restarts, and no golden-covered number moves anywhere), and the §16 coherence gate emits a **`refi_noop` WARN** naming the tranche and year — a POST-RUN read of named `TrancheYear` fields (`refinanced` ∧ beginning balance ≤ **`RETIRED_TOL`** — §7's economically-retired threshold = §15's ±$0.005m; sign-off round 1 REFUSED for an unbound ε contradicting the gloss — a dust residual in (0, RETIRED_TOL] is engine-retired yet a machine-epsilon ε would run its refi "live"; pinned to the ONE existing tolerance so flag-class ≡ retired-class), consistent with check.ts's no-second-path charter. REJECTED: input-gate rejection (solver-shaped — needs the model's own sweep outcome); silent no-op (a per-run OUTCOME belongs on the §16 coherence surface, not in silence); `block` severity (economics aren't broken — the debt was simply repaid early). §16 schema: `CoherenceFlag.code` gains `refi_noop`. §18.11 gains (viii): the directed fixture, mutation-tested THREE ways (emission dropped ⇒ red; condition widened to every refi ⇒ the G6-REFI/live-balance negative reddens; a dust-balance deal pins ε = RETIRED_TOL ⇒ a tighter ε reddens). Goldens: byte-identical (no golden constructs a zero-balance refi; flags are not golden columns). | Post-merge NOTE-8 disposition (PR #113 review 2026-08-07); mini Tier-A (engine-path file check.ts + types.ts union); hostile sign-off round 1 REFUSED (B1: ε unbound) → fixes → round 2 GRANTED (2026-08-07, fingerprint-anchored) |
