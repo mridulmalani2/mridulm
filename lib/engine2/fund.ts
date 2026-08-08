@@ -4,8 +4,9 @@
  * §3-step-7 distributions (the ONE §9 pari-passu rule), `exit.sponsor_share`
  * (post-§10-promote), `sources_uses.{sponsor_equity, rollover_equity}`, and
  * `gp_fee_income` for the ILPA fee offset — and touches NO waterfall/tax/BS arithmetic.
- * Held to the adjudicated G7-FUND gospel (tests/goldens/G7FUND, two passes SIGNED) at the
- * §15 bar, plus the §19.10 directed fixtures for every golden-uncovered branch.
+ * Held to the adjudicated G7-FUND gospel (tests/goldens/G7FUND — two passes SIGNED, then the
+ * full-precision reseed re-signed by two further blind passes) at the §15 bar, plus the
+ * §19.10 directed fixtures for every golden-uncovered branch.
  *
  * Year-end event ORDER [§19.4, sign-off round-2 B8]: (1) ACCRUE pref on the PRE-DRAW
  * state; (2) DRAW fee_t (enters paid-in, and — 'european' only — the return-of-capital +

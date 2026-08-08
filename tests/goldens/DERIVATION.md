@@ -490,6 +490,11 @@ edits reverted; tree clean.
 
 ## G7-FUND (§19 v1.4.0, Phase-2 step 2) — adjudication record
 
+*[The numeric values in the two pass texts below are the ROUNDED-SEED walk and are numerically
+SUPERSEDED by the full-precision reseed record at the end of this section (2026-08-08). The
+method and structure stand — and both reseed passes reproduce these legacy numbers exactly,
+digit-for-digit, from the r2 seeds with the same committed code.]*
+
 **Pass 1 (2026-08-08) — SIGNED.** The full fund-of-one walk was hand-derived from the
 G2-DIST fixture's sponsor rows + SPEC §19 r3 alone, BEFORE the reference path ran, then
 compared: **zero mismatches to the digit.** Derivation: invested 587.22; fee 2% × invested
@@ -529,3 +534,48 @@ domain despite 3 sign changes). Every fixture value matched exactly (dollars) or
 (i) §19.5 leaves the never-reached payback sentinel unstated — fixture uses null, concur;
 (ii) year-5 interim + exit riding step (3) as one D or sequentially is result-identical
 (the walk is path-independent within a year) — no spec change needed.
+
+**FULL-PRECISION RESEED (2026-08-08, with step 3) — delta RE-VERIFIED, both new passes SIGNED.**
+The first reference read the run's EMITTED rows — r2-rounded DISPLAY values (invested 587.22,
+inflows [0, 12.09, 15.34, 10, 8], exit share 1044.06) — the v1.0.3 display-precision artifact,
+re-committed. Fixed by moving `fund_overlay` INSIDE `run()` onto the full-precision locals
+(sponsor_equity 587.2249999999999, sponsor_paid [0, 12.089723962053547, 15.341141537235018,
+10, 8], exit sponsor_share 1044.0615934788534) and reseeding G7FUND (paid-in 645.942→645.9475,
+ΣGP 88.7096→88.708992, moic 1.549335→1.549326, irr 0.098059→0.098058). Both signatures above
+predate that reseed, so the delta was re-verified by TWO NEW independent blind passes, each
+seeded ONLY from the captured full-precision `fund_overlay` inputs + SPEC §19, derivation
+committed to scratch BEFORE opening the fixture or reference, and each ALSO re-running its
+identical committed code on the legacy r2 seeds:
+
+**Reseed pass A (float walk + Decimal cross-check) — SIGNED, zero mismatches.** Every fund
+field r6-EXACT vs the reseeded fixture (the ±$0.005m/±0.1bp bar was never needed): fee 11.7445
+= 2% × 587.225; paid-in 645.9475 (≡ 1.1 × invested); lp_distributions [0, 12.089724,
+15.341142, 10, 963.352602]; ΣLP 1000.783467; ΣGP 88.708992; moic 1.549326 ≡ dpi[5]; dpi
+[0, 0.019796, 0.044069, 0.05902, 1.549326]; irr 0.098058 (full 0.09805782520669715); payback
+null. Year-5 walk: D 1052.0615934788534 → RoC 608.5166345007 (life RoC ≡ paid-in EXACTLY —
+fee_5 drawn pre-distribution per B8) → pref 279.2863625322 → catch-up 69.8215906330 (= 0.25 ×
+pref at q=1) → terminal 94.4370058129 → LP 75.5496046503 / GP 18.8874011626. §19.6(a) diff 0.0
+float / 0E-36 Decimal; §19.6(d) BINDING AT EQUALITY (Decimal gap exactly 0); cum-dist
+monotone; float-vs-Decimal max deviation 1.15e-13; no fixture value within 1e-9 of an r6 half
+boundary. The legacy walk (same committed code on the r2 seeds) reproduced EVERY old signed
+value digit-for-digit — incl. the 10-digit dpi/irr quotes, pref chain 46.9776→…→64.89271462912,
+and the y5 split 75.55435250688 / 18.88858812672 — so the delta is PURE SEED PRECISION, zero
+logic change (corroborated diff-side: the reseed's `fund_overlay` loop-body diff is a variable
+rename).
+
+**Reseed pass B (exact rational arithmetic, blind, independent) — SIGNED, zero mismatches.**
+The §19 walk in `fractions.Fraction` over the dyadic seeds: §19.6(a) conservation = 0/1
+IDENTICALLY and §19.6(d) = 0/1 IDENTICALLY (both seed sets) — with the closure argument: years
+2–4 die in step-1 RoC strictly below `unreturned`; the year-5 D exceeds unreturned-incl-fee_5
+[B8], so life RoC = paid-in exactly and distributed profit B = pref + catch-up + terminal;
+q=1 gives x = 0.25·pref exactly at gp = 0.2·(pref+x), and the terminal tier grows both sides
+in the carry ratio ⇒ ΣGP ≡ 0.2·B. Sturm-sequence EXACT root count over (−0.999, 10]: ONE real
+root (the 3 sign changes admit no second); Fraction-bisection IRR 0.09805782520669702 (legacy
+0.09805906900158125) → r6 0.098058 / 0.098059. Every fixture field r6-EXACT; every legacy
+value digit-for-digit; closest fixture field to an r6 boundary 3.7e-8 (lp_distributions[3]) —
+no rounding-mode sensitivity (spec_calc `r6` = round-half-even, confirmed post-commit).
+§19.6(b): 0.098058 < sponsor 0.133906, both streams single-root-defined.
+
+The G7-FUND GOSPEL is the RESEEDED fixture. Adjudication artifacts (blind commits + phase-3
+comparisons, both passes) were preserved in the session scratchpad; this record is the durable
+summary, per the DERIVATION method.

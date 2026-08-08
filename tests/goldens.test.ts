@@ -272,7 +272,7 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
       expect(g7[k], `G7-FUND ${k} must equal G2-DIST`).toEqual(g2dist[k]);
     }
   });
-  it('the adjudicated fund walk (pass-1 hand-derivation, european/2%-invested/8%-pref/20%-carry/full catch-up)', () => {
+  it('the adjudicated fund walk (full-precision reseed, passes A+B re-signed; european/2%-invested/8%-pref/20%-carry/full catch-up)', () => {
     expect(f.paid_in_total).toBeCloseTo(645.9475, 4);         // 587.225 + 5 × 11.7445 = 1.1 × se, EXACT
     expect(f.paid_in_total).toBeCloseTo(1.1 * f.lp_contributions[0], 6);
     expect(f.mgmt_fees_net.every((x: number) => Math.abs(x - 11.7445) < 1e-6)).toBe(true);
