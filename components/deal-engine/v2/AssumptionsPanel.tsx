@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/format';
 import BasisBadge from './BasisBadge';
-import type { DealAssumptions, CashPayTrancheAssumption, RefinancingEvent } from '../../../lib/engine2/types';
+import type { DealAssumptions, CashPayTrancheAssumption, FundOverlayAssumption, RefinancingEvent } from '../../../lib/engine2/types';
 import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { sizingBasisLabel } from '../../../lib/engine2/display';
@@ -162,7 +162,7 @@ const AssumptionsPanel: React.FC = () => {
       {/* ── Advanced (collapsed) ── */}
       <details className="mt-3">
         <summary className="text-[10px] tracking-widest uppercase cursor-pointer" style={labelStyle}>
-          Advanced — tax · fees · sweep · MIP · distributions
+          Advanced — tax · fees · sweep · MIP · distributions · fund
         </summary>
         <div className="mt-2">
           <Row label="Tax rate" path="tax.rate">
@@ -281,6 +281,87 @@ const AssumptionsPanel: React.FC = () => {
                       {term.name} reprices to base {toPctInput(base.base_rate)}% + {bps(newSpread)} at year {refi.year};
                       a {toPctInput(refi.call_premium_pct)}% call premium is paid that year, the old unamortized
                       OID and fees write off (tax deduction the following year), maturity extends past the hold (§18).
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()}
+          {/* ── §19 [v1.4.0] fund/LP overlay — Class B, Advanced tier ──────────────────
+              A fund-of-one on the SPONSOR side (§19.1): LPs fund the equity check + annual
+              management fees; RoC → pref → catch-up → carry nets the LP stream into the
+              Returns tab's fourth row. The suggestion layer proposes NONE (§19 preamble —
+              an LP-agreement fact), so the group starts OFF (fund: null) and wears YOU once
+              touched; a 0/blank fee clears back to null ("off" stays a single
+              representation — the distributions precedent). Commits NORMALIZE into §19.2's
+              domains (catch-up {0} ∪ [carry, 1]) rather than construct a rejected state;
+              the committed-below-contributions gate needs run-time paid-in, so it surfaces
+              through the store's error banner. fee_offset_pct stays at the ILPA 1.0
+              convention (programmatic field — the refi new_oid precedent). */}
+          {(() => {
+            const fund = a.fund;
+            const mkFund = (over: Partial<FundOverlayAssumption>): FundOverlayAssumption => {
+              const f: FundOverlayAssumption = {
+                committed_capital: fund?.committed_capital ?? null,
+                mgmt_fee_pct: fund?.mgmt_fee_pct ?? 0.02,
+                fee_basis: fund?.fee_basis ?? 'invested',
+                carry_pct: fund?.carry_pct ?? 0.20,
+                pref_rate: fund?.pref_rate ?? 0.08,
+                catchup_pct: fund?.catchup_pct ?? 1.0,
+                waterfall: fund?.waterfall ?? 'european',
+                fee_offset_pct: fund?.fee_offset_pct ?? 1.0,
+                ...over,
+              };
+              // §19.2: catchup_pct ∈ {0} ∪ [carry_pct, 1] — normalize, never reject-at-run.
+              if (f.catchup_pct !== 0 && f.catchup_pct < f.carry_pct) f.catchup_pct = f.carry_pct;
+              if (f.catchup_pct > 1) f.catchup_pct = 1;
+              return f;
+            };
+            const withF = (over: Partial<FundOverlayAssumption>): [DealAssumptions, string[]] => [
+              { ...a, fund: mkFund(over) },
+              ['fund'],
+            ];
+            return (
+              <>
+                <Row label={`Fund overlay — mgmt fee (% of ${fund?.fee_basis ?? 'invested'})`} path="fund">
+                  <NumInput value={fund === null ? '' : toPctInput(fund.mgmt_fee_pct)} suffix="%"
+                    onCommit={pctCommit((v) => (v > 0 ? withF({ mgmt_fee_pct: v }) : [{ ...a, fund: null }, ['fund']]))} />
+                </Row>
+                {fund !== null && (
+                  <>
+                    {/* input clamps are TERNARY domain normalizers on the typed scalar —
+                        deliberately not Math.min/max, which the governance aggregation scan
+                        reserves for allowlisted presentational derivations over model values */}
+                    <Row label="↳ carried interest" path="fund">
+                      <NumInput value={toPctInput(fund.carry_pct)} suffix="%"
+                        onCommit={pctCommit((v) => withF({ carry_pct: v < 0 ? 0 : v > 0.99 ? 0.99 : v }))} />
+                    </Row>
+                    <Row label="↳ preferred return (compounded)" path="fund">
+                      <NumInput value={toPctInput(fund.pref_rate)} suffix="%"
+                        onCommit={pctCommit((v) => withF({ pref_rate: v < 0 ? 0 : v }))} />
+                    </Row>
+                    <Row label="↳ GP catch-up (0 = hard hurdle)" path="fund">
+                      <NumInput value={toPctInput(fund.catchup_pct)} suffix="%"
+                        onCommit={pctCommit((v) => withF({ catchup_pct: v <= 0 ? 0 : v > 1 ? 1 : v }))} />
+                    </Row>
+                    <Row label="↳ waterfall election" path="fund">
+                      <button onClick={() => set(...withF({ waterfall: fund.waterfall === 'european' ? 'american' : 'european' }))}
+                        className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
+                        style={{ border: '1px solid rgba(17,17,17,0.15)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
+                        {fund.waterfall}
+                      </button>
+                    </Row>
+                    <Row label="↳ committed capital (sets fee basis)" path="fund">
+                      <NumInput value={fund.committed_capital === null ? '' : num(fund.committed_capital, 1)} suffix="m"
+                        onCommit={numCommit((v) => (v > 0
+                          ? withF({ committed_capital: v, fee_basis: 'committed' })
+                          : withF({ committed_capital: null, fee_basis: 'invested' })))} />
+                    </Row>
+                    <p className="text-[10px] text-right" style={labelStyle}>
+                      {fund.waterfall === 'european'
+                        ? 'european: ALL contributions (equity + fee draws) in the hurdle and pref base'
+                        : 'american: INVESTED capital only — fees never enter the hurdle or accrue pref (no fee-recovery tier)'}
+                      ; pref compounds annually; monitoring-fee offset {toPctInput(fund.fee_offset_pct)}% (ILPA) — SPEC §19
                     </p>
                   </>
                 )}

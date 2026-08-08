@@ -69,6 +69,15 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Sponsor MOIC', o.returns.sponsor_net.moic],
     ['Pre-promote IRR', o.returns.pre_promote.irr],
     ['Unlevered IRR', o.returns.unlevered.irr],
+    // §19 [v1.4.0]: the net-to-LP stream rides the RETURNS section ONLY when the overlay is
+    // ON — §19.6(c) makes it ABSENT when OFF (no N/A rows for a feature that is off).
+    ...(o.fund !== null
+      ? [
+          ['Net to LP IRR (after fund fees & carry, fund-of-one)', o.fund.fund_lp_net.irr] as Cell[],
+          ['Net to LP TVPI (= DPI — fully realized)', o.fund.fund_lp_net.moic] as Cell[],
+          ['LP paid-in (equity + fee draws)', o.fund.paid_in_total] as Cell[],
+        ]
+      : []),
     ['— CAPITALIZATION —', null],
     ...o.sources_uses.debt_at_par.map((d): Cell[] => [`${d.name} (x EBITDA · % of cap)`, d.amount]),
     ['Equity (sponsor + rollover)', o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity],
@@ -89,7 +98,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
   sum.eachRow((row, r) => {
     const labelCell = String(row.getCell(1).value ?? '');
     if (/IRR/.test(labelCell)) sum.getCell(r, 2).numFmt = PCT;
-    if (/multiple|MOIC|leverage/i.test(labelCell)) sum.getCell(r, 2).numFmt = MULT;
+    if (/multiple|MOIC|TVPI|leverage/i.test(labelCell)) sum.getCell(r, 2).numFmt = MULT;
     if (/DSCR/.test(labelCell)) sum.getCell(r, 2).numFmt = '0.00';
   });
 
@@ -182,6 +191,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions', 'SPEC §3/§15'],
     ['Interim distributions: paid at year-end after full debt service (never revolver-funded); blocked capacity does not accrue; the RP trap is the closed-form pro-forma net-leverage test (§3.7 — no solver)', 'SPEC §3/§15'],
     ['Refinancing: scheduled per-tranche event (one per tranche), par-for-par, cash-pay term tranches only; repricing effective for the whole refi year; old OID/DFC write-off + call premium deducted uncapped the FOLLOWING year (conservative vs Treas. Reg. §1.1001-3)', 'SPEC §18/§15'],
+    ["Fund/LP overlay: fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs/NAV); no subscription line, no GP commitment, no clawback (nothing to claw back by construction); european = all-contributions hurdle + pref base, american = invested-capital base with NO fee-recovery tier; the §10 promote is NOT fund carry; the year-N fee draws BEFORE the final distribution", 'SPEC §19/§15'],
     [`Entry leverage is GROSS (debt at par ÷ ${entryMult.sizing_label} EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series`, 'SPEC §11'],
     ['A model is a range, not a point — the sensitivity/scenario exhibits are the primary caveat mechanism', 'SPEC §15'],
   ], [null, null]);

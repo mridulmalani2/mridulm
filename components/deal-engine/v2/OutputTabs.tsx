@@ -1,12 +1,14 @@
 /**
- * v2 OutputTabs (PHASE_E §E2, first slice): Summary (IC one-pager) · Returns (3 streams
- * + value bridge) · Operating (the FCF waterfall table — new) · S&U · Debt schedule
- * (deleveraging footer, SPEC §11) · Balance sheet · Credit (null ⇒ N/A — no 9999/99 can
- * render). Sensitivity/Scenarios/Methodology land in E2b. Everything reads ModelOutput
+ * v2 OutputTabs (PHASE_E §E2, first slice): Summary (IC one-pager) · Returns (3 sponsor-side
+ * streams + the §19 net-to-LP row when the fund overlay is ON [v1.4.0] + value bridge) ·
+ * Operating (the FCF waterfall table — new) · S&U · Debt schedule (deleveraging footer,
+ * SPEC §11) · Balance sheet · Credit (null ⇒ N/A — no 9999/99 can render).
+ * Sensitivity/Scenarios/Methodology land in E2b. Everything reads ModelOutput
  * through lib/format; nothing here computes engine arithmetic.
  *
- * Deliberately ABSENT (the §E2 removal list): Fragility, Reality Check, fund economics,
- * add-ons, partial exits, ratchets, PIK elections, refi editors, distributions, trace.
+ * Deliberately ABSENT (the §E2 removal list): Fragility, Reality Check, add-ons, partial
+ * exits, ratchets, PIK elections, refi editors, distributions, trace. (Fund economics left
+ * this list in v1.4.0 — the §19 overlay renders on the Returns tab.)
  */
 import React, { useState } from 'react';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
@@ -92,19 +94,52 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
   );
 };
 
-const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
-  <Table head={['Stream', 'Outflow', 'Final inflow', 'IRR', 'MOIC']}>
-    {([['Sponsor net', o.returns.sponsor_net], ['Pre-promote', o.returns.pre_promote], ['Unlevered', o.returns.unlevered]] as const).map(([l, s]) => (
-      <tr key={l} style={rowB}>
-        <td className="px-2 py-1">{l}</td>
-        <td className={td}>{money(s.cashflows[0], ccy)}</td>
-        <td className={td}>{money(s.cashflows[s.cashflows.length - 1], ccy)}</td>
-        <td className={td}>{pct(s.irr)}</td>
-        <td className={td}>{multiple(s.moic)}</td>
-      </tr>
-    ))}
-  </Table>
-);
+// Exported for the directed §19 display test (label/value provenance on the net-to-LP row).
+export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  // §19 [v1.4.0]: the FOURTH stream — net to LP through the fund-of-one waterfall. Rendered
+  // ONLY when the overlay is ON: §19.6(c) makes the stream ABSENT when OFF, never a zero row.
+  const f = o.fund;
+  const N = f ? f.lp_distributions.length : 0;
+  return (
+    <div>
+      <Table head={['Stream', 'Outflow', 'Final inflow', 'IRR', 'MOIC']}>
+        {([['Sponsor net', o.returns.sponsor_net], ['Pre-promote', o.returns.pre_promote], ['Unlevered', o.returns.unlevered]] as const).map(([l, s]) => (
+          <tr key={l} style={rowB}>
+            <td className="px-2 py-1">{l}</td>
+            <td className={td}>{money(s.cashflows[0], ccy)}</td>
+            <td className={td}>{money(s.cashflows[s.cashflows.length - 1], ccy)}</td>
+            <td className={td}>{pct(s.irr)}</td>
+            <td className={td}>{multiple(s.moic)}</td>
+          </tr>
+        ))}
+        {f && (
+          /* Cells are NAMED FundBlock fields: t=0 draw (negated for the outflow column) and
+             the year-N LP NET flow (distribution − fee_N — scalar on named fields, pinned by
+             the value-provenance test). The multiple is TVPI ≡ DPI (fully realized) — the
+             §19.5 label rides the footnote. Fee-only years make the LP stream multi-sign;
+             kernel/irr's policy applies and a null renders N/A, never a fabricated rate. */
+          <tr style={rowB}>
+            <td className="px-2 py-1">Net to LP — after fund fees & carry (fund-of-one overlay)</td>
+            <td className={td}>{money(-f.lp_contributions[0], ccy)}</td>
+            <td className={td}>{money(f.lp_distributions[N - 1] - f.mgmt_fees_net[N - 1], ccy)}</td>
+            <td className={td}>{pct(f.fund_lp_net.irr)}</td>
+            <td className={td}>{multiple(f.fund_lp_net.moic)}</td>
+          </tr>
+        )}
+      </Table>
+      {f && (
+        <p className="text-[10px] mt-2" style={label}>
+          less: fund fees & carry → net to LP (SPEC §19). Paid-in {money(f.paid_in_total, ccy)} (equity
+          check + annual fee draws; committed {money(f.committed_capital, ccy)}); the LP multiple is
+          TVPI (= DPI — fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
+          {f.fund_lp_net.payback_year === null ? 'N/A' : `Y${f.fund_lp_net.payback_year}`} (interim
+          distributions only — the exit year never counts). Outflow shows the t=0 equity draw; fee
+          draws continue annually.
+        </p>
+      )}
+    </div>
+  );
+};
 
 const Operating: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
   <Table head={['Year', 'Revenue', 'EBITDA', 'Margin', 'D&A', 'Capex', 'ΔNWC', 'Cash tax', 'FCF pre-debt']}>
@@ -376,6 +411,8 @@ const DISCLOSURES: [string, string][] = [
   ['Interim distributions (§3 step 7)', 'paid at YEAR-END after full debt service — never revolver-funded; blocked capacity does not accrue (no carryforward); the RP trap is the closed-form pro-forma net-leverage test (§3.7 — no solver)'],
   // §18.8: the v1 refinancing simplifications are LISTED here — the SPEC sentence §15 carries verbatim-mirrored
   ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted UNCAPPED the FOLLOWING year (vs the Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1yr)'],
+  // §19.8 [v1.4.0]: the fund-of-one simplifications — the SPEC §15 sentence mirrored here
+  ['Fund/LP overlay (§19)', "fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs, no NAV basis); no subscription line; no GP commitment; no clawback (nothing to claw back by construction); 'european' = all-contributions hurdle + pref base, 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, NOT fund carry; the year-N fee draws BEFORE the final distribution"],
 ];
 
 export const Methodology: React.FC = () => (
