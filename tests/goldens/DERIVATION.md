@@ -570,7 +570,9 @@ IDENTICALLY and §19.6(d) = 0/1 IDENTICALLY (both seed sets) — with the closur
 [B8], so life RoC = paid-in exactly and distributed profit B = pref + catch-up + terminal;
 q=1 gives x = 0.25·pref exactly at gp = 0.2·(pref+x), and the terminal tier grows both sides
 in the carry ratio ⇒ ΣGP ≡ 0.2·B. Sturm-sequence EXACT root count over (−0.999, 10]: ONE real
-root (the 3 sign changes admit no second); Fraction-bisection IRR 0.09805782520669702 (legacy
+root (the 3 sign changes admit no second) [audit 2026-08-08 N6: the solver bracket is
+(−0.9999, 10]; the uncensused sliver is root-free — a 2M-point full-bracket scan finds the
+same single crossing]; Fraction-bisection IRR 0.09805782520669702 (legacy
 0.09805906900158125) → r6 0.098058 / 0.098059. Every fixture field r6-EXACT; every legacy
 value digit-for-digit; closest fixture field to an r6 boundary 3.7e-8 (lp_distributions[3]) —
 no rounding-mode sensitivity (spec_calc `r6` = round-half-even, confirmed post-commit).

@@ -16,6 +16,7 @@
  */
 
 import { irr } from './kernel/irr';
+import { sponsorShareOfDistributions } from './returns';
 import type { FundOverlayAssumption, FundBlock, SourcesUses } from './types';
 
 export interface FundOverlayInputs {
@@ -37,6 +38,14 @@ export function validateFund(fund: FundOverlayAssumption): void {
   if (fund.committed_capital === null && fund.fee_basis === 'committed') {
     bad("committed_capital = null with fee_basis 'committed' is circular — the fee would depend on committed which depends on fees drawn");
   }
+  // audit 2026-08-08 M3: NaN slipped BOTH committed gates (NaN < paidIn − 5e-3 is false) and
+  // emitted an all-NaN block; out-of-union strings took the committed branch. Fail closed,
+  // like the sibling !(x >= 0) gates.
+  if (fund.committed_capital !== null && !Number.isFinite(fund.committed_capital)) {
+    bad('committed_capital must be a finite number or null');
+  }
+  if (fund.fee_basis !== 'committed' && fund.fee_basis !== 'invested') bad("fee_basis must be 'committed' or 'invested'");
+  if (fund.waterfall !== 'european' && fund.waterfall !== 'american') bad("waterfall must be 'european' or 'american'");
   if (!(fund.mgmt_fee_pct >= 0)) bad('mgmt_fee_pct must be ≥ 0');
   if (!(fund.carry_pct >= 0 && fund.carry_pct < 1)) bad('carry_pct must be in [0, 1)');
   if (!(fund.pref_rate >= 0)) bad('pref_rate must be ≥ 0');
@@ -53,9 +62,10 @@ export function validateFund(fund: FundOverlayAssumption): void {
 export function buildFundOverlay(fund: FundOverlayAssumption, x: FundOverlayInputs): FundBlock {
   const N = x.distributions_paid.length;
   const se = x.sources_uses.sponsor_equity;
-  const rollover = x.sources_uses.rollover_equity ?? 0;
-  const share = se + rollover > 0 ? se / (se + rollover) : 1; // §9 pari-passu (B1)
-  const inflow = x.distributions_paid.map((d) => d * share);
+  // §19.7/§9 pari-passu (B1): the sponsor share comes through the ONE share rule — never a
+  // local re-derivation (audit 2026-08-08 M2: the inline copy's degenerate fallback had
+  // already drifted from returns.ts — 1 vs 0 on a non-positive check).
+  const inflow = sponsorShareOfDistributions(x.distributions_paid, se, x.sources_uses.rollover_equity ?? 0);
   inflow[N - 1] += x.exit_sponsor_share;
 
   const basis = fund.fee_basis === 'invested' ? se : (fund.committed_capital as number);
@@ -111,7 +121,10 @@ export function buildFundOverlay(fund: FundOverlayAssumption, x: FundOverlayInpu
     }
     cumD += lpDist[t - 1];
     dpi[t - 1] = cumC > 0 ? cumD / cumC : 0; // ILPA to-date ratio (§19.5/B6)
-    if (payback === null && t < N && cumD >= cumC - 1e-12) payback = t; // interim-only (L-10)
+    // interim-only (L-10); ALL of year N is excluded at this layer — the §14.16 merged
+    // period-N flow makes year-N interim inseparable from exit here, unlike the sponsor row
+    // (audit N2; mirrored by the reference).
+    if (payback === null && t < N && cumD >= cumC - 1e-12) payback = t;
   }
 
   let paidIn = 0;

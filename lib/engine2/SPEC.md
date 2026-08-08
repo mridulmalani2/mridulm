@@ -1616,10 +1616,17 @@ Distribution walk (amount D):
    reaches its carry share of PROFITS DISTRIBUTED SO FAR (profits INCLUDE the pref — the
    market-standard base; at catchup_pct = 1 this yields the classic `carry/(1−carry) × pref`
    catch-up). `catchup_pct = 0` skips (hard hurdle). The LHS includes later step-4 carry
-   while the RHS is evaluated during step 3 — equivalent on every reachable state: step 4
-   only runs after the target is met, after which both sides grow in the carry ratio and the
-   pref base is extinguished, so no re-trigger exists [round-1 minor 7 — stated so an
-   implementer does not "fix" it].
+   while the RHS is evaluated during step 3 — equivalent under 'american', and under
+   'european' only while no NEW pref accrues after a step-4 dollar (base extinguished, both
+   sides growing in the carry ratio). The equivalence is NOT universal under 'european':
+   later fee draws re-seed `unreturned`, new pref accrues, and `carry_pct × (pref + catch-up
+   + LP-profit paid)` can overtake `gp_carry_paid` — step 3 then RUNS AGAIN. The normative
+   stop-equation above governs on cumulative state (GP stays within the §19.6(d) bound —
+   conservative), and the re-trigger case is pinned by directed fixture §19.10(x)
+   [round-1 minor 7, RESCOPED by the step-3 accuracy audit 2026-08-08: the original "no
+   re-trigger exists on every reachable state" claim was refuted by a worked 'european'
+   counterexample (fees re-seed the base); the normative equation is UNCHANGED and the
+   implementation already followed it].
 4. **Carry split**: remaining D splits `(1 − carry_pct)` LP / `carry_pct` GP. This tier is
    TERMINAL — nothing ranks after it.
 **Under 'american' there is NO fee-recovery tier [round-1 B2]: fee draws are simply never
@@ -1643,6 +1650,11 @@ and the stream `fund_lp_net: {irr, moic, dpi[], payback_year}` where:
 - `payback_year` = the first year cumulative `lp_distributions` ≥ cumulative
   `lp_contributions` to date, counting INTERIM distributions only — the year-N exit inflow
   does not count (the §9/L-10 rule, applied at the LP layer) [B6]; null when never reached (the pass-2 sentinel pin).
+  [Layer note, audit 2026-08-08 N2: at THIS layer ALL of year N is excluded — the §14.16
+  merged period-N flow makes year-N interim inseparable from exit post-waterfall — whereas
+  the sponsor-layer rule counts year-N interim distributions separately; a deal repaying on
+  year-N interim alone shows sponsor payback = N, fund payback = null. Engine and reference
+  both implement this reading.]
 Labels carry the ILPA basis: "Net to LP — after fund fees & carry (fund-of-one overlay)".
 The §12 bridge is UNCHANGED (the overlay is value SHARING on the sponsor-LP boundary, not
 value creation — DR-2 Item 7); a memo line "less: fund fees & carry → net to LP" may render
@@ -1678,7 +1690,10 @@ scenario's sponsor flows; LP CONTRIBUTIONS are scenario-invariant in EVERY confi
 retracted]: sponsor_equity is entry-frozen (§13), the fee basis is a constant, and the
 offset's monitoring income is a FIXED annual dollar amount (§5) — none is touched by
 `ScenarioDeltas` (operations + exit_multiple only). LP DISTRIBUTIONS vary by scenario, as
-they must.
+they must. [v1 reality, audit 2026-08-08 N1: each scenario's full re-run computes the
+overlay from that scenario's flows and then DISCARDS it — the spec-pinned slim
+`ScenarioResult` schema (§16) carries no fund field, so no stale overlay can carry over;
+SURFACING per-scenario LP-net is a v2 exposure item, tracked, not a silent omission.]
 
 **§19.8 Disclosure (§15 row).** Fund-of-one overlay; annual fee on a constant basis (no
 step-downs, no NAV basis); no subscription line (ILPA's with/without presentation N/A); no
