@@ -316,7 +316,7 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
   });
 });
 
-describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; adjudication pending → gospel after signed)', () => {
+describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; GOSPEL — both adjudication passes SIGNED)', () => {
   const g8 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G8PIKT/expected.json'), 'utf8'));
   const g3 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G3/expected.json'), 'utf8'));
   const note = g8.tranches['PIK Note'];
