@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/format';
 import BasisBadge from './BasisBadge';
-import type { DealAssumptions, CashPayTrancheAssumption, FundOverlayAssumption, RefinancingEvent } from '../../../lib/engine2/types';
+import type { DealAssumptions, CashPayTrancheAssumption, FundOverlayAssumption, PikNoteAssumption, RefinancingEvent } from '../../../lib/engine2/types';
 import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { sizingBasisLabel } from '../../../lib/engine2/display';
@@ -162,7 +162,7 @@ const AssumptionsPanel: React.FC = () => {
       {/* ── Advanced (collapsed) ── */}
       <details className="mt-3">
         <summary className="text-[10px] tracking-widest uppercase cursor-pointer" style={labelStyle}>
-          Advanced — tax · fees · sweep · MIP · distributions · fund
+          Advanced — tax · fees · sweep · MIP · distributions · fund · PIK
         </summary>
         <div className="mt-2">
           <Row label="Tax rate" path="tax.rate">
@@ -281,6 +281,90 @@ const AssumptionsPanel: React.FC = () => {
                       {term.name} reprices to base {toPctInput(base.base_rate)}% + {bps(newSpread)} at year {refi.year};
                       a {toPctInput(refi.call_premium_pct)}% call premium is paid that year, the old unamortized
                       OID and fees write off (tax deduction the following year), maturity extends past the hold (§18).
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()}
+          {/* ── §20 [v1.5.0] PIK toggle — Class B, Advanced tier ──────────────────────
+              The per-year WHOLE-coupon election on a pik_note. Rendered ONLY when the deal
+              actually carries a PIK note: the v2 UI has no tranche BUILDER, and the D7
+              suggestion layer never proposes a pik_note, so today this surface appears for
+              programmatically-constructed deals (and templates, once wired) — conditional
+              render, exactly like the refi editor's floating-tranche gate. The suggestion
+              layer proposes NO elections (§19-preamble precedent): a schedule starts null
+              (the FIXED both-legs note) and wears YOU the moment it is touched. §20.2 gates
+              are enforced at Build; the commits below can only construct in-domain states
+              (whole-coupon values, length ≡ hold). */}
+          {(() => {
+            const note = a.structure.tranches.find(
+              (t): t is PikNoteAssumption => t.type === 'pik_note',
+            );
+            if (!note) return null;
+            const N = a.entry.hold_years;
+            const el = note.elections;
+            const writeNote = (over: Partial<PikNoteAssumption>): [DealAssumptions, string[]] => [
+              {
+                ...a,
+                structure: {
+                  ...a.structure,
+                  tranches: a.structure.tranches.map((t) => (t.type === 'pik_note' ? { ...t, ...over } : t)),
+                },
+              },
+              ['structure.tranches'],
+            ];
+            return (
+              <>
+                <Row label={`PIK toggle — ${note.name}`} path="structure.tranches">
+                  <button
+                    onClick={() =>
+                      set(
+                        ...writeNote(
+                          el === null
+                            ? // turning it ON starts every year at 'pik' (the accreting default the
+                              // FIXED note already behaves like); the user then elects cash per year
+                              { elections: Array.from({ length: N }, () => 'pik' as const) }
+                            : { elections: null },
+                        ),
+                      )
+                    }
+                    className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
+                    style={{ border: '1px solid rgba(17,17,17,0.15)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}
+                  >
+                    {el === null ? 'fixed (both legs)' : 'per-year election'}
+                  </button>
+                </Row>
+                {el !== null && (
+                  <>
+                    <div className="flex gap-1 mb-2 justify-end">
+                      {el.map((e, i) => (
+                        <button
+                          key={i}
+                          onClick={() =>
+                            set(
+                              ...writeNote({
+                                elections: el.map((x, j) => (j === i ? (x === 'pik' ? 'cash' : 'pik') : x)),
+                              }),
+                            )
+                          }
+                          className="px-1.5 py-1 text-[9px] uppercase tracking-widest"
+                          style={{
+                            border: '1px solid rgba(17,17,17,0.15)',
+                            background: e === 'pik' ? 'rgba(17,17,17,0.06)' : '#fff',
+                            color: 'rgba(17,17,17,0.65)',
+                            fontFamily: mono,
+                          }}
+                        >
+                          Y{i + 1} {e}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-right" style={labelStyle}>
+                      each year serves the WHOLE coupon one way: cash pays {toPctInput(note.cash_coupon)}% on the
+                      beginning balance and accrues nothing; PIK accrues {toPctInput(note.pik_coupon)}% and pays
+                      nothing (SPEC §20). Elections are frozen across scenarios; PIK is deducted as accrued —
+                      AHYDO is not modelled (see the methodology page).
                     </p>
                   </>
                 )}
