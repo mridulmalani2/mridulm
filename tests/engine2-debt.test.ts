@@ -45,7 +45,7 @@ const SPECS: Record<string, { fy_ebitda: number; min_cash: number; sweep_pct: nu
     fy_ebitda: 90, min_cash: 8, sweep_pct: 0.5,
     tranches: [
       { name: 'Senior', type: 'senior', size: { x_ebitda: 3 }, pricing: floating(0.045, 0.0075), amort_pct_of_face: 0.05, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 } },
-      { name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 } },
+      { name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 }, elections: null },
     ],
   },
   G4: {
@@ -209,7 +209,7 @@ describe('debt.ts §3–§5 properties & guards', () => {
             {
               tranches: [
                 { name: 'S', type: 'senior', size: { amount: seniorBal }, pricing: { kind: 'fixed', rate: 0.08 }, amort_pct_of_face: 0.01, maturity_years: 8, oid_pct: 0, sweep: { participates: true, priority: 1 } },
-                { name: 'P', type: 'pik_note', size: { amount: pikBal }, cash_coupon: 0.02, pik_coupon: pikRate, amort_pct_of_face: 0, maturity_years: 9, oid_pct: 0, sweep: { participates: false, priority: 2 } },
+                { name: 'P', type: 'pik_note', size: { amount: pikBal }, cash_coupon: 0.02, pik_coupon: pikRate, amort_pct_of_face: 0, maturity_years: 9, oid_pct: 0, sweep: { participates: false, priority: 2 }, elections: null },
               ],
               min_cash: 5,
               sweep: { base_pct: 0.5, grid: null },

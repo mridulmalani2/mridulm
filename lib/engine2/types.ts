@@ -126,8 +126,11 @@ export interface PikNoteAssumption extends TermTrancheCommon {
    * (BOTH legs every year: cash paid AND accrual). Non-null: `'cash'` pays
    * `beginning × cash_coupon` with NO accrual; `'pik'` accrues `beginning × pik_coupon` with
    * NO cash. Length ≡ hold_years; §20.2 gates reject the rest (see `validatePikElections`).
+   * REQUIRED-with-null (never optional — §16's schema shape): a field-enumerating rebuild that
+   * DROPS elections must be a COMPILE error, not a silent reversion to fixed semantics
+   * [accuracy audit 2026-08-09, M7 — the store/UI rebuild sites are exactly that shape].
    */
-  elections?: ('cash' | 'pik')[] | null;
+  elections: ('cash' | 'pik')[] | null;
 }
 
 export type TermTrancheAssumption = CashPayTrancheAssumption | PikNoteAssumption;

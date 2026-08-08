@@ -224,7 +224,7 @@ describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, n
       bad([REFI({ tranche_name: 'PIK', year: 3 })], (a) => {
         a.structure.tranches = [
           ...a.structure.tranches,
-          { name: 'PIK', type: 'pik_note', size: { x_ebitda: 1 }, cash_coupon: 0, pik_coupon: 0.1, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0, sweep: { participates: false, priority: 2 } },
+          { name: 'PIK', type: 'pik_note', size: { x_ebitda: 1 }, cash_coupon: 0, pik_coupon: 0.1, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0, sweep: { participates: false, priority: 2 }, elections: null },
         ];
       }),
     ).toThrow(/pik_note|not a term tranche/);

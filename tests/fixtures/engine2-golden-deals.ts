@@ -86,7 +86,7 @@ export const GOLDEN_DEALS: Record<string, { facts: DealFacts; assumptions: DealA
       multiple: 8.5, exit_multiple: 8.5, min_cash: 8, sweep_pct: 0.5,
       tranches: [
         { name: 'Senior', type: 'senior', size: { x_ebitda: 3 }, pricing: floating(0.045, 0.0075), amort_pct_of_face: 0.05, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 } },
-        { name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 } },
+        { name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 }, elections: null },
       ],
       growth: [0.05, 0.04, 0.04, 0.03, 0.03], target_margin: 0.3, da_pct: 0.04, maint_pct: 0.035,
       growth_capex: [0, 0, 0, 0, 0], nwc: { method: 'days', dso: 45, dio: 30, dpo: 40 },

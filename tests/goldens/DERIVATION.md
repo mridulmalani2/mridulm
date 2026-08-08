@@ -617,9 +617,14 @@ ported" clause was load-bearing.** The cap BINDS in every one of the five years 
 × ATI throughout), so G3's binds-every-year property PORTS — but its companion
 "carryforward GROWS monotonically" assert does NOT: the path is
 **[10.0575, 18.480267, 19.477611, 16.128796, 13.201901] — NON-monotone, peaking at Y3**. The turn
-is the toggle itself: accrual years push 12% compounding into the pool (38.41, 37.91 vs caps
-28.35, 29.48 — builds), while cash years push only 9% on a FLAT balance (28.23, 29.60 vs caps
-31.58, 32.53 — RELEASES). Y3 straddles (+1.00). Had the assert been ported it would have failed.
+is the toggle interacting with the amortizing senior: accrual years 1–2 push 12% compounding
+into the pool (38.41, 37.91 vs caps 28.35, 29.48 — BUILDS); Y3, though a cash year, still
+straddles (31.66 vs 30.66, +1.00); the releases are **Y4 (cash: 28.23 vs cap 31.58)** and
+**Y5 (a PIK year: 29.60 vs cap 32.53)** — Y5 releases not because of an election but because
+the senior has amortized down (its interest falls 21.87 → 8.95 across the hold), so the pool
+shrinks under a growing EBITDA cap [attribution corrected by the step-3 accuracy audit, M2;
+all six numbers were and remain correct]. Had G3's monotone assert been ported it would have
+failed.
 
 **Sweep coupling (pass 2, vs an all-'pik' counterfactual).** The coupons are a §3 step-1 cash use
 ahead of the 50% sweep. Y3 is the clean case: the pool falls by exactly 15.240960 and the sweep by

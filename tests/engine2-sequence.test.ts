@@ -78,7 +78,11 @@ describe('§7 early retirement — the deferred tax deduction lands in t+1 (accu
 
 describe('runCore — first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
 
-  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI']) {
+  // G7FUND and G8PIKT added by the step-3 accuracy audit (M3): every OTHER feature golden was
+  // in this comprehensive block-by-block gate, so the fund overlay's and the toggle's
+  // balance_sheet / waterfall / operating / senior-tranche rows were compared to their
+  // fixtures by no committed test.
+  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT']) {
     it(`${golden}: operating, tax, tranches, revolver, waterfall, balance sheet`, () => {
       const g = load(golden);
       const core = runCore(DEALS[golden].facts, DEALS[golden].assumptions);
