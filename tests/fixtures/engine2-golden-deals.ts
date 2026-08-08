@@ -55,7 +55,7 @@ function makeAssumptions(p: {
     mip: p.mip ?? null,
     covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: p.rp_trap ?? null },
     mid_year_irr: false,
-  fund: null,
+    fund: null,
   };
 }
 
