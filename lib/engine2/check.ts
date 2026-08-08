@@ -20,7 +20,7 @@ import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, D
 
 export interface CoherenceInputs {
   facts: Pick<DealFacts, 'implied_trading_ev_ebitda'>;
-  assumptions: Pick<DealAssumptions, 'entry' | 'exit' | 'operations' | 'covenants'>;
+  assumptions: Pick<DealAssumptions, 'entry' | 'exit' | 'operations' | 'covenants' | 'structure'>;
   sources_uses: SourcesUses;
   derived: { entry_multiple: number };
   waterfall: WaterfallYear[];
@@ -40,6 +40,25 @@ const DAYS_MAX = { dso: 180, dio: 365, dpo: 180 };
 
 export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
   const flags: CoherenceFlag[] = [];
+
+  // §20.6(e) [v1.5.0]: the AHYDO SHAPE — structural, on the tranche TERMS alone (no run data),
+  // so it is deterministic and fires identically under every election pattern that accrues.
+  // TWO of §163(i)'s three legs are NOT tested here: the YIELD leg (YTM ≥ AFR + 5pts) needs the
+  // monthly AFR — external data this engine has no source for — and the SIGNIFICANT-OID leg is
+  // PROXIED by "an accruing year exists", which over-fires on small coupons (a WARN: the safe
+  // direction) and under-fires only on issue-OID-only cash tranches (immaterial at v1's ≤2.5%
+  // OID). Boundary is `> 5`, not `≥ 5` (§163(i)(1)'s "more than 5 years").
+  for (const tr of x.assumptions.structure.tranches) {
+    if (tr.type !== 'pik_note') continue;
+    const accrues = tr.elections != null ? tr.elections.some((e) => e === 'pik') : tr.pik_coupon > 0;
+    if (tr.maturity_years > 5 && accrues) {
+      flags.push({
+        code: 'ahydo_shape',
+        severity: 'warn',
+        message: `"${tr.name}" has the AHYDO shape (maturity ${tr.maturity_years}y > 5 with accruing PIK): under §163(e)(5)/§163(i) the accrued-PIK deduction can be DEFERRED until paid and a disqualified portion permanently disallowed. v1 deducts PIK as accrued and does NOT model this (SPEC §20.4/§20.8) — the assumed cure is the contractual AHYDO catch-up payment most such indentures carry. The yield leg (YTM ≥ AFR + 5pts) is NOT tested here (needs the monthly AFR) and the significant-OID leg is proxied, so this flag is structural and deliberately over-inclusive.`,
+      });
+    }
+  }
 
   // §18.8 [v1.3.1]: a scheduled refi that hit an already-retired balance is a stamped NO-OP —
   // and a scheduled structural event that did nothing must say so. POST-RUN read of named

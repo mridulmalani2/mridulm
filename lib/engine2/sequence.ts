@@ -33,6 +33,7 @@ import {
   openingDebtState,
   resolveSweepPct,
   runDebtYear,
+  validatePikElections,
   validateRefinancing,
   validateStructureForHold,
   type DebtState,
@@ -85,6 +86,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   const sized = sizeStructure(assumptions.structure, entry.entry_ebitda_for_sizing);
   validateStructureForHold(sized, N);
   validateRefinancing(sized, assumptions.structure.refinancing, N); // §16/§18 input-gate rejections
+  validatePikElections(sized, N); // §16/§20.2 input-gate rejections [v1.5.0]
   const su = buildSourcesUses(entry, sized, assumptions);
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
@@ -192,7 +194,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     }
 
     // ── rates → interest & fees from opening balances (§4/§5; effectiveSized carries any refi) ──
-    const lines = financeLines(effectiveSized, debtState);
+    const lines = financeLines(effectiveSized, debtState, t); // §20: `t` selects the year's election
     // scheduled amortization this year, on the LIVE remaining balances (§7)
     // §18.3: after a refi the OID/fee numerators and the straight-line horizon are the NEW
     // incarnation's (effOidAmount/effFeeAllocated/effMaturity); pre-refi they equal the close-time

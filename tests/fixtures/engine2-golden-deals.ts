@@ -163,6 +163,25 @@ GOLDEN_DEALS.G7FUND = {
   },
 };
 
+// §20.9 [v1.5.0]: G8-PIKT = G3 + the per-year election. Facts, entry structure, financing and
+// operating case are IDENTICAL to G3; the ONLY changed fields are the note's two election rates
+// and the schedule — so every difference from G3 is attributable to §20 alone.
+GOLDEN_DEALS.G8PIKT = {
+  facts: GOLDEN_DEALS.G3.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G3.assumptions,
+    deal_name: 'G8-PIKT',
+    structure: {
+      ...GOLDEN_DEALS.G3.assumptions.structure,
+      tranches: GOLDEN_DEALS.G3.assumptions.structure.tranches.map((t) =>
+        t.type === 'pik_note'
+          ? { ...t, cash_coupon: 0.09, pik_coupon: 0.12, elections: ['pik', 'pik', 'cash', 'cash', 'pik'] as ('cash' | 'pik')[] }
+          : t,
+      ),
+    },
+  },
+};
+
 GOLDEN_DEALS.G2DISTD = {
   facts: GOLDEN_DEALS.G2.facts,
   assumptions: {

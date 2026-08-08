@@ -73,7 +73,16 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
       // §3.7's `distribution_blocked` WARN, and a blocked distribution is the trap doing
       // its job, not an incoherent deal. Exactly one WARN, listing exactly the blocked
       // years the fixture records.
-      expect(out.coherence).toEqual([]);
+      // §20.9 [v1.5.0] amends it again, DECIDED SPEC-SIDE BEFORE the code landed (never
+      // discovered as a red test — the v1.1.1 round-2(b) convention): G3 carries a fixed
+      // ACCRETING pik_note at maturity 8, which is the §20.6(e) AHYDO shape, so from
+      // v1.5.0 it emits exactly one `ahydo_shape` WARN. The enumeration is exact — any
+      // OTHER golden emitting ANY flag still reds here.
+      expect(out.coherence).toEqual(
+        golden === 'G3'
+          ? [expect.objectContaining({ code: 'ahydo_shape', severity: 'warn' })]
+          : [],
+      );
       expect(out.gp_fee_income).toBeNull(); // monitoring OFF in all goldens
       expect(out.scenarios).toBeNull();
       expect(out.sensitivity).toBeNull();
@@ -447,10 +456,13 @@ describe('§3.7 distribution_blocked WARN (the amended coherence convention)', (
     });
   }
 
-  it('G3DIST: trap OFF ⇒ no distributions are blocked ⇒ still coherence-CLEAN', () => {
+  it('G3DIST: trap OFF ⇒ no distributions are blocked (the ONLY flag is §20.9\'s decided ahydo_shape on the accreting note)', () => {
     const { facts, assumptions } = GOLDEN_DEALS.G3DIST;
     expect(blockedFixture('G3DIST')).toEqual([]);
-    expect(runModel(facts, assumptions).coherence).toEqual([]);
+    const flags = runModel(facts, assumptions).coherence;
+    // §20.9 [v1.5.0], decided spec-side: G3-DIST inherits G3's fixed accreting pik_note
+    // (maturity 8) ⇒ exactly one ahydo_shape WARN, and NO distribution_blocked.
+    expect(flags.map((f) => f.code)).toEqual(['ahydo_shape']);
   });
 
   it('§13: the scenario slim block carries paid/blocked per year, and the policy is FROZEN', () => {
