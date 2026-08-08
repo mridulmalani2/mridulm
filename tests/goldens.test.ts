@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);
@@ -259,5 +259,59 @@ describe('SPEC §17 committed assertions', () => {
     for (const g of [g1, g2, g3, g4, g5, g2d, g2dist, g3dist, g2distd, g6refi]) {
       for (const row of g.balance_sheet) expect(Math.abs(row.check)).toBeLessThan(0.005);
     }
+  });
+});
+
+describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjudicated values)', () => {
+  const g7 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G7FUND/expected.json'), 'utf8'));
+  const g2dist = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G2DIST/expected.json'), 'utf8'));
+  const f = g7.fund;
+
+  it('§19.7 additivity: every non-fund block is byte-identical to G2-DIST (post-engine overlay)', () => {
+    for (const k of Object.keys(g2dist)) {
+      expect(g7[k], `G7-FUND ${k} must equal G2-DIST`).toEqual(g2dist[k]);
+    }
+  });
+  it('the adjudicated fund walk (full-precision reseed, passes A+B re-signed; european/2%-invested/8%-pref/20%-carry/full catch-up)', () => {
+    expect(f.paid_in_total).toBeCloseTo(645.9475, 4);         // 587.225 + 5 × 11.7445 = 1.1 × se, EXACT
+    expect(f.paid_in_total).toBeCloseTo(1.1 * f.lp_contributions[0], 6);
+    expect(f.mgmt_fees_net.every((x: number) => Math.abs(x - 11.7445) < 1e-6)).toBe(true);
+    const lp = f.lp_distributions.reduce((a: number, b: number) => a + b, 0);
+    const gp = f.gp_carry.reduce((a: number, b: number) => a + b, 0);
+    expect(lp).toBeCloseTo(1000.783468, 4);
+    expect(gp).toBeCloseTo(88.708992, 4);
+    expect(f.fund_lp_net.moic).toBeCloseTo(1.549326, 6);
+    expect(f.fund_lp_net.irr).toBeCloseTo(0.098058, 6);
+    expect(f.fund_lp_net.payback_year).toBeNull();            // interim-only rule: never repaid mid-hold
+  });
+  it('§19.6(a) conservation: LP + GP ≡ sponsor-share inflows, exact', () => {
+    const lp = f.lp_distributions.reduce((a: number, b: number) => a + b, 0);
+    const gp = f.gp_carry.reduce((a: number, b: number) => a + b, 0);
+    // the fixture's waterfall/exit rows are r2-DISPLAY values (±0.005 each); the fund block
+    // is full-precision-seeded (v1.0.3 rule) — compare at the display tolerance, and note the
+    // EXACT identity is asserted inside the reference itself at 1e-9 on the internals
+    const inflows = g7.waterfall.reduce((a: number, w: any) => a + w.distribution_paid, 0) + g7.exit.sponsor_share;
+    expect(lp + gp).toBeCloseTo(inflows, 1);                  // ≈1089.49 at display precision
+  });
+  it("§19.6(d) 'european' GP-share bound BINDS with equality at full catch-up", () => {
+    const lp = f.lp_distributions.reduce((a: number, b: number) => a + b, 0);
+    const gp = f.gp_carry.reduce((a: number, b: number) => a + b, 0);
+    expect(gp).toBeCloseTo(0.2 * Math.max(0, lp + gp - f.paid_in_total), 4);
+  });
+  it('§14.20(d): dpi[N] ≡ moic; cumulative lp_distributions monotone (and dpi itself is NOT — fee-only years)', () => {
+    const dpi = f.fund_lp_net.dpi;
+    expect(dpi[dpi.length - 1]).toBeCloseTo(f.fund_lp_net.moic, 6);
+    let cum = 0;
+    for (const d of f.lp_distributions) { expect(d).toBeGreaterThanOrEqual(0); cum += d; }
+    expect(cum).toBeGreaterThan(0);
+    // the exact adjudicated to-date sequence (G7-FUND distributes EVERY year 2-5, so the
+    // general non-monotonicity of dpi[] — §14.20(d)'s stated caveat — is not exercised
+    // HERE; it is a spec-text truth, honestly not pinned by this golden)
+    for (const [i, v] of [0, 0.019796, 0.044069, 0.05902, 1.549326].entries()) {
+      expect(dpi[i]).toBeCloseTo(v, 6);
+    }
+  });
+  it('§19.6(b): net-to-LP IRR strictly below the sponsor-net IRR (fees + carry both live)', () => {
+    expect(f.fund_lp_net.irr).toBeLessThan(g7.returns.sponsor_net.irr); // 9.81% < 13.39%
   });
 });

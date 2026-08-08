@@ -3,7 +3,8 @@
  * across C6–C9 as the downstream blocks landed).
  *
  * Pure assembly in the §5 order: runCore (operating/tax/debt/BS year loop) → §9 exit →
- * §9/§10 returns + GP-fee memo → §11 credit → §12 bridge → §16 coherence → §13
+ * §9/§10 returns + GP-fee memo → §11 credit → §12 bridge → §19 fund overlay (when ON,
+ * §19.7's slot) → §16 coherence → §13
  * scenarios/sensitivity (opt-in via `options`; every scenario is a FULL re-run with the
  * entry frozen). Nothing here computes finance — modules do; the facade wires them and
  * enforces the §14.16 single-source mirrors by construction (each block reads the same
@@ -17,6 +18,7 @@
 
 import { buildBridge, type Engine2ValueBridge } from './bridge';
 import { runCoherence } from './check';
+import { buildFundOverlay, validateFund } from './fund';
 import { buildCreditYear, type CreditYearInputs } from './credit';
 import { buildExit, monitoringTermination, type ExitInputs } from './exit';
 import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './returns';
@@ -130,6 +132,22 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     ).reduce((a, b) => a + b, 0),
   });
 
+  // §19 [v1.4.0] — the fund-of-one overlay: a POST-ENGINE layer on sponsor-side outputs
+  // only (the ONE §9 share rule + exit.sponsor_share + gp_fee_income); null ≡ OFF,
+  // byte-identity. Runs after §9/§10 and BEFORE §16 coherence, in §19.7's stated order
+  // (audit N3 aligned the code order with the sentence; no data dependence either way).
+  let fund = null as import('./types').FundBlock | null;
+  if (assumptions.fund) {
+    const fi = {
+      distributions_paid: core.distributions_paid,
+      exit_sponsor_share: exit.sponsor_share,
+      sources_uses: core.sources_uses,
+      gp_fee_income: gpFeeIncome,
+    };
+    validateFund(assumptions.fund); // structural gates; the committed-floor throws in the walk
+    fund = buildFundOverlay(assumptions.fund, fi);
+  }
+
   const coherence = runCoherence({
     facts,
     assumptions,
@@ -160,6 +178,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     gp_fee_income: gpFeeIncome,
     bridge,
     coherence,
+    fund,
     scenarios: null,
     sensitivity: null,
   };

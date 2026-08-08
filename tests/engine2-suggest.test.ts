@@ -44,6 +44,10 @@ const LARGE_CAP: DealFacts = {
 describe('D7 — suggestion assembly (bases mandatory)', () => {
   const { assumptions, basis } = suggestAssumptions(LARGE_CAP);
 
+  it('§19 preamble/B7: the suggestion layer proposes NO fund overlay — fund starts null (audit B2: a live-overlay mutant ran green through the whole suite before this pin)', () => {
+    expect(assumptions.fund).toBeNull();
+  });
+
   it('growth comes from HISTORY (4 points ≥ the D1 gate) as a true-span CAGR', () => {
     expect(basis['operations.growth'].kind).toBe('history');
     const spanDays = (Date.parse('2025-12-31') - Date.parse('2022-12-31')) / 86_400_000;

@@ -282,6 +282,9 @@ export interface DealAssumptions {
   /** null = no promote. Promote pool only — sweet equity is a different instrument (SPEC §10). */
   mip: { pool_pct: number; hurdle_moic: number } | null;
   covenants: CovenantAssumption;
+  /** §19 [v1.4.0] fund-of-one overlay — null ≡ OFF (byte-identity §19.6(c)); the
+   *  suggestion layer proposes NO overlay (an LP-agreement fact — §16). */
+  fund: FundOverlayAssumption | null;
   /**
    * Display-only IRR option (SPEC §1): interim flows at t−0.5; t=0 and the EXIT flow never
    * shift. Scoped to the SPONSOR-SIDE streams. Numerically inert while the distribution
@@ -289,6 +292,33 @@ export interface DealAssumptions {
    * of `irr` / `irr_mid_year` the UI headlines; both are always computed.
    */
   mid_year_irr: boolean;
+}
+
+/** §19.2 [v1.4.0] — the fund-of-one overlay inputs (all rates decimals; §16 gates). */
+export interface FundOverlayAssumption {
+  /** null ⇒ derived for REPORTING as total contributions; null ∧ fee_basis 'committed'
+   *  is an input-gate REJECTION (circular — §19.2/B5). */
+  committed_capital: number | null;
+  mgmt_fee_pct: number;            // ≥ 0 (convention 2.0%)
+  fee_basis: 'committed' | 'invested';
+  carry_pct: number;               // [0, 1)
+  pref_rate: number;               // ≥ 0, compounded annually on the election's base
+  /** {0} ∪ [carry_pct, 1] — below carry_pct strands the waterfall (§19.2 gate). */
+  catchup_pct: number;
+  waterfall: 'european' | 'american';
+  fee_offset_pct: number;          // [0, 1]; ILPA principle 1.0
+}
+
+/** §19.5 [v1.4.0] — ModelOutput.fund (null when OFF; named fields, unconditional emission
+ *  within the non-null object; lp_contributions length N+1, the other arrays length N). */
+export interface FundBlock {
+  lp_contributions: number[];
+  lp_distributions: number[];
+  gp_carry: number[];
+  mgmt_fees_net: number[];
+  paid_in_total: number;
+  committed_capital: number;
+  fund_lp_net: { irr: number | null; moic: number; dpi: number[]; payback_year: number | null };
 }
 
 // ── Output (Class C lives here — derived, never editable) ───────────────────
@@ -615,6 +645,8 @@ export interface ModelOutput {
   gp_fee_income: { annual: number[]; termination: number; total: number } | null;
   bridge: ValueBridge;
   coherence: CoherenceFlag[];
+  /** §19 [v1.4.0] — null when the overlay is OFF (never a zero row). */
+  fund: FundBlock | null;
   scenarios: ScenarioResult[] | null;
   sensitivity: SensitivityGrid[] | null;
 }

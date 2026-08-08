@@ -168,6 +168,33 @@ describe('§18 refinancing — Excel surfaces disclose the event (G6-REFI)', () 
   });
 });
 
+describe('§19 fund overlay — Excel surfaces (G7-FUND)', () => {
+  it('Summary RETURNS section carries the net-to-LP rows as NAMED FundBlock fields when the overlay is ON; absent when OFF; Methodology row always present', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    const g7 = runModel(GOLDEN_DEALS.G7FUND.facts, GOLDEN_DEALS.G7FUND.assumptions);
+    const rb = await roundTrip(buildEngine2Workbook(g7, 'USD'));
+    const sum = rb.getWorksheet('Summary')!;
+    const rows: [string, unknown][] = [];
+    sum.eachRow((row) => rows.push([String(row.getCell(1).value ?? ''), row.getCell(2).value]));
+    const byLabel = (l: string) => rows.find((r) => r[0] === l)?.[1];
+    // value provenance: the cells ARE the named fields (raw floats, no display rounding)
+    expect(byLabel('Net to LP IRR (after fund fees & carry, fund-of-one)')).toBe(g7.fund!.fund_lp_net.irr);
+    expect(byLabel('Net to LP TVPI (= DPI — fully realized)')).toBe(g7.fund!.fund_lp_net.moic);
+    expect(byLabel('LP paid-in (equity + fee draws)')).toBe(g7.fund!.paid_in_total);
+    // §19.6(c): a fund-OFF workbook carries NONE of the rows (absent, never N/A rows)
+    const off = runModel(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
+    const rbOff = await roundTrip(buildEngine2Workbook(off, 'USD'));
+    const offLabels: string[] = [];
+    rbOff.getWorksheet('Summary')!.eachRow((row) => offLabels.push(String(row.getCell(1).value ?? '')));
+    expect(offLabels.some((l) => l.startsWith('Net to LP'))).toBe(false);
+    expect(offLabels.some((l) => l.startsWith('LP paid-in'))).toBe(false);
+    // §19.8 disclosure row (the #115 both-methodology-surfaces precedent) — unconditional
+    const methodText: string[] = [];
+    rb.getWorksheet('Methodology')!.eachRow((row) => methodText.push(String(row.getCell(1).value ?? '')));
+    expect(methodText.some((l) => l.startsWith('Fund/LP overlay:') && l.includes('NO fee-recovery tier') && l.includes('NOT fund carry')), 'fund Methodology row').toBe(true);
+  });
+});
+
 describe('§15 completeness — the v1.1.0 interim-distributions row is on the Excel Methodology sheet', () => {
   it('Methodology carries the distributions/RP-trap sentence (label mutation-tested)', async () => {
     const { runModel } = await import('../lib/engine2/facade');

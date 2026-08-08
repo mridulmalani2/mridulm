@@ -91,7 +91,7 @@ const DISPLAY_SURFACES = [
  * displayed numbers the doc's fences already treat as off-limits to Tier C).
  */
 const ENGINE_ARITHMETIC_MODULES =
-  /from ['"].*\/(kernel\/|operating|tax|debt|sequence|exit|returns|credit|bridge|sourcesUses|openingBalance|scenarios|check|factsAdapter|suggest|suggestions)['"]/;
+  /from ['"].*\/(kernel\/|operating|tax|debt|sequence|exit|returns|credit|bridge|sourcesUses|openingBalance|scenarios|check|factsAdapter|suggest|suggestions|fund)['"]/;
 
 /**
  * SANCTIONED single-source imports — the ONLY engine-arithmetic imports allowed into a display
