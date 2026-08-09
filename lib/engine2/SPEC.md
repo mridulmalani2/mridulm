@@ -1012,6 +1012,19 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
     sign-off — cash elections drain sweep fuel while PIK compounds the exit payoff; the
     §19.6(e) precedent).
 
+22. Sector comps band [v1.6.0 — §21; DATA-SIDE, so these are FACT invariants, not engine
+    ones] (domains PER CLAUSE): (a) [band non-null] `low ≤ median ≤ high` and each is a value
+    that OCCURS among the constituents (the §21.4 nearest-rank convention synthesizes
+    nothing); (b) [any (region, sector)] `industries_used ≥ 1 ⇔ band non-null`, and `firms`
+    counts ONLY included constituents — an NA industry contributes to neither the value set
+    nor the weight total; (c) [all] `bands.json` is a pure function of the committed CSVs +
+    the committed sector map, reproduced BYTE-IDENTICALLY by the §21.10 regeneration gate;
+    (d) [all] the feature adds NO engine output — every existing golden regenerates
+    byte-identically and the only `ModelOutput` change is one additive `facts` field;
+    (e) an explicit NON-CLAIM: the band is a PUBLIC-MARKET trading range, not a buyout-entry
+    range, and no ordering between a deal's entry multiple and the band is asserted to be
+    right or wrong (§21.8(e)).
+
 ## §15 Units, precision, display [CONFIRMED DR-5 Item 6]
 
 Engine: float64 end-to-end, unit = millions of deal currency, **no intermediate rounding**.
@@ -1030,7 +1043,7 @@ carryforwards out of scope; exit-year fee write-off deducted UNCAPPED; PP&E roll
 mechanically and may go negative (warned); post-2025 OBBBA §163(j) sub-changes out of
 scope; interim distributions [v1.1.0] pay at year-end after full debt service (never
 revolver-funded), blocked capacity does not accrue, and the RP trap is the closed-form
-pro-forma net-leverage test (§3.7 — no solver); the fund/LP overlay [v1.4.0 — §19] is a FUND-OF-ONE on the sponsor side only (annual fee on a constant basis — no step-downs/NAV; no subscription line; no GP commitment; no clawback — nothing to claw back by construction; 'european' = all-contributions hurdle+pref base vs 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, never fund carry; the year-N fee draws BEFORE the final distribution); the PIK toggle [v1.5.0 — §20] is a PER-YEAR WHOLE-COUPON election on the `pik_note` (no partial/50-50 elections; elections frozen across scenarios; PIK deducted as accrued with AHYDO a disclosed omission carrying the structural `ahydo_shape` WARN — the §163(i) yield leg needs the monthly AFR and is stated, not tested, and the significant-OID leg is PROXIED, over-firing conservatively; PIK notes stay non-refinanceable and sweep-exempt by default); refinancing [v1.3.0 — §18] is a SCHEDULED
+pro-forma net-leverage test (§3.7 — no solver); the fund/LP overlay [v1.4.0 — §19] is a FUND-OF-ONE on the sponsor side only (annual fee on a constant basis — no step-downs/NAV; no subscription line; no GP commitment; no clawback — nothing to claw back by construction; 'european' = all-contributions hurdle+pref base vs 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, never fund carry; the year-N fee draws BEFORE the final distribution); the PIK toggle [v1.5.0 — §20] is a PER-YEAR WHOLE-COUPON election on the `pik_note` (no partial/50-50 elections; elections frozen across scenarios; PIK deducted as accrued with AHYDO a disclosed omission carrying the structural `ahydo_shape` WARN — the §163(i) yield leg needs the monthly AFR and is stated, not tested, and the significant-OID leg is PROXIED, over-firing conservatively; PIK notes stay non-refinanceable and sweep-exempt by default); the sector comps band [v1.6.0 — §21] is a COMMITTED-DATASET reality check (Damodaran industry averages, annual vintage stated per band — no live feed; PUBLIC-MARKET trading multiples, NOT buyout-entry multiples; positive-EBITDA firms only; the 94→9 sector map is a stated convention with its constituent count shown; financials are NA at source and surface as unavailable, never as a number; region inferred from reporting currency and displayed); refinancing [v1.3.0 — §18] is a SCHEDULED
 per-tranche event (no forward-curve or covenant-cure trigger), one refi per tranche,
 par-for-par (no dividend recap / upsizing), cash-pay term tranches only (no PIK refi), the
 repricing effective for the whole of the refi year (no mid-year proration), and the old
@@ -1097,7 +1110,7 @@ is OFF ⇔ +∞** — N/A semantics, never a sentinel, per §11/§15), `distribu
 `distribution_blocked`. `ReturnStreams` gains `dpi: number[]` (length `hold_years`, NOT
 t0-anchored) and `payback_year: number | null` (1-indexed), and its two SPONSOR-SIDE streams
 gain `irr_mid_year: number | null`. `ValueBridge.walkdown` gains
-`interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8; [v1.5.0] `ahydo_shape` — §20.6(e), WARN class, per qualifying pik_note). [v1.4.0] `assumptions.fund: FundOverlayAssumption | null` — `{committed_capital: number|null, mgmt_fee_pct: ≥0, fee_basis: 'committed'|'invested', carry_pct: [0,1), pref_rate: ≥0, catchup_pct: {0} ∪ [carry_pct, 1], waterfall: 'european'|'american', fee_offset_pct: [0,1]}; null ≡ OFF (byte-identity §19.6(c)). Input-gate REJECTIONS: committed_capital = null ∧ fee_basis = 'committed' (circular — §19.2); explicit committed below total contributions; every domain violation above. `ModelOutput.fund` (Class C): null when OFF; when ON, `{lp_contributions[], lp_distributions[], gp_carry[], mgmt_fees_net[], paid_in_total, committed_capital, fund_lp_net: {irr, moic, dpi[], payback_year}}` — named fields, unconditional emission within the non-null object; `lp_contributions` length N+1 (t=0..N), the other four arrays length N (years 1..N, NOT t0-anchored), `payback_year` 1-indexed or null (the v1.1.1 contract precedent). The suggestion layer proposes NO fund overlay (§19 preamble). [v1.5.0] `PikNoteAssumption` gains `elections: ('cash' | 'pik')[] | null` (default null ≡ the v1 FIXED both-legs note — numeric/fixture identity with the coherence carve-out, §20.6(c)/§20.9). Input-gate REJECTIONS (§20.2): non-null length ≠ `hold_years`; any entry outside the union; non-null ∧ `cash_coupon ≤ 0` (a 0%-cash toggle year is a free coupon holiday no term sheet grants — the FIXED cash-0 note stays available as null); non-null ∧ `pik_coupon < cash_coupon` (the PIK premium is non-negative — market shape, DR-3.4). NO new ModelOutput fields — `TrancheYear.{cash_interest, pik_accrual}` already carry the per-year split. The suggestion layer proposes NO elections [rescoped, round-1 M2]: the D7 ASSEMBLY builds no pik_note, but the layer's own data ships one — conventions.json's `mm-senior-mezz` template carries a Mezzanine Note (pik_note, cash 10% + PIK 3%, NO elections) — so a template-built mezz deal whose note matures past year 5 wears `ahydo_shape` permanently (template badge ≠ suggested badge, so §14.13's all-SUGGESTED-clean invariant is untouched); either way no elections are ever proposed and a user-added note starts null (the toggle is opt-in per year). [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
+`interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8; [v1.5.0] `ahydo_shape` — §20.6(e), WARN class, per qualifying pik_note). [v1.4.0] `assumptions.fund: FundOverlayAssumption | null` — `{committed_capital: number|null, mgmt_fee_pct: ≥0, fee_basis: 'committed'|'invested', carry_pct: [0,1), pref_rate: ≥0, catchup_pct: {0} ∪ [carry_pct, 1], waterfall: 'european'|'american', fee_offset_pct: [0,1]}; null ≡ OFF (byte-identity §19.6(c)). Input-gate REJECTIONS: committed_capital = null ∧ fee_basis = 'committed' (circular — §19.2); explicit committed below total contributions; every domain violation above. `ModelOutput.fund` (Class C): null when OFF; when ON, `{lp_contributions[], lp_distributions[], gp_carry[], mgmt_fees_net[], paid_in_total, committed_capital, fund_lp_net: {irr, moic, dpi[], payback_year}}` — named fields, unconditional emission within the non-null object; `lp_contributions` length N+1 (t=0..N), the other four arrays length N (years 1..N, NOT t0-anchored), `payback_year` 1-indexed or null (the v1.1.1 contract precedent). The suggestion layer proposes NO fund overlay (§19 preamble). [v1.5.0] `PikNoteAssumption` gains `elections: ('cash' | 'pik')[] | null` (default null ≡ the v1 FIXED both-legs note — numeric/fixture identity with the coherence carve-out, §20.6(c)/§20.9). Input-gate REJECTIONS (§20.2): non-null length ≠ `hold_years`; any entry outside the union; non-null ∧ `cash_coupon ≤ 0` (a 0%-cash toggle year is a free coupon holiday no term sheet grants — the FIXED cash-0 note stays available as null); non-null ∧ `pik_coupon < cash_coupon` (the PIK premium is non-negative — market shape, DR-3.4). NO new ModelOutput fields — `TrancheYear.{cash_interest, pik_accrual}` already carry the per-year split. The suggestion layer proposes NO elections [rescoped, round-1 M2]: the D7 ASSEMBLY builds no pik_note, but the layer's own data ships one — conventions.json's `mm-senior-mezz` template carries a Mezzanine Note (pik_note, cash 10% + PIK 3%, NO elections) — so a template-built mezz deal whose note matures past year 5 wears `ahydo_shape` permanently (template badge ≠ suggested badge, so §14.13's all-SUGGESTED-clean invariant is untouched); either way no elections are ever proposed and a user-added note starts null (the toggle is opt-in per year). [v1.6.0] `DealFacts.sector_comps: SectorCompsBand | null` (Class A — extraction-supplied, never user-editable, never engine-derived): `{region: 'US'|'Europe'|'Japan'|'Emerging'|'India'|'China'|'Global', vintage: string (the source file's own stated date), sector: string, low: number, median: number, high: number, industries_used: number, firms: number, basis: 'total_market_ex_financials' | 'sector', citation: string}` — or **null** when the (region, sector) pair has zero included constituents (§21.4's honest-null rule; the surface renders unavailable, NEVER a number). NO input gate: it is derived from committed data, not user input, so there is nothing to reject — a malformed committed dataset is caught by the §21.10 regeneration + SHA-256 gates at CI, not at Build. `ModelOutput` gains NOTHING beyond this one `facts` field (§21.8(d)), and the suggestion layer proposes no fund/PIK/comps value of any kind. [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
 `ScenarioResult.waterfall`'s slim block gains `distribution_paid` and `distribution_blocked`
 (§13). The reference derivation additionally records a top-level `distributions` block —
 `requested`, `paid`, `sponsor_share_paid`, `cumulative_paid`, `trap_level`, `blocked_years`
@@ -1931,12 +1944,164 @@ year (the pool-membership mutant discriminator: a mutant deducting the wrong leg
 cash tax); (vii) elections ∧ sweep participation — the balance DECREASES through accrual
 years via the sweep (the closed form correctly yields to the walk).
 
+## §21 Sector comps band — a cited, reproducible reality check [v1.6.0 — Phase 4 / backlog #4; **Tier B, DATA-SIDE**] [DRAFT — hostile sign-off round 1 pending]
+
+**§21.1 The frame and the hole it closes [DECIDED].** The engine already carries ONE reality
+check: the D5 trading anchor (`facts.implied_trading_ev_ebitda`, a live quote-derived
+EV/EBITDA for the SAME company). It has no SECTOR context — and the only sector data in the
+repo is a hardcoded blob in `suggestions/conventions.json` explicitly WITHHELD from every
+surface (`sectorMedians_CAVEAT.verifyBeforeDisplay = true`: "NA+Europe combined, PE+corporate
+blended, NOT strictly buyout-entry multiples"). §21 replaces that unusable blob with a
+CITED, REPRODUCIBLE, REGIONAL band: for the deal's sector and region, the EV/EBITDA range
+publicly-traded peers actually trade at, with its source and vintage on the face of the
+display. It computes a FACT the model DISPLAYS; it changes NO engine number (§21.7).
+
+**§21.2 Source [DECIDED].** Aswath Damodaran's industry-average datasets
+(`pages.stern.nyu.edu/~adamodar/pc/datasets/vebitda*.xls`), the "Enterprise Value Multiples
+by Industry Sector" series — free, no key, no account, no rate limit, updated annually in
+January (current vintage **5 Jan 2026**, verified from the file's own `Date updated` cell).
+SEVEN regional files, each a distinct dataset over an IDENTICAL 94-industry taxonomy plus two
+aggregate rows: US, Europe, Japan, Emerging, India, China, Global.
+REJECTED sources: (a) **Financial Modeling Prep** — its free tier is 250 req/day, 500MB/30d,
+**US-ONLY**, and the `stock peers` endpoint that would actually produce comps is PAID ($15/mo
+minimum). US-only alone disqualifies it: this app imports ESEF filings and models GBP/EUR/
+INR/JPY deals. A keyed live feed would also add a secret, a rate limit, an SSRF allowlist
+entry and a RUNTIME dependency — and, decisively, a daily-moving number cannot be adjudicated
+against a byte-reproducible fixture the way this project adjudicates every other number.
+(b) the existing PitchBook/GF-Data sector medians — self-disclosed as unverified and
+methodologically blended; they stay withheld and §21 does not read them.
+
+**§21.3 Vendoring — the dataset is COMMITTED, never fetched at runtime [DECIDED].** The
+`.xls` files are legacy BIFF8, which `exceljs` (this repo's only spreadsheet library) cannot
+read — it returns zero worksheets. Conversion is therefore an OFFLINE, MANUAL, ANNUAL step,
+not runtime parsing: `scripts/comps/refresh.md` records the seven source URLs, the conversion
+command, and each file's **SHA-256 and its own stated vintage**; the converted CSVs are
+COMMITTED under `data/comps/raw/`, and the derived band table is COMMITTED as
+`data/comps/bands.json`. The app therefore has NO new network dependency, NO new
+`api/edgar.ts` allowlist entry and NO new secret — and the whole feature is deterministic and
+offline-testable. REJECTED: fetching Damodaran at runtime (a third-party static host becomes
+a hard dependency of the model, and the number would silently change under the user); a
+build-time fetch (same, plus it breaks reproducible builds).
+
+**§21.4 The derived band (THE new computation — this is what gets adjudicated).**
+Per (region, sector): from the region's file, take each industry mapped to that sector by the
+committed §21.5 map and read its **EV/EBITDA on the ONLY-POSITIVE-EBITDA firm block**
+(the file's second data column group) together with its **number of firms** `n_i`.
+- **Column choice [DECIDED]:** the positive-EBITDA block, because a multiple whose denominator
+  is a negative or ~zero EBITDA is not a price — and an LBO target with `EBITDA_adj ≤ 0` is
+  already outside the engine's domain (§7). REJECTED: the "all firms" block (fabricates
+  meaning from negative denominators); EV/EBIT and EV/EBITDAR&D (the engine's entry multiple
+  is EV/**EBITDA** — mixing bases is the §11 basis-mismatch defect in another costume).
+- **Exclusions [DECIDED]:** an industry whose value is `NA` is EXCLUDED, and its firms are
+  excluded from the weight total. In the 5 Jan 2026 US file exactly three industries are `NA`
+  — `Bank (Money Center)`, `Banks (Regional)`, `Brokerage & Investment Banking` — all
+  financials, where EV/EBITDA is meaningless by construction. The two aggregate rows
+  (`Total Market`, `Total Market (without financials)`) are NEVER industry constituents.
+- **The band** = the firm-count-weighted **25th / 50th / 75th** percentiles of the
+  constituent industries' EV/EBITDA values. **The weighted-percentile convention is PINNED as
+  LOWER / NEAREST-RANK, no interpolation:** sort the constituents ascending by value; let
+  `W = Σ n_i` over the INCLUDED constituents and `c_k` the cumulative weight through the k-th;
+  the p-th percentile is the value of the FIRST constituent with `c_k ≥ p·W`. REJECTED:
+  linear interpolation between constituents (there are at least four mutually-inconsistent
+  interpolated-weighted-percentile conventions in common use; picking one silently would make
+  the number unreproducible by an independent adjudicator — the whole point of the Tier-B
+  bar); an unweighted percentile (a 3-firm industry would count as much as a 568-firm one);
+  a simple min/max range (one 3-firm outlier sets the whole band — `Rubber& Tires` n=3 and
+  `Auto & Truck` 47.76x are both live in the 2026 US file).
+- **Emission is a RANGE, never a point [DECIDED]:** the 94→9 bucket map is a stated
+  CONVENTION, not a market fact, and a range communicates the dispersion the mapping
+  introduces. `industries_used` and `firms` ride the output so the basis is inspectable.
+- **The honest-null rule (the repo's standing invariant):** if a (region, sector) pair has
+  ZERO included constituents, the band is **null** — the surface shows the unavailable state,
+  NEVER a fabricated number and never a silent fallback to another sector or region.
+
+**§21.5 The sector map [DECIDED — data, committed, signed off as a CONVENTION].** The app's
+`DealFacts.sector` is a nine-bucket taxonomy (`inferSector`, plus the manual-entry dropdown);
+Damodaran's is 94 industries. The map lives in `data/comps/sector-map.json` as DATA with a
+one-line rationale per bucket — never inline in code — so a reviewer can attack the mapping
+without reading TypeScript. Two source strings carry TYPOS that are part of the join key and
+MUST be preserved verbatim: `Rubber& Tires` (no space) and `Heathcare Information and
+Technology` (sic). `Other` maps to NO industries and instead resolves to the file's own
+`Total Market (without financials)` aggregate — stated on the display as a whole-market
+fallback, never presented as a sector.
+
+**§21.6 Region selection [DECIDED].** By the deal's CURRENCY: USD→US, EUR→Europe, GBP→Europe,
+JPY→Japan, INR→India; anything else→Global. Rationale: currency is a first-class fact of the
+deal's own unit of account and is already gated (§16 rejects unsupported currencies), whereas
+`facts.source` says only which FILING ROUTE was used — an ESEF filer can report in USD and a
+`manual` deal has no route at all. REJECTED: keying on `source` (route ≠ market); keying on a
+new user input (a field nobody can answer better than their own reporting currency).
+The chosen region is DISPLAYED, so a GBP deal is never silently told it is being compared to
+continental Europe without saying so.
+
+**§21.7 Composition — the Tier-B admission ticket [DECIDED].** `sector_comps` is a Class-A
+FACT computed in the EXTRACTION layer (`lib/edgar/comps.ts`) and threaded through
+`factsAdapter`. **The git diff over the ENGINE ARITHMETIC PATH is EMPTY** — no
+`kernel/**`, no `operating/tax/debt/sequence/exit/returns/credit/bridge/sourcesUses/
+openingBalance/scenarios/facade/check/fund`. It feeds NO engine number, NO suggestion value
+and NO coherence flag. **The comparison flag is DEFERRED, by design and by rule:** a
+`entry_multiple_vs_sector` coherence flag would have to live in `check.ts`, which IS on the
+engine arithmetic path, so it is a SEPARATELY-GATED Tier-A PR — the same per-changed-number
+decomposition PHASE_G mandates for backlog #10. This PR displays the band beside the entry
+multiple and lets the reader draw the conclusion.
+
+**§21.8 Invariants (→ §14.22, domains stated).**
+(a) [domain: band non-null] `low ≤ median ≤ high`, and all three are values that ACTUALLY
+OCCUR among the constituents (a consequence of the nearest-rank convention — no synthesized
+value can appear).
+(b) [domain: any (region, sector)] `industries_used ≥ 1 ⇔ band non-null`; `firms` = Σ of the
+included constituents' firm counts, and NA-excluded industries contribute to NEITHER.
+(c) [domain: all] `bands.json` is a pure function of the committed CSVs + the committed
+sector map: re-running the reference derivation reproduces it BYTE-IDENTICALLY (the §21.10
+CI regeneration gate).
+(d) [domain: all] Adding `sector_comps` changes NO engine output: every existing golden
+regenerates byte-identically and `ModelOutput` gains no field outside `facts`.
+(e) An explicit NON-CLAIM: the band is a PUBLIC-MARKET trading range, NOT a buyout-entry
+range. Control premia, synergies, leverage and illiquidity all sit between the two, and no
+ordering between a deal's entry multiple and this band is asserted to be right or wrong. The
+display says so; §21.9 disclosures carry it.
+
+**§21.9 Disclosure (§15 row).** Annual vintage (stated per band, from the file's own cell —
+a deal modelled in December compares against a January dataset and is told so); public-market
+trading multiples, NOT buyout-entry multiples (§21.8(e)); the 94→9 sector map is a stated
+convention with the constituent count shown; positive-EBITDA firms only; financials
+(banks/brokers) are `NA` at source and surface as unavailable rather than as a number;
+region inferred from reporting currency and displayed; no live feed — the dataset is
+committed and refreshed manually (`scripts/comps/refresh.md`).
+
+**§21.10 Adjudication plan — the Tier-B mechanism, bound to the DERIVATION.md method.**
+Tier B redirects the SAME machinery at the new computation: (1) a reference derivation in a
+DIFFERENT LANGUAGE with ZERO imports of the code under test — `scripts/comps/derive_bands.py`
+reads the committed CSVs and the committed sector map and emits `bands.json`; (2) **TWO
+independent blind hand-derivation passes** over a stated sample — at minimum: one bucket with
+many constituents and lopsided weights (Consumer or Industrials, where the nearest-rank rule
+BITES), one bucket that must come back null-or-degenerate (Financial Services, three `NA`
+constituents), the `Other` whole-market fallback, and one non-US region (Japan, whose values
+are ~3× below China's on the same industry) — each pass computing the weighted percentiles by
+hand from the CSVs and comparing only after committing its numbers; (3) the **CI REGENERATION
+GATE**: `tests/comps-regeneration.test.ts` re-runs `derive_bands.py` into a temp dir and
+byte-compares against the committed `bands.json`, exactly as `goldens.test.ts` does for the
+engine — an ordinary same-language fixture with no regeneration gate is NOT acceptable;
+(4) a CSV-integrity gate pinning each committed CSV's SHA-256 and its stated vintage, so a
+silent upstream re-publish cannot slip in unadjudicated.
+
+**§21.11 Golden-uncovered by design** (directed fixtures): (i) the NA-exclusion path (a
+bucket whose constituents are partly NA — the excluded firms must leave the weight total);
+(ii) the all-NA bucket → null band, and the display's unavailable state; (iii) the
+nearest-rank boundary — a constructed weight vector where `c_k` lands EXACTLY on `p·W`
+(the `≥` is load-bearing; `>` would shift the percentile one constituent right); (iv) the
+`Other` whole-market fallback; (v) region selection for each of the five modelled currencies
+plus one unsupported→Global; (vi) the two typo join keys (`Rubber& Tires`,
+`Heathcare Information and Technology`) — a "corrected" map string must FAIL to join loudly,
+never silently drop the industry; (vii) a single-constituent bucket (low ≡ median ≡ high).
+
 ---
 
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.6.0 | 2026-08-09 | **PHASE-4 FEATURE AMENDMENT (spec-first; NO extraction/UI code in this version) — sector comps band (backlog #4). TIER B, DATA-SIDE.** §21 added: a CITED, REPRODUCIBLE sector EV/EBITDA band replacing the repo's unusable hardcoded blob (`conventions.json sectorMedians_CAVEAT.verifyBeforeDisplay = true` — "NA+Europe combined, PE+corporate blended, NOT strictly buyout-entry"). Source: Damodaran industry averages (`vebitda*.xls`), free, no key, no account, seven regional files over an identical 94-industry taxonomy, vintage 5 Jan 2026 verified from the files' own cells. **The dataset is COMMITTED, never fetched at runtime** (§21.3 — the `.xls` are legacy BIFF8 that `exceljs` cannot read, so conversion is an offline annual step with SHA-256 + vintage pinned; no new network dependency, no allowlist entry, no secret). The NEW computation (§21.4): per (region, sector), the firm-count-weighted 25/50/75th percentiles of the constituent industries' EV/EBITDA on the POSITIVE-EBITDA firm block, with the weighted-percentile convention PINNED as LOWER/NEAREST-RANK (`first constituent with cumulative weight ≥ p·W`) because at least four inconsistent interpolated conventions are in common use and an unreproducible number fails the Tier-B bar. NA industries are EXCLUDED from both the value set and the weight total (the 2026 US file has exactly three — Bank (Money Center), Banks (Regional), Brokerage & Investment Banking — all financials, where EV/EBITDA is meaningless), and a bucket with zero included constituents emits **null**, never a fabricated number. Region from reporting CURRENCY (USD→US, EUR/GBP→Europe, JPY→Japan, INR→India, else Global) and DISPLAYED. The 94→9 sector map is committed DATA with per-bucket rationale; two source typos (`Rubber& Tires`, `Heathcare Information and Technology`) are part of the join key and preserved verbatim; `Other` resolves to the file's own `Total Market (without financials)` aggregate, labelled as a whole-market fallback. **Tier-B admission ticket: the git diff over the ENGINE ARITHMETIC PATH is EMPTY** — `sector_comps` is a Class-A FACT computed in `lib/edgar/comps.ts`, feeding no engine number, no suggestion value and no coherence flag; the `entry_multiple_vs_sector` comparison flag is DEFERRED to a separately-gated Tier-A PR because it would live in `check.ts` (the per-changed-number decomposition PHASE_G mandates for backlog #10). Invariants §14.22 (a)–(e) incl. the occurs-among-constituents consequence of nearest-rank, the NA weight-exclusion identity, byte-identical regeneration, engine-output invariance, and the explicit NON-CLAIM that a public-market trading range is not a buyout-entry range. Adjudication (§21.10): a DIFFERENT-LANGUAGE reference (`derive_bands.py`, zero imports of the code under test), TWO independent blind passes over a stated sample (a lopsided-weight bucket where nearest-rank BITES, the all-NA financials bucket, the `Other` fallback, and a non-US region), a **CI REGENERATION GATE** byte-comparing `bands.json`, and a CSV SHA-256 + vintage gate so a silent upstream re-publish cannot slip in. REJECTED: **Financial Modeling Prep** (free tier is 250 req/day, US-ONLY, and the `stock peers` endpoint is PAID — US-only alone disqualifies it for an app that imports ESEF and models GBP/EUR/INR/JPY; a keyed live feed also adds a secret, a rate limit and a runtime dependency, and a daily-moving number cannot be adjudicated against a byte-reproducible fixture); runtime/build-time fetching; the existing unverified PitchBook sector medians; interpolated or unweighted percentiles; a min/max range (one 3-firm industry would set the band — `Rubber& Tires` n=3 and `Auto & Truck` 47.76x are both live). | Phase-4 step 1 (Tier B template, rebuild/PHASE_G_EXTENSIONS.md); backlog #4; hostile sign-off round 1 PENDING — must sign off the TIER CHOICE and the diff proof as well as the convention (the standing Tier-B/C rule) |
 | v1.5.0 | 2026-08-08 | **PHASE-3 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — PIK toggle (backlog #6). TIER A.** §20 added: a per-year WHOLE-coupon cash/PIK ELECTION on the `pik_note` — 'cash' pays `beginning × cash_coupon` with NO accrual, 'pik' accrues `beginning × pik_coupon` with NO cash, `elections: null` ≡ the v1 FIXED both-legs note ⇒ every NUMERIC output and serialized fixture byte identical, with the ONE spec-side-decided coherence carve-out: G3/G3-DIST (fixed accreting, maturity 8) EMIT the new `ahydo_shape` WARN from v1.5.0 on (§20.6(c)/§20.9 — decided here, never a discovered red test). §16 gates: non-null length ≡ hold_years; entries in the union; `cash_coupon > 0` ∧ `pik_coupon ≥ cash_coupon` when non-null (a 0%-cash toggle is a free coupon holiday; the PIK premium is non-negative — DR-3.4 market shape). Tax: the §6 machine unchanged, the capped pool's per-year composition follows the elected leg (§20.4); **AHYDO stays a DISCLOSED omission** plus the new STRUCTURAL `ahydo_shape` WARN — fires on maturity > 5y ∧ an accruing year, yield leg (AFR + 5pts) stated-not-tested, the assumed contractual catch-up cure named (§20.6(e)/§20.8). Composition unchanged by construction: §5 order (elections are data), §3/§4 sweep-exemption + amort, §18.2 non-refinanceability (gate reads TYPE, not election), §9 par+accrued payoff, §13 elections FROZEN across scenarios, §19 unaffected. NO new ModelOutput fields (`TrancheYear` already splits cash/PIK). Invariants §14.21 (a)–(f) incl. the closed-form balance (domain-scoped), the null-elections byte-identity gate, the per-election pool mirror, and the all-cash-vs-all-PIK IRR NON-claim. Golden plan: **G8-PIKT** (= G3 + `{cash 9%, pik 12%, elections [pik,pik,cash,cash,pik]}`; payoff closed form 135 × 1.12³ = 189.665280; cash years pay 15.240960; the §6 binding pattern ADJUDICATED, not ported from G3) + SEVEN directed uncovered fixtures (§20.10 (i)–(vii), incl. the both-legs discriminator, the pool-membership flip, and the ahydo_shape boundary set). REJECTED: partial/50-50 elections (v2, disclosed), a `pik_premium` field, election optimizers, fixed-note-as-all-pik sugar — each recorded with its reason (§20.1). | Phase-3 step 1 (Tier A template, rebuild/PHASE_G_EXTENSIONS.md); backlog #6; hostile sign-off round 1 REFUSED — 3 blocking ((B1) the §20.6(c) "byte-identity on every output" claim was CONTRADICTED by §20.6(e) with the counterexample already committed as G3/G3-DIST — coherence gains `ahydo_shape` on null-elections deals and two committed coherence-clean tests would red undecided; rescoped to numeric/fixture identity + the spec-side-decided exception per the v1.1.1 convention; (B2) §14.21's blanket non-null domain preamble was FALSE on clauses (b)/(c)/(e) — replaced with per-clause domains; (B3) the "§14.13 pool mirror" citation was DANGLING — re-anchored to §6.1's capped-pool definition) — ALL applied in r2 with minors (header un-bumped to v1.4.0 until grant per the 01f0ec8 precedent; the suggestion-layer premise rescoped to the conventions.json mezz template; the significant-OID proxy leg named as proxied; the §3 sweep cite; the maturity-5 negative fixture's hold ≤ 4 note; "every COMPUTED output" on §20.10(ii); the §9 membership-unchanged adjudication recorded); **round 2 GRANTED** (fingerprint-anchored @ ebfae5c, zero blocking conditions; the reviewer independently reproduced the ENTIRE committed G3 fixture, pre-verified G8-PIKT's feasibility — minimum cash-floor headroom 16.68, MIP in the money, closed forms to 6dp, the §163(j) carryforward path non-monotone so "adjudicated-not-ported" is NECESSARY — and constructed both §20.6(f) IRR directions numerically; 4 text-only residuals folded into the grant-recording commit). **Post-grant step-5 conformance edits, recorded for traceability (2026-08-09, commits 203da16/7a5ad62; the v1.4.0 precedent):** the FILE header bumped v1.4.0 → v1.5.0 (the precedented step-5 item — it was deliberately held at v1.4.0 while §20 was DRAFT), and §20.9's coherence-exception sentence rescoped from "every other golden stays coherence-clean" to "no other golden emits `ahydo_shape`" (the DIST goldens' v1.1.1 `distribution_blocked` was never in scope). NO normative rule, number, gate or assert moved — the operative §20 text remains byte-identical to the granted text @ ebfae5c |
 | v1.4.0 | 2026-08-07 | **PHASE-2 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — fund/LP overlay (backlog #3). TIER A.** §19 added: a fund-of-one overlay computing the FOURTH return stream (net-to-LP after management fees and carried interest, per the ILPA definitions DR-2 pins). LP flows = sponsor equity at t=0 + annual fee draws (2%/basis, ILPA 100% monitoring-fee offset, floored at 0) vs deal distributions + exit proceeds; waterfall = return-of-capital → 8% compounded pref → catch-up (domain {0} ∪ [carry_pct, 1]) → TERMINAL carry split, with 'european' (all-contributions hurdle + pref base; year-N fee drawn before the final distribution) vs 'american' (invested-capital hurdle + pref base; NO fee-recovery tier — fees recovered only through the LP profit share) as the SPEC'D single difference for a single-asset fund. §10 promote explicitly NOT fund carry (different layer — the DR-2 double-count trap). Default `fund: null` = OFF ⇒ byte-identity; stream ABSENT when OFF. Invariants §19.6 incl. the LP+GP ≡ sponsor-share-inflows conservation (fee draws cancel identically; the offset is GP fee income, not a deal flow) and the explicit NON-claim on american-vs-european ordering. Golden plan: G7-FUND on G2-DIST + SEVEN directed uncovered fixtures (§19.10 (i)–(vii), incl. the rollover sponsor-share discriminator). REJECTED: multi-deal funds, subscription lines, clawback (nothing to claw back by construction), GP commitment, fee step-downs — each disclosed (§19.8). | Phase-2 step 1 (Tier A template); hostile sign-off round 1 REFUSED — 7 blocking (total-vs-sponsor-share LP inflow; dead 'american' fee-recovery tier; unpinned pref base/event order; §19.6(d) false under 'american' (worked counterexample); circular committed ∧ committed-basis under the golden; unbound dpi/payback; unwritten §14/§15/§16 integration + suggestion stance) — ALL applied in r2; round 2 REFUSED (3 closure-of-closure: the draw-after fee order broke the 'european' GP bound via fee_N — order flipped to accrue→draw→distribute; the Change column still described r1 — resynced; §14.20(d)'s dpi monotonicity false on the to-date basis — replaced with cum-dist monotone + dpi[N] ≡ moic) — ALL applied in r3; **round 3 GRANTED** (fingerprint-anchored @ 01f0ec8, zero conditions; both GP-share bounds machine-verified to EQUALITY on the reviewer's worked deal under both elections). **Post-grant step-3 accuracy-audit dispositions applied IN-VERSION (2026-08-08, commit 6d611d3; conformance-ruled no-new-version — normative surface untouched):** §19.4 minor-7 equivalence note RESCOPED on a worked 'european' re-trigger counterexample (the normative stop-equation UNCHANGED; the implementation already conformed); §19.5 layer note + §19.7 v1-reality note added; §19.10 extended (viii)–(x) (event-order, pref-magnitude, re-trigger pins — two of the three close audit coverage holes θ/δ). The granted text is @ 01f0ec8; audit deltas are annotated inline with their finding tags |
 | v1.3.2 | 2026-08-07 | **DATA-SIDE AMENDMENT (Tier B; engine arithmetic untouched) — uploaded-filing extraction.** The upload path goes live for ANNUAL documents (interim/10-Q uploads REJECTED up-front — the reused mapper would anchor nothing and the import would be all-gap): SEC 10-K/20-F iXBRL `.htm`, UK Companies House accounts iXBRL (THE private-company filing form; v1 extracts IDENTITY only — every financial field an honest gap the user confirms, FRC alias mapping a named later extension), and ESEF `.zip` packages (nested `**/reports/*.xhtml`), all parsed ENTIRELY in the browser (privacy: a private target's accounts never leave the machine — server-side parsing REJECTED on exactly that) into the OIM shape `mapIfrsReport` already consumes, or (us-gaap) into a synthesized CompanyFacts consumed by `mapCompanyFacts` VERBATIM — zero new mapping logic; the adjudicated mappers are reused as-is. New arithmetic is confined to transform/scale/sign evaluation and fact grouping, spec'd normatively in `lib/edgar/IXBRL_SPEC.md` (supported ixt subset with drop-with-note for the rest — a dropped fact can only produce a GAP, never a wrong number; fixture set incl. a REAL Apple FY2024 10-K trim + a REAL 19KB Companies House FRC filing; independent Python reference extraction + two adjudication passes + CI regeneration gate — the DERIVATION.md method). Schema: the THREE source unions gain `'upload'` (additive; provenance restamp appends `· uploaded <filename>` to mapper details, never replacing the audit strings). Dedup is decimals-aware and order-INDEPENDENT (the real Apple 10-K carries 70 duplicate keys — an order-dependent pick is $38m wrong on UnrecognizedTaxBenefits); only DIMENSION-FREE facts enter the CompanyFacts synthesis (segment members must never impersonate consolidated totals). Documented degradations vs fetch: single-vintage history (no restatement dedup), the §1.1 LTM stitch RUNS and REFUSES on three proven grounds → FY basis + staleness badge does the honest work. | Phase-1 upload parser (owner-approved formats 2026-08-07); Tier-B template rebuild/PHASE_G_EXTENSIONS.md; hostile sign-off round 1 REFUSED — 9 blocking (transform registry contradicted by BOTH real samples: TR2 unhyphenated names, TR5 namespace missing — two of three classes would extract ZERO; order-dependent dedup; dimensional leakage; 10-Q all-gap story; unproven stitch claim; provenance restamp + third union; FRC classification inverted; ESEF glob; allowlist deltas) — then rounds 2–3 REFUSED (3 + 1 further blockers: FRC period-end self-contradiction, restamp erasing the 'default' statutory tag, the un-runnable Apple dup pin, the JS 0!=null fabricated-URL/pseudo-CIK path) — ALL applied through IXBRL_SPEC r4; **round 4 GRANTED** (fingerprint-anchored @ fb8021e) |
