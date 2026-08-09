@@ -59,7 +59,7 @@ AND was outside the fence]:
 > exactly the Tier-B shape (a FACT the engine consumes, adjudicated by the DERIVATION method)**,
 > the ONE store call site that threads an extraction argument (`store/dealEngine.ts` — added
 > 2026-08-09 for §21.5b's SIC pass-through; the fence FAILS CLOSED, so an implicit admission is
-> exactly the breach the `data/**` amendment was written to avoid, and the narrow wording keeps
+> exactly the breach the `data/comps/**` amendment was written to avoid, and the narrow wording keeps
 > the rest of `store/**` out),
 > `tests/**`, and docs — and is EMPTY over the ENGINE ARITHMETIC PATH. Any diff to a file
 > OUTSIDE the allowlist trips the gate (fail-closed) and forces re-justification or escalation.

@@ -68,6 +68,13 @@ describe('§21.9 — the disclosure row is on the Methodology surface (label mut
     expect(html).toContain('INDUSTRY AGGREGATE');
     expect(html).toContain('industry POPULATION');
     expect(html).toContain('financials are NOT uniformly unavailable');
+    // The clause AFTER that phrase is the one round-1 B2 got wrong and step 5 found wrong AGAIN
+    // on the shipped surface: only JAPAN publishes an actual bank multiple; Europe and India
+    // have both bank rows NA and enter through brokers. PHASE_G gate (c) makes a relabelled
+    // field carry a mutation-tested assertion — without these two lines a regression to the
+    // false wording ships green (measured).
+    expect(html).toContain('BROKER multiples only');
+    expect(html).toContain('only Japan publishes an actual bank multiple');
     expect(html).toContain('collapse to a point');
   });
 });
