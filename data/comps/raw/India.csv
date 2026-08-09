@@ -1,0 +1,106 @@
+Date updated:,5 Jan 26,,,,,,YouTube Video explaining estimation choices and process.,Notes,
+Created by:,"Aswath Damodaran, adamodar@stern.nyu.edu",,,,,,,"Pricing ratios (or multiples) can be used to price companies, with the end game of determining whether they are under or over priced.",
+What is this data?,Enterprise value multiples,,,,India,,,,
+Home Page:,http://www.damodaran.com,,,,,,,,
+Data website:,https://pages.stern.nyu.edu/~adamodar/New_Home_Page/data.html,,,,,,,,
+Companies in each industry:,https://pages.stern.nyu.edu/~adamodar/pc/datasets/indname.xls,,,,,,,,
+Variable definitions:,https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/variable.htm,,,,,,,,
+,,Only positive EBITDA firms,,,,All firms,,,
+Industry Name,Number of firms,EV/EBITDAR&D,EV/EBITDA,EV/EBIT,EV/EBIT (1-t),EV/EBITDAR&D,EV/EBITDA,EV/EBIT,EV/EBIT (1-t)
+Advertising,24,15.30,15.59,20.12,27.45,16.66,17.01,20.20,27.56
+Aerospace/Defense,23,34.31,39.40,44.04,59.17,34.80,40.02,44.25,59.44
+Air Transport,5,21.93,21.93,29.17,35.33,26.91,26.91,29.77,36.05
+Apparel,386,25.75,26.50,36.92,49.61,31.56,32.60,40.34,54.20
+Auto & Truck,19,16.89,21.47,27.20,37.97,15.91,19.82,27.67,38.61
+Auto Parts,120,22.55,23.20,34.37,46.64,22.52,23.17,34.37,46.64
+Bank (Money Center),35,NA,NA,NA,NA,NA,NA,NA,NA
+Banks (Regional),6,NA,NA,NA,NA,NA,NA,NA,NA
+Beverage (Alcoholic),22,42.14,42.35,49.91,66.51,43.81,44.04,50.34,67.08
+Beverage (Soft),5,31.61,31.61,39.32,51.21,33.18,33.18,39.38,51.29
+Broadcasting,19,11.74,11.74,18.55,27.41,19.83,19.84,25.43,37.58
+Brokerage & Investment Banking,186,24.43,28.93,33.61,44.81,NA,NA,NA,NA
+Building Materials,67,23.88,24.36,33.73,44.80,22.78,23.22,33.82,44.92
+Business & Consumer Services,75,25.16,25.16,28.80,39.11,29.81,29.81,32.77,44.50
+Cable TV,8,3.47,3.47,NA,NA,3.62,3.62,NA,NA
+Chemical (Basic),152,18.01,18.26,24.63,33.47,18.27,18.52,25.02,33.99
+Chemical (Diversified),8,29.42,30.49,39.09,53.75,31.06,32.26,39.09,53.75
+Chemical (Specialty),202,21.53,21.95,27.67,35.27,22.24,22.68,28.07,35.78
+Coal & Related Energy,5,5.86,5.89,7.65,10.46,5.23,5.25,7.65,10.46
+Computer Services,196,17.41,17.73,19.42,26.08,17.44,17.75,19.48,26.16
+Computers/Peripherals,12,38.27,38.28,41.85,55.53,38.28,38.28,41.90,55.60
+Construction Supplies,109,17.70,17.95,24.74,32.63,21.91,22.25,27.36,36.08
+Diversified,13,29.53,29.97,35.27,48.59,32.21,32.70,36.84,50.74
+Drugs (Biotechnology),9,14.28,18.78,38.06,45.78,15.37,20.47,39.48,47.48
+Drugs (Pharmaceutical),188,17.69,20.91,25.65,33.97,18.22,21.63,25.83,34.22
+Education,40,59.07,61.04,129.83,NA,67.33,69.62,144.78,NA
+Electrical Equipment,139,37.21,38.69,45.73,60.12,41.79,43.65,46.20,60.73
+Electronics (Consumer & Office),9,39.59,39.98,48.48,61.49,48.17,48.74,49.31,62.54
+Electronics (General),37,33.25,33.73,38.37,50.40,39.29,39.96,38.57,50.67
+Engineering/Construction,219,16.15,17.18,20.19,26.49,16.02,17.02,20.44,26.82
+Entertainment,66,27.33,27.41,47.85,54.51,41.66,41.82,52.83,60.18
+Environmental & Waste Services,20,12.13,12.28,15.06,20.08,12.07,12.21,15.40,20.54
+Farming/Agriculture,75,18.12,19.13,24.54,33.07,19.41,20.55,25.13,33.87
+Financial Svcs. (Non-bank & Insurance),291,16.56,16.65,17.16,23.08,152.22,153.08,145.35,195.41
+Food Processing,220,27.27,27.45,33.64,44.59,26.95,27.12,33.91,44.95
+Food Wholesalers,41,18.91,18.91,22.62,27.19,25.04,25.04,27.56,33.13
+Furn/Home Furnishings,52,29.51,31.31,39.48,53.95,26.45,27.89,39.50,53.97
+Green & Renewable Energy,18,23.29,23.29,32.48,37.15,25.21,25.21,32.50,37.17
+Healthcare Products,19,35.40,38.70,58.06,83.67,68.00,76.81,82.96,119.55
+Healthcare Support Services,45,30.46,30.66,39.04,51.33,32.40,32.63,39.59,52.04
+Heathcare Information and Technology,25,34.81,36.05,48.16,61.77,38.38,39.87,48.81,62.60
+Homebuilding,1,NA,NA,NA,NA,NA,NA,NA,NA
+Hospitals/Healthcare Facilities,42,34.89,34.98,44.70,57.05,37.75,37.85,44.79,57.17
+Hotel/Gaming,80,28.47,28.66,35.77,47.44,30.13,30.34,35.82,47.51
+Household Products,43,38.74,38.91,42.47,55.74,37.44,37.60,42.49,55.77
+Information Services,26,17.54,17.65,20.96,28.81,19.23,19.36,21.07,28.95
+Insurance (General),2,NA,NA,NA,NA,NA,NA,NA,NA
+Insurance (Life),9,13.25,13.25,13.46,15.59,13.47,13.47,13.46,15.59
+Insurance (Prop/Cas.),3,24.65,24.65,25.39,30.95,25.89,25.89,25.39,30.95
+Investments & Asset Management,115,31.81,32.04,31.84,41.21,37.02,37.29,37.45,48.47
+Machinery,187,26.30,26.85,32.76,44.49,27.47,28.05,34.11,46.32
+Metals & Mining,51,9.26,9.27,11.97,16.12,9.40,9.40,11.98,16.14
+Office Equipment & Services,20,26.80,27.02,33.90,45.37,28.42,28.66,34.14,45.69
+Oil/Gas (Integrated),1,4.43,4.46,6.84,9.47,4.77,4.80,6.84,9.47
+Oil/Gas (Production and Exploration),7,9.20,9.27,14.04,18.21,9.21,9.28,14.54,18.86
+Oil/Gas Distribution,12,11.11,11.11,14.80,18.37,10.40,10.40,15.29,18.98
+Oilfield Svcs/Equip.,30,10.76,10.79,14.92,19.30,12.45,12.49,14.92,19.31
+Packaging & Container,101,9.84,9.89,14.48,18.38,10.43,10.48,14.67,18.62
+Paper/Forest Products,55,13.80,13.90,26.65,35.81,12.88,12.96,28.35,38.08
+Power,33,11.93,11.94,17.05,21.59,11.37,11.38,17.06,21.61
+Precious Metals,1,NA,NA,NA,NA,NA,NA,NA,NA
+Publishing & Newspapers,25,9.94,10.01,13.48,18.39,11.61,11.69,15.81,21.57
+R.E.I.T.,5,16.28,16.28,21.71,30.52,15.03,15.03,21.71,30.52
+Real Estate (Development),156,26.64,26.65,34.22,45.14,40.19,40.19,43.57,57.47
+Real Estate (General/Diversified),16,42.62,42.62,49.13,57.89,43.11,43.11,50.18,59.12
+Real Estate (Operations & Services),42,22.18,22.18,34.77,38.83,34.85,34.85,47.08,52.58
+Recreation,15,20.89,20.94,38.01,50.83,19.33,19.37,39.30,52.56
+Reinsurance,1,3.68,3.68,3.75,4.71,4.28,4.28,3.75,4.71
+Restaurant/Dining,19,102.11,104.11,NA,NA,NA,NA,NA,NA
+Retail (Automotive),10,34.45,34.45,54.57,67.96,36.18,36.18,54.59,67.99
+Retail (Building Supply),3,10.99,11.20,NA,NA,NA,NA,NA,NA
+Retail (Distributors),276,27.37,27.38,38.92,53.20,28.11,28.12,41.69,56.99
+Retail (General),11,39.33,39.38,NA,NA,131.98,132.25,NA,NA
+Retail (Grocery and Food),13,53.09,53.09,63.51,86.33,53.62,53.62,63.58,86.42
+Retail (REITs),1,16.75,16.75,25.83,38.70,17.11,17.11,25.83,38.70
+Retail (Special Lines),61,46.09,46.20,61.98,85.39,54.81,54.95,63.81,87.91
+Rubber& Tires,18,14.06,14.90,22.92,31.43,13.64,14.43,22.98,31.52
+Semiconductor,18,15.99,16.00,19.57,25.62,24.53,24.55,21.44,28.07
+Semiconductor Equip,2,38.97,39.27,91.88,96.18,125.06,128.17,91.88,96.18
+Shipbuilding & Marine,28,17.55,17.55,23.38,27.63,18.82,18.82,23.45,27.72
+Shoe,13,28.67,28.90,41.05,55.84,27.66,27.87,41.14,55.96
+Software (Entertainment),4,66.38,66.75,71.66,85.92,66.96,67.34,71.66,85.92
+Software (Internet),6,49.15,49.15,NA,NA,37.31,37.31,NA,NA
+Software (System & Application),82,22.17,24.41,28.19,38.74,24.71,27.43,29.02,39.89
+Steel,185,12.98,13.14,19.26,27.54,14.36,14.55,19.84,28.37
+Telecom (Wireless),4,16.19,16.19,32.26,36.09,18.68,18.68,33.07,36.99
+Telecom. Equipment,22,22.25,26.71,79.69,136.05,30.70,34.24,177.45,NA
+Telecom. Services,11,10.69,10.69,15.44,20.57,11.50,11.50,17.65,23.51
+Tobacco,7,19.87,20.01,21.36,28.50,19.38,19.52,21.36,28.51
+Transportation,59,19.10,19.20,32.63,42.51,24.98,25.14,34.13,44.46
+Transportation (Railroads),3,20.57,20.57,26.32,35.11,19.61,19.61,26.32,35.11
+Trucking,24,10.17,10.17,13.54,18.52,11.12,11.12,13.69,18.73
+Utility (General),0,NA,NA,NA,NA,NA,NA,NA,NA
+Utility (Water),1,14.38,16.85,16.99,22.27,14.41,16.89,16.99,22.27
+Total Market,5170,19.30,19.92,26.17,34.29,24.07,24.89,31.42,41.17
+Total Market (without financials),4523,16.97,17.56,23.47,30.93,18.07,18.72,24.14,31.81
+Total Market (without financials),3850,15.77,16.35,21.57,28.48,18.25,19.00,22.11,29.20
