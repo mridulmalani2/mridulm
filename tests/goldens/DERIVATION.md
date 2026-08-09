@@ -660,3 +660,62 @@ explicit non-claim stands.
 
 The G8-PIKT GOSPEL is the committed fixture. Blind derivations and comparison records for both
 passes were preserved in the session scratchpad; this record is the durable summary.
+
+## Sector comps bands (§21 v1.6.0, Phase-4 step 2) — adjudication record
+
+**Tier B redirects THIS method at a data-side computation** (PHASE_G: "same rigour means the
+MECHANISM, not the adjective"). Both passes derived all 4 regions × 9 buckets from SPEC §21 +
+the committed CSVs + the committed sector map ALONE — no `derive_bands.py`, no `bands.json`, no
+`comps.ts`, and (pass 2) no sight of pass 1 — each sealing its derivation before comparing.
+
+**Pass 1 (2026-08-09) — SIGNED. 216 field comparisons, ZERO mismatches.** Two independent
+percentile methods over all 96 picks (cumulative walk with `p·W` held as an exact Fraction; and
+expand-the-weights into a sorted multiset of size W, take element `ceil(p·W)`) — **0
+disagreements**. Full precision and 2dp coincide by construction: nearest-rank SELECTS a
+published CSV cell rather than computing a new number.
+
+**Pass 2 (2026-08-09, blind, independent) — SIGNED. Zero mismatches under exact
+`fractions.Fraction` arithmetic** (no float in any pick or weight sum), plus six adversarial
+probes:
+- **Boundary hunt, exhaustive over 96 (bucket, percentile) pairs: exactly ONE exact hit** —
+  Japan Real Estate p=0.25 (W=168, p·W=42=c₁) ⇒ `≥` 8.91 vs `>` 11.31 — i.e. the spec named the
+  only one and omits none. Order-robust (re-run under both intra-tie orderings). Headroom: the
+  next-closest pairs miss by 1.5 and 2 firms, so no second case is one firm from flipping.
+- **Interpolation differential: 1 of 32 sector bands discriminates**, |Δ| = 1.80, matching
+  §21.10. **But the convention matters** — only expand-by-weight type-7 yields 10.71; under
+  block-midpoint or CDF-edge weighting **all 32 bands** discriminate (four conventions, four
+  answers on one bucket: 10.71 / 9.51 / 10.03 / 8.91). §21.10 now names type-7; the spread is a
+  live vindication of §21.4's refusal to interpolate.
+- **Ordering:** `low ≤ median ≤ high` exact on 32/32; all 96 endpoints occur among their band's
+  constituents (§21.8(a)).
+- **Collapse census:** two buckets collapse — US Real Estate (R.E.I.T. 64.19% of W) and India
+  Real Estate (Real Estate (Development) 70.91%). Six constituents exceed 50% of W but only
+  these two STRADDLE all three targets, so §21.4's straddle condition is load-bearing, not
+  decorative. Japan Business Services is the mirror case (dominant constituent sets median and
+  high but not low).
+- **Exclusion ledger: 18 rows**, and excluded firms are absent from W on all 32 bands —
+  §21.11(i)'s identity holds exactly (US Financial Services 1173 − 615 = **558**). No bucket in
+  the vendored set has zero included constituents, so §21.4's honest-null rule has NO live case
+  and its coverage rests on §21.11(iv)'s directed fixture, correctly.
+- **Duplicate aggregate rows: India only** (17.56 n=4523 first, 16.35 n=3850 second). Committed
+  `India/Other` is 17.56/4523 — the FIRST row, so §21.5's rule holds; a last-row
+  dict-overwrite implementation would have produced 16.35/3850.
+
+**Both passes independently confirmed §21.9's corrected financials disclosure** — and pass 2
+sharpened it: the disjunction "bank OR broker" is NECESSARY, because Europe and India have both
+bank rows NA and are carried into the band by Brokerage & Investment Banking alone (26.62 n=69;
+28.93 n=186); only Japan publishes an actual bank multiple (46.26 n=7). A "banks" claim would
+have been false for two of the three.
+
+**Conformance items raised by the passes and applied to the spec (no value moved):** §21.10 now
+NAMES the type-7 interpolation and scopes the one-discriminator claim to it; §21.10(3)'s byte
+contract is corrected to describe what determinism actually requires (2dp ROUNDING before
+serialization is load-bearing; CPython's deterministic float `repr` then drops trailing zeros on
+8 of 108 values, which is expected because the gate compares emitter-vs-emitter, never against a
+hand-authored file — the earlier clause demanded a fixed 2-decimal SERIALIZER and was
+contradicted by the artifact it governs, flagged independently by both passes); and §21.4's n=0
+example is corrected from one row to the five that exist.
+
+The SECTOR COMPS GOSPEL is the committed `data/comps/bands.json`. Blind derivations, seals and
+comparison records for both passes were preserved in the session scratchpad; this record is the
+durable summary.

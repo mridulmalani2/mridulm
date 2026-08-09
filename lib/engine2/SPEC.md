@@ -2015,7 +2015,7 @@ Per (region, bucket): for each Damodaran industry mapped to that bucket by §21.
   total, when its value is `NA` **or is ≤ 0** [round-1 M2 — a live case: Japan
   `Insurance (Life)` = **−9.78x** inside the positive-EBITDA block, since positive EBITDA does
   not imply positive enterprise value]. Rows with `n_i = 0` are excluded (they carry no weight
-  and live in the vendored set: Japan `Utility (Water)`) [round-1 M1].
+  and live in the vendored set: FIVE rows — Japan `Oil/Gas (Integrated)`, `Reinsurance`, `Utility (General)`, `Utility (Water)` and India `Utility (General)` — every one of which is also NA, so the n=0 rule is belt-and-braces here rather than load-bearing) [round-1 M1].
   **`NA` carries at least TWO distinct meanings** and the surface says which: the ratio is
   meaningless for the industry (US banks/brokers), or the industry is EMPTY in that region
   (several Japan/India rows) [round-1 M6]. The aggregate rows are NEVER industry constituents.
@@ -2251,19 +2251,34 @@ numbers pinned so a passing adjudicator cannot have interpolated:
   - **`Other` (US)** = the `Total Market (without financials)` scalar 16.95, basis
     `'total_market_ex_financials'` — the §21.8(b) carve-out.
   Adjudication compares at FULL precision, never at §15's 1-decimal display precision.
-  **Under the committed map only Japan Real Estate discriminates** (max |NR − interp| = 1.80;
-  US Financial Services, US Real Estate and US Consumer are identical to 4dp, and `Other` is a
-  scalar) [round-2 M2 — the r2 draft's "US Consumer differs by 0.02x" was measured on the
+  **Under the committed map exactly ONE of 96 (bucket, percentile) points discriminates** —
+  Japan Real Estate p=0.25, nearest-rank 8.91 vs interpolated 10.71, |Δ| = 1.80 — and the
+  interpolation meant is **expand-by-weight LINEAR (type-7, `h = (W−1)p`)**, named because it
+  is the only convention that yields 10.71 [round-2 adjudication pass 2]. The scoping matters:
+  under block-midpoint (type-5) or cumulative-CDF-edge weighting the same bucket returns 10.03
+  or 8.91 and **all 32 sector bands discriminate**, so "only one discriminates" is a statement
+  about type-7, not about interpolation in general — which is itself the live vindication of
+  §21.4's rejection rationale (four mutually-inconsistent conventions, four different answers
+  on one bucket) [round-2 M2 — the r2 draft's "US Consumer differs by 0.02x" was measured on the
   r1-era bucket and is FALSE under the map committed beside it]. Because the sample therefore
   has ONE discriminator, the §21.10(3) gate must ASSERT that the pinned interpolation value
   still differs from the pinned nearest-rank value, so an annual refresh cannot silently
   remove the only mutant-catching case.
 (3) The **CI REGENERATION GATE**: `tests/comps-regeneration.test.ts` re-runs `derive_bands.py`
 into a temp dir and byte-compares `bands.json`, exactly as `goldens.test.ts` does for the
-engine. **The byte contract is pinned** [round-1 M7]: `python3` ≥3.11, `json.dumps(...,
-sort_keys=True, indent=1, ensure_ascii=False)` + trailing newline, floats emitted by a FIXED 2-decimal formatter
-(`f"{v:.2f}"`), never `repr` — `repr` drops trailing zeros and 29 values across the vendored
-CSVs carry them, which would make "byte-identical" ambiguous [round-2 M4].
+engine. **The byte contract is pinned** [round-1 M7, corrected by the step-2 adjudication]: `python3` ≥3.11,
+`json.dumps(..., sort_keys=True, indent=1, ensure_ascii=False)` + a trailing newline, and every emitted
+value ROUNDED through `f"{v:.2f}"` before serialization — the rounding is what kills binary float
+noise, and it is the load-bearing half. Serialization is then CPython's float `repr`, whose
+shortest-round-trip form is DETERMINISTIC and stable across versions ≥3.1, so **trailing zeros do
+NOT survive** (8 of the 108 emitted band values render as `9.5`, `12.0`, `18.5` … where the source
+cell reads `9.50`). That is EXPECTED, not a defect: the gate compares one run of the emitter against
+another run of the SAME emitter, never against a hand-authored file, so determinism — not decimal
+cosmetics — is what "byte-identical" needs. [The earlier draft demanded a fixed 2-decimal
+SERIALIZER and was contradicted by the artifact it governs; both adjudication passes flagged it
+independently, and the clause is corrected here rather than the emitter, because forcing `9.50`
+into JSON requires bypassing `json.dumps` for a raw literal — strictly more fragile for zero
+numeric gain.]
 (4) A **CSV integrity + freshness gate**: each committed CSV's SHA-256 and stated vintage are
 pinned, AND the test REDDENS once the vintage is more than 15 months old — the manual annual
 refresh is the one step this design rests on, so it gets a forcing function rather than a
