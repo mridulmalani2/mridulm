@@ -32,7 +32,7 @@ const LARGE_CAP: DealFacts = {
   effective_tax_rate: 0.24,
   nol_carryforward_floor: null,
   implied_cost_of_debt: 0.058,
-  implied_trading_ev_ebitda: 11.0, // 12.0x suggestion ≤ 11.0 × 1.15 — no warn
+  implied_trading_ev_ebitda: 11.0, sic_code: null, sector_comps: null, // 12.0x suggestion ≤ 11.0 × 1.15 — no warn
   history: [
     { fiscal_year: 2022, period_end: '2022-12-31', revenue: 7150, ebitda: 1690, capex: 250, operating_nwc: 610 },
     { fiscal_year: 2023, period_end: '2023-12-31', revenue: 7480, ebitda: 1790, capex: 262, operating_nwc: 640 },

@@ -95,6 +95,12 @@ export interface RawHistoricals {
   effective_tax_rate: SourcedValue | null;   // tax expense / pretax income (decimal)
   nol_carryforward: SourcedValue | null;     // NOL carryforward (£m/$m)
   sector?: SourcedValue | null;              // SIC-derived sector, when available
+  /** §21.5 [v1.6.0] — the EDGAR NUMERIC SIC (e.g. "6798"), the comps bucket key. Distinct
+   *  from `sector`, which carries the SIC DESCRIPTION. null when the route supplies none. */
+  sicCode?: string | null;
+  /** §21.5 [v1.6.0] — the MANUAL entry screen's nine-value dropdown, already a bucket name
+   *  (no inference). Set only on the manual route. */
+  sectorBucket?: string | null;
 
   /** Field labels that could NOT be derived from filings — surfaced on Screen 2 for the user
    *  to fill in (provenance then becomes 'user'). Never silently defaulted. */

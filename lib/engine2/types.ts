@@ -84,7 +84,33 @@ export interface DealFacts {
   implied_cost_of_debt: number | null;
   implied_trading_ev_ebitda: number | null;
 
+  /** §21 [v1.6.0] — the EDGAR numeric SIC, the §21.5 comps bucket key. null on ESEF/upload,
+   *  on the §D6 IFRS-in-SEC route until it threads `sicCode` (§21.5b), and on manual deals
+   *  (which carry the dropdown bucket instead). NOT the same thing as `sector`, which keeps
+   *  carrying the raw SIC DESCRIPTION untouched. */
+  sic_code: string | null;
+  /** §21 [v1.6.0] — the adjudicated sector comps band, or null (three causes — §16/§21.5).
+   *  Class A: extraction-supplied, never user-editable, never engine-derived. Displayed only;
+   *  no engine number, no suggestion value and no coherence flag reads it (§21.7). */
+  sector_comps: SectorCompsBand | null;
+
   history: HistoricalYear[];
+}
+
+/** §21.5 [v1.6.0] — one adjudicated band from `data/comps/bands.json` (the gospel; two blind
+ *  passes SIGNED). `basis: 'total_market_ex_financials'` is the `Other` whole-market fallback,
+ *  where `industries_used` is 0 and `firms` is the aggregate row's own count (§21.8(b)). */
+export interface SectorCompsBand {
+  region: 'US' | 'Europe' | 'Japan' | 'India';
+  vintage: string;
+  bucket: string;
+  low: number;
+  median: number;
+  high: number;
+  industries_used: number;
+  firms: number;
+  basis: 'sector' | 'total_market_ex_financials';
+  citation: string;
 }
 
 // ── Class B: assumptions ─────────────────────────────────────────────────────

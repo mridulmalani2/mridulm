@@ -13,7 +13,7 @@ const facts = (over: Partial<DealFacts>): DealFacts => ({
   fy_revenue: 1080, fy_ebitda: 267, fy_ebitda_margin: 267 / 1080, da_pct_revenue: 0.03, maint_capex_pct_revenue: 0.03,
   net_ppe: 100, operating_nwc: 10, nwc_pct_revenue: 0.01, dso: null, dio: null, dpo: null,
   gross_debt: 0, cash: 0, net_debt: 0, effective_tax_rate: 0.21, nol_carryforward_floor: null,
-  implied_cost_of_debt: null, implied_trading_ev_ebitda: null,
+  implied_cost_of_debt: null, implied_trading_ev_ebitda: null, sic_code: null, sector_comps: null,
   history: [{ fiscal_year: 2024, period_end: '2024-12-31', revenue: 1080, ebitda: 267, capex: null, operating_nwc: null }],
   ...over,
 });

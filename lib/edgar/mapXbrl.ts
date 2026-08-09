@@ -656,6 +656,8 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     effective_tax_rate,
     nol_carryforward,
     sector,
+    // §21.5 [v1.6.0]: the NUMERIC SIC rides through as the comps bucket key.
+    sicCode: opts.sicCode ?? null,
     gaps,
   };
 }
