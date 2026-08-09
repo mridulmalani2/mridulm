@@ -20,9 +20,13 @@ temp dir and BYTE-compares, so drift on either side is a red test.
            label in file order (China/India publish a duplicate — §21.2)
   zero included constituents => null (the honest-null rule; never a fabricated number)
 
-Byte contract (§21.10(3)): python3 >= 3.11, json.dumps(sort_keys=True, indent=1,
-ensure_ascii=False) + a trailing newline, floats via a FIXED 2-decimal formatter (never repr —
-repr drops trailing zeros and 29 values across the vendored CSVs carry them).
+Byte contract (§21.10(3), as corrected in step 2): python3 >= 3.11, json.dumps(sort_keys=True,
+indent=1, ensure_ascii=False) + a trailing newline. Every value is ROUNDED through f"{v:.2f}"
+BEFORE serialization — that is the load-bearing half, killing binary float noise. Serialization
+is then CPython's float repr, which is deterministic (shortest round-trip, stable since 3.1) but
+does NOT preserve trailing zeros: 8 of the 108 emitted band values render as 9.5 / 12.0 / 18.5
+where the CSV cell reads 9.50 / 12.00 / 18.50. That is expected — the gate compares one run of
+this emitter against another run of the SAME emitter, never against a hand-authored file.
 
 Usage: python3 scripts/comps/derive_bands.py [outdir]   (default: data/comps)
 """
@@ -41,7 +45,7 @@ PCTLS = (0.25, 0.50, 0.75)
 
 
 def f2(v):
-    """§21.10(3): a FIXED 2-decimal formatter. Never repr()."""
+    """§21.10(3): round to 2dp so binary float noise can never reach the artifact."""
     return float(f'{v:.2f}')
 
 

@@ -119,3 +119,92 @@ describe('§21.4/§21.5 — the committed bands carry the shape the spec pins', 
     expect(jp.low).not.toBe(11.31);        // the `>` answer — the boundary rule is load-bearing
   });
 });
+
+describe('§21.10(4) — ALL 36 bands are pinned, not just the US nine (audit B3: the drift bound was US-only)', () => {
+  const bands = JSON.parse(readFileSync(join(ROOT, 'data/comps/bands.json'), 'utf8'));
+
+  // The signed gospel, in full. The byte gate is regeneration-SYMMETRIC — it re-runs the same
+  // reference over the same inputs, so it cannot catch a change to an INPUT of the reference
+  // (sector-map.json, derive_bands.py). The audit built three such changes that moved a
+  // displayed band with all gates green. This table is what closes that hole.
+  const GOSPEL: [string, string, number, number, number, number, number][] = [
+    ['US', 'Business Services', 9.26, 12.0, 14.26, 7, 324],
+    ['US', 'Consumer', 10.39, 13.17, 14.93, 23, 917],
+    ['US', 'Energy', 5.15, 8.63, 11.56, 9, 371],
+    ['US', 'Financial Services', 38.03, 38.03, 57.52, 6, 558],
+    ['US', 'Healthcare', 15.25, 15.78, 19.78, 6, 1178],
+    ['US', 'Industrials', 11.39, 15.61, 17.18, 24, 929],
+    ['US', 'Other', 16.95, 16.95, 16.95, 0, 4822],
+    ['US', 'Real Estate', 19.87, 19.87, 19.87, 5, 296],
+    ['US', 'Technology', 22.01, 24.48, 24.48, 11, 806],
+    ['Europe', 'Business Services', 8.41, 12.81, 12.81, 7, 442],
+    ['Europe', 'Consumer', 10.92, 12.43, 15.23, 23, 1340],
+    ['Europe', 'Energy', 2.66, 7.58, 9.5, 9, 357],
+    ['Europe', 'Financial Services', 10.43, 10.43, 17.01, 7, 625],
+    ['Europe', 'Healthcare', 12.59, 16.17, 17.0, 6, 642],
+    ['Europe', 'Industrials', 8.78, 11.01, 14.98, 24, 1597],
+    ['Europe', 'Other', 10.77, 10.77, 10.77, 0, 5757],
+    ['Europe', 'Real Estate', 18.83, 24.11, 24.55, 5, 491],
+    ['Europe', 'Technology', 12.03, 17.27, 20.85, 11, 884],
+    ['Japan', 'Business Services', 6.21, 11.73, 11.73, 7, 417],
+    ['Japan', 'Consumer', 8.97, 10.25, 12.84, 23, 1073],
+    ['Japan', 'Energy', 7.86, 7.86, 8.45, 5, 56],
+    ['Japan', 'Financial Services', 18.5, 18.5, 93.68, 6, 122],
+    ['Japan', 'Healthcare', 9.7, 12.39, 15.03, 6, 206],
+    ['Japan', 'Industrials', 7.11, 8.94, 12.15, 24, 1064],
+    ['Japan', 'Other', 10.36, 10.36, 10.36, 0, 3762],
+    ['Japan', 'Real Estate', 8.91, 11.31, 23.86, 5, 168],
+    ['Japan', 'Technology', 11.77, 12.51, 12.52, 11, 777],
+    ['India', 'Business Services', 25.16, 25.16, 29.97, 7, 187],
+    ['India', 'Consumer', 26.5, 27.38, 27.45, 22, 1395],
+    ['India', 'Energy', 10.79, 11.11, 11.94, 8, 107],
+    ['India', 'Financial Services', 16.65, 24.65, 28.93, 6, 605],
+    ['India', 'Healthcare', 20.91, 20.91, 34.98, 6, 328],
+    ['India', 'Industrials', 17.18, 18.26, 23.2, 23, 1869],
+    ['India', 'Other', 17.56, 17.56, 17.56, 0, 4523],
+    ['India', 'Real Estate', 26.65, 26.65, 26.65, 5, 220],
+    ['India', 'Technology', 17.73, 17.73, 24.41, 11, 414],
+  ];
+
+  for (const [region, bucket, low, median, high, k, firms] of GOSPEL) {
+    it(`${region} / ${bucket} = ${low} / ${median} / ${high} (k=${k}, W=${firms})`, () => {
+      const b = bands[region][bucket];
+      expect(b, `${region}/${bucket} missing`).not.toBeNull();
+      expect([b.low, b.median, b.high, b.industries_used, b.firms]).toEqual([low, median, high, k, firms]);
+    });
+  }
+
+  it('§21.8(b) holds STRUCTURALLY on every band, not just on spot values', () => {
+    for (const region of Object.keys(bands)) {
+      for (const [bucket, b] of Object.entries(bands[region] as Record<string, any>)) {
+        if (b === null) continue;
+        if (b.basis === 'sector') expect(b.industries_used, `${region}/${bucket}`).toBeGreaterThanOrEqual(1);
+        else expect(b.industries_used, `${region}/${bucket}`).toBe(0);
+        expect(b.firms, `${region}/${bucket}`).toBeGreaterThan(0);
+        expect(b.region, `${region}/${bucket}`).toBe(region);
+        expect(b.bucket, `${region}/${bucket}`).toBe(bucket);
+      }
+    }
+  });
+
+  it('§21.11(v): India takes the FIRST duplicate aggregate row — 17.56/4523, NEVER 16.35/3850', () => {
+    // The round-1 B6 defect is silently reintroducible: the audit removed the first-row rule
+    // from the reference, regenerated, and every gate stayed green.
+    expect([bands.India.Other.low, bands.India.Other.firms]).toEqual([17.56, 4523]);
+    expect(bands.India.Other.low).not.toBe(16.35);
+    expect(bands.India.Other.firms).not.toBe(3850);
+  });
+
+  it('every region carries the SAME bucket key set (so a cross-region fallback is detectable)', () => {
+    const keys = Object.keys(bands.US).sort();
+    for (const r of ['Europe', 'Japan', 'India']) expect(Object.keys(bands[r]).sort()).toEqual(keys);
+  });
+
+  it('the vintage gate covers EVERY band, not one region (audit M-f)', () => {
+    for (const region of Object.keys(bands)) {
+      for (const [bucket, b] of Object.entries(bands[region] as Record<string, any>)) {
+        if (b !== null) expect(b.vintage, `${region}/${bucket}`).toBe('5 Jan 26');
+      }
+    }
+  });
+});

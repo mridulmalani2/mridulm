@@ -2108,11 +2108,13 @@ still land in a bucket its business has outgrown. That is a limitation of the KE
 `store/dealEngine.ts` fetches `submissions.sic` ONCE and then forks: the us-gaap branch passes
 `{sicDescription, sicCode}` to `mapCompanyFacts`, but the **IFRS-in-SEC branch (PHASE_D §D6's
 20-F filers) calls `mapCompanyFactsIfrs(facts, { sicDescription })` — which has no `sicCode`
-parameter at all**, so the code EDGAR supplied one line earlier is dropped. Step 3 MUST add
-`sicCode?: string` to that opts type and pass it (both files are inside the Tier-B allowlist);
-until it does, a 20-F IFRS filer would show "no sector information exists" about a company whose
-SIC EDGAR published. §16's null-cause list names this route explicitly rather than folding it
-into "ESEF/upload", and §21.11(xi) pins the D6 route end-to-end.
+parameter at all**, so the code EDGAR supplied one line earlier is dropped. Step 3 ADDED `sicCode?: string` to that opts type and passes it. `lib/edgar/**` is allowlisted;
+`store/dealEngine.ts` was NOT, so PHASE_G's Tier-B allowlist is amended with the same narrow,
+explicit wording the `data/**` admission used — a fail-closed fence cannot admit a path
+implicitly [audit B6; the earlier claim that both files were already inside was FALSE]. §16's null-cause list names this route explicitly, and §21.11(xi) pins it end-to-end — both a
+behavioural fixture through `mapCompanyFactsIfrs` and a SOURCE-SCAN guard on the store's call
+site, because the store is network-driven and the T5 mutant (the branch silently dropping the
+argument) survives any purely behavioural test.
 
 **The map (94 industries → 8 buckets; verified 94 mapped / 0 unmapped / 0 phantom against the
 5 Jan 2026 taxonomy).** `Other` maps to NO industries and instead resolves to the file's

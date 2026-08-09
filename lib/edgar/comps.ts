@@ -34,7 +34,10 @@ const SIC_RANGES = sectorMap.sic_ranges.ranges as Range[];
 export function compsBucket(sicCode: string | null | undefined): string | null {
   if (sicCode === null || sicCode === undefined || sicCode.trim() === '') return null;
   const n = Number.parseInt(sicCode.trim(), 10); // base 10: "0100" → 100
-  if (!Number.isFinite(n)) return null;
+  // Garbage and out-of-domain codes are "we know nothing" (null), NEVER "we looked" ('Other') —
+  // the round-3 M1 distinction. SIC is four digits, and "0000" is EDGAR's own
+  // no-classification sentinel: it must not buy a cited whole-market band [audit M-d/M-e].
+  if (!Number.isFinite(n) || n < 100 || n > 9999) return null;
   let best: string | null = null;
   let width = Infinity;
   for (const [lo, hi, bucket] of SIC_RANGES) {
@@ -49,8 +52,8 @@ export function compsBucket(sicCode: string | null | undefined): string | null {
 export interface CompsInputs {
   /** `DealFacts.currency` — already coerced to the five modelled values (§21.6). */
   currency: keyof typeof REGION_BY_CURRENCY;
-  /** The EDGAR numeric SIC. null on ESEF/upload and on the §D6 IFRS-in-SEC route until it
-   *  threads `sicCode` (§21.5b); manual deals pass `bucketOverride` instead. */
+  /** The EDGAR numeric SIC. null on ESEF/upload; the §D6 IFRS-in-SEC route threads it as of step 3 (§21.5b).
+   *  Manual deals carry `bucketOverride` (the entry screen's dropdown) instead. */
   sicCode: string | null;
   /** The manual entry screen's nine-value dropdown — already a bucket name, no inference. */
   bucketOverride?: string | null;
@@ -67,5 +70,10 @@ export function sectorCompsFor(x: CompsInputs): SectorCompsBand | null {
   const bucket = x.bucketOverride?.trim() ? x.bucketOverride.trim() : compsBucket(x.sicCode);
   if (bucket === null) return null; // no sector source at all — the surface says so
   const byRegion = (bands as Record<string, Record<string, SectorCompsBand | null>>)[region];
-  return byRegion?.[bucket] ?? null;
+  // OWN properties only: `byRegion['constructor']` is a FUNCTION, not a band, and `?? null`
+  // cannot catch it — that hands a non-null non-band to a caller typed `SectorCompsBand | null`
+  // [audit M-a]. A bucket absent in THIS region is null, never a silent fallback to another
+  // bucket or another region (§21.4's honest-null rule — the cross-region variant is M-b).
+  if (!byRegion || !Object.prototype.hasOwnProperty.call(byRegion, bucket)) return null;
+  return byRegion[bucket] ?? null;
 }

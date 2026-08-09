@@ -199,6 +199,10 @@ export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
     // detail as facts.sector, so anything else here discards the user's choice (F-tail
     // review MAJOR: "Manually entered — Sector" was reaching the AI prompt verbatim)
     sector: { value: 0, provenance: { source: 'user', detail: inp.sector } },
+    // §21.5 [v1.6.0]: the manual dropdown ALREADY carries the nine bucket names, so it IS
+    // the comps bucket — no SIC, no inference. Without this line `bucketOverride` is a dead
+    // wire and every manual deal silently shows no band [audit B2].
+    sectorBucket: inp.sector || null,
     gaps,
     dso: null,
     dio: null,

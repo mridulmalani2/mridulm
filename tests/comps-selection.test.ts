@@ -125,3 +125,33 @@ describe('§21.11(iv) — the honest-null rule has a directed fixture (no live c
     expect(sectorCompsFor({ currency: 'USD', sicCode: null, bucketOverride: 'Nonexistent Bucket' })).toBeNull();
   });
 });
+
+describe('audit hardening — the mutants that survived the first cut', () => {
+  it('M-b: NO silent CROSS-REGION fallback (a bucket missing here must not borrow the US band)', () => {
+    for (const c of ['USD', 'EUR', 'JPY', 'INR'] as const) {
+      const b = sectorCompsFor({ currency: c, sicCode: '7372' })!;
+      expect(b.region, c).toBe({ USD: 'US', EUR: 'Europe', JPY: 'Japan', INR: 'India' }[c]);
+    }
+  });
+
+  it('M-c: bucketOverride WINS over the SIC, and a whitespace-only override falls back to it', () => {
+    // both supplied ⇒ the explicit user choice governs
+    expect(sectorCompsFor({ currency: 'USD', sicCode: '6022', bucketOverride: 'Technology' })!.bucket).toBe('Technology');
+    // a blank override is not a choice ⇒ the SIC still governs
+    expect(sectorCompsFor({ currency: 'USD', sicCode: '6798', bucketOverride: '   ' })!.bucket).toBe('Real Estate');
+  });
+
+  it('M-d/M-e: garbage and out-of-domain codes are NULL ("we know nothing"), never a cited band', () => {
+    for (const bad of ['ABCD', '0000', '0', '-1', '-6798', '10000', '99999', '99', 'NaN', 'Infinity']) {
+      expect(compsBucket(bad), bad).toBeNull();
+    }
+    // …while a genuine in-domain code with no mapped range IS 'Other' — "we looked"
+    expect(compsBucket('9995')).toBe('Other');
+  });
+
+  it('M-a: a prototype key can never masquerade as a band', () => {
+    for (const proto of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+      expect(sectorCompsFor({ currency: 'USD', sicCode: null, bucketOverride: proto }), proto).toBeNull();
+    }
+  });
+});
