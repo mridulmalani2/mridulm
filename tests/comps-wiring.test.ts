@@ -145,3 +145,15 @@ describe('§21.5b — the STORE call site passes the SIC on BOTH SEC branches (a
     expect(gaapCall![1], 'the us-gaap branch dropped sicCode').toContain('sicCode');
   });
 });
+
+describe('§21.5 — the entry screen\'s dropdown is BOUND to the band key set (no hand-kept list)', () => {
+  it('every dropdown option resolves to a real band, and the sets are identical', async () => {
+    const { SECTORS } = await import('../components/deal-engine/start/ManualFactsScreen');
+    const bands = JSON.parse(readFileSync(join(__dirname, '..', 'data', 'comps', 'bands.json'), 'utf8'));
+    // PHASE_G names the hand-maintained list as its recurring enforcement failure: rename one
+    // option and every manual deal of that sector silently shows "unavailable" while the code
+    // still compiles. Bind the two by construction.
+    expect([...SECTORS].sort()).toEqual(Object.keys(bands.US).sort());
+    for (const s of SECTORS) expect(bands.US[s], s).not.toBeNull();
+  });
+});

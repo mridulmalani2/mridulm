@@ -7,8 +7,8 @@
  * MUTANTS (run RED via string-replace, then reverted):
  * (M-a) the SIC table sorted ASCENDING BY `lo` and first-match-wins, instead of
  *   most-specific-wins — this reproduces the round-2 sign-off defect exactly (every REIT to
- *   Financial Services, 38.03/38.03/57.52 instead of Real Estate's 19.87×3). MEASURED: reds 4
- *   tests, incl. both (x) items and the defect-set case. NOTE, because it matters to a future
+ *   Financial Services, 38.03/38.03/57.52 instead of Real Estate's 19.87×3). MEASURED at step 5: reds 6 tests — 5 in this file (both (x) items, the defect set, the
+ *   parse rules, the override precedence) and the REIT end-to-end in comps-wiring. NOTE, because it matters to a future
  *   maintainer: a WEAKER variant — first match in the array's own order — does NOT red, because
  *   the committed array happens to list the 6798 and 1531 carve-outs first. Array order is
  *   therefore NOT the mechanism and must never be relied on as one; most-specific-wins is, and

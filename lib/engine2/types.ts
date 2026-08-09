@@ -84,9 +84,8 @@ export interface DealFacts {
   implied_cost_of_debt: number | null;
   implied_trading_ev_ebitda: number | null;
 
-  /** §21 [v1.6.0] — the EDGAR numeric SIC, the §21.5 comps bucket key. null on ESEF/upload,
-   *  on the §D6 IFRS-in-SEC route until it threads `sicCode` (§21.5b), and on manual deals
-   *  (which carry the dropdown bucket instead). NOT the same thing as `sector`, which keeps
+  /** §21 [v1.6.0] — the EDGAR numeric SIC, the §21.5 comps bucket key. null on ESEF/upload and on any route with no
+   *  published SIC; manual deals carry the dropdown bucket instead (§21.5b). NOT the same thing as `sector`, which keeps
    *  carrying the raw SIC DESCRIPTION untouched. */
   sic_code: string | null;
   /** §21 [v1.6.0] — the adjudicated sector comps band, or null (three causes — §16/§21.5).
