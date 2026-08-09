@@ -54,7 +54,7 @@ AND was outside the fence]:
 > **Tier-B allowlist:** the PR's diff is CONFINED TO `lib/edgar/**`, `lib/engine2/factsAdapter.ts`,
 > the SUGGESTION PATH, purely-additive Class-A/C `types.ts` fields, the DISPLAY-SURFACE SET,
 > **committed REFERENCE-DATA roots (`data/**`) and their offline derivation scripts
-> (`scripts/**`) — added 2026-08-09 for §21's vendored comps dataset; a fail-closed allowlist
+> (`scripts/comps/**` — NARROWED from `scripts/**` at round-2 M5: a wholesale scripts allowlist would let a Tier-B PR rewrite `scripts/goldens/spec_calc.py`, the independent reference that adjudicates the ENGINE) — added 2026-08-09 for §21's vendored comps dataset; a fail-closed allowlist
 > cannot admit them implicitly, and vendored data with an offline reference derivation is
 > exactly the Tier-B shape (a FACT the engine consumes, adjudicated by the DERIVATION method)**,
 > `tests/**`, and docs — and is EMPTY over the ENGINE ARITHMETIC PATH. Any diff to a file
