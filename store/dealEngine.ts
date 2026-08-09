@@ -106,7 +106,7 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
 
       // D6: IFRS-reporting 20-F filers carry facts['ifrs-full'] — route to the IFRS mapper.
       const raw = isIfrsCompanyFacts(facts)
-        ? mapCompanyFactsIfrs(facts, { sicDescription })
+        ? mapCompanyFactsIfrs(facts, { sicDescription, sicCode })
         : mapCompanyFacts(facts, { sicDescription, sicCode });
       feedEngine2FromImport(raw, { ticker, factsPayload: facts, latestAnnualForm });
       set({ isCalculating: false });

@@ -45,7 +45,8 @@ const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, 
   </div>
 );
 
-const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+// Exported for the directed §21 display test (label/value provenance on the comps band).
+export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
   // §11: label the entry multiple by its ACTUAL basis and show the FY/LTM-canonical figure
   // alongside it under an NTM entry ("shows both, LTM canonical"); FY deals are unchanged.
   const em = entryMultipleDisplay(o);
@@ -60,6 +61,27 @@ const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o,
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}</p>
         {em.fy_canonical !== null && (
           <p className="text-[10px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
+        )}
+        {/* §21 [v1.6.0]: the sector comps band, beside the entry multiple because that is the
+            number a reader compares it against. Every part of the label is load-bearing — the
+            band is a PUBLIC-MARKET trading range, NOT a buyout-entry range (§21.8(e)'s
+            NON-claim), so the surface states its basis, region, vintage and how many industries
+            stand behind it, and asserts NO ordering against the entry multiple. Reads the named
+            fact; no arithmetic here. */}
+        {o.facts.sector_comps !== null ? (
+          <p className="text-[10px]" style={label}>
+            {o.facts.sector_comps.basis === 'sector'
+              ? `${o.facts.sector_comps.bucket} peers trade`
+              : 'Whole market (ex-financials) trades'}{' '}
+            {multiple(o.facts.sector_comps.low)}–{multiple(o.facts.sector_comps.high)} (median{' '}
+            {multiple(o.facts.sector_comps.median)}) — listed comps, NOT buyout entry ·{' '}
+            {o.facts.sector_comps.region} · {o.facts.sector_comps.vintage}
+            {o.facts.sector_comps.basis === 'sector'
+              ? ` · ${o.facts.sector_comps.industries_used} industries, ${o.facts.sector_comps.firms} firms`
+              : ` · ${o.facts.sector_comps.firms} firms`}
+          </p>
+        ) : (
+          <p className="text-[10px]" style={label}>Sector comps unavailable — no sector source for this deal (§21)</p>
         )}</div>
       {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
           per-year credit metrics on the other tabs are NET. */}
@@ -431,6 +453,8 @@ const DISCLOSURES: [string, string][] = [
   ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted UNCAPPED the FOLLOWING year (vs the Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1yr)'],
   // §19.8 [v1.4.0]: the fund-of-one simplifications — the SPEC §15 sentence mirrored here
   ['Fund/LP overlay (§19)', "fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs, no NAV basis); no subscription line; no GP commitment; no clawback (nothing to claw back by construction); 'european' = all-contributions hurdle + pref base, 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, NOT fund carry; the year-N fee draws BEFORE the final distribution"],
+  // §21.9 [v1.6.0]: the sector-comps simplifications — the SPEC §15 sentence mirrored here
+  ['Sector comps band (§21)', "public-market TRADING multiples, NOT buyout-entry multiples — control premia, synergies, leverage and illiquidity all sit between the two, and NO ordering against your entry multiple is asserted; each figure is an INDUSTRY AGGREGATE (aggregate EV ÷ aggregate EBITDA), not a median firm, on data trailing through the prior year's Q3; annual vintage, stated per band, from a COMMITTED dataset refreshed manually (no live feed); positive-EBITDA block only, with NA and non-positive values excluded; the displayed firm count is the industry POPULATION, which includes firms outside the ratio's own aggregate; the sector map is a stated convention keyed on the numeric SIC — a 1987 taxonomy recording PRIMARY activity, so a conglomerate can sit in a bucket its business has outgrown; financials are NOT uniformly unavailable (the US bank/broker rows are NA and drop out, leaving a band set by asset managers, while Europe and India enter through BROKER multiples only — their bank rows are NA too — and only Japan publishes an actual bank multiple); a band may collapse to a point under a dominant constituent; region is inferred from reporting currency, a proxy for listing market"],
   // §20.8 [v1.5.0]: the PIK-toggle simplifications — the SPEC §15 sentence mirrored here
   ['PIK toggle (§20)', 'per-year WHOLE-coupon election only (no partial/50-50 elections — v2); elections are frozen across scenarios; PIK is deducted as ACCRUED, with AHYDO (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the disqualified-portion disallowance are NOT modelled; qualifying notes carry the structural ahydo_shape warning (maturity > 5y + an accruing year), whose yield leg is untested (it needs the monthly AFR) and whose significant-OID leg is proxied, so the flag deliberately over-fires; PIK notes remain non-refinanceable and sweep-exempt by default'],
 ];

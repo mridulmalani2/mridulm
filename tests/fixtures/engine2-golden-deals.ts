@@ -17,7 +17,7 @@ function makeFacts(p: { revenue: number; ebitda: number; net_ppe: number }): Dea
     da_pct_revenue: 0, maint_capex_pct_revenue: 0, net_ppe: p.net_ppe,
     operating_nwc: null, nwc_pct_revenue: null, dso: null, dio: null, dpo: null,
     gross_debt: 0, cash: 0, net_debt: 0, effective_tax_rate: 0.25,
-    nol_carryforward_floor: null, implied_cost_of_debt: null, implied_trading_ev_ebitda: null,
+    nol_carryforward_floor: null, implied_cost_of_debt: null, implied_trading_ev_ebitda: null, sic_code: null, sector_comps: null,
     history: [],
   };
 }

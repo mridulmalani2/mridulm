@@ -1,0 +1,84 @@
+{
+  "_spec": "SPEC §21.5 — the committed 94→8 sector map. DATA, not code: a reviewer attacks the mapping here without reading TypeScript. Two source strings carry TYPOS that are part of the join key and MUST be preserved verbatim: 'Rubber& Tires' (no space) and 'Heathcare Information and Technology' (sic).",
+  "_taxonomy_vintage": "5 Jan 26",
+  "_coverage": "94 industries mapped, 0 unmapped, 0 phantom — asserted by scripts/comps/derive_bands.py and by the CI regeneration gate.",
+  "_other": "The 'Other' bucket maps to NO industries. It resolves instead to the file's own 'Total Market (without financials)' aggregate row, taking the FIRST row with that label in file order (China/India publish a duplicate label — SPEC §21.2/§21.5).",
+  "buckets": {
+    "Technology": [
+      "Computer Services", "Computers/Peripherals", "Electronics (Consumer & Office)",
+      "Electronics (General)", "Information Services", "Semiconductor", "Semiconductor Equip",
+      "Software (Entertainment)", "Software (Internet)", "Software (System & Application)",
+      "Telecom. Equipment"
+    ],
+    "Healthcare": [
+      "Drugs (Biotechnology)", "Drugs (Pharmaceutical)", "Healthcare Products",
+      "Healthcare Support Services", "Heathcare Information and Technology",
+      "Hospitals/Healthcare Facilities"
+    ],
+    "Industrials": [
+      "Aerospace/Defense", "Air Transport", "Auto & Truck", "Auto Parts", "Building Materials",
+      "Chemical (Basic)", "Chemical (Diversified)", "Chemical (Specialty)", "Construction Supplies",
+      "Electrical Equipment", "Engineering/Construction", "Environmental & Waste Services",
+      "Farming/Agriculture", "Machinery", "Metals & Mining", "Packaging & Container",
+      "Paper/Forest Products", "Precious Metals", "Rubber& Tires", "Shipbuilding & Marine",
+      "Steel", "Transportation", "Transportation (Railroads)", "Trucking"
+    ],
+    "Consumer": [
+      "Apparel", "Beverage (Alcoholic)", "Beverage (Soft)", "Broadcasting", "Cable TV",
+      "Entertainment", "Food Processing", "Food Wholesalers", "Furn/Home Furnishings",
+      "Homebuilding", "Hotel/Gaming", "Household Products", "Publishing & Newspapers",
+      "Recreation", "Restaurant/Dining", "Retail (Automotive)", "Retail (Building Supply)",
+      "Retail (Distributors)", "Retail (General)", "Retail (Grocery and Food)",
+      "Retail (Special Lines)", "Shoe", "Tobacco"
+    ],
+    "Financial Services": [
+      "Bank (Money Center)", "Banks (Regional)", "Brokerage & Investment Banking",
+      "Financial Svcs. (Non-bank & Insurance)", "Insurance (General)", "Insurance (Life)",
+      "Insurance (Prop/Cas.)", "Investments & Asset Management", "Reinsurance"
+    ],
+    "Real Estate": [
+      "R.E.I.T.", "Real Estate (Development)", "Real Estate (General/Diversified)",
+      "Real Estate (Operations & Services)", "Retail (REITs)"
+    ],
+    "Energy": [
+      "Coal & Related Energy", "Green & Renewable Energy", "Oil/Gas (Integrated)",
+      "Oil/Gas (Production and Exploration)", "Oil/Gas Distribution", "Oilfield Svcs/Equip.",
+      "Power", "Utility (General)", "Utility (Water)"
+    ],
+    "Business Services": [
+      "Advertising", "Business & Consumer Services", "Diversified", "Education",
+      "Office Equipment & Services", "Telecom (Wireless)", "Telecom. Services"
+    ]
+  },
+  "_forced_assignments": {
+    "_why": "SPEC §21.5 — the nine-bucket taxonomy has NO bucket for utilities, telecom, materials or media, so these are placed by JUDGMENT and they move real numbers. Named so a reviewer disagrees with a convention, not with a computation.",
+    "Power/Utility (General)/Utility (Water)": "Energy — the taxonomy has no Utilities bucket",
+    "Telecom (Wireless)/Telecom. Services": "Business Services — no Telecom bucket",
+    "Telecom. Equipment": "Technology — the equipment maker, not the carrier",
+    "Broadcasting/Cable TV/Entertainment/Publishing & Newspapers": "Consumer — no Media bucket",
+    "Diversified": "Business Services — no principled home (n=20, 11.42x US)",
+    "Homebuilding": "Consumer — defensible in Real Estate or Industrials too"
+  },
+  "sic_ranges": {
+    "_spec": "SPEC §21.5 — the join key is the NUMERIC SIC code. MOST-SPECIFIC RANGE WINS is the SOLE tie-break. Empty/absent ⇒ null ('we know nothing'), a code in no range ⇒ 'Other' ('we looked'). Measured 33/33 over a real-code set; the only uncovered block is 9000-9999 (Public Administration / Nonclassifiable), deliberately 'Other'.",
+    "ranges": [
+      [6798, 6798, "Real Estate"], [1531, 1531, "Consumer"],
+      [100, 999, "Industrials"], [1000, 1099, "Industrials"], [1100, 1399, "Energy"],
+      [1400, 1499, "Industrials"], [1500, 1999, "Industrials"],
+      [2000, 2399, "Consumer"], [2400, 2499, "Industrials"], [2500, 2599, "Consumer"],
+      [2600, 2699, "Industrials"], [2700, 2799, "Consumer"], [2800, 2829, "Industrials"],
+      [2830, 2836, "Healthcare"], [2837, 2899, "Industrials"], [2900, 2999, "Energy"],
+      [3000, 3099, "Industrials"], [3100, 3199, "Consumer"], [3200, 3399, "Industrials"],
+      [3400, 3569, "Industrials"], [3570, 3579, "Technology"], [3580, 3659, "Industrials"],
+      [3660, 3699, "Technology"], [3700, 3799, "Industrials"], [3800, 3840, "Technology"],
+      [3841, 3851, "Healthcare"], [3852, 3899, "Technology"], [3900, 3999, "Consumer"],
+      [4000, 4799, "Industrials"], [4800, 4829, "Business Services"], [4830, 4849, "Consumer"],
+      [4850, 4899, "Business Services"], [4900, 4999, "Energy"], [5000, 5199, "Industrials"],
+      [5200, 5999, "Consumer"], [6000, 6499, "Financial Services"], [6500, 6599, "Real Estate"],
+      [6600, 6999, "Financial Services"], [7000, 7019, "Consumer"],
+      [7020, 7369, "Business Services"], [7370, 7379, "Technology"],
+      [7380, 7799, "Business Services"], [7800, 7999, "Consumer"], [8000, 8099, "Healthcare"],
+      [8100, 8999, "Business Services"], [9000, 9999, "Other"]
+    ]
+  }
+}

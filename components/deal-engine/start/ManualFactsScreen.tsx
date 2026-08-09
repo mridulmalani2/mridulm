@@ -22,7 +22,11 @@ const paper = '#F9F9F7';
 const inputStyle: React.CSSProperties = { background: '#fff', border: '1px solid rgba(17,17,17,0.15)', color: '#111', fontFamily: mono, outline: 'none' };
 const labelStyle: React.CSSProperties = { color: 'rgba(17,17,17,0.4)', fontFamily: mono };
 
-const SECTORS = ['Technology', 'Healthcare', 'Industrials', 'Consumer', 'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other'];
+/** The nine comps buckets (§21.5). These strings ARE the join key into `data/comps/bands.json`
+ *  — rename one and every manual deal of that sector silently falls to the unavailable state
+ *  (the audit-B2 dead-wire class). `tests/comps-wiring.test.ts` binds this list to the band key
+ *  set by CONSTRUCTION, so drift is a red test rather than a hand-kept list [conformance N8]. */
+export const SECTORS = ['Technology', 'Healthcare', 'Industrials', 'Consumer', 'Financial Services', 'Real Estate', 'Energy', 'Business Services', 'Other'];
 const CURRENCIES: ('USD' | 'GBP' | 'EUR' | 'INR' | 'JPY')[] = ['USD', 'GBP', 'EUR', 'INR', 'JPY'];
 const CSYM: Record<string, string> = { GBP: '£', EUR: '€', USD: '$', INR: '₹', JPY: '¥' };
 

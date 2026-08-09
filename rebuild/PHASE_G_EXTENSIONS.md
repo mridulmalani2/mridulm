@@ -53,6 +53,14 @@ AND was outside the fence]:
 >
 > **Tier-B allowlist:** the PR's diff is CONFINED TO `lib/edgar/**`, `lib/engine2/factsAdapter.ts`,
 > the SUGGESTION PATH, purely-additive Class-A/C `types.ts` fields, the DISPLAY-SURFACE SET,
+> **committed REFERENCE-DATA roots (`data/comps/**` — NARROWED from `data/**` at conformance N6, for symmetry with the scripts narrowing one clause below) and their offline derivation scripts
+> (`scripts/comps/**` — NARROWED from `scripts/**` at round-2 M5: a wholesale scripts allowlist would let a Tier-B PR rewrite `scripts/goldens/spec_calc.py`, the independent reference that adjudicates the ENGINE) — added 2026-08-09 for §21's vendored comps dataset; a fail-closed allowlist
+> cannot admit them implicitly, and vendored data with an offline reference derivation is
+> exactly the Tier-B shape (a FACT the engine consumes, adjudicated by the DERIVATION method)**,
+> the ONE store call site that threads an extraction argument (`store/dealEngine.ts` — added
+> 2026-08-09 for §21.5b's SIC pass-through; the fence FAILS CLOSED, so an implicit admission is
+> exactly the breach the `data/comps/**` amendment was written to avoid, and the narrow wording keeps
+> the rest of `store/**` out),
 > `tests/**`, and docs — and is EMPTY over the ENGINE ARITHMETIC PATH. Any diff to a file
 > OUTSIDE the allowlist trips the gate (fail-closed) and forces re-justification or escalation.
 > New SUGGESTION-PATH arithmetic carries the full Tier-B adjudication (DERIVATION.md method).
@@ -179,7 +187,7 @@ hand-kept list of what to check, assume it already has a hole.
 | 1 | A | ✅ **DONE 2026-07-25** — **Interim distributions + cash trap** | Unlocks DPI/RVPI/TVPI + payback properly (ILPA defs from DR-2); the feared same-year cycle DISSOLVED: §3.7's pro-forma test is linear in the payment, so rp_max has a closed form and the no-solver rule holds (SPEC v1.1.0 §5). Shipped as SPEC v1.1.0/v1.1.1 + goldens G2-DIST / G3-DIST / G2-DIST-D + engine + UI |
 | 2 | **B** | **Quarter-stitched LTM** | FY + YTD − prior-YTD, Q4 = FY − 9M, 52/53-week fixtures; FPI stays FY with staleness badge. DATA-SIDE: computes a more-current LTM fact the engine consumes. Admission ticket = EMPTY git-diff over the engine arithmetic path (NOT golden byte-identity — that is necessary-secondary). Adjudicate the STITCH with a different-language reference derivation + two passes + a CI regeneration gate (the DERIVATION.md method) |
 | 3 | A | ✅ **DONE 2026-08-08** — **Fund/LP overlay** | Net-to-LP after fees/carry (European/American), reuses old fundReturns spec knowledge; feeds a fourth return row clearly labelled fund-level |
-| 4 | B | **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |
+| 4 | B | 🔄 **IN FLIGHT 2026-08-09** — **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |
 | 5 | A | ✅ **DONE 2026-07-26** — **Refinancing events** | Repricing, premium, extend; OID/DFC write-off interplay already spec'd in §7/§9 |
 | 6 | A | ✅ **DONE 2026-08-09** — **PIK toggle (per-year election)** | Extends the v1 fixed PIK note; AHYDO disclosure from DR-3.4 (changes the §4 PIK accrual path ⇒ engine arithmetic) |
 | 7 | A | **Partial exits / IPO selldown** | Interacts with MIP cap (SPEC §10 already forward-compatible) |

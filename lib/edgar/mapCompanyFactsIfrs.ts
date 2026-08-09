@@ -53,7 +53,7 @@ export function isIfrsCompanyFacts(facts: CompanyFacts): boolean {
 
 export function mapCompanyFactsIfrs(
   facts: CompanyFacts,
-  opts: { unitScale?: number; statutoryTaxRate?: number; sicDescription?: string } = {},
+  opts: { unitScale?: number; statutoryTaxRate?: number; sicDescription?: string; sicCode?: string } = {},
 ): RawHistoricals {
   const scale = opts.unitScale ?? 1e6;
   const statutory = opts.statutoryTaxRate ?? 0.25;
@@ -230,6 +230,8 @@ export function mapCompanyFactsIfrs(
     effective_tax_rate,
     nol_carryforward: null, // IFRS DTA disclosures don't map to the US NOL concept — gap by design
     sector: opts.sicDescription ? { value: 0, provenance: { source: 'edgar', detail: `SIC: ${opts.sicDescription}` } } : null,
+    // §21.5b [v1.6.0]: the §D6 route dropped the fetched SIC — threading it closes that gap.
+    sicCode: opts.sicCode ?? null,
     gaps,
     history,
     dso: null,

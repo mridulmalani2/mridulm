@@ -10,6 +10,7 @@
  * period END date, with per-cell nulls preserved (no fake totals).
  */
 
+import { sectorCompsFor } from '../edgar/comps';
 import type { RawHistoricals } from '../edgar/types';
 import type { DealFacts, HistoricalYear } from './types';
 import type { Engine2Currency } from '../format';
@@ -84,6 +85,14 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     // fallback for origin-less payloads (it mislabelled USD manual deals as 'edgar').
     source: raw.origin ?? (raw.currency === 'USD' || raw.cik10 ? 'edgar' : 'esef'),
     sector: raw.sector?.provenance.detail?.replace(/^SIC:\s*/, '') ?? 'Other',
+    // §21 [v1.6.0] — the comps bucket key (the NUMERIC SIC) and the adjudicated band. Both are
+    // Class-A extraction facts: DISPLAYED only, read by no engine number and no coherence flag.
+    sic_code: raw.sicCode ?? null,
+    sector_comps: sectorCompsFor({
+      currency: (MODELLED.has(raw.currency) ? raw.currency : 'USD') as 'USD' | 'EUR' | 'GBP' | 'JPY' | 'INR',
+      sicCode: raw.sicCode ?? null,
+      bucketOverride: raw.sectorBucket ?? null,
+    }),
     currency: (MODELLED.has(raw.currency) ? raw.currency : 'USD') as Engine2Currency & DealFacts['currency'],
     fiscal_year: raw.fiscalYear ?? 0,
     period_end: raw.periodEnd ?? '',
