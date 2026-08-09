@@ -1904,7 +1904,8 @@ independent passes.
 **COHERENCE EXCEPTION — decided HERE, spec-side, never discovered as a red test (the
 v1.1.1 round-2(b) convention; round-1 B1):** from v1.5.0 the fixed accreting notes in
 **G3 and G3-DIST** (maturity 8, pik 12%, elections null) EMIT `ahydo_shape`, and so does
-**G8-PIKT**; every other golden stays coherence-clean. The committed coherence-clean
+**G8-PIKT**; no other golden emits `ahydo_shape` (the DIST goldens' `distribution_blocked`
+under the v1.1.1 amendment is untouched by this exception). The committed coherence-clean
 asserts (the facade-scenarios G-loop and the G3-DIST check) are AMENDED in step 3 to
 expect EXACTLY this flag on EXACTLY these goldens — any other coherence delta on any
 golden remains a red test.

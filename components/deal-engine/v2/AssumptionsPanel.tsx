@@ -295,8 +295,12 @@ const AssumptionsPanel: React.FC = () => {
               render, exactly like the refi editor's floating-tranche gate. The suggestion
               layer proposes NO elections (§19-preamble precedent): a schedule starts null
               (the FIXED both-legs note) and wears YOU the moment it is touched. §20.2 gates
-              are enforced at Build; the commits below can only construct in-domain states
-              (whole-coupon values, length ≡ hold). */}
+              are enforced at Build (and the store surfaces the throw in the red banner). The
+              commits below guarantee the two SCHEDULE gates by construction — whole-coupon
+              values and length ≡ hold_years, which is read-only here — while the two RATE
+              gates (cash_coupon > 0, pik ≥ cash) are properties of the note itself that a
+              schedule cannot fix, so the toggle is DISABLED with its reason when they fail
+              [conformance note 3 — the earlier comment claimed more than it delivered]. */}
           {(() => {
             const note = a.structure.tranches.find(
               (t): t is PikNoteAssumption => t.type === 'pik_note',
@@ -304,20 +308,37 @@ const AssumptionsPanel: React.FC = () => {
             if (!note) return null;
             const N = a.entry.hold_years;
             const el = note.elections;
+            // Keyed on the NAME, not the type: this row edits the note it names, so on a
+            // multi-note deal the second note must NOT inherit a schedule the user never chose
+            // [conformance note 4]. Each tranche renders its own markers, so a type-wide write
+            // would be visible — but wrong is wrong.
             const writeNote = (over: Partial<PikNoteAssumption>): [DealAssumptions, string[]] => [
               {
                 ...a,
                 structure: {
                   ...a.structure,
-                  tranches: a.structure.tranches.map((t) => (t.type === 'pik_note' ? { ...t, ...over } : t)),
+                  tranches: a.structure.tranches.map((t) =>
+                    t.type === 'pik_note' && t.name === note.name ? { ...t, ...over } : t,
+                  ),
                 },
               },
               ['structure.tranches'],
             ];
+            // §20.2(iii)/(iv) are properties of the note's RATES, not of the schedule, so the
+            // toggle itself cannot fix them — offering it on such a note would only commit a
+            // state Build rejects. Disable and say why [conformance note 3].
+            const rateBlock =
+              !(note.cash_coupon > 0)
+                ? 'needs a cash coupon > 0 (§20.2)'
+                : note.pik_coupon < note.cash_coupon
+                  ? 'needs pik ≥ cash coupon (§20.2)'
+                  : null;
             return (
               <>
                 <Row label={`PIK toggle — ${note.name}`} path="structure.tranches">
+                  {rateBlock && <span className="text-[10px] mr-1" style={labelStyle}>{rateBlock}</span>}
                   <button
+                    disabled={rateBlock !== null}
                     onClick={() =>
                       set(
                         ...writeNote(
@@ -330,7 +351,11 @@ const AssumptionsPanel: React.FC = () => {
                       )
                     }
                     className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
-                    style={{ border: '1px solid rgba(17,17,17,0.15)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}
+                    style={{
+                      border: '1px solid rgba(17,17,17,0.15)',
+                      color: rateBlock ? 'rgba(17,17,17,0.3)' : 'rgba(17,17,17,0.55)',
+                      fontFamily: mono,
+                    }}
                   >
                     {el === null ? 'fixed (both legs)' : 'per-year election'}
                   </button>

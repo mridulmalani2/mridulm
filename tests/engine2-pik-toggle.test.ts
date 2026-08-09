@@ -2,9 +2,13 @@
  * §20 PIK toggle [v1.5.0] — the C-gate (engine ≡ the adjudicated G8-PIKT gospel) plus the
  * §20.10 golden-uncovered branches as DIRECTED fixtures and the §14.21 invariants.
  *
- * MUTANTS (each run RED via string-replace, then reverted). The reddened set below is MEASURED,
- * not assumed — the step-3 accuracy audit (2026-08-09) found the first draft of this header
- * mis-attributed M-c, the same defect class the §19 audit caught:
+ * MUTANTS (each run RED via string-replace, then reverted). The reddened sets below are
+ * MEASURED, not assumed — the step-3 accuracy audit (2026-08-09) found the first draft of this
+ * header mis-attributed M-c, the same defect class the §19 audit caught. The sets name the
+ * fixtures IN THIS FILE; conformance step 5 measured that the arithmetic mutants also redden
+ * cross-file gates (the C5 sequence row for G8PIKT, the credit gate, the display-marker test
+ * and the financeLines-default test), so the per-mutant kill counts run HIGHER than listed —
+ * listed is the in-file floor, never the ceiling:
  * (M-a) 'cash' years ALSO accruing (the both-legs mutant) → C-gate ×3, (i), (iv), (vi), §14.21
  *   mixed + all-cash;
  * (M-b) elections read at the WRONG year offset (`el[yearIndex+1]`, or from the END) → C-gate

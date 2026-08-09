@@ -631,7 +631,14 @@ ahead of the 50% sweep. Y3 is the clean case: the pool falls by exactly 15.24096
 exactly half of it (7.620480) — with **cash tax UNCHANGED** (14.272 either way), because §163(j)
 binds under both legs so `deductible = 30% × ATI` regardless of which leg fills the pool; the Y3
 coupling is purely the cash leg, no tax channel. Y4 compounds it (the Y3 shortfall leaves senior
-7.620 higher → +1.529839 Y4 interest → sweep −11.739301). By exit the two coupons leave senior
+7.620480 higher → **+0.617259** of extra Y4 interest at the 8.1% all-in = 7.620480 × 0.081 →
+Y4 sweep −11.74). [Magnitude corrected at conformance step 5, 2026-08-09: the record read
+"+1.529839 Y4 interest", which is a YEAR-SHIFT — 1.568146 (= 19.36 × 0.081) is the **Y5**
+interest delta, and 7.620480 at 8.1% cannot yield 1.53. Verified against the committed
+fixtures: G8-PIKT vs G3 senior interest is 12.66 vs 12.04 in Y4 (Δ 0.62) and 8.95 vs 7.38 in
+Y5 (Δ 1.57). Same defect class as the M2 §163(j) attribution corrected in the paragraph above
+— a wrong measured magnitude in a SIGNED record; every other number in this paragraph, incl.
+the sweep deltas and the exit split, reproduces.] By exit the two coupons leave senior
 26.014 HIGHER (51.865 vs 25.852) and the note 48.251 LOWER (189.665 vs G3's 237.916): paying 30.48
 of cash coupons bought 48.25 of avoided compounding.
 
