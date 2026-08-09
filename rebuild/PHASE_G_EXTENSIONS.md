@@ -178,10 +178,10 @@ hand-kept list of what to check, assume it already has a hole.
 |---|---|---|---|
 | 1 | A | ✅ **DONE 2026-07-25** — **Interim distributions + cash trap** | Unlocks DPI/RVPI/TVPI + payback properly (ILPA defs from DR-2); the feared same-year cycle DISSOLVED: §3.7's pro-forma test is linear in the payment, so rp_max has a closed form and the no-solver rule holds (SPEC v1.1.0 §5). Shipped as SPEC v1.1.0/v1.1.1 + goldens G2-DIST / G3-DIST / G2-DIST-D + engine + UI |
 | 2 | **B** | **Quarter-stitched LTM** | FY + YTD − prior-YTD, Q4 = FY − 9M, 52/53-week fixtures; FPI stays FY with staleness badge. DATA-SIDE: computes a more-current LTM fact the engine consumes. Admission ticket = EMPTY git-diff over the engine arithmetic path (NOT golden byte-identity — that is necessary-secondary). Adjudicate the STITCH with a different-language reference derivation + two passes + a CI regeneration gate (the DERIVATION.md method) |
-| 3 | A | **Fund/LP overlay** | Net-to-LP after fees/carry (European/American), reuses old fundReturns spec knowledge; feeds a fourth return row clearly labelled fund-level |
+| 3 | A | ✅ **DONE 2026-08-08** — **Fund/LP overlay** | Net-to-LP after fees/carry (European/American), reuses old fundReturns spec knowledge; feeds a fourth return row clearly labelled fund-level |
 | 4 | B | **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |
-| 5 | A | **Refinancing events** | Repricing, premium, extend; OID/DFC write-off interplay already spec'd in §7/§9 |
-| 6 | A | **PIK toggle (per-year election)** | Extends the v1 fixed PIK note; AHYDO disclosure from DR-3.4 (changes the §4 PIK accrual path ⇒ engine arithmetic) |
+| 5 | A | ✅ **DONE 2026-07-26** — **Refinancing events** | Repricing, premium, extend; OID/DFC write-off interplay already spec'd in §7/§9 |
+| 6 | A | ✅ **DONE 2026-08-09** — **PIK toggle (per-year election)** | Extends the v1 fixed PIK note; AHYDO disclosure from DR-3.4 (changes the §4 PIK accrual path ⇒ engine arithmetic) |
 | 7 | A | **Partial exits / IPO selldown** | Interacts with MIP cap (SPEC §10 already forward-compatible) |
 | 8 | A | **MIP ratchets + sweet equity** | Sweet equity as a REAL strip structure (institutional loan notes + ordinaries) — the v1 promote stays separate; never blend the two instruments |
 | 9 | A | **Add-on acquisitions** | The old engine's deepest wound (debt discarded, scenario bases diverged): spec must state add-on debt enters the SAME waterfall, scenario/sensitivity bases include add-ons by construction (single code path guarantees it) |

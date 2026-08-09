@@ -581,3 +581,82 @@ no rounding-mode sensitivity (spec_calc `r6` = round-half-even, confirmed post-c
 The G7-FUND GOSPEL is the RESEEDED fixture. Adjudication artifacts (blind commits + phase-3
 comparisons, both passes) were preserved in the session scratchpad; this record is the durable
 summary, per the DERIVATION method.
+
+## G8-PIKT (§20 v1.5.0, Phase-3 step 2) — adjudication record
+
+Both passes derived the WHOLE deal (S&U → operating → §4 interest under the elections → §6 tax
+machine → §3 waterfall/sweep → §8 BS → §9 exit → §10 MIP → returns) from SPEC text and the §17
+G3 inputs ALONE — no reference path, no fixture, no engine code, and (pass 2) no sight of pass 1.
+Each committed its full derivation to the scratchpad BEFORE opening `tests/goldens/G8PIKT/`.
+
+**Pass 1 (2026-08-08/09) — SIGNED. 657 leaves compared, ZERO mismatches.** Own float64 walk +
+Decimal(prec-40) cross-check (max |Δ| 1.14e-13). A test STRONGER than the §15 bar passes with no
+exceptions: for all 285 money leaves `fixture == round_half_up(full-precision, 2)` exactly. Worst
+IRR deviation vs the r6 fixture **3.458e-07 (0.0035bp) — 29× inside the ±0.1bp bar**; worst MOIC
+deviation 3.86e-05 against r4 display. Derived key values: uses **797.075** (EV 765 + txn 15.30 +
+fees 6.075 + OID 2.70 + cash 8.00), sponsor equity **392.075** (plug), goodwill 679.067123; exit
+EV **921.704828**, payoff **241.530454** (senior 51.865174 + note 189.665280), cash at exit
+53.067959, equity pre-MIP **719.416760**, MIP **19.695639** (in the money, cap not binding),
+sponsor share **699.721121**; sponsor net **IRR 0.122823 / MOIC 1.784661**, pre-promote 0.129074 /
+1.834896, unlevered 0.110837 / 1.589924; BS |check| max **5.68e-14**; min cash headroom 16.681890.
+
+**Pass 2 (2026-08-08/09, blind, independent) — SIGNED. 421 fixture leaves, ALL match.** Exact
+RATIONAL arithmetic (fractions), closed forms PROVEN before the numeric walk: with amort 0 and no
+sweep participation the note's balance is untouched by §3, so §20.3 collapses to a pure product
+over the pik prefix; 1.12 = 28/25 makes every balance a TERMINATING rational (no rounding enters).
+Both cash years therefore sit on the SAME balance 135·(28/25)² = 169.344, making the two coupons
+identically 15.240960 — a theorem here, not a coincidence — and three pik years give the payoff
+135·(28/25)³ = **189.665280**. All four §20.9 closed forms reproduce to the last digit. §14.2 BS
+check **exactly 0** on all six rows in exact arithmetic. Twelve leaves sit exactly on an r2 tie
+(6.075, 797.075, 392.075 ×3 surfaces, 8.775, 11.025, 68.425); every one resolves UP in the
+fixture and float64 (§15's mandated arithmetic) lands on or above the tie for each — verified
+bit-wise, so no flagged leaf is on the wrong side.
+
+**The §163(j) finding both passes reached independently — and why §20.9's "adjudicated, never
+ported" clause was load-bearing.** The cap BINDS in every one of the five years (deductible ≡ 30%
+× ATI throughout), so G3's binds-every-year property PORTS — but its companion
+"carryforward GROWS monotonically" assert does NOT: the path is
+**[10.0575, 18.480267, 19.477611, 16.128796, 13.201901] — NON-monotone, peaking at Y3**. The turn
+is the toggle interacting with the amortizing senior: accrual years 1–2 push 12% compounding
+into the pool (38.41, 37.91 vs caps 28.35, 29.48 — BUILDS); Y3, though a cash year, still
+straddles (31.66 vs 30.66, +1.00); the releases are **Y4 (cash: 28.23 vs cap 31.58)** and
+**Y5 (a PIK year: 29.60 vs cap 32.53)** — Y5 releases not because of an election but because
+the senior has amortized down (its interest falls 21.87 → 8.95 across the hold), so the pool
+shrinks under a growing EBITDA cap [attribution corrected by the step-3 accuracy audit, M2;
+all six numbers were and remain correct]. Had G3's monotone assert been ported it would have
+failed.
+
+**Sweep coupling (pass 2, vs an all-'pik' counterfactual).** The coupons are a §3 step-1 cash use
+ahead of the 50% sweep. Y3 is the clean case: the pool falls by exactly 15.240960 and the sweep by
+exactly half of it (7.620480) — with **cash tax UNCHANGED** (14.272 either way), because §163(j)
+binds under both legs so `deductible = 30% × ATI` regardless of which leg fills the pool; the Y3
+coupling is purely the cash leg, no tax channel. Y4 compounds it (the Y3 shortfall leaves senior
+7.620480 higher → **+0.617259** of extra Y4 interest at the 8.1% all-in = 7.620480 × 0.081 →
+Y4 sweep −11.74). [Magnitude corrected at conformance step 5, 2026-08-09: the record read
+"+1.529839 Y4 interest", which is a YEAR-SHIFT — 1.568146 (= 19.36 × 0.081) is the **Y5**
+interest delta, and 7.620480 at 8.1% cannot yield 1.53. Verified against the committed
+fixtures: G8-PIKT vs G3 senior interest is 12.66 vs 12.04 in Y4 (Δ 0.62) and 8.95 vs 7.38 in
+Y5 (Δ 1.57). Same defect class as the M2 §163(j) attribution corrected in the paragraph above
+— a wrong measured magnitude in a SIGNED record; every other number in this paragraph, incl.
+the sweep deltas and the exit split, reproduces.] By exit the two coupons leave senior
+26.014 HIGHER (51.865 vs 25.852) and the note 48.251 LOWER (189.665 vs G3's 237.916): paying 30.48
+of cash coupons bought 48.25 of avoided compounding.
+
+**Conformance notes.** (i) ONE genuine fork — the year-5 BOOK treatment of the exit write-off —
+which §14.2 cannot discriminate (both readings close the BS to zero, since the charge reduces DFC
+and equity equally). Pass 2 committed BOTH readings in advance and labelled the wrong one primary;
+the fixture (DFC[5] = 0, equity 589.76) equals its committed ALTERNATIVE to the cent and is
+CORRECT per §7's early-retirement rule ("the BOOK write-off lands in the retirement year") and
+self-consistently so, since the same write-off is already taken as the Y5 uncapped deduction
+(3.760714). Classified: adjudicator error, fixture right — three leaves, nothing else depends on
+it. (ii) Unlevered t=0 = −780.30 (EV + transaction costs only): min cash is a financing-side item,
+so it neither leaves at t=0 nor returns at exit — the only internally consistent pair (adding cash
+at exit unfunded would fabricate 8.00 of return). (iii) `coherence` is absent from the fixture BY
+DESIGN (§20.6(c) — fixtures serialize neither assumptions nor coherence), so `ahydo_shape`, which
+this note qualifies for (maturity 8 > 5, three accruing years), is asserted on the ENGINE's
+coherence surface in step 3, not here. (iv) §20.6(f) checked, not assumed: pass 2's all-pik
+counterfactual confirms the two shapes' IRR ordering is configuration-dependent — the spec's
+explicit non-claim stands.
+
+The G8-PIKT GOSPEL is the committed fixture. Blind derivations and comparison records for both
+passes were preserved in the session scratchpad; this record is the durable summary.

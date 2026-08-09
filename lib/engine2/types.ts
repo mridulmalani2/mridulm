@@ -121,6 +121,16 @@ export interface PikNoteAssumption extends TermTrancheCommon {
   type: 'pik_note';
   cash_coupon: number;
   pik_coupon: number;
+  /**
+   * §20 [v1.5.0] PIK TOGGLE — the per-year WHOLE-coupon election. `null` ≡ the v1 FIXED note
+   * (BOTH legs every year: cash paid AND accrual). Non-null: `'cash'` pays
+   * `beginning × cash_coupon` with NO accrual; `'pik'` accrues `beginning × pik_coupon` with
+   * NO cash. Length ≡ hold_years; §20.2 gates reject the rest (see `validatePikElections`).
+   * REQUIRED-with-null (never optional — §16's schema shape): a field-enumerating rebuild that
+   * DROPS elections must be a COMPILE error, not a silent reversion to fixed semantics
+   * [accuracy audit 2026-08-09, M7 — the store/UI rebuild sites are exactly that shape].
+   */
+  elections: ('cash' | 'pik')[] | null;
 }
 
 export type TermTrancheAssumption = CashPayTrancheAssumption | PikNoteAssumption;
@@ -551,7 +561,11 @@ export interface CoherenceFlag {
     /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
     | 'distribution_blocked'
     /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
-    | 'refi_noop';
+    | 'refi_noop'
+    /** §20.6(e) [v1.5.0]: a pik_note whose STRUCTURE fits the AHYDO shape (maturity > 5y + an
+     *  accruing year). Structural legs only — the §163(i) yield leg is untested (needs the
+     *  monthly AFR) and the significant-OID leg is proxied; see §20.8. */
+    | 'ahydo_shape';
   severity: 'block' | 'warn';
   message: string;
 }

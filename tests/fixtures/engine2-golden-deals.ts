@@ -86,7 +86,7 @@ export const GOLDEN_DEALS: Record<string, { facts: DealFacts; assumptions: DealA
       multiple: 8.5, exit_multiple: 8.5, min_cash: 8, sweep_pct: 0.5,
       tranches: [
         { name: 'Senior', type: 'senior', size: { x_ebitda: 3 }, pricing: floating(0.045, 0.0075), amort_pct_of_face: 0.05, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 } },
-        { name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 } },
+        { name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 }, elections: null },
       ],
       growth: [0.05, 0.04, 0.04, 0.03, 0.03], target_margin: 0.3, da_pct: 0.04, maint_pct: 0.035,
       growth_capex: [0, 0, 0, 0, 0], nwc: { method: 'days', dso: 45, dio: 30, dpo: 40 },
@@ -159,6 +159,25 @@ GOLDEN_DEALS.G7FUND = {
       committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested',
       carry_pct: 0.20, pref_rate: 0.08, catchup_pct: 1.0,
       waterfall: 'european', fee_offset_pct: 1.0,
+    },
+  },
+};
+
+// §20.9 [v1.5.0]: G8-PIKT = G3 + the per-year election. Facts, entry structure, financing and
+// operating case are IDENTICAL to G3; the ONLY changed fields are the note's two election rates
+// and the schedule — so every difference from G3 is attributable to §20 alone.
+GOLDEN_DEALS.G8PIKT = {
+  facts: GOLDEN_DEALS.G3.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G3.assumptions,
+    deal_name: 'G8-PIKT',
+    structure: {
+      ...GOLDEN_DEALS.G3.assumptions.structure,
+      tranches: GOLDEN_DEALS.G3.assumptions.structure.tranches.map((t) =>
+        t.type === 'pik_note'
+          ? { ...t, cash_coupon: 0.09, pik_coupon: 0.12, elections: ['pik', 'pik', 'cash', 'cash', 'pik'] as ('cash' | 'pik')[] }
+          : t,
+      ),
     },
   },
 };

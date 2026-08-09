@@ -1,0 +1,46 @@
+line,Y1,Y2,Y3,Y4,Y5
+revenue,315.0,327.6,340.7,350.93,361.45
+ebitda_adj,94.5,98.28,102.21,105.28,108.44
+da,12.6,13.1,13.63,14.04,14.46
+ebit,81.9,85.18,88.58,91.24,93.98
+maint_capex,11.03,11.47,11.92,12.28,12.65
+growth_capex,0.0,0.0,0.0,0.0,0.0
+delta_nwc,1.56,1.31,1.36,1.06,1.1
+fcf_pre_debt,68.73,71.79,74.65,77.22,80.27
+tax.ati,94.5,98.28,102.21,105.28,108.44
+tax.capped_interest_pool,38.41,37.91,31.66,28.23,29.6
+tax.uncapped_deductions,0.83,0.83,0.83,0.83,3.76
+tax.deductible_capped_interest,28.35,29.48,30.66,31.58,32.53
+tax.s163j_carryforward_end,10.06,18.48,19.48,16.13,13.2
+tax.taxable_before_nol,52.72,54.86,57.09,58.83,57.69
+tax.acquired_nol_used,0.0,0.0,0.0,0.0,0.0
+tax.postclose_nol_used,0.0,0.0,0.0,0.0,0.0
+tax.nol_banked,0.0,0.0,0.0,0.0,0.0
+tax.cash_tax,13.18,13.72,14.27,14.71,14.42
+Senior.beginning_balance,270.0,239.82,198.55,156.25,110.43
+Senior.cash_interest,21.87,19.43,16.08,12.66,8.95
+Senior.pik_accrual,0.0,0.0,0.0,0.0,0.0
+Senior.mandatory_amort,13.5,13.5,13.5,13.5,13.5
+Senior.sweep_repayment,16.68,27.77,28.8,32.31,45.07
+Senior.ending_balance,239.82,198.55,156.25,110.43,51.87
+Senior.refinanced,False,False,False,False,False
+Senior.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+Senior.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
+PIK Note.beginning_balance,135.0,151.2,169.34,169.34,169.34
+PIK Note.cash_interest,0.0,0.0,15.24,15.24,0.0
+PIK Note.pik_accrual,16.2,18.14,0.0,0.0,20.32
+PIK Note.mandatory_amort,0.0,0.0,0.0,0.0,0.0
+PIK Note.sweep_repayment,0.0,0.0,0.0,0.0,0.0
+PIK Note.ending_balance,151.2,169.34,169.34,169.34,189.67
+PIK Note.refinanced,False,False,False,False,False
+PIK Note.refinancing_cash_cost,0.0,0.0,0.0,0.0,0.0
+PIK Note.unamortized_writeoff,0.0,0.0,0.0,0.0,0.0
+wf.opening_cash,8.0,24.68,35.77,36.8,40.31
+wf.sweep_pool,33.36,55.54,57.6,64.63,90.14
+wf.sweep_applied_total,16.68,27.77,28.8,32.31,45.07
+wf.closing_cash,24.68,35.77,36.8,40.31,53.07
+wf.distribution_requested,0.0,0.0,0.0,0.0,0.0
+wf.rp_max,,,,,
+wf.distribution_paid,0.0,0.0,0.0,0.0,0.0
+wf.distribution_blocked,False,False,False,False,False
+returns.dpi,0.0,0.0,0.0,0.0,0.0

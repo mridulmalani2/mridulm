@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);
@@ -313,5 +313,42 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
   });
   it('§19.6(b): net-to-LP IRR strictly below the sponsor-net IRR (fees + carry both live)', () => {
     expect(f.fund_lp_net.irr).toBeLessThan(g7.returns.sponsor_net.irr); // 9.81% < 13.39%
+  });
+});
+
+describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; GOSPEL — both adjudication passes SIGNED)', () => {
+  const g8 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G8PIKT/expected.json'), 'utf8'));
+  const g3 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G3/expected.json'), 'utf8'));
+  const note = g8.tranches['PIK Note'];
+
+  it('entry and operating are FROZEN vs G3 (coupon mechanics are post-close; the dist_variant discipline)', () => {
+    expect(g8.sources_uses).toEqual(g3.sources_uses);
+    expect(g8.operating).toEqual(g3.operating);
+    expect(g8.returns.unlevered).toEqual(g3.returns.unlevered); // §9 capital-structure-blind
+  });
+
+  it('§20.9 closed forms: the elected walk [pik,pik,cash,cash,pik] to the digit', () => {
+    // pik years accrue at 12% on beginning balance; cash years pay 9% with NO accrual
+    expect(note[0].pik_accrual).toBeCloseTo(16.2, 2);      // 135 × 0.12
+    expect(note[1].pik_accrual).toBeCloseTo(18.14, 2);     // 151.2 × 0.12 = 18.144
+    expect(note[2].cash_interest).toBeCloseTo(15.24, 2);   // 169.344 × 0.09 = 15.240960
+    expect(note[3].cash_interest).toBeCloseTo(15.24, 2);   // beginning balance FLAT in cash years
+    expect(note[4].pik_accrual).toBeCloseTo(20.32, 2);     // 169.344 × 0.12 = 20.32128
+    for (const [i, e] of (['pik', 'pik', 'cash', 'cash', 'pik'] as const).entries()) {
+      expect(note[i].cash_interest === 0).toBe(e === 'pik');   // whole-coupon: never both legs
+      expect(note[i].pik_accrual === 0).toBe(e === 'cash');
+    }
+    expect(note[2].beginning_balance).toBeCloseTo(169.34, 2);
+    expect(note[4].ending_balance).toBeCloseTo(189.67, 2); // 135 × 1.12³ = 189.665280 (§9 par + accrued)
+  });
+
+  it('the toggle moves the whole deal coherently (adjudicated values, r2 display)', () => {
+    expect(g8.exit.debt_payoff_at_par_plus_pik).toBeCloseTo(241.53, 2); // senior 51.87 + note 189.67 at full precision
+    expect(g8.exit.mip_payout).toBeCloseTo(19.7, 1);                    // promote stays IN the money (§20.9/G3 base)
+    expect(g8.returns.sponsor_net.irr).toBeCloseTo(0.122823, 6);
+    expect(g8.returns.sponsor_net.moic).toBeCloseTo(1.7847, 4);
+    // §20.6(f) is an explicit NON-claim: the fixture happens to beat G3's all-accrual shape
+    // (12.28% > 11.85%) but NO ordering between election patterns is asserted as a rule —
+    // the round-1 sign-off constructed the counter-direction numerically.
   });
 });

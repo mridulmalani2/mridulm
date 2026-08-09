@@ -195,6 +195,21 @@ describe('§19 fund overlay — Excel surfaces (G7-FUND)', () => {
   });
 });
 
+describe('§20.8 — the PIK-toggle disclosure row is on the Excel Methodology sheet (both surfaces, the #115 precedent)', () => {
+  it('Methodology carries the §20 row with its load-bearing clauses (label mutation-tested)', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    const { facts, assumptions } = GOLDEN_DEALS.G8PIKT;
+    const rb = await roundTrip(buildEngine2Workbook(runModel(facts, assumptions), 'USD'));
+    const methodText: string[] = [];
+    rb.getWorksheet('Methodology')!.eachRow((row) => methodText.push(String(row.getCell(1).value ?? '')));
+    const row = methodText.find((l) => l.startsWith('PIK toggle:'));
+    expect(row, 'the §20 Methodology row').toBeTruthy();
+    expect(row).toContain('WHOLE-coupon election only');
+    expect(row).toContain('deducted as ACCRUED');
+    expect(row).toContain('deliberately over-fires');
+  });
+});
+
 describe('§15 completeness — the v1.1.0 interim-distributions row is on the Excel Methodology sheet', () => {
   it('Methodology carries the distributions/RP-trap sentence (label mutation-tested)', async () => {
     const { runModel } = await import('../lib/engine2/facade');

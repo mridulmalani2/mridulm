@@ -63,7 +63,7 @@ const SPECS: Record<string, GoldenSpec> = {
       },
       {
         name: 'PIK Note', type: 'pik_note', size: { x_ebitda: 1.5 }, cash_coupon: 0, pik_coupon: 0.12,
-        amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 },
+        amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: false, priority: 2 }, elections: null,
       },
     ],
   },

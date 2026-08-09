@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/format';
 import BasisBadge from './BasisBadge';
-import type { DealAssumptions, CashPayTrancheAssumption, FundOverlayAssumption, RefinancingEvent } from '../../../lib/engine2/types';
+import type { DealAssumptions, CashPayTrancheAssumption, FundOverlayAssumption, PikNoteAssumption, RefinancingEvent } from '../../../lib/engine2/types';
 import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { sizingBasisLabel } from '../../../lib/engine2/display';
@@ -162,7 +162,7 @@ const AssumptionsPanel: React.FC = () => {
       {/* ── Advanced (collapsed) ── */}
       <details className="mt-3">
         <summary className="text-[10px] tracking-widest uppercase cursor-pointer" style={labelStyle}>
-          Advanced — tax · fees · sweep · MIP · distributions · fund
+          Advanced — tax · fees · sweep · MIP · distributions · fund · PIK
         </summary>
         <div className="mt-2">
           <Row label="Tax rate" path="tax.rate">
@@ -281,6 +281,115 @@ const AssumptionsPanel: React.FC = () => {
                       {term.name} reprices to base {toPctInput(base.base_rate)}% + {bps(newSpread)} at year {refi.year};
                       a {toPctInput(refi.call_premium_pct)}% call premium is paid that year, the old unamortized
                       OID and fees write off (tax deduction the following year), maturity extends past the hold (§18).
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()}
+          {/* ── §20 [v1.5.0] PIK toggle — Class B, Advanced tier ──────────────────────
+              The per-year WHOLE-coupon election on a pik_note. Rendered ONLY when the deal
+              actually carries a PIK note: the v2 UI has no tranche BUILDER, and the D7
+              suggestion layer never proposes a pik_note, so today this surface appears for
+              programmatically-constructed deals (and templates, once wired) — conditional
+              render, exactly like the refi editor's floating-tranche gate. The suggestion
+              layer proposes NO elections (§19-preamble precedent): a schedule starts null
+              (the FIXED both-legs note) and wears YOU the moment it is touched. §20.2 gates
+              are enforced at Build (and the store surfaces the throw in the red banner). The
+              commits below guarantee the two SCHEDULE gates by construction — whole-coupon
+              values and length ≡ hold_years, which is read-only here — while the two RATE
+              gates (cash_coupon > 0, pik ≥ cash) are properties of the note itself that a
+              schedule cannot fix, so the toggle is DISABLED with its reason when they fail
+              [conformance note 3 — the earlier comment claimed more than it delivered]. */}
+          {(() => {
+            const note = a.structure.tranches.find(
+              (t): t is PikNoteAssumption => t.type === 'pik_note',
+            );
+            if (!note) return null;
+            const N = a.entry.hold_years;
+            const el = note.elections;
+            // Keyed on the NAME, not the type: this row edits the note it names, so on a
+            // multi-note deal the second note must NOT inherit a schedule the user never chose
+            // [conformance note 4]. Each tranche renders its own markers, so a type-wide write
+            // would be visible — but wrong is wrong.
+            const writeNote = (over: Partial<PikNoteAssumption>): [DealAssumptions, string[]] => [
+              {
+                ...a,
+                structure: {
+                  ...a.structure,
+                  tranches: a.structure.tranches.map((t) =>
+                    t.type === 'pik_note' && t.name === note.name ? { ...t, ...over } : t,
+                  ),
+                },
+              },
+              ['structure.tranches'],
+            ];
+            // §20.2(iii)/(iv) are properties of the note's RATES, not of the schedule, so the
+            // toggle itself cannot fix them — offering it on such a note would only commit a
+            // state Build rejects. Disable and say why [conformance note 3].
+            const rateBlock =
+              !(note.cash_coupon > 0)
+                ? 'needs a cash coupon > 0 (§20.2)'
+                : note.pik_coupon < note.cash_coupon
+                  ? 'needs pik ≥ cash coupon (§20.2)'
+                  : null;
+            return (
+              <>
+                <Row label={`PIK toggle — ${note.name}`} path="structure.tranches">
+                  {rateBlock && <span className="text-[10px] mr-1" style={labelStyle}>{rateBlock}</span>}
+                  <button
+                    disabled={rateBlock !== null}
+                    onClick={() =>
+                      set(
+                        ...writeNote(
+                          el === null
+                            ? // turning it ON starts every year at 'pik' (the accreting default the
+                              // FIXED note already behaves like); the user then elects cash per year
+                              { elections: Array.from({ length: N }, () => 'pik' as const) }
+                            : { elections: null },
+                        ),
+                      )
+                    }
+                    className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
+                    style={{
+                      border: '1px solid rgba(17,17,17,0.15)',
+                      color: rateBlock ? 'rgba(17,17,17,0.3)' : 'rgba(17,17,17,0.55)',
+                      fontFamily: mono,
+                    }}
+                  >
+                    {el === null ? 'fixed (both legs)' : 'per-year election'}
+                  </button>
+                </Row>
+                {el !== null && (
+                  <>
+                    <div className="flex gap-1 mb-2 justify-end">
+                      {el.map((e, i) => (
+                        <button
+                          key={i}
+                          onClick={() =>
+                            set(
+                              ...writeNote({
+                                elections: el.map((x, j) => (j === i ? (x === 'pik' ? 'cash' : 'pik') : x)),
+                              }),
+                            )
+                          }
+                          className="px-1.5 py-1 text-[9px] uppercase tracking-widest"
+                          style={{
+                            border: '1px solid rgba(17,17,17,0.15)',
+                            background: e === 'pik' ? 'rgba(17,17,17,0.06)' : '#fff',
+                            color: 'rgba(17,17,17,0.65)',
+                            fontFamily: mono,
+                          }}
+                        >
+                          Y{i + 1} {e}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-right" style={labelStyle}>
+                      each year serves the WHOLE coupon one way: cash pays {toPctInput(note.cash_coupon)}% on the
+                      beginning balance and accrues nothing; PIK accrues {toPctInput(note.pik_coupon)}% and pays
+                      nothing (SPEC §20). Elections are frozen across scenarios; PIK is deducted as accrued —
+                      AHYDO is not modelled (see the methodology page).
                     </p>
                   </>
                 )}

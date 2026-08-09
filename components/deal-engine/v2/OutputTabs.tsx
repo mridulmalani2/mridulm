@@ -186,14 +186,24 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
   const last = o.credit[o.credit.length - 1];
   return (
     <div>
-      {o.tranches.map((rows, k) => (
+      {o.tranches.map((rows, k) => {
+        // §20 [v1.5.0]: a pik_note carrying a per-year election schedule renders the ELECTED
+        // leg per year, read from `assumptions.structure` (an input the engine consumed, not a
+        // derived number). Absent elections the note is the v1 FIXED both-legs shape and no
+        // marker renders — §20.6(c)'s "never a zero row" discipline applied to a label.
+        const trancheAssumption = o.assumptions.structure.tranches.find(
+          (t) => t.type !== 'revolver' && t.name === rows[0]?.name,
+        );
+        const elections = trancheAssumption && trancheAssumption.type === 'pik_note' ? trancheAssumption.elections : null;
+        return (
         <div key={k} className="mb-3">
           <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>{rows[0]?.name ?? `Tranche ${k + 1}`}</p>
           <Table head={['Year', 'Beginning', 'Interest', 'PIK', 'Amort', 'Sweep', 'Ending']}>
             {rows.map((r, i) => (
               <tr key={i} style={rowB}>
-                {/* §18: mark the refi year — the tranche re-prices/re-terms at the start of it. */}
-                <td className="px-2 py-1">Y{i + 1}{r.refinanced ? ' ⟳' : ''}</td>
+                {/* §18: mark the refi year — the tranche re-prices/re-terms at the start of it.
+                    §20: mark the year's PIK-toggle election (cash coupon paid vs coupon accrued). */}
+                <td className="px-2 py-1">Y{i + 1}{r.refinanced ? ' ⟳' : ''}{elections ? (elections[i] === 'cash' ? ' · cash' : ' · PIK') : ''}</td>
                 <td className={td}>{num(r.beginning_balance, 1)}</td>
                 <td className={td}>{num(r.cash_interest, 2)}</td>
                 <td className={td}>{num(r.pik_accrual, 2)}</td>
@@ -203,8 +213,16 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
               </tr>
             ))}
           </Table>
+          {elections && (
+            <p className="text-[10px] mt-1" style={label}>
+              PIK toggle (§20): each year the issuer elects the WHOLE coupon — “cash” pays the cash
+              coupon on the beginning balance and accrues nothing; “PIK” accrues the PIK coupon and
+              pays nothing. Never both legs in one year. Elections are frozen across scenarios.
+            </p>
+          )}
         </div>
-      ))}
+        );
+      })}
       {o.revolver && (
         <div className="mb-3">
           <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Revolver</p>
@@ -413,6 +431,8 @@ const DISCLOSURES: [string, string][] = [
   ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted UNCAPPED the FOLLOWING year (vs the Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1yr)'],
   // §19.8 [v1.4.0]: the fund-of-one simplifications — the SPEC §15 sentence mirrored here
   ['Fund/LP overlay (§19)', "fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs, no NAV basis); no subscription line; no GP commitment; no clawback (nothing to claw back by construction); 'european' = all-contributions hurdle + pref base, 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, NOT fund carry; the year-N fee draws BEFORE the final distribution"],
+  // §20.8 [v1.5.0]: the PIK-toggle simplifications — the SPEC §15 sentence mirrored here
+  ['PIK toggle (§20)', 'per-year WHOLE-coupon election only (no partial/50-50 elections — v2); elections are frozen across scenarios; PIK is deducted as ACCRUED, with AHYDO (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the disqualified-portion disallowance are NOT modelled; qualifying notes carry the structural ahydo_shape warning (maturity > 5y + an accruing year), whose yield leg is untested (it needs the monthly AFR) and whose significant-OID leg is proxied, so the flag deliberately over-fires; PIK notes remain non-refinanceable and sweep-exempt by default'],
 ];
 
 export const Methodology: React.FC = () => (

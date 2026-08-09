@@ -105,6 +105,38 @@ export function validateRefinancing(
   }
 }
 
+/**
+ * §16/§20.2 input gates for the PIK toggle (input-gate REJECTIONS, never computed defaults —
+ * elections are indenture terms, not UI slips). Validated at Build, per tranche:
+ * length ≡ hold_years; every entry in the union; `cash_coupon > 0` (a 0%-cash toggle year is a
+ * coupon holiday no lender signs — the FIXED cash-0 accreting note stays available as
+ * `elections: null`); `pik_coupon ≥ cash_coupon` (the PIK premium compensates deferral —
+ * DR-3.4 market shape).
+ */
+export function validatePikElections(sized: SizedStructure, holdYears: number): void {
+  for (const t of sized.terms) {
+    const a = t.assumption;
+    if (a.type !== 'pik_note') continue;
+    const el = a.elections;
+    if (el === null || el === undefined) continue; // null ≡ the v1 FIXED both-legs note
+    const bad = (msg: string): never => {
+      throw new RangeError(`debt: pik_note "${a.name}" elections — ${msg} (SPEC §20.2/§16)`);
+    };
+    if (el.length !== holdYears) {
+      bad(`length ${el.length} ≠ hold_years ${holdYears}; the schedule is one election per HOLD year`);
+    }
+    for (const [i, e] of el.entries()) {
+      if (e !== 'cash' && e !== 'pik') bad(`entry ${i + 1} is "${String(e)}" — must be 'cash' or 'pik'`);
+    }
+    if (!(a.cash_coupon > 0)) {
+      bad("cash_coupon must be > 0 with elections set — a 0%-cash toggle year is a free coupon holiday; use elections: null for the FIXED accreting note");
+    }
+    if (!(a.pik_coupon >= a.cash_coupon)) {
+      bad(`pik_coupon ${a.pik_coupon} < cash_coupon ${a.cash_coupon} — the PIK premium compensates deferral and is non-negative`);
+    }
+  }
+}
+
 export interface FinanceLines {
   per_tranche: { cash_interest: number; pik_accrual: number }[];
   revolver_interest: number;
@@ -114,11 +146,22 @@ export interface FinanceLines {
   pik_accrual_total: number;
 }
 
-/** §4: every accrual on BEGINNING-of-year balances — interest, PIK, and the commitment fee on beginning undrawn. */
-export function financeLines(sized: SizedStructure, state: DebtState): FinanceLines {
+/**
+ * §4: every accrual on BEGINNING-of-year balances — interest, PIK, and the commitment fee on
+ * beginning undrawn. `yearIndex` (0-based; year t+1) selects a pik_note's §20 election; omit it
+ * (or leave `elections` null) for the v1 FIXED both-legs note — byte-identity §20.6(c).
+ */
+export function financeLines(sized: SizedStructure, state: DebtState, yearIndex = 0): FinanceLines {
   const perTranche = sized.terms.map((t, i) => {
     const balance = state.term_balances[i];
     if (t.assumption.type === 'pik_note') {
+      // §20.3 [v1.5.0]: the per-year WHOLE-coupon election — one leg or the other, never both.
+      const el = t.assumption.elections;
+      if (el !== null && el !== undefined) {
+        return el[yearIndex] === 'cash'
+          ? { cash_interest: cashInterest(balance, t.assumption.cash_coupon), pik_accrual: 0 }
+          : { cash_interest: 0, pik_accrual: pikAccrual(balance, t.assumption.pik_coupon) };
+      }
       return {
         cash_interest: cashInterest(balance, t.assumption.cash_coupon),
         pik_accrual: pikAccrual(balance, t.assumption.pik_coupon),
