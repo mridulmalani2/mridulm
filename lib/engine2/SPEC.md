@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.4.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.5.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
