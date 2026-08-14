@@ -46,3 +46,40 @@ note on the backlog row).
 - Schema REQUIRED-with-null; every new output unconditional-or-null per the §22.10 pattern.
 - The golden's EXACT inputs + ≥1 worked closed form pinned IN the spec.
 - ≤2 hostile rounds; ledger everything non-blocking; the budget belongs to steps 2–3.
+
+## DECIDED 2026-08-14 (constraints dossier in the step-1 record; citations therein)
+
+1. Valuation: user-stated `event_multiple` × EBITDA_adj[t] − net debt at t (§9's form at
+   year t, §11's debt/cash definitions), × fraction = proceeds. A stated equity VALUE is
+   REJECTED (scenario-invariant in a downside — the §13 trap precedent decides the form).
+   The RVPI no-interim-marks rejection forbids any engine-invented mark.
+2. Fraction applies to the SPONSOR's position only. `selldown ∧ rollover > 0` REJECTED in
+   v1 (owner question Q-B records why). Domain: fraction ∈ (0,1) OPEN; year ∈ {1..N−1}.
+3. §10 MIP: proceeds EXCLUDED from the hurdle base X (a sponsor-only flow may not enter a
+   TOTAL-company base — §10's own mixing prohibition, inverted); the promote at N is
+   computed on total exit proceeds exactly as today (the buyer bears it pro-rata, the
+   rollover precedent). The named interaction, decided with a worked example.
+4. `selldown ∧ sweet_equity` REJECTED in v1 — §22.3(ii)'s exact style (ownership allocation
+   is negotiated; §22.7's machinery allocates company cash by priority, a different object).
+5. Membership: IN sponsor_net at year t (one flow per period); EXCLUDED from pre_promote
+   (the buyer's exit share is already inside the total stream — adding proceeds at t would
+   double-count); NEVER in unlevered. DPI/payback: distributions-only (owner question Q-A;
+   conservative default + a basis-labelled memo line).
+6. §19 fund: the year-t interim LP leg (conservation forces it); the deal-vs-fund DPI
+   asymmetry stated as a layer note.
+7. §12 bridge: the four bars are UNTOUCHED (the money never transits the company — the
+   FIRST sponsor inflow that must NOT shrink the paydown bar; stated); the walk-down gains
+   `selldown_proceeds_sponsor` and a `buyer_delta` term (the rollover-Δ template); §14.16
+   widens to SIX claimant terms (buyer exit share, 0 when no event); the new terms
+   self-cancel in residual (b) and need direct asserts.
+8. §13: the event is STRUCTURE — terms frozen across scenarios; PROCEEDS recompute from
+   each scenario's EBITDA_adj[t] (the trap's policy-frozen/binding-varies split).
+9. Coherence: `selldown_below_cost` WARN (never silent, never a rejection): fires when the
+   implied event equity value of the SOLD fraction < fraction × sponsor_equity − $0.005m,
+   condition-named, measurement pair pinned.
+10. Golden: **G11-SELL = G2-DIST + exactly one event** (terms pinned at draft time with
+    closed forms for proceeds AND the year-N shrink on the same fixture); `selldown: null`
+    byte-identity gate; §22.13-style directed fixtures per the dossier list.
+
+Spec-hygiene item (found by the dossier): §1's "Interim sponsor flows exist exactly when
+interim distributions are on" becomes FALSE under a selldown — the draft amends it.
