@@ -1132,8 +1132,10 @@ This only ever WIDENS a null-domain, which is the intended direction in every ca
     `management_effective_ordinary_pct ≡ M / P`, NULL at `P ≤ 0`.
     COMPARISON RULE [round-1 arith-M5, restated here as its home]: the tier COUNT is taken on
     `institution_moic_at_ratchet` — the engine's own walk value — and `returns.sponsor_net.moic`
-    is checked against it on MONEY. One assert on money, one on counts; never a count-vs-count
-    race across two float paths at exactly the boundary §22.13(iii) makes normative.** And
+    is checked against it on VALUE, under the absolute tolerance floor above. This clause
+    carries TWO value asserts (that MOIC check, and the money identity below) and ONE count
+    assert; never a count-vs-count race across two float paths at exactly the boundary
+    §22.13(iii) makes normative.** And
     `institution_ordinary_share + loan_notes_redeemed ≡ sponsor_share`: the ratchet's own test
     must agree with the MOIC the UI headlines, or one of them is lying; (e) [sweet_equity
     non-null **∧ ordinary_pot > 0** — at `P = 0` the ratio is `0/0`, which §22.10's own
@@ -2498,7 +2500,7 @@ MARGINAL rather than a cliff):
    pro-rata.
 
 All three are OFF by default (`sweet_equity: null`, `mip.ratchet: null`, `warrant: null`), and
-with all three off every computed number is identical to v1.6.0 (§22.9(f)); the ONE deliberate
+with all three off every computed number is identical to v1.6.0 (§14.23(f), whose domain §22.9(f) carries); the ONE deliberate
 fixture-SHAPE change is decided spec-side in §22.12, never discovered as a red test.
 
 **CODE HOME.** All
@@ -2531,7 +2533,7 @@ subordinated to every external lender. v1 models them **entirely inside the equi
 - **MEASUREMENT POINT, pinned.** `loan_notes_accrued_balance` is `LN[N]`
   **grown to exit and BEFORE the exit redemption** (i.e. net of any INTERIM redemptions but
   gross of the exit one); `loan_notes_redeemed` is the **EXIT** redemption alone, not a
-  cumulative figure. §22.9(g)'s flag condition only reads correctly under exactly this pair,
+  cumulative figure. §14.23(g)'s flag condition (whose domain §22.9(g) carries) only reads correctly under exactly this pair,
   so it is stated rather than left to the implementer.
 
 REJECTED alternatives, each with its reason:
@@ -2660,7 +2662,7 @@ mip_payout        = min( uncapped promote, max(0, exit_equity_pre_mip_total) )  
 ```
 
 With `ratchet` null the sum has ONE term and this is `pool_pct × max(0, X − T_0)` — **§10
-verbatim**, which is why every existing golden's `mip_payout` is unchanged (§22.9(f)). This
+verbatim**, which is why every existing golden's `mip_payout` is unchanged (§14.23(f)). This
 was verified symbolically AND over 18 numeric cases including `X < T_0` and a binding cap
 (round-1 arithmetic sign-off: zero mismatches).
 
@@ -2751,8 +2753,9 @@ Every step is linear and each `need` is closed-form, so §5's **no-solver rule h
 result is exact — this is the same closed-form-over-a-solver move §3.7 made for the RP trap.
 The walk was independently exercised over nine adversarial configurations in the round-1
 sign-off (P = 0; V₀ above the top tier; P too small to reach tier 1; s₀ = 0; a tier below V₀
-followed by one above; n = 0; V₀ = 0; all tiers cleared; s = 0.99) with `M + institution ≡ P`,
-`M/P ∈ [s₀, s_n]` and the tier count agreeing in every one.
+followed by one above; n = 0; V₀ = 0; all tiers cleared; s = 0.99) with `M + institution ≡ P`
+and the tier count agreeing in every one, and `M/P ∈ [s₀, s_n]` in the eight with `P > 0`
+(at `P = 0` the ratio is 0/0, which is why §14.23(e) gates on a positive pot).
 
 **Worked example (normative — reproduce this exactly).** `I = 50`, `V₀ = 100`, `P = 25`,
 `s₀ = 0.10`, one tier `{hurdle 2.4 ⇒ T₁ = 120, s₁ = 0.20}`:
@@ -2873,7 +2876,7 @@ exercises; `gross = 5.1`, `net = 3.1`, `P = 0.95 × 102 = 96.9`; the class gave 
 **Exact boundary, pinned with both answers.** `w = 0.05`, `K = 2` ⇒ at-the-money at
 `P₀ = K(1 − w)/w = 38`: `0.05 × 40 = 2 = K`, `net = 0`. **NORMATIVE (strict `>`): does NOT
 exercise**, `warrant_exercised = false`, `P = 38`. Under `≥` it exercises and
-`P = 0.95 × 40 = 38` — **identical money and THREE differing displayed fields** [round-9 M4, a residual CREATED by the round-9 fix pinning `warrant_strike_paid = 0` on the else branch]: at ATM (P₀ = 38, w = 0.05, K = 2) the `≥` reading gives `warrant_exercised` true, `warrant_strike_paid` 2 and `warrant_payout_gross` 2, against false/0/0 under the normative `>` — two of the three are MONEY. All three are pinned in §22.13(vi) — the §22.5 boundary
+`P = 0.95 × 40 = 38` — **identical ALLOCATIONS (`ordinary_pot`, `warrant_payout_net`) and THREE differing displayed fields**: at ATM (P₀ = 38, w = 0.05, K = 2) the `≥` reading gives `warrant_exercised` true, `warrant_strike_paid` 2 and `warrant_payout_gross` 2, against false/0/0 under the normative `>` — two of the three are MONEY. All three are pinned in §22.13(vi) — the §22.5 boundary
 pattern again.
 
 **Seniority — the warrant sits BELOW the promote and the loan notes, ABOVE the ordinary
@@ -2942,7 +2945,7 @@ which is also why `sponsor_share ≡ E` was mistaken for the general answer — 
 that NO golden runs rollover > 0, so nothing would have caught it]: with all three instruments
 null the pipeline reproduces `exit.ts` EXACTLY at `E = 703.83, 0, −0.01, −25` **at both
 `rollover_fraction = 0` (`sponsor_share ≡ E`) and `rollover_fraction = 0.25`
-(703.83 → 527.8725/175.9575; −25 → −18.75/−6.25)**, and the §14.23(b) five-term mirror closes
+(703.83 → 527.8725/175.9575; −25 → −18.75/−6.25)**, and the §14.16 five-term mirror (§14.23(b)) closes
 in every one. Under an underwater strip (`LN[N] = 500`, rollover 0 by §22.3(ii)) it returns
 `sponsor_share ≡ E` at both `E = 200` and `E = −25`, which is what §22.13(v) asserts —
 and §22.13(v) now states that rollover-0 domain rather than implying generality.
@@ -3017,7 +3020,7 @@ DSCR (§22.13(x) proves it by a directed with/without pair).
 and `entry_equity_pre_promote_total` now INCLUDES `management_subscription`, which is what
 keeps §14.9(a)'s frictionless identity exact (`entry equity total − entry costs ≡ EV₀ − ND₀`
 holds only if every equity source is counted; re-derived from §2 in the round-1 sign-off).
-**§20.9's coherence roster, §14.16 AND §14.9(b) ARE ALL AMENDED** — §14.16's exit-mirror clause gains the two new claimants and is their single home (§14.23(b) points at it); the engine PR must widen the committed three-term asserts in `tests/engine2-exit-returns.test.ts`, `tests/engine2-facade-scenarios.test.ts`, `lib/engine2/types.ts` and `lib/engine2/exit.ts` alongside it. **§14.9(b) IS AMENDED** to carry the two new terms [round-1 arith-B5 — the first draft leaned
+**§20.9's coherence roster, §14.16 AND §14.9(b) ARE ALL AMENDED** — §14.16's exit-mirror clause gains the two new claimants and is their single home (§14.23(b) points at it); every committed statement of the three-term exit mirror — asserts and doc comments alike — must be widened with it; at v1.7.0 these live in `tests/engine2-exit-returns.test.ts`, `tests/engine2-facade-scenarios.test.ts`, `lib/engine2/types.ts`, `lib/engine2/exit.ts` AND `lib/engine2/bridge.ts` (whose §14.9(b) comment states the identity), and the engine PR must RE-GREP for the identity rather than trust this list. **§14.9(b) IS AMENDED** to carry the two new terms [round-1 arith-B5 — the first draft leaned
 on §14.9(b) in §22.13(ix) without amending it, and the un-amended identity reports a
 reconciliation residual of **$28.73m** on the very golden §22.12 pins].
 **§13 scenarios:** the strip, the ratchet and the warrant are STRUCTURE/POLICY — FROZEN across
@@ -3128,7 +3131,11 @@ otherwise.**
     §20.6(f) are the precedents).
 
 **§22.10 Outputs.** `SourcesUses` gains `management_subscription` (Class C, unconditional
-`0.0`), entering `total_sources` — §22.8's §2 fix. `ExitBlock` gains `management_ordinary_share`
+`0.0`), entering `total_sources` — §22.8's §2 fix. It is also a DISPLAYED source: the step-4
+UI PR must add a `Management subscription (sweet equity)` row to the Excel S&U SOURCES block
+and fold the subscription into the `Equity (sponsor + rollover)` and `Total capitalization`
+rows, which today compute `sponsor_equity + rollover_equity` (`excelExport.ts:49/83`) and
+would otherwise disagree with §22.8's amended §8 equity line by exactly the subscription. `ExitBlock` gains `management_ordinary_share`
 and `warrant_payout_net`, emitted UNCONDITIONALLY (`0.0` when off) — the G-1/G-5 committed-zero-
 column precedent, which `tests/goldens.test.ts` already asserts for the refi fields on all nine
 pre-v1.3.0 goldens. **`SourcesUses.management_subscription` is emitted the same way, and that IS
@@ -3150,7 +3157,10 @@ ordinary_pot_pre_warrant, warrant_exercised: boolean, warrant_strike_paid,
 warrant_payout_gross, warrant_payout_net, ordinary_pot, management_ordinary_share,
 institution_ordinary_share, ratchet_tiers_reached, management_effective_ordinary_pct:
 number | null, institution_moic_at_ratchet: number | null }` — named fields the display
-surface READS, never recomputes (**§14.16's single-source rule** and PHASE_G's standing
+surface READS, never recomputes. ONE sanctioned exception, stated because §22.12 pins the
+figure and no field carries it: the institutional ORDINARY subscription (39.0075 on G9-SWEET)
+may be DISPLAYED as `sponsor_equity − loan_notes_subscribed` — exact by §22.2's split of the
+plug, a presentational derivation, not a second calculation path (**§14.16's single-source rule** and PHASE_G's standing
 "no second calculation path" rule [round-1 gov-B5: the first draft cited "§16's single-path
 rule", and §16 contains no such rule — only the unrelated single-DRIVER entry gate]).
 **The WARRANT-ONLY shape is pinned**: with `warrant` non-null ∧
@@ -3161,7 +3171,11 @@ this is now consistent —
 `ratchet_tiers_reached` is `0`, and both `| null` fields are `null`: there is no strip to
 measure. `management_effective_ordinary_pct` is likewise `null` for a ZERO **or NEGATIVE**
 ordinary pot [round-2 arith-M5 — the r2 draft named only the zero case, and the signed
-pipeline makes a negative pot reachable].
+pipeline makes a negative pot reachable]. **`ratchet_tiers_reached` counts §22.5 SWEET-EQUITY
+tiers ONLY**: the §22.4 promote ratchet emits no tier count (its effect is fully carried by
+`mip_payout`), so on a legal `warrant` + `mip.ratchet` deal this field reads `0` even where
+the promote ratchet tiered, and any surface showing it on such a deal must label the basis —
+the §9 naming rule applied to the second ratchet.
 **The MIRROR-IMAGE shape is pinned too [round-4 arith-M4 — the r4 draft wrote out the harder
 direction and left the obvious one unstated, which is how "obvious" defaults become divergent
 implementations]:** with `sweet_equity` non-null ∧ `warrant` NULL, `ordinary_pot_pre_warrant`
@@ -3215,7 +3229,7 @@ ADJUDICATED during workbook construction, never assumed — the §20.9 rule):
 - Loan notes subscribed = 0.90 × 390.075 = **351.0675**; institutional ordinaries = 0.10 ×
   390.075 = **39.0075**.
 - No interim distributions ⇒ `LN[5] = 351.0675 × 1.08⁵ = 351.0675 × 1.4693280768 =
-  **515.833334601984**` (§22.9(a) closed form).
+  **515.833334601984**` (§14.23(a)'s closed form).
 - Ratchet thresholds, exact from the inputs: `T₁ = 1.50 × 390.075 = **585.1125**`,
   `T₂ = 2.00 × 390.075 = **780.15**`.
 - **`exit_equity_pre_mip_total` is IDENTICAL to G3's committed value** (2dp fixture: 703.83;
@@ -3233,7 +3247,7 @@ ADJUDICATED during workbook construction, never assumed — the §20.9 rule):
   money.
 - Asserts: the warrant is IN THE MONEY and exercises; the loan notes redeem IN FULL (no
   `loan_notes_unredeemed`); **`ratchet_tiers_reached = 1`** — tier 1 crossed, tier 2 NOT
-  (reaching T₂ needs ~306 of ordinary pot against ~180 available); §14.23(b)'s five-term mirror
+  (reaching T₂ needs ~306 of ordinary pot against ~180 available); §14.16's five-term mirror (§14.23(b))
   closes; §14.23(d)'s mirror to `returns.sponsor_net.moic` agrees.
   **G9-SWEET does NOT exercise the walk's trailing `M ← M + s_n × rem` line** [round-1 gov-B7 /
   arith-M2 — the first draft claimed a "top-tier remainder", which is FALSE: the pot is
