@@ -26,6 +26,9 @@ function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock
     invested_equity_total: core.sources_uses.sponsor_equity + core.sources_uses.rollover_equity,
     rollover_equity: core.sources_uses.rollover_equity,
     cumulative_distributions: 0,
+    loan_notes_subscribed: 0,
+    loan_note_balance_at_exit: 0,
+    institutional_interim_value: 0,
   };
   return buildExit(assumptions, inputs);
 }
@@ -37,7 +40,7 @@ function bridgeInputs(core: EngineCore, exit: ExitBlock, assumptions: DealAssump
     entry_ebitda: core.derived.enterprise_value / core.derived.entry_multiple,
     entry_net_debt: core.derived.total_debt_at_par - su.cash_to_balance_sheet,
     entry_costs: su.transaction_costs + su.financing_fees + su.oid_funded,
-    entry_equity_pre_promote_total: su.sponsor_equity + su.rollover_equity,
+    entry_equity_pre_promote_total: su.sponsor_equity + su.rollover_equity + su.management_subscription,
     exit_multiple: assumptions.exit.multiple,
     exit_ebitda: exit.exit_ebitda_basis_value,
     exit_net_debt: exit.debt_payoff_at_par_plus_pik - exit.cash_at_exit,
@@ -50,6 +53,9 @@ function bridgeInputs(core: EngineCore, exit: ExitBlock, assumptions: DealAssump
     sponsor_equity: su.sponsor_equity,
     monitoring_annual_total: 0,
     interim_distributions_sponsor: 0,
+    management_subscription: su.management_subscription,
+    management_ordinary_share: exit.management_ordinary_share,
+    warrant_payout_net: exit.warrant_payout_net,
   };
 }
 
@@ -114,6 +120,7 @@ describe('bridge.ts — §14.9 exact reconciliation on every golden (C8 gate)', 
       exit_multiple: 8.5, exit_ebitda: 120, exit_net_debt: 220, exit_costs: 20.3,
       exit_equity_pre_mip_total: E1, mip_payout: mip,
       rollover_share: rolloverShare, rollover_equity: 100,
+      management_subscription: 0, management_ordinary_share: 0, warrant_payout_net: 0,
       sponsor_share: sponsorShare, sponsor_equity: sponsorEquity,
       monitoring_annual_total: 8,
       interim_distributions_sponsor: 0,

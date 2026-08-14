@@ -1,5 +1,9 @@
 # Round-10 OPEN MINORS — SPEC §22 (backlog #8, Tier A, step 1)
 
+> **SUPERSEDED by `rebuild/G10_LEDGER.md` (round 11, 2026-08-14).** All 15 items are
+> dispositioned there; "none fixed" below was stale at this file's own commit time —
+> 6b51bfb had already fixed M1/M3/M6/M8/M13/M15-core. Round 11 GRANTED with zero blocking.
+
 Persisted from the round-10 workflow so they survive the session. **15 spec-minors, none fixed.**
 Round 11 must work these plus confirm the two round-10 blocking fixes closed without relocating.
 

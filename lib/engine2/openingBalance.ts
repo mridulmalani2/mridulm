@@ -38,7 +38,9 @@ export function buildOpeningBalance(
   const ppe = facts.net_ppe ?? 0;
   const dfc = su.financing_fees + su.oid_funded; // one merged deferred-cost line (v1.0.2)
   const debtAtPar = su.debt_at_par.reduce((s, t) => s + t.amount, 0) + drawnAtClose;
-  const equity = su.sponsor_equity + su.rollover_equity;
+  // §22.8/§8 [v1.7.0]: equity = sponsor + rollover + management subscription — the third
+  // term is what keeps the goodwill plug genuinely unaffected by a strip (0 when null).
+  const equity = su.sponsor_equity + su.rollover_equity + su.management_subscription;
   const goodwill = debtAtPar + equity - (cash + nwc0 + ppe + dfc); // §8 plug closes the BS
   const totalAssets = cash + nwc0 + ppe + dfc + goodwill;
   return {

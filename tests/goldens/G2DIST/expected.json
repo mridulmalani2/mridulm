@@ -110,11 +110,13 @@
   "exit_equity_pre_mip_total": 1044.06,
   "exit_ev": 1227.54,
   "exit_fees": 18.41,
+  "management_ordinary_share": 0.0,
   "mip_payout": 0.0,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
   "sponsor_share": 1044.06,
-  "unamortized_fees_written_off": 1.89
+  "unamortized_fees_written_off": 1.89,
+  "warrant_payout_net": 0.0
  },
  "operating": [
   {
@@ -298,6 +300,7 @@
   ],
   "enterprise_value": 990.0,
   "financing_fees": 7.42,
+  "management_subscription": 0.0,
   "oid_funded": 0.0,
   "sponsor_equity": 587.22,
   "total_sources": 1027.22,

@@ -84,18 +84,45 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 - **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
   any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
   `.claude/worktrees/`; in a cloud session it is a fresh clone.
-- **main** @ `64625fe`, SPEC v1.6.0, vitest **686/686**.
+- **main** @ `881b38b` (= 64625fe + PR #122, the bounded criterion + this runbook), SPEC
+  v1.6.0 on main, vitest **686/686**.
 - **In flight:** backlog **#8** (sweet equity strip + MIP ratchets + warrants) = SPEC v1.7.0
   §22, branch `claude/deal-engine-exits-mip-5ee40a`, **DRAFT PR #121**, vitest **689/689**
   (the +3 are `tests/governance-spec-single-home.test.ts`).
-- **#8 progress:** step 1 of 5 (spec) — ten rounds run, NOT signed under the old unbounded
-  rule. Round 10's arithmetic and contracts lenses both GRANTED with **zero** blocking; the
-  numbers, schema, output contracts and fixture shape are clean.
-- **Open for #8:** `rebuild/G10_ROUND10_OPEN_MINORS.md` (15 items — under the new rule these
-  are almost all LEDGER, not blocking; triage them with rule 1).
-- **Parked:** `git stash@{0}` on that branch — a cosmetic pass stripping 29 round-history
-  brackets from §22. Unadjudicated. **Recommendation: apply it**, re-run gates, and ledger any
-  doubt; §22 at 908 lines is itself a defect generator.
+- **#8 progress: step 1 of 5 (spec) SIGNED 2026-08-14 at round 11** under the bounded rule
+  (branch @ `0f431c4`): the parked cosmetic stash was applied+dropped (`a6897a5` — two
+  conflicts resolved in favor of the round-10 fixes), all 15 round-10 minors dispositioned
+  (`0398fb3`, six were already fixed by 6b51bfb), and a 3-lens workflow
+  (closure/composition/coherence) GRANTED with ZERO blocking; SPEC header bumped to v1.7.0,
+  grant + fingerprint stamped in the §22 header and changelog row.
+- **Open for #8:** `rebuild/G10_LEDGER.md` items L1–L12 — fix in ONE pass at step 6, never
+  blocking. `G10_ROUND10_OPEN_MINORS.md` is superseded.
+- **#8 step 2 (goldens) COMPLETE 2026-08-14** (branch @ `9bea84f`): spec_calc.py carries the
+  §22 reference (c0fcb52 — every §22.12 closed form to the digit; 12-golden shape change with
+  ZERO movement over 4,977 leaves; engine zero-columns added so gates stay green, 698/698);
+  BOTH blind adjudication passes SIGNED, AGREE, zero mismatches, identical full-precision
+  internals across rationals vs decimal (DERIVATION.md §22 record).
+- **#8 step 3 (engine) COMPLETE 2026-08-14** (branch @ `2f50836`): §22 implemented across
+  the CODE-HOME modules (`3255395`); engine reproduces BOTH adjudicated goldens + §22.13
+  (i)–(xii) + audit-commissioned (xiii)/(xiv) directed fixtures; 19 documented mutants ALL RED, reverted byte-identically
+  (`rebuild/G10_STEP3_MUTANTS.md`). The hostile accuracy audit REFUSED with 2 blocking
+  (skeptic-confirmed) — BOTH FIXED in-step (`2f50836`): the §22.3(vi) sensitivity-grid
+  pre-test (null cell, single-condition `stripPlugRejection` home) and the
+  `loan_notes_unredeemed` emission coverage (±band pinned). Audit ledger L13–L18 recorded.
+  vitest **719/719**.
+- **#8 step 4 (UI) COMPLETE 2026-08-14** (branch @ `ba002df`): Advanced-tier editors for
+  sweet_equity/warrant/mip.ratchet (strip DROPS the promote — §22.3(i) structural in the
+  editor); the EquityStrip Returns block (named fields only, §22.10 absent-when-off, the
+  sanctioned derivation labelled, basis-labelled tier count); §15 row on BOTH methodology
+  surfaces; M10's Excel S&U obligations (subscription row + Equity/Total-cap fold with
+  basis-stating labels). 9 new display tests; 6 display-provenance mutants ALL RED
+  (G10_STEP3_MUTANTS.md). vitest **728/728**.
+- **Next for #8: step 5 (conformance + walkthrough)** — adversarial review of the FULL
+  branch DIFF vs main (main...claude/deal-engine-exits-mip-5ee40a) + the Tier-A choice,
+  bounded rule; then the three-issuer E-gate walkthrough (Apple CIK 320193 / SAP CIK
+  1000184 / Vinci via ESEF, through the PRODUCTION proxy — record
+  rebuild/G10_SWEET_WALKTHROUGH.md). Then step 6 (ledger pass L1–L18 in one commit),
+  step 7 (merge PR #121 with a MERGE COMMIT, verify main CI, update memory + STATE).
 
 ### Backlog — 12 items, 5 merged
 

@@ -13,6 +13,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runCore, type EngineCore } from '../lib/engine2/sequence';
 import { buildExit, exitBasisValue, monitoringTermination, type ExitInputs } from '../lib/engine2/exit';
+import { sponsorShareOfDistributions } from '../lib/engine2/returns';
 import { buildGpFeeIncome, buildReturns } from '../lib/engine2/returns';
 import { GOLDEN_DEALS, g2DownsideAssumptions } from './fixtures/engine2-golden-deals';
 import type { DealAssumptions, ExitBlock } from '../lib/engine2/types';
@@ -37,6 +38,9 @@ function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock
     // Passing 0 here gives G3-DIST a promote of 1.82 instead of 16.53 — the golden’s
     // 9.1x discriminator caught exactly that while this gate was being extended.
     cumulative_distributions: core.distributions_paid.reduce((a, b) => a + b, 0),
+    loan_notes_subscribed: 0,
+    loan_note_balance_at_exit: 0,
+    institutional_interim_value: 0,
   };
   return buildExit(assumptions, inputs);
 }
@@ -63,12 +67,21 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
       for (const key of Object.keys(g.exit) as (keyof ExitBlock)[]) {
         expect(Math.abs((exit[key] as number) - (g.exit[key] as number)), `${golden} exit.${key}`).toBeLessThan(TOL);
       }
-      // §14.16 mirror: sponsor + rollover + MIP ≡ pre-MIP total, exact
-      expect(exit.sponsor_share + exit.rollover_share + exit.mip_payout).toBeCloseTo(exit.exit_equity_pre_mip_total, 9);
+      // §14.16 FIVE-term mirror [v1.7.0]: the two new terms are 0 on every v1 golden
+      expect(
+        exit.sponsor_share + exit.rollover_share + exit.mip_payout +
+        exit.management_ordinary_share + exit.warrant_payout_net,
+      ).toBeCloseTo(exit.exit_equity_pre_mip_total, 9);
 
       const returns = buildReturns(assumptions, {
         sponsor_equity: core.sources_uses.sponsor_equity,
         rollover_equity: core.sources_uses.rollover_equity,
+        management_subscription: core.sources_uses.management_subscription,
+        sponsor_interim_shares: sponsorShareOfDistributions(
+          core.distributions_paid,
+          core.sources_uses.sponsor_equity,
+          core.sources_uses.rollover_equity,
+        ),
         enterprise_value: core.derived.enterprise_value,
         transaction_costs: core.sources_uses.transaction_costs,
         unlevered_fcf: core.unlevered_fcf,
@@ -139,6 +152,8 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
       buildReturns(a, {
         sponsor_equity: core.sources_uses.sponsor_equity,
         rollover_equity: 0,
+        management_subscription: 0,
+        sponsor_interim_shares: core.distributions_paid,
         enterprise_value: core.derived.enterprise_value,
         transaction_costs: core.sources_uses.transaction_costs,
         unlevered_fcf: core.unlevered_fcf,
@@ -162,13 +177,14 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
     const base: ExitInputs = {
       exit_year_ebitda_adj: 100, last_growth: 0.03, debt_payoff: 200, closing_cash: 30,
       unamortized_writeoff: 0, invested_equity_total: 400, rollover_equity: 0,
-    cumulative_distributions: 0,
+      cumulative_distributions: 0,
+      loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
     };
     const a = (monitoring: DealAssumptions['fees']['monitoring']): DealAssumptions['fees'] =>
       ({ transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring });
-    const noFee = buildExit({ exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: null, fees: a(null) }, base);
+    const noFee = buildExit({ exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: null, sweet_equity: null, warrant: null, fees: a(null) }, base);
     const withFee = buildExit(
-      { exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: null, fees: a({ annual: 2, termination_years: 3, discount_rate: 0.1 }) },
+      { exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: null, sweet_equity: null, warrant: null, fees: a({ annual: 2, termination_years: 3, discount_rate: 0.1 }) },
       base,
     );
     expect(noFee.exit_equity_pre_mip_total - withFee.exit_equity_pre_mip_total).toBeCloseTo(npv, 9);
@@ -182,29 +198,34 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
   it('§10 MIP: out of the money ⇒ 0; in the money ⇒ pool × excess over hurdle; capped at available equity', () => {
     const mk = (exitEquityDriver: number, mip: DealAssumptions['mip']): ExitBlock =>
       buildExit(
-        { exit: { multiple: 1, basis: 'fy', fees_pct: 0 }, mip, fees: { transaction_pct_of_ev: 0, financing_pct_of_commitments: 0, monitoring: null } },
+        { exit: { multiple: 1, basis: 'fy', fees_pct: 0 }, mip, sweet_equity: null, warrant: null, fees: { transaction_pct_of_ev: 0, financing_pct_of_commitments: 0, monitoring: null } },
         {
           exit_year_ebitda_adj: exitEquityDriver, last_growth: 0, debt_payoff: 0, closing_cash: 0,
           unamortized_writeoff: 0, invested_equity_total: 100, rollover_equity: 0, cumulative_distributions: 0,
+          loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
         },
       );
     // hurdle 2.0x on 100 invested = 200; exit equity 150 → out of the money
-    expect(mk(150, { pool_pct: 0.15, hurdle_moic: 2 }).mip_payout).toBe(0);
+    expect(mk(150, { pool_pct: 0.15, hurdle_moic: 2, ratchet: null }).mip_payout).toBe(0);
     // exit equity 300 → excess 100 → 15
-    expect(mk(300, { pool_pct: 0.15, hurdle_moic: 2 }).mip_payout).toBeCloseTo(15, 9);
+    expect(mk(300, { pool_pct: 0.15, hurdle_moic: 2, ratchet: null }).mip_payout).toBeCloseTo(15, 9);
     // cap: pool 100% of excess over a 0x hurdle, equity 50 → capped at 50
-    expect(mk(50, { pool_pct: 1, hurdle_moic: 0 }).mip_payout).toBeCloseTo(50, 9);
+    expect(mk(50, { pool_pct: 1, hurdle_moic: 0, ratchet: null }).mip_payout).toBeCloseTo(50, 9);
   });
 
   it('rollover splits the post-MIP pot pari-passu pro-rata; §14.16 holds with rollover (golden-uncovered)', () => {
     const exit = buildExit(
-      { exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: { pool_pct: 0.15, hurdle_moic: 1.5 }, fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null } },
+      { exit: { multiple: 8, basis: 'fy', fees_pct: 0.015 }, mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: null }, sweet_equity: null, warrant: null, fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null } },
       {
         exit_year_ebitda_adj: 120, last_growth: 0, debt_payoff: 300, closing_cash: 25,
         unamortized_writeoff: 3, invested_equity_total: 400, rollover_equity: 100, cumulative_distributions: 0,
+        loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
       },
     );
-    expect(exit.sponsor_share + exit.rollover_share + exit.mip_payout).toBeCloseTo(exit.exit_equity_pre_mip_total, 9);
+    expect(
+      exit.sponsor_share + exit.rollover_share + exit.mip_payout +
+      exit.management_ordinary_share + exit.warrant_payout_net,
+    ).toBeCloseTo(exit.exit_equity_pre_mip_total, 9); // §14.16 five-term [v1.7.0]
     // pro-rata: rollover / invested = 25% of the post-MIP pot
     expect(exit.rollover_share).toBeCloseTo((exit.exit_equity_pre_mip_total - exit.mip_payout) * 0.25, 9);
     expect(exit.sponsor_share).toBeCloseTo((exit.exit_equity_pre_mip_total - exit.mip_payout) * 0.75, 9);

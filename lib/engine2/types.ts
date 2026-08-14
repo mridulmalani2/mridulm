@@ -276,6 +276,39 @@ export interface CovenantAssumption {
   rp_trap: { metric: 'net_leverage'; level: number } | null;
 }
 
+/** §22.3 [v1.7.0]: one MOIC ratchet tier — MARGINAL (top-slice), never a cliff (§22.5's
+ *  no-fixed-point counterexample). Hurdles strictly ascending; shares non-decreasing,
+ *  ≥ the base share, every one < 1 (§22.3(iii)/(iv)). */
+export interface RatchetTier {
+  hurdle_moic: number; // > 0
+  share_pct: number; // [base, 1)
+}
+
+/** §22.3 [v1.7.0]: the UK/European sweet-equity strip. Loan notes are EQUITY (§22.2) —
+ *  outside §11 leverage, outside the §3 waterfall and §9 payoff, NO interest deduction,
+ *  accruing only with NO year-0 accretion. Rejected at Build when combined with a promote
+ *  (§22.3(i), the DR-2 double-count) or a rollover (§22.3(ii), v1 scope). */
+export interface SweetEquityAssumption {
+  /** (0, 1] — the ordinaries' share of the institutional strip; loan notes take 1 − p. */
+  sponsor_ordinary_pct: number;
+  loan_note_rate: number; // ≥ 0
+  /** ≥ 0 — a §2 SOURCE line of its own (§22.8); the plug is the residual AFTER it. */
+  management_subscription: number;
+  management_ordinary_pct: number; // [0, 1)
+  /** §22.5 sweet-equity ratchet on the INSTITUTION'S OWN realized MOIC; null ≡ [] ≡ none. */
+  ratchet: RatchetTier[] | null;
+}
+
+/** §22.3 [v1.7.0]: SINGULAR by construction — two warrants' exercise decisions are mutually
+ *  dependent and admit multiple rational-exercise equilibria, so "at most one" is a TYPE.
+ *  Settled at exit on FULL DILUTION with the strike paid in (§22.6); strict `>` at ATM. */
+export interface WarrantAssumption {
+  /** Label ONLY (e.g. a mezzanine tranche name) — no arithmetic depends on it (§22.11). */
+  holder_label: string;
+  pct_of_ordinary: number; // (0, 1)
+  strike_total: number; // ≥ 0
+}
+
 export interface DealAssumptions {
   deal_name: string;
   entry: {
@@ -314,8 +347,15 @@ export interface DealAssumptions {
   /** Netted from the sponsor check; pari-passu common at exit (SPEC §9, C-5). */
   rollover_equity: number;
   exit: { multiple: number; basis: 'fy' | 'ntm'; fees_pct: number };
-  /** null = no promote. Promote pool only — sweet equity is a different instrument (SPEC §10). */
-  mip: { pool_pct: number; hurdle_moic: number } | null;
+  /** null = no promote. Promote pool only — sweet equity is a different instrument (SPEC §10).
+   *  [v1.7.0] `ratchet` (§22.4): MARGINAL tiers ABOVE the base hurdle on §10's own base
+   *  (total proceeds vs total invested equity); one tier ≡ §10 verbatim; null ≡ [] ≡ v1. */
+  mip: { pool_pct: number; hurdle_moic: number; ratchet: RatchetTier[] | null } | null;
+  /** §22 [v1.7.0] — null ≡ OFF ≡ v1 numbers (§14.23(f)). May not coexist with `mip` or a
+   *  rollover (§22.3(i)/(ii), Build rejections). */
+  sweet_equity: SweetEquityAssumption | null;
+  /** §22 [v1.7.0] — null ≡ OFF ≡ v1 numbers (§14.23(f)). Legal beside either instrument. */
+  warrant: WarrantAssumption | null;
   covenants: CovenantAssumption;
   /** §19 [v1.4.0] fund-of-one overlay — null ≡ OFF (byte-identity §19.6(c)); the
    *  suggestion layer proposes NO overlay (an LP-agreement fact — §16). */
@@ -485,6 +525,9 @@ export interface SourcesUses {
   debt_at_par: { name: string; amount: number }[];
   rollover_equity: number;
   sponsor_equity: number; // the plug (SPEC §2)
+  /** §22.10 [v1.7.0]: the management subscription is its OWN source line entering
+   *  total_sources (unconditional `0.0` until the §22 engine lands — step 3). */
+  management_subscription: number;
   total_sources: number;
 }
 
@@ -499,9 +542,50 @@ export interface ExitBlock {
   /** = exit_ev − payoff + cash_at_exit − exit_fees − monitoring_termination (SPEC §9). */
   exit_equity_pre_mip_total: number;
   mip_payout: number;
-  /** sponsor_share + rollover_share + mip_payout ≡ exit_equity_pre_mip_total; sponsor_share ≡ final sponsor_net cashflow (§14.16). */
+  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net ≡ exit_equity_pre_mip_total (§14.16 five-term [v1.7.0]); sponsor_share ≡ final sponsor_net cashflow. */
   sponsor_share: number;
   rollover_share: number;
+  /** §22.10 [v1.7.0]: unconditional carriers, `0.0` when the instruments are off — the
+   *  G-1/G-5 committed-zero-column precedent. The §14.16 exit mirror is FIVE terms:
+   *  sponsor_share + rollover_share + mip_payout + management_ordinary_share +
+   *  warrant_payout_net ≡ exit_equity_pre_mip_total (the two new terms are 0 whenever
+   *  their instruments are null, so the three-term form is the degenerate case). */
+  management_ordinary_share: number;
+  warrant_payout_net: number;
+}
+
+/**
+ * §22.10 [v1.7.0]: the strip/warrant output block — named fields the display surface READS,
+ * never recomputes (§14.16 single-source; the ONE sanctioned presentational derivation is
+ * `sponsor_equity − loan_notes_subscribed` for the institutional ordinary subscription).
+ * null ⇔ `sweet_equity` null ∧ `warrant` null. On the WARRANT-ONLY shape: `loan_notes_*`
+ * 0, `management_ordinary_share` 0, `institution_ordinary_share` ≡ `sponsor_share`,
+ * `ratchet_tiers_reached` 0, BOTH `| null` fields null. `ratchet_tiers_reached` counts
+ * §22.5 SWEET-EQUITY tiers ONLY (the §22.4 promote ratchet emits no tier count — its
+ * effect is fully carried by `mip_payout`). Every field REQUIRED-with-null, never optional.
+ */
+export interface EquityStripBlock {
+  loan_notes_subscribed: number;
+  /** LN[N] grown to exit and BEFORE the exit redemption — net of interim redemptions,
+   *  gross of the exit one (§22.2's pinned measurement point). */
+  loan_notes_accrued_balance: number;
+  /** The EXIT redemption alone, never cumulative (§22.2). */
+  loan_notes_redeemed: number;
+  ordinary_pot_pre_warrant: number;
+  warrant_exercised: boolean;
+  warrant_strike_paid: number;
+  warrant_payout_gross: number;
+  warrant_payout_net: number;
+  /** The class residual after the warrant — SIGNED (§22.7 carries E signed). */
+  ordinary_pot: number;
+  management_ordinary_share: number;
+  institution_ordinary_share: number;
+  /** §14.23(d): STRICT count on `institution_moic_at_ratchet`, never a money-form race. */
+  ratchet_tiers_reached: number;
+  /** M / P — null at a non-positive ordinary pot (0/0 — §14.23(e)); N/A, never a sentinel. */
+  management_effective_ordinary_pct: number | null;
+  /** V_final / I (§22.5's walk value over the §2 plug) — null only on the warrant-only arm. */
+  institution_moic_at_ratchet: number | null;
 }
 
 /**
@@ -562,6 +646,11 @@ export interface ValueBridge {
      * exits through the same smaller bar). 0 whenever the schedule is empty.
      */
     interim_distributions_sponsor: number;
+    /** §12 [v1.7.0] management's exit share − their subscription — the strip's leakage
+     *  term, symmetric with `rollover_delta`; 0 when `sweet_equity` is null. */
+    sweet_equity_delta: number;
+    /** §12 [v1.7.0] the warrant's net take at exit; 0 when `warrant` is null. */
+    warrant_payout_net: number;
     /**
      * §12 [v1.1.0] the sponsor-net TOTAL delta: sponsor_share + cumulative sponsor-share
      * distributions − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
@@ -583,6 +672,7 @@ export interface CoherenceFlag {
     | 'negative_ppe'
     | 'negative_goodwill'
     | 'negative_sponsor_equity'
+    | 'loan_notes_unredeemed'
     /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
     | 'distribution_blocked'
     /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
@@ -686,6 +776,8 @@ export interface ModelOutput {
   coherence: CoherenceFlag[];
   /** §19 [v1.4.0] — null when the overlay is OFF (never a zero row). */
   fund: FundBlock | null;
+  /** §22.10 [v1.7.0]: null ⇔ `sweet_equity` null ∧ `warrant` null (the `fund` precedent). */
+  equity_strip: EquityStripBlock | null;
   scenarios: ScenarioResult[] | null;
   sensitivity: SensitivityGrid[] | null;
 }

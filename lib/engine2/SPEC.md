@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v1.6.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v1.7.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -717,7 +717,20 @@ includes the retirement-triggered unamortized-fee write-off as an UNCAPPED deduc
 **Naming [CONFIRMED DR-2 Item 2]:** the pre-carry series is labelled **"pre-promote IRR"**
 — never "gross" (ILPA/GIPS reserve "gross" for the before-fund-fees-and-carry concept). It is
 defined once: net of transaction costs and portfolio-company fees, before management
-incentive, not an LP return.
+incentive, not an LP return. **[v1.7.0] The "before management incentive" clause covers TWO
+different instruments and the basis is stated rather than left to the reader (the
+v1.1.2/v1.1.3 mislabel class): on a §10 PROMOTE deal the incentive is EXCLUDED from the
+stream, while on a §22 STRIP deal management's sweet-equity share settles INSIDE
+`exit_equity_pre_mip_total` — the stream's own exit inflow — and their subscription is netted
+into its t=0 outflow (§22.8). Same label, two bases; every surface rendering this stream
+alongside a strip must say which. The WARRANT needs its own clause [round-3 gov-M5]: it is
+neither a transaction cost, a portfolio-company fee, nor a management incentive, so the
+definition above does not reach it — the stream's exit inflow is `exit_equity_pre_mip_total`,
+which is PRE-warrant, so a warrant deal's pre-promote figure is GROSS of a genuine third-party
+equity claim. And the HEADLINE-vs-REALIZED MOIC divergence belongs here rather than only in
+§22 [round-3 gov-M4]: `moic` sums STRICTLY POSITIVE inflows (v1.1.0), so on ANY deal whose
+final sponsor flow is negative — strip or not — the headline exceeds the realized multiple;
+§14.23(d)'s ratchet mirror is struck on the realized figure.**
 
 **Fee/flow membership table (the table every past review fought about):**
 
@@ -726,6 +739,15 @@ the item is IN the stream, as part of the t=0 OUTFLOW. **`excluded`** means the 
 in the stream at all. **`in (−)`** / **`in (+)`** are later-period flows. `n/a` means the
 concept does not exist for that stream. The two words are not synonyms — "out" is a
 direction, "excluded" is a membership decision.
+**Legend addendum [v1.7.0 — round-2 gov-M3].** `excluded` covers TWO distinct situations and
+the rows now say which: (1) the item genuinely never touches the stream; (2) **"excluded as a
+LINE"** — the item is already NETTED inside a figure the stream does take (the rollover share
+and management's sweet share settle inside `exit_equity_pre_mip_total`; the warrant AND the §10 MIP
+promote both net inside `sponsor_share`), so adding it again would double-count. **Per COLUMN [round-9 M9]: in the PRE-PROMOTE column every claimant on
+`exit_equity_pre_mip_total` is situation (2) by construction, because the stream takes the GROSS
+total — so `excluded` there ALWAYS means excluded as a LINE.** The pre-existing rollover row
+carries situation (1) in column (1) and situation (2) and was always read that way; stating it stops the next reader
+rediscovering the ambiguity.
 **Net-to-LP (§19) membership addendum [v1.4.0]:** management fees in (−, drawn years 1..N — later-period flows per the legend, not t=0); GP carry in (−) — and note carry is a REDUCTION already inside `lp_distributions`, never a second negative flow (per-period nets identical either way); monitoring fees EXCLUDED from LP inflows (they OFFSET the fee draw — never re-added; the §5 sponsor-consolidation rule); sponsor share of §3-step-7 distributions in (+); `exit.sponsor_share` in (+) at N (already post-§10-promote — the promote is NOT re-deducted); rollover flows EXCLUDED entirely (§19.1); transaction/financing costs already inside the t=0 equity check (unchanged).
 
 | Item | (1) Sponsor net | (2) Unlevered | (3) Pre-promote |
@@ -737,9 +759,12 @@ direction, "excluded" is a membership decision.
 | Management rollover | netted (−) | n/a | netted (−) |
 | Monitoring fee (if ON) | reduces FCF & exit; memo line "GP fee income" shown separately (the consolidated-sponsor-economics view, DR-2 Item 5 — never silently dropped, never double-counted) | **excluded** | reduces FCF & exit |
 | Exit advisory fees | in (−) | in (−) | in (−) |
-| MIP promote | in (−) | n/a | **excluded** |
+| MIP promote | **excluded as a LINE** [v1.7.0 — round-3 gov-M1] — already NETTED inside `exit.sponsor_share` (`exit.ts` computes `postMip = E − mip` then splits), by the IDENTICAL mechanism the warrant row below describes; an `in (−)` line would double-count | n/a | **excluded** |
 | Rollover share of exit | excluded (sponsor stream is sponsor-only; rollover pari-passu pro-rata) | n/a | excluded |
-| Interim distributions [v1.1.0] | in (+ at year t; sponsor-only share when rollover > 0 — pari-passu pro-rata, same rule as exit) | **excluded** (an equity/financing flow — the unlevered stream is capital-structure-blind) | in (+ at year t, pre-promote total) |
+| Interim distributions [v1.1.0] | in (+ at year t; sponsor-only share when rollover > 0 — pari-passu pro-rata, same rule as exit. **[v1.7.0] Under a sweet-equity strip the sponsor share is the §22.7 INSTITUTIONAL split — loan-note redemption + (1 − s₀) × the ordinary remainder — NOT the pari-passu fraction; §22.7 names all three committed call sites that must read it**) | **excluded** (an equity/financing flow — the unlevered stream is capital-structure-blind) | in (+ at year t, pre-promote total) |
+| Management subscription (sweet equity) [v1.7.0] | netted (−) — it reduces the sponsor's own cheque exactly as rollover does (§22.8/§2) | n/a | netted (−) — it is part of the TOTAL pre-incentive equity in |
+| Management sweet-equity share of exit [v1.7.0] | excluded (the sponsor stream is sponsor-only — the same treatment as the rollover share) | n/a | excluded as a LINE: it settles INSIDE `exit_equity_pre_mip_total`, which is the stream's exit inflow (again the rollover-share treatment) |
+| Warrant net payout [v1.7.0] | **excluded as a LINE** — it is already NETTED inside `exit.sponsor_share` (the warrant is taken at §22.7 stage 3, ahead of the ordinary split), so adding it again as a later-period flow would DOUBLE-COUNT [round-2 arith-M2]; it dilutes a ROLLOVER holder pro-rata exactly as it dilutes the sponsor | n/a | **excluded** (the stream's inflow is `exit_equity_pre_mip_total`, which is PRE-warrant) |
 
 Unlevered taxes on **EBIT** — letting the interest tax shield leak into the unlevered stream
 is DR-2 Item 6's #1 flagged error. Sponsor MOIC = sponsor inflows / sponsor outflow
@@ -774,7 +799,8 @@ place in a single-deal promote). DISCLOSED consequence: the exit-equity cap — 
 unreachable for pool_pct ≤ 1 — can now genuinely bind (large cumulative distributions,
 small exit residual) and TRUNCATES the promote below the uncapped formula with no accrual;
 that is the deliberate price of exit-only settlement. Carried through §14.16's FIRST mirror
-clause unchanged (mip_payout still settles inside exit_equity_pre_mip_total; the
+clause — which v1.7.0 EXTENDS to five claimants (§22.9(b)/§14.23(b)); the promote's own
+treatment there is unchanged [round-9 M6b] (mip_payout still settles inside exit_equity_pre_mip_total; the
 final-cashflow clause is separately amended for year-N distributions). DR-2 confirms the
 draft's core rule verbatim: layering a promote on a sweet-equity cap table **double-counts**
 management upside — sweet-equity strips (institutional strip + ordinaries, the UK/European
@@ -870,7 +896,9 @@ term into the multiple bar by construction and is this section's rejected altern
 paydown = ND₀ − ND₁, where ND₀ = par − funded min cash and ND₁ = payoff − closing cash.
 Walk-down from the bar sum: − entry costs (transaction + financing fees + OID) − exit
 costs (exit advisory fees + monitoring termination) − MIP − rollover Δ (rollover exit
-share − rollover contributed) = sponsor net Δ. The ANNUAL monitoring leakage is embedded
+share − rollover contributed) − sweet-equity Δ (management's exit share − their
+subscription) − warrant net [both v1.7.0 — §22.8; 0 whenever their instruments are null,
+so the pre-v1.7.0 walk is the degenerate case] = sponsor net Δ. The ANNUAL monitoring leakage is embedded
 in the paydown bar via cash (never double-counted in the walk-down); the walk-down's
 monitoring item is the termination component within exit costs, with the annual drag
 shown as a memo from `gp_fee_income`. **Interim distributions [v1.1.0]**: paid amounts
@@ -921,6 +949,14 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
 
 ## §14 Invariant catalogue (each with its validity domain)
 
+**Domain convention for DOTTED fields [v1.7.0 — round-9 F01].** Where a domain names a dotted
+field as NULL, an ABSENT PARENT satisfies it: `mip.ratchet null` covers `mip: null`, and
+`elections NULL` covers a deal with no `pik_note`. A domain naming a dotted field as NON-null
+requires the parent. Stated once here rather than per clause, because item 21(c) and item 23(f)
+are the same construct written to one template — editing either alone would make two clauses
+disagree about the same question, and editing both by hand is the re-sync failure PHASE_G names.
+This only ever WIDENS a null-domain, which is the intended direction in every case.
+
 1. Sources ≡ uses (always).
 2. BS closes every year, |check| < $0.005m (always).
 3. Running-cash conservation: Σ(waterfall applications) ≤ opening cash + FCF + draws (always).
@@ -932,9 +968,12 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
    growth↓/margin↓/exit multiple↓).
 9. Bridge (two exact identities, §12): growth + multiple + interaction + paydown ≡
    frictionless pre-promote Δ (EV − ND at both ends); bar sum − entry costs − exit costs
-   − MIP − rollover Δ + interim distributions (sponsor share) ≡ sponsor net TOTAL Δ
-   (always; the distributions term is 0 whenever the schedule is empty — the pre-v1.1.0
-   identity is the degenerate case) [v1.1.0].
+   − MIP − rollover Δ − sweet-equity Δ − warrant net payout + interim distributions
+   (sponsor share) ≡ sponsor net TOTAL Δ (always; the distributions term is 0 whenever the
+   schedule is empty — the pre-v1.1.0 identity is the degenerate case [v1.1.0]; the
+   sweet-equity and warrant terms are 0 whenever their instruments are null — the pre-v1.7.0
+   identity is likewise the degenerate case [v1.7.0 — §22.8/§22.13(ix); un-amended, this
+   clause reports a ≈$28.73m residual on the G9-SWEET shape]).
 10. Sponsor MOIC ≡ sponsor inflows / outflow (always).
 11. IRR↑ in exit multiple (domain: exit equity > 0 across tested range).
 12. Leverage↑ ⇒ IRR↑ (domain: frictionless config only — zero fees/OID, bullet cash-pay debt,
@@ -948,8 +987,15 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
     (always — DR-1 Item 7 flag).
 16. Mirror identities (single-source rule): waterfall totals ≡ Σ tranche + revolver rows;
     FCF's tax term ≡ tax[i].cash_tax; sources_uses.enterprise_value ≡
-    derived.enterprise_value; sponsor_share + rollover_share + mip_payout ≡
-    exit_equity_pre_mip_total; final sponsor_net cashflow ≡ sponsor_share + the sponsor
+    derived.enterprise_value; sponsor_share + rollover_share + mip_payout +
+    management_ordinary_share + warrant_payout_net ≡ exit_equity_pre_mip_total
+    [v1.7.0 — §22.9(b)/§14.23(b); the two new terms are 0 whenever their instruments are null,
+    so the pre-v1.7.0 THREE-term form is the degenerate case. Amended HERE, in place, because
+    §14.23(b) and §22.9(b) both describe themselves as this clause EXTENDED rather than a
+    parallel one — leaving the three-term form standing at domain "(always)" made the catalogue
+    carry two clauses that cannot both hold, false by $30.73m on G9-SWEET (round-8, found
+    independently by two lenses; the identical shape to round 1's un-amended §14.9(b), one
+    catalogue item over)]; final sponsor_net cashflow ≡ sponsor_share + the sponsor
     share of paid[N] [v1.1.0 — the model is annual, one flow per period; a year-N
     distribution and the exit settle in the same period-N number] (always).
 17. Committed downside scenario (G2): sponsor IRR ≤ base AND entry S&U identical to base
@@ -1029,6 +1075,119 @@ variables; operating axes do not. Presentation [DR-5 Item 2]: paired IRR + MOIC 
     trading range, not a buyout-entry range, and no ordering between a deal's entry multiple
     and the band is asserted to be right or wrong (§21.8(e)).
 
+23. Sweet equity / ratchets / warrants [v1.7.0 — §22] (domains PER CLAUSE): (a) [sweet_equity
+    non-null] the loan-note walk §22.9(a) — `LN[t] = LN[t−1] × (1 + rate) − redeemed[t]`,
+    `LN[t] ≥ 0` (guaranteed by §22.3(vi)'s Build rejection, not by hope), and
+    `LN[N] = LN[0] × (1 + rate)^N` on the no-distribution path, with NO year-0 accretion;
+    (b) [ALL] → **§14.16's exit-mirror clause**, which STATES the five-term identity and is its
+    single home. Not restated here [round-9 §5(5)]: the round-9 fix to §14.16 closed a
+    contradiction but left the SAME identity in two hand-synced places, which is the generator
+    rather than the instance — the failure this document already names for hand-kept lists. The
+    §22-specific content is the DOMAIN and the reason: it holds for SIGNED
+    `exit_equity_pre_mip_total` INCLUDING negative values, because §22.7 carries the residual
+    signed rather than clamping it, and it is asserted on the UNCONDITIONAL `ExitBlock`
+    carriers [round-2 gov-B3/arith-M3: the r2 draft named `management_ordinary_share`, which
+    lives ONLY on the nullable `equity_strip` and therefore does not exist across most of this
+    clause's own `[ALL]` domain — the same defect the r2 fix correctly applied to (g). §22.6's
+    ONE-NAME rule is extended: `management_ordinary_share` is THE name on BOTH carriers, and
+    `ExitBlock.sweet_equity_management` is renamed to `ExitBlock.management_ordinary_share`];
+    the v1 THREE-term form is the degenerate case, both new terms being 0 when their
+    instruments are null; (c) [warrant non-null ∧
+    exercised] `ordinary_pot + warrant_payout_gross ≡ ordinary_pot_pre_warrant +
+    warrant_strike_paid` and `0 ≤ warrant_payout_net ≡ ordinary_pot_pre_warrant −
+    ordinary_pot` — the warrant never dilutes the class by more than its own value;
+    (d) [sweet_equity non-null **∧ sponsor_equity > 0 ∧ the period-N sponsor flow ≥ 0** —
+    of the THREE conditions the THIRD is load-bearing; the SECOND (`sponsor_equity > 0`) is now
+    REDUNDANT inside this clause's own domain and [round-7 arith-B1 — the round-6 "correction"
+    said the FIRST was redundant, which names `sweet_equity non-null`, the domain's CORE, without
+    which there is no strip and nothing to assert; the clause's own justification two sentences
+    on describes the PLUG condition, i.e. the second. A fix landing in the governing home and
+    making it WORSE than its companion, for the fourth time]
+    is kept only as belt-and-braces [round-4 arith-M1 — its r1 justification was "a non-positive
+    plug is REACHABLE as a run (`negative_sponsor_equity` is a coherence flag, not a Build
+    rejection)", and round 2 made that FALSE: §22.3(vi) turned a non-positive plug into a BUILD
+    REJECTION whenever `sweet_equity` is non-null, which is exactly this domain, and clause (a)
+    already cites that gate correctly. The qualifier is harmless; the reason is withdrawn]. The
+    THIRD [round-2 blocking, BOTH reviewers]: `returns.ts` sums STRICTLY POSITIVE cashflows
+    (`c > 0 ? s + c : s`), a v1.1.0 convention, so a NEGATIVE period-N flow is silently dropped
+    from `moic` — which the r1 clamp had been accidentally hiding by forcing `sponsor_share ≥ 0`,
+    and which fixing the clamp exposed on the very fixture §22.13(v) mandates (worked, inputs pinned: I = 100,
+    LN[0] = 90 at `loan_note_rate` 0.08 ⇒ LN[5] = 132.2395, s₀ = 0.10, E = −25 ⇒ realized
+    MOIC −0.25 vs headline 0.00; with a year-1 distribution of 300 the two even disagree on
+    the COUNT at a 2.6 hurdle). The divergence is
+    a PRE-EXISTING v1 property §22 surfaces rather than introduces, and it is DISCLOSED in §15
+    rather than repaired here — repairing it would change `moic` on the v1 path and break
+    §14.23(f)] the §22.5 SINGLE-SOURCE MIRROR —
+    `ratchet_tiers_reached ≡ #{ j : institution_moic_at_ratchet > hurdle_moic_j }` (STRICT)
+    with `|returns.sponsor_net.moic − institution_moic_at_ratchet| ≤ max(1e-9 × |moic|, 1e-12)`
+    — the ABSOLUTE floor matters [round-2 arith-B2]: a purely relative bound anchored on `moic`
+    degenerates to an exact-equality demand whenever `moic` is 0, which is reachable.
+    **DEFINITIONS — these are DEFINITIONS, not domain-gated assertions: they hold at EVERY sign of
+    the pot and of the period-N flow, independently of (d)'s SECOND and THIRD conditions (the plug and the period-N sponsor flow) — but NOT of the FIRST: `sweet_equity` non-null still gates them, because with no strip there is no §22.5 walk, hence no `V_final` and no `M` to divide, and §22.10/§16 pin BOTH fields NULL on the warrant-only arm [round-10: the r10 widening said "independently of (d)'s validity domain", which reached the FIRST condition as well and made the GOVERNING home contradict §22.10 and §16 — under §22.9's own precedence rule an implementer would then emit `0` for `management_effective_ordinary_pct` where two homes say `null`, a sentinel §11/§15 forbid, on the very shape §22.13(vi) commissions a fixture for] [round-10: the
+    §22.13(v)(α) fixture sits OUTSIDE (d)'s domain — its period-N flow is negative — yet needs the
+    definition, so gating it on (d) left a REQUIRED output undefined exactly where a fixture
+    asserts it]. Stated HERE because this clause READS them and round 4 deleted their only
+    other statement [round-4 arith-B3 — the removed §22.5 "COMPARISON RULE" paragraph was the
+    ONLY text binding the field to the walk, so a REQUIRED output had no normative definition
+    anywhere, and this clause was left carrying the project's FOURTH dangling cite]:
+    `institution_moic_at_ratchet ≡ V_final / I`, where `V_final` is §22.5's walk value at EVERY
+    sign of the pot and `I` is the §2 sponsor plug; and
+    `management_effective_ordinary_pct ≡ M / P`, NULL at `P ≤ 0`.
+    COMPARISON RULE [round-1 arith-M5, restated here as its home]: the tier COUNT is taken on
+    `institution_moic_at_ratchet` — the engine's own walk value — and `returns.sponsor_net.moic`
+    is checked against it on VALUE, under the absolute tolerance floor above. This clause
+    carries TWO value asserts (that MOIC check, and the money identity below) and ONE count
+    assert; never a count-vs-count race across two float paths at exactly the boundary
+    §22.13(iii) makes normative.** And
+    `institution_ordinary_share + loan_notes_redeemed ≡ sponsor_share`: the ratchet's own test
+    must agree with the MOIC the UI headlines, or one of them is lying; (e) [sweet_equity
+    non-null **∧ ordinary_pot > 0** — at `P = 0` the ratio is `0/0`, which §22.10's own
+    `management_effective_ordinary_pct: number | null` concedes is reachable]
+    `management_ordinary_share` is CONTINUOUS, non-decreasing and piecewise-linear in the
+    ordinary pot, with `0 ≤ M ≤ P` and `M/P ∈ [s₀, s_n]` — the marginal rule's defining
+    properties, and exactly what the REJECTED cliff violates; (f) [sweet_equity null ∧ warrant
+    null ∧ (mip.ratchet null OR EMPTY) — the load-bearing compatibility gate, nothing trivial
+    about it. **The EMPTY list is IN domain** [round-7 gov-B3]: §22.3 pins `null ≡ [] ≡ v1` and
+    §22.4's one-term sum IS §10 verbatim, so `[]` produces v1 numbers too — and this is the
+    clause asserting v1 NUMERIC IDENTITY. Round 7 widened (h) to admit `[]` and, applying the
+    mirror image, briefly NARROWED (f) to exclude it, which would have let a compatibility
+    regression on the empty-list representation ship green]
+    every NUMERIC output is IDENTICAL to the v1.6.0 engine and every golden's every
+    pre-existing leaf is byte-unchanged; the ONE carve-out is the fixture SHAPE (three added
+    zero-valued keys per golden — §22.12), DECIDED spec-side, never discovered as a red test;
+    (g) [**equity_strip non-null** — the domain is stated because the fields it reads do not
+    exist when the block is null] `loan_notes_unredeemed` (WARN, once per run) fires exactly on
+    `loan_notes_accrued_balance > loan_notes_redeemed + $0.005m`, on §22.2's pinned measurement
+    pair (balance grown to exit and BEFORE the exit redemption; redeemed = the EXIT redemption
+    alone); named for its CONDITION, so the flag cannot mislabel what it detects;
+    (h) [**mip.ratchet non-null ∧ invested_equity_total > 0**] the UNCAPPED bracket sum is
+    MONOTONE non-decreasing and
+    CONTINUOUS in the pre-promote total X, equals the §10 single-tier value whenever `ratchet`
+    is empty, and is bounded by `s_0 × max(0, X − T_0) ≤ promote_uncapped ≤ s_n × max(0, X −
+    T_0)` — it can never escape the two flat-rate envelopes. **The `invested_equity_total > 0`
+    qualifier is LOAD-BEARING [round-8]: `T_j = hurdle_moic_j × invested_equity_total`, so at a
+    NEGATIVE invested equity the thresholds INVERT (ascending hurdles produce DESCENDING
+    thresholds) and the envelope is FALSE — measured at invested = −100, X = 500, tiers
+    {1.5→0.15, 2.0→0.25}: the bracket sum is 175.0 against an envelope of [97.5, 162.5]. The
+    case is REACHABLE: `facade.ts` derives `invested_equity_total` from the §2 plug plus
+    rollover, and a non-positive plug is a COHERENCE FLAG, not a Build rejection, so the run
+    still produces output. Clause (d) already carries the equivalent qualifier; (h) omitted
+    it.** All four statements are about
+    `promote_uncapped`, NOT about `mip_payout` [round-2 gov-M7: the r2 clause opened on "the
+    ratcheted promote" and closed on the uncapped sum, and §10's
+    `min(·, max(0, exit_equity_pre_mip_total))` cap makes them different numbers]. **The scoping
+    is right; the ORIGINAL reason given for it was WRONG and is corrected HERE [round-3 arith-M2,
+    re-filed into the NORMATIVE home in round 4 — arith-B2 caught the correction sitting only in
+    §22.9(h), which round 4 had just declared SUBORDINATE, so the new precedence rule was
+    promoting the FALSE claim]: at a FIXED `E` the cap is a CONSTANT and `min` of two
+    non-decreasing functions is still non-decreasing (measured twice independently: 0
+    non-monotone steps over 3,000 X values), so "the cap breaks monotonicity in X" is FALSE.
+    `mip_payout` departs from the uncapped sum only along the engine manifold where rising
+    cumulative distributions lower `E` — which §10 already discloses.**; (i) an explicit
+    NON-CLAIM: no ordering is asserted between a strip deal's sponsor IRR and the same deal run
+    with a §10 promote — different instruments, different payoffs, and which is dearer depends
+    on the exit level (the §19.6(e)/§20.6(f) precedent).
+
 ## §15 Units, precision, display [CONFIRMED DR-5 Item 6]
 
 Engine: float64 end-to-end, unit = millions of deal currency, **no intermediate rounding**.
@@ -1047,7 +1206,7 @@ carryforwards out of scope; exit-year fee write-off deducted UNCAPPED; PP&E roll
 mechanically and may go negative (warned); post-2025 OBBBA §163(j) sub-changes out of
 scope; interim distributions [v1.1.0] pay at year-end after full debt service (never
 revolver-funded), blocked capacity does not accrue, and the RP trap is the closed-form
-pro-forma net-leverage test (§3.7 — no solver); the fund/LP overlay [v1.4.0 — §19] is a FUND-OF-ONE on the sponsor side only (annual fee on a constant basis — no step-downs/NAV; no subscription line; no GP commitment; no clawback — nothing to claw back by construction; 'european' = all-contributions hurdle+pref base vs 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, never fund carry; the year-N fee draws BEFORE the final distribution); the PIK toggle [v1.5.0 — §20] is a PER-YEAR WHOLE-COUPON election on the `pik_note` (no partial/50-50 elections; elections frozen across scenarios; PIK deducted as accrued with AHYDO a disclosed omission carrying the structural `ahydo_shape` WARN — the §163(i) yield leg needs the monthly AFR and is stated, not tested, and the significant-OID leg is PROXIED, over-firing conservatively; PIK notes stay non-refinanceable and sweep-exempt by default); the sector comps band [v1.6.0 — §21] is a COMMITTED-DATASET reality check (Damodaran industry averages, annual vintage stated per band — no live feed; PUBLIC-MARKET trading multiples, NOT buyout-entry multiples; each figure is an INDUSTRY AGGREGATE — aggregate EV ÷ aggregate EBITDA, not a median firm — on data trailing through the prior year's Q3; positive-EBITDA block only, with NA and non-positive values excluded; the displayed `firms` is the industry POPULATION count, which includes firms outside the ratio's own aggregate; the 94→8 sector map is a stated convention whose forced assignments are listed in §21.5; financials are NOT uniformly unavailable — the US bank/broker rows are NA and drop out, leaving a band set by asset managers and non-bank financials, while Europe and India enter through BROKER multiples only — their bank rows are NA too — and only Japan publishes an actual bank multiple; a band may collapse to a point under a dominant constituent; region is inferred from reporting currency, a proxy for listing market, and displayed; ESEF/upload deals carry no sector source and show the unavailable state); refinancing [v1.3.0 — §18] is a SCHEDULED
+pro-forma net-leverage test (§3.7 — no solver); the fund/LP overlay [v1.4.0 — §19] is a FUND-OF-ONE on the sponsor side only (annual fee on a constant basis — no step-downs/NAV; no subscription line; no GP commitment; no clawback — nothing to claw back by construction; 'european' = all-contributions hurdle+pref base vs 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, never fund carry; the year-N fee draws BEFORE the final distribution); the PIK toggle [v1.5.0 — §20] is a PER-YEAR WHOLE-COUPON election on the `pik_note` (no partial/50-50 elections; elections frozen across scenarios; PIK deducted as accrued with AHYDO a disclosed omission carrying the structural `ahydo_shape` WARN — the §163(i) yield leg needs the monthly AFR and is stated, not tested, and the significant-OID leg is PROXIED, over-firing conservatively; PIK notes stay non-refinanceable and sweep-exempt by default); the sector comps band [v1.6.0 — §21] is a COMMITTED-DATASET reality check (Damodaran industry averages, annual vintage stated per band — no live feed; PUBLIC-MARKET trading multiples, NOT buyout-entry multiples; each figure is an INDUSTRY AGGREGATE — aggregate EV ÷ aggregate EBITDA, not a median firm — on data trailing through the prior year's Q3; positive-EBITDA block only, with NA and non-positive values excluded; the displayed `firms` is the industry POPULATION count, which includes firms outside the ratio's own aggregate; the 94→8 sector map is a stated convention whose forced assignments are listed in §21.5; financials are NOT uniformly unavailable — the US bank/broker rows are NA and drop out, leaving a band set by asset managers and non-bank financials, while Europe and India enter through BROKER multiples only — their bank rows are NA too — and only Japan publishes an actual bank multiple; a band may collapse to a point under a dominant constituent; region is inferred from reporting currency, a proxy for listing market, and displayed; ESEF/upload deals carry no sector source and show the unavailable state); <!--§15-BOUND-->sweet equity, ratchets and warrants [v1.7.0 — §22] model the institutional loan notes as EQUITY — outside §11 leverage/ICR/FCCR/DSCR, outside the §3 waterfall and the §9 debt payoff, and with NO interest deduction (jurisdiction-specific — UK CTA 2009 Part 5, hybrid-mismatch, US §385 — so v1 claims none, which is NEVER ANTI-CONSERVATIVE: neutral only where §163(j) binds in EVERY year so the disallowance is never released (G3's shape), lower-return elsewhere), accruing only, never cash-pay, with NO year-0 accretion; ratchets are MARGINAL top-slice step functions on MOIC struck at EXIT ONLY, never cliffs (a cliff on a REALIZED-return hurdle has NO SOLUTION OVER AN INTERVAL OF EXIT VALUES — §22.5 carries the worked counterexample), with a value exactly ON a tier threshold taking the LOWER tier (strict >, the §3 sweep-grid convention) and IRR-based ratchets deferred to v2; the §10 promote ratchet and the sweet-equity ratchet are struck on DELIBERATELY DIFFERENT bases (total pre-promote proceeds vs the institution's own realized value — §22.5); the strip, the ratchet and the warrant are FROZEN across scenarios; MANAGEMENT'S SUBSCRIPTION REDUCES THE SPONSOR'S OWN CHEQUE (a §2 source line — material to every sponsor return number on the page); a promote and a strip may NOT coexist (DR-2's double-count, an input-gate rejection) and a strip may not coexist with a rollover in v1 (the strip/sweet allocation of a rollover is negotiated, with no defensible default — §22.3(ii)); when exit equity does not cover the accreted loan notes the ordinary pot is zero, management's sweet equity is worthless and the `loan_notes_unredeemed` WARN fires, and when exit equity is NEGATIVE the ordinary pot is likewise NEGATIVE (not zero) and the whole shortfall stays with the pre-existing §9 claimants (management's ords cannot go negative) — and whenever the FINAL SPONSOR FLOW is negative — which is the true trigger, NOT a negative exit equity, since a year-N distribution can outweigh a negative exit residual and leave the flow positive — the HEADLINE sponsor MOIC exceeds the realized one, because `returns` has summed POSITIVE inflows only since v1.1.0 and a negative final flow does not reduce it (a pre-existing convention §22 surfaces rather than introduces; the §22.5 ratchet is struck on the REALIZED figure, never the headline — §14.23(d)); AT MOST ONE warrant, rationally exercised on full dilution with the strike paid in, NOT exercised exactly at-the-money, diluting a ROLLOVER holder pro-rata exactly as it dilutes the sponsor, NOT participating in interim distributions (an option is not a distribution right), and its association with a mezzanine TRANCHE is a LABEL ONLY — no arithmetic depends on it; management's subscription price and their ordinary % are INDEPENDENT inputs, so the model never checks that the terms are actually sweet<!--/§15-BOUND-->; refinancing [v1.3.0 — §18] is a SCHEDULED
 per-tranche event (no forward-curve or covenant-cure trigger), one refi per tranche,
 par-for-par (no dividend recap / upsizing), cash-pay term tranches only (no PIK refi), the
 repricing effective for the whole of the refi year (no mid-year proration), and the old
@@ -1115,6 +1274,7 @@ is OFF ⇔ +∞** — N/A semantics, never a sentinel, per §11/§15), `distribu
 t0-anchored) and `payback_year: number | null` (1-indexed), and its two SPONSOR-SIDE streams
 gain `irr_mid_year: number | null`. `ValueBridge.walkdown` gains
 `interim_distributions_sponsor`. `CoherenceFlag.code` gains `distribution_blocked` ([v1.3.1] and `refi_noop` — §18.8; [v1.5.0] `ahydo_shape` — §20.6(e), WARN class, per qualifying pik_note). [v1.4.0] `assumptions.fund: FundOverlayAssumption | null` — `{committed_capital: number|null, mgmt_fee_pct: ≥0, fee_basis: 'committed'|'invested', carry_pct: [0,1), pref_rate: ≥0, catchup_pct: {0} ∪ [carry_pct, 1], waterfall: 'european'|'american', fee_offset_pct: [0,1]}; null ≡ OFF (byte-identity §19.6(c)). Input-gate REJECTIONS: committed_capital = null ∧ fee_basis = 'committed' (circular — §19.2); explicit committed below total contributions; every domain violation above. `ModelOutput.fund` (Class C): null when OFF; when ON, `{lp_contributions[], lp_distributions[], gp_carry[], mgmt_fees_net[], paid_in_total, committed_capital, fund_lp_net: {irr, moic, dpi[], payback_year}}` — named fields, unconditional emission within the non-null object; `lp_contributions` length N+1 (t=0..N), the other four arrays length N (years 1..N, NOT t0-anchored), `payback_year` 1-indexed or null (the v1.1.1 contract precedent). The suggestion layer proposes NO fund overlay (§19 preamble). [v1.5.0] `PikNoteAssumption` gains `elections: ('cash' | 'pik')[] | null` (default null ≡ the v1 FIXED both-legs note — numeric/fixture identity with the coherence carve-out, §20.6(c)/§20.9). Input-gate REJECTIONS (§20.2): non-null length ≠ `hold_years`; any entry outside the union; non-null ∧ `cash_coupon ≤ 0` (a 0%-cash toggle year is a free coupon holiday no term sheet grants — the FIXED cash-0 note stays available as null); non-null ∧ `pik_coupon < cash_coupon` (the PIK premium is non-negative — market shape, DR-3.4). NO new ModelOutput fields — `TrancheYear.{cash_interest, pik_accrual}` already carry the per-year split. The suggestion layer proposes NO elections [rescoped, round-1 M2]: the D7 ASSEMBLY builds no pik_note, but the layer's own data ships one — conventions.json's `mm-senior-mezz` template carries a Mezzanine Note (pik_note, cash 10% + PIK 3%, NO elections) — so a template-built mezz deal whose note matures past year 5 wears `ahydo_shape` permanently (template badge ≠ suggested badge, so §14.13's all-SUGGESTED-clean invariant is untouched); either way no elections are ever proposed and a user-added note starts null (the toggle is opt-in per year). [v1.6.0] `DealFacts.sic_code: string | null` (additive Class-A — the EDGAR numeric SIC, the §21.5 bucket key; null on ESEF/upload and on any route with no published SIC; manual deals use the dropdown instead) and `DealFacts.sector_comps: SectorCompsBand | null`: `{region: 'US'|'Europe'|'Japan'|'India'` — **FOUR regions, the only ones a deal can select** (currency is coerced to the five modelled values, so Global/Emerging/China are unreachable and are NOT vendored — §21.6) — `vintage: string (the source file's own stated date), bucket: string (the §21.5 comps bucket or 'Other' — NOT `facts.sector`, which keeps carrying the raw SIC description untouched), low, median, high: number, industries_used: number, firms: number, basis: 'sector' | 'total_market_ex_financials', citation: string}`. **THREE distinct null causes, all emitting `sector_comps: null`:** (1) no sector information at all — the ESEF/upload routes, which publish no SIC and have no dropdown; (2) the PHASE_D §D6 IFRS-in-SEC route when EDGAR publishes no SIC for that filer — the plumbing gap that once made this cause universal on the route was CLOSED in step 3 (`mapCompanyFactsIfrs` takes `sicCode`; `store/dealEngine` passes it; pinned live by §21.11(xi)), so the route now behaves exactly like (1) and differs only in why the code is absent [round-3 B1, closed]; and (3) a bucket that resolves but has ZERO included constituents in that region (§21.4's honest-null rule). The surface distinguishes them in the reason it shows. NO input gate: the value is derived from committed data, not user input, so there is nothing to reject — a malformed committed dataset is caught by the §21.10 regeneration, SHA-256 and vintage gates at CI, not at Build. `ModelOutput` gains NOTHING beyond these `facts` fields (§21.8(d)), and the suggestion layer proposes no comps value. [v1.3.2] ALL THREE source unions — `DealFacts.source`, `RawHistoricals.origin`, and the extraction-layer `ProvenanceSource` — gain `'upload'` (the uploaded-filing route; normative conventions in `lib/edgar/IXBRL_SPEC.md`; purely additive — no fetch route ever produces it, no engine arithmetic reads `source`, and stamping origin explicitly keeps factsAdapter's legacy fallback from mislabelling an upload as 'edgar'/'esef').
+[v1.7.0] `assumptions.sweet_equity: SweetEquityAssumption | null` — `{sponsor_ordinary_pct: (0,1], loan_note_rate: ≥0, management_subscription: ≥0, management_ordinary_pct: [0,1), ratchet: RatchetTier[] | null}`; `assumptions.warrant: WarrantAssumption | null` — `{holder_label: string, pct_of_ordinary: (0,1), strike_total: ≥0}`, SINGULAR by construction (two warrants' exercise decisions are mutually dependent and admit multiple rational-exercise equilibria — "at most one" is a TYPE, not a gate someone must remember to write, §22.3); `assumptions.mip` gains `ratchet: RatchetTier[] | null`; `RatchetTier = {hurdle_moic: > 0, share_pct: [0, 1)}`. All three null ≡ OFF ≡ **NUMERIC identity**, with the §22.12 fixture-SHAPE carve-out — never the unqualified "byte-identity", which is false against §22.10's unconditional emission and is the v1.5.0 round-1 B1 defect (§14.23(f) states the precise form; §22.9(f) carries its domain). Input-gate REJECTIONS (§22.3): `sweet_equity` ∧ `mip` both non-null (the DR-2 double-count rule made STRUCTURAL); `sweet_equity` non-null ∧ `rollover_equity > 0` (a v1 SCOPE gate, stated as one); `hurdle_moic` not strictly ascending, or a first tier not strictly above the base threshold it sits on (`mip.hurdle_moic` for §22.4); `share_pct` DECREASING across tiers or below the base share (a ratchet only ratchets up); any `share_pct = 1` (for §22.5 the bracket walk's `(1 − s)` denominator is zero and the tier can never be exited; for §22.4 the gate is ECONOMIC — §22.3(iv) carries the per-ratchet pair); `sweet_equity` non-null ∧ a `management_subscription` that would leave the §2 residual plug ≤ 0 (deterministic at Build from the S&U identity — a non-positive plug makes the ordinary/loan-note split incoherent — see §22.3(vi), where the older `LN[0]`-NEGATIVE gloss is RETRACTED as false at `sponsor_ordinary_pct = 1` [round-10: this line WAS edited in the round-9 commit and the refuted half was left standing, so the document asserted a proposition and its refutation in two homes], so it is a REJECTION and not the post-run `negative_sponsor_equity` flag); `management_ordinary_pct = 0` with a POSITIVE subscription (paying real money for a zero share is a typo, not a structure — a zero subscription with a zero share stays legal, being the all-institutional strip); every domain violation above. The suggestion layer proposes NO strip, NO ratchet and NO warrant (a cap-table structure is a negotiated term with no history/convention basis — the distributions/refi/fund/elections precedent); fields start empty/off, badge TEMPLATE via template paths, YOU when set. **ModelOutput additions [v1.7.0 — §22.10]:** `SourcesUses` gains `management_subscription` (Class C, unconditional `0.0`) and it enters `total_sources`, so `sources ≡ uses` (§14.1, "always") is preserved BY CONSTRUCTION; `openingBalance`'s §8 equity line becomes `sponsor_equity + rollover_equity + management_subscription`, which is what keeps the goodwill plug genuinely unaffected. `ExitBlock` gains `management_ordinary_share` and `warrant_payout_net` (§22.6's ONE-NAME-per-number rule, extended in round 3 to the management share — the `equity_strip` fields of the same names are its strip-block echoes, and every invariant is asserted on these UNCONDITIONAL carriers), emitted UNCONDITIONALLY (`0.0` when off, so the pre-v1.7.0 goldens carry committed zero columns exactly like the G-1/G-5 additions — the fixture-shape change is DECIDED in §22.12); `ModelOutput.equity_strip: EquityStripBlock | null` (null ⇔ `sweet_equity` null ∧ `warrant` null; OMITTED from a fixture when null — the `ModelOutput.fund` precedent verbatim, where only `G7FUND/expected.json` carries the key) = `{loan_notes_subscribed, loan_notes_accrued_balance, loan_notes_redeemed, ordinary_pot_pre_warrant, warrant_exercised: boolean, warrant_strike_paid, warrant_payout_gross, warrant_payout_net, ordinary_pot, management_ordinary_share, institution_ordinary_share, ratchet_tiers_reached, management_effective_ordinary_pct: number | null, institution_moic_at_ratchet: number | null}` — named fields the display surface READS, never recomputes; the two `| null`s are N/A semantics for a ZERO OR NEGATIVE ordinary pot, never sentinels (the once-named second cause — a zero invested equity — is deleted here as UNREACHABLE, see the correction below) — **corrected [round-9 M7]: that second cause is UNREACHABLE (§22.3(vi) makes a non-positive plug a Build rejection wherever a strip exists, and §22.10 pins the field null on the only other arm). The reachable pins are §22.10's: on the WARRANT-ONLY shape BOTH are null (there is no strip to measure); under a strip `management_effective_ordinary_pct` is null at a non-positive ordinary pot and `institution_moic_at_ratchet` is never null** (§11/§15) [round-3 arith-M5: the signed pipeline makes a negative pot reachable; the r3 minor was applied in §22.10 but not here]. `ValueBridge.walkdown` gains `sweet_equity_delta` and `warrant_payout_net`, and §14.9(b)'s identity is AMENDED to carry both (un-amended it reports a ≈$28.73m residual on the G9-SWEET shape), and `ValueBridge.entry_equity_pre_promote_total` now INCLUDES `management_subscription` — which is what keeps §14.9(a)'s frictionless identity exact (it holds only if EVERY equity source is counted) and is byte-identical when the strip is null. `CoherenceFlag.code` gains `loan_notes_unredeemed` (§14.23(g), WARN; §22.9(g) carries its domain). All Class C, all REQUIRED-with-null.
 `ScenarioResult.waterfall`'s slim block gains `distribution_paid` and `distribution_blocked`
 (§13). The reference derivation additionally records a top-level `distributions` block —
 `requested`, `paid`, `sponsor_share_paid`, `cumulative_paid`, `trap_level`, `blocked_years`
@@ -1921,7 +2081,8 @@ independent passes.
 **COHERENCE EXCEPTION — decided HERE, spec-side, never discovered as a red test (the
 v1.1.1 round-2(b) convention; round-1 B1):** from v1.5.0 the fixed accreting notes in
 **G3 and G3-DIST** (maturity 8, pik 12%, elections null) EMIT `ahydo_shape`, and so does
-**G8-PIKT**; no other golden emits `ahydo_shape` (the DIST goldens' `distribution_blocked`
+**G8-PIKT**; from v1.7.0 **G9-SWEET** and **G10-RATCHET** join them (§22.12 — both inherit
+G3's note); no other golden emits `ahydo_shape` (the DIST goldens' `distribution_blocked`
 under the v1.1.1 amendment is untouched by this exception). The committed coherence-clean
 asserts (the facade-scenarios G-loop and the G3-DIST check) are AMENDED in step 3 to
 expect EXACTLY this flag on EXACTLY these goldens — any other coherence delta on any
@@ -2311,12 +2472,929 @@ round-2 defect (every REIT displayed at 38.03/38.03/57.52 instead of 19.87×3) a
 (xi) the D6 route (§21.5b): an IFRS-in-SEC 20-F filer with a published SIC must reach a bucket,
 NOT the null band — the fixture fails until `mapCompanyFactsIfrs` threads `sicCode`.
 
+## §22 Sweet equity, ratchets & warrants — the management strip as a REAL instrument [v1.7.0 — Phase 5 / backlog #8; Tier A, engine arithmetic] [STEP-1 SIGN-OFF GRANTED at round 11 under PHASE_G's BOUNDED rule, 2026-08-14, fingerprint @ 0398fb3 — history: round 1 REFUSED by two independent reviewers (11 blocking in union: G9-SWEET's false zero-flag claim with G3's `ahydo_shape` as the committed counterexample; the missing §2 source field breaking §14.1; the §8 goodwill plug moving under a "plug is unaffected" sentence; "§19 composes unchanged" false against three committed `sponsorShareOfDistributions` call sites; the `max(0, E)` clamp breaking the v1 path at E < 0; a dangling "§16 single-path rule" cite; three over-broad §14.23 domains; §22.4 with zero golden coverage and no invariant; §14.9(b) un-amended and off by $28.73m on the golden; §16's false "byte-identity" shorthand; the §9 membership table un-amended), ALL applied; round 2 REFUSED by both (7 blocking in union — the `pot ≤ 0` arm was UNQUALIFIED so it overrode §9's pari-passu split of a negative residual on the v1 path and byte-identity was still false, just differently; §14.23(d) FAILED on the very negative-E fixture §22.13(v) newly prescribed, because `returns.ts` sums positive flows only and the r1 clamp had been hiding it; §22.5's `STOP` left three REQUIRED outputs undefined on a reachable path; the §15 disclosure row was BYTE-IDENTICAL to the refuted draft — still "the conservative direction" — while the changelog claimed it amended; §14.23(b) named a nullable `equity_strip` field across its own `[ALL]` domain; plus the §9 warrant row double-counting and the §22.9(h) payout/uncapped conflation), ALL applied; round 3 REFUSED by both (5 blocking in union — `V_final ← V₀` on the zero/negative-pot arm reported TIERS REACHED on value subsequently LOST (V₀ = 99, P = −25: 0.99 vs the realized 0.74, crossing 0.8 and 0.9 hurdles), the THIRD relocation of one defect family; the stage-4 split made §22.5's own `P ≤ 0` opener UNREACHABLE so three REQUIRED outputs went undefined again and §22.13(v)(α) contradicted §22.7; §22.9(d)/(h) were byte-identical to the REFUSED text while §14.23 carried the corrections and the changelog claimed both applied; §22.5's MIRROR block was byte-identical to r2 and its normative sentence to the r1 REFUTED draft, still naming `returns.sponsor_net.moic` with no domain and no tolerance floor; and §22.11 had LOST the headline-vs-realized disclosure that §15 carried, so regenerating §15 from it — exactly what its heading commissions — would have deleted a refused finding's disposition), ALL applied — round 4 pending. **STRUCTURAL FIX in r4: §14.23 is now the SINGLE normative home for every §22 invariant and §22.11 the single home for the §15 row; §22.5/§22.9 carry domains, rationale and worked examples and CITE §14.23, and any divergence is itself a defect with §14.23 governing. Three consecutive rounds shipped a "stale against the refuted draft" defect (§16 inherited from v1.6.0, then §15, then §22.9) because the same rule lived in three places and was re-synced by hand — the same failure PHASE_G names for hand-kept lists.** Round 4 REFUSED by both (5 blocking in union — the §22.5 annotation still DEFINED the count as `#{ j : V₀ > T_j }`, the refused rule, four lines below its own correction and giving 2 tiers where the normative line gives 0 on the block's OWN counterexample; the r3 monotonicity correction had been filed in §22.9(h) while §14.23(h) kept the FALSE claim, so the new precedence rule PROMOTED the error it was written to prevent; the deleted COMPARISON RULE paragraph left `institution_moic_at_ratchet` with NO normative definition anywhere and §14.23(d) carrying this project's FOURTH dangling cite; and the single-home conversion had reached 2 of §22.9's 9 clauses while the header and changelog claimed the section), ALL applied — round 5 pending. **The single-home rule is now MECHANICALLY ENFORCED rather than promised: `tests/governance-spec-single-home.test.ts` fails if §22.9 states any formula, if a §14.23(23) clause letter lacks a §22.9 citation, or if §15 drifts from the marker-delimited sentences §22.11 governs. Three mutants run RED and reverted — one reproducing the exact r3 defect (§15 back to "the conservative direction").** Round 5 REFUSED by both (3 blocking in union, ALL in that guard: it keyed on ONE character, `≡`, which only 3 of 9 clauses use, so mutants restating (a), (e), (g) and (h) passed GREEN — including one asserting the §22.4 envelope on the WRONG quantity, i.e. the exact round-4 defect the guard existed to prevent; the clause-letter check was a hand-kept `[a-i]` literal, so a new §14.23 clause needed no companion, and its substring match let §22.9 clause (f) be DELETED silently; and the §15 check pinned 18% of the clause in ONE direction, so §15 could gain a CONTRADICTING sentence or gain §22 content absent from its source — round-4's own defect inverted — and stay green. The v1 mutants had all landed inside the covered subset, the §21-round-1 "sample blind to its own mutant" failure). ALL applied — **guard v2** bans EVERY mathematical token in §22.9's code spans with domains rewritten as PROSE, derives clause letters from §14.23 with an OPEN class, binds each citation to its OWN clause body, and compares §15 against the §22.11 block in BOTH directions over the WHOLE clause. **14 mutants derived FROM the property — one per clause plus every structural hole the reviewers proved — all RED, all reverted, baseline green.** Round 6 REFUSED by both (5 blocking in union, ALL in guard v2, 12 of 20 reviewer mutants passing it: the token ban was an ENUMERATED DENYLIST and so failed OPEN — missing `+`, ASCII `-`, `*`, `**`, `÷` and unicode lookalikes, with its slash rule INVERTED so it fired on paths and missed division; it scanned only BACKTICKED spans, so the FALSE §22.4 envelope passed simply by dropping its backticks; its clause scan anchored on a hand-kept punctuation set, so a clause added after a PERIOD was invisible; its §15 slice covered 39%, so §22 disclosure placed elsewhere in §15 was ungoverned — round-4's defect surviving by relocation; and §22.9(h)'s prose domain was NARROWER than §14.23(h)'s, excluding the empty ratchet list the clause's own sub-claim requires). ALL applied — **guard v3 inverts the polarity where it matters**: the span check is a fail-closed ALLOWLIST (a §22.9 code span must be an identifier or a filename, admitting no expression at all), with a token BACKSTOP over the PROSE so an unbackticked formula is caught too; clause sets are derived from BOTH homes and compared for EQUALITY with no punctuation anchor; §15 is delimited on BOTH sides with §22 terms banned outside the markers. **19 mutants — every operator family and every hole either reviewer proved — ALL RED, and the SPEC verified BYTE-IDENTICAL to pre-mutation.** Round 7 REFUSED by both (union: 2 real SPEC defects + the guard's own escalation). The SPEC defects: §14.23(d)'s round-6 ordinal "fix" called the domain's CORE condition redundant when the redundant one is the plug condition — a fix landing in the governing home and making it WORSE than its companion, for the FOURTH time; and round 7's null-vs-empty disambiguation NARROWED §14.23(f) to exclude `mip.ratchet: []`, which also produces v1 numbers, so a compatibility regression on that representation could have shipped green. **Both fixed.** On the guard, the governance reviewer's proportionality judgement was requested and delivered: **across rounds 5–7 it caught ZERO §22 defects and OCCASIONED THREE**, while the same false §22.4 envelope survived all three generations by changing notation (`≤` → unbackticked `≤` → the words "is at most"), which no lexical rule can reach. **ROUND 8 CUT IT BACK** to the three checks that enforce IDENTITY RELATIONS across widely-separated text — the allowlist, the clause-set equality, the §15↔§22.11 equality — and DELETED the prose backstop and its CHARTER pin, which had pinned a stale self-description into §22.9. 15 mutants across every notation family still RED with the smaller guard, so the cut lost nothing measurable. Round 8 closed — **Round 8 REFUSED** by a 5-lens workflow (5/5 lenses REFUSED; 12 spec-blocking findings over 14 distinct subjects; ZERO guard-locus findings, once the guard's residuals were documented and findings were labelled by locus). **Round 9 adversarially VERIFIED all 14** with two independent skeptics each (29 agents): **10 confirmed blocking, 4 minor, ZERO not-a-defect** — and TWO that round 8 had REFUTED (§22.3(vi)'s scope, §14.23(f)'s dotted-null domain) were CONFIRMED on re-verification, so the round-8 refutations were themselves wrong. ALL applied. The six blocking: §22.3(vi)'s Build rejection was UNQUALIFIED and would have made `runModel` THROW on a run v1 merely FLAGS, killing a committed insolvency test inside the domain §14.23(f) declares v1-identical; §22.7 claimed `equity_strip` is null on the whole `sweet_equity`-null arm, FALSE on the warrant-only arm §22.13(vi) commissions a fixture for; §22.5 stated the tier count a SECOND time on a money path, which §14.23(d)'s COMPARISON RULE forbids — the two agree in exact arithmetic but disagreed on **4.1% of 300,000 float draws**, at exactly the tie §22.13(iii) makes normative; §22.13(v)(α), the ONLY coverage of §22.5's `P ≤ 0` opener, was BLIND to the mutant it names (its configuration was fine — its ASSERT SET was not); §14.23(f)'s domain did not reach `mip: null`, closed by ONE convention sentence in §14's preamble which closes item 21(c) simultaneously rather than re-editing a clause a prior attempt had already relocated once; and the cliff 'NO fixed point' UNIVERSAL, false because no-solution holds only over a BOUNDED INTERVAL. 11 minors applied. **The adjudicator also caught that the round-9-PARTIAL fix to §14.16 had traded a contradiction for a DUPLICATE** — the same identity in two hand-synced homes, the generator rather than the instance — so §14.16 now OWNS it and §14.23(b) POINTS at it. **Round 10 REFUSED**, 2 blocking, and its CLOSURE phase — which asked "did each round-9 fix CLOSE its finding, or RELOCATE it?" — found TWO of the round-9 fixes had relocated and five more had created new defects; all 8 fixed. The sharpest: the money-form tier count was fixed on ONE line and left, in money form, 24 lines above in the SAME normative fence — and because the `P ≤ 0` arm RETURNs before reaching the fixed line, the stale form was the OPERATIVE rule on precisely the arm §22.13(v)(α) is the sole coverage of. The round-10 FRESH phase then ran four lenses blind to any finding list: **arithmetic and contracts both GRANTED with ZERO blocking** — the numbers, the schema, the output contracts and the fixture shape are clean — while composition and coherence returned 2 blocking, both tracing to ONE round-10 fix of mine: ungating §14.23(d)'s DEFINITIONS over-shot by dropping the FIRST domain condition (colliding with §22.10/§16's warrant-only NULL pin, so the governing home would have had an implementer emit a `0` sentinel §11/§15 forbid) AND landed in one home only, leaving §22.9(d)'s prose still gating them — the round-6 gov-B2 shape for the SIXTH time. Both fixed, plus the mirror-image of the round-8 warrant fix (the EXERCISED branch never assigned `warrant_strike_paid`) and a REQUIRED output left unassigned on a reachable path by the `P ≤ 0` opener. 15 minors recorded. **Round 11 GRANTED — closure, composition and coherence lenses ALL GRANTED with ZERO blocking under the bounded rule; the two round-10 blocking fixes verified CLOSED in BOTH homes without relocation; all 15 round-10 minors dispositioned (six already fixed by 6b51bfb, verified by diff; nine fixed in the r11 ledger pass; one prescribed fix rejected as stale); every §22 worked example, closed-form pin and committed-code claim independently recomputed by the granting review; 16 ledger items recorded in rebuild/G10_LEDGER.md for the step-6 pass.**]
+
+**§22.1 The frame [DECIDED].** §10 models ONE instrument: a US-style promote pool struck on
+total equity proceeds. DR-2 Item 4 is explicit that layering that promote on a **sweet-equity
+cap table double-counts management upside**, and §10 has carried the consequence as a
+forward reference since v1.0: *"sweet-equity strips (institutional strip + ordinaries, the
+UK/European structure) are a separate Phase G module, modeled through the actual instrument,
+never blended."* §22 is that module, and it keeps the rule STRUCTURAL rather than advisory:
+`sweet_equity` non-null ∧ `mip` non-null is an **input-gate REJECTION** (§22.3), so the two
+instruments cannot be blended even by accident.
+
+§22 adds THREE claims on the equity pot, all resolved at exit, all closed-form (§5's
+no-solver rule survives — see §22.5, where preserving it is the whole reason the ratchet is
+MARGINAL rather than a cliff):
+
+1. **The institutional strip (§22.2)** — the sponsor's check is subscribed partly as
+   deeply-subordinated **institutional loan notes** (a fixed compounding yield, redeemed at
+   exit at par + accrued, ranking AHEAD of ordinary shares) and partly as **institutional
+   ordinaries**. Management subscribes cash for **sweet ordinaries** — a share of the ordinary
+   class disproportionate to what they paid. That asymmetry IS the incentive; it replaces the
+   promote, it does not sit beside it.
+2. **Ratchets (§22.4/§22.5)** — a step function that raises an incentive share as a MOIC
+   threshold is crossed. Two applications, because two instruments: the §10 promote's
+   `pool_pct` gains tiers (§22.4), and the sweet-equity ordinary split gains tiers (§22.5).
+   They share the MARGINAL convention but are struck on DIFFERENT, explicitly stated bases —
+   §22.5 says why the divergence is deliberate rather than an inconsistency.
+3. **Warrants / equity kickers (§22.6)** — DR-4's mezzanine warrant (2–8% of equity): a claim
+   on the ordinary CLASS, rationally exercised at exit, diluting every ordinary holder
+   pro-rata.
+
+All three are OFF by default (`sweet_equity: null`, `mip.ratchet: null`, `warrant: null`), and
+with all three off every computed number is identical to v1.6.0 (§14.23(f), whose domain §22.9(f) carries); the ONE deliberate
+fixture-SHAPE change is decided spec-side in §22.12, never discovered as a red test.
+
+**CODE HOME.** All
+§22 arithmetic lands in modules ALREADY on the ENGINE ARITHMETIC PATH: the exit waterfall in
+`lib/engine2/exit.ts`, the interim split in `sequence.ts` with its three consumers
+(`returns.ts`, `fund.ts`, `facade.ts` — §22.7), the §2 source line in `sourcesUses.ts`, the
+§8 equity line in `openingBalance.ts`, the walk-down in `bridge.ts`, the flag in `check.ts`.
+**§22 introduces NO new engine module**, so neither PHASE_G's ENGINE-ARITHMETIC-PATH
+enumeration nor `tests/governance-display-surface.test.ts`'s `ENGINE_ARITHMETIC_MODULES`
+regex needs amending — the §19 precedent (which DID add `fund.ts` and amended both) is
+deliberately not repeated. PRECISION: PHASE_G's enumeration covers all nine
+modules including `facade.ts`; the governance REGEX deliberately omits `facade` (display
+surfaces read ModelOutput via `facade` types), which is a pre-existing and intended asymmetry
+§22 neither creates nor relies on. PHASE_G names hand-kept lists as the recurring enforcement hole;
+the cheapest way not to fall in it is not to extend the list.
+
+**§22.2 The institutional strip — loan notes are EQUITY, not debt [DECIDED].** Institutional
+loan notes (equivalently redeemable preference shares) are shareholder instruments
+subordinated to every external lender. v1 models them **entirely inside the equity box**:
+
+- They are NOT tranches. They do not enter §11 leverage, ICR, FCCR or DSCR; they take no
+  part in the §3 waterfall (no cash interest, no amort, no sweep); they are NOT in §9's
+  `debt_payoff_at_par_plus_pik`; they are not refinanceable (§18).
+- They generate **NO §6 deduction**. Their yield rolls up and is settled out of equity
+  proceeds.
+- Their balance accretes annually at `loan_note_rate` and is reduced by any interim
+  redemption (§22.7): `LN[t] = LN[t−1] × (1 + rate) − redeemed[t]`, `LN[0] = the subscribed
+  amount` (NO year-0 accretion — the first accretion lands in year 1). With no interim
+  distributions this is the closed form `LN[N] = LN[0] × (1 + rate)^N`.
+- **MEASUREMENT POINT, pinned.** `loan_notes_accrued_balance` is `LN[N]`
+  **grown to exit and BEFORE the exit redemption** (i.e. net of any INTERIM redemptions but
+  gross of the exit one); `loan_notes_redeemed` is the **EXIT** redemption alone, not a
+  cumulative figure. §14.23(g)'s flag condition (whose domain §22.9(g) carries) only reads correctly under exactly this pair,
+  so it is stated rather than left to the implementer.
+
+REJECTED alternatives, each with its reason:
+(a) **Modeling loan notes as a `structure.tranches` entry.** They would land in entry
+leverage, the credit dashboard, the ECF sweep and the §9 payoff — every one of which would
+be wrong, because no external lender's covenant package counts shareholder notes as debt.
+This is not a shortcut that loses precision; it computes different, false numbers.
+(b) **Claiming an interest deduction on the loan-note yield.** Whether a real strip's yield
+is deductible is a jurisdiction-specific question (UK CTA 2009 Part 5 unallowable-purpose,
+the hybrid-mismatch rules, US §385 / earnings-stripping) that the engine carries no facts to
+answer. v1 claims NO deduction, which is **never anti-conservative** [round-1 gov-M6 — the
+first draft said "conservative", which over-claims: on a deal where §163(j) BINDS every year
+(G3 is exactly that) admitting the deduction would change nothing, so the effect is NEUTRAL
+there and lower-returns elsewhere; "never anti-conservative" is the claim that is true in
+both regimes]. The jurisdictional module is a v2 re-entry.
+(c) **A cash-pay loan note.** Real strips roll up; a cash-pay shareholder note would compete
+with debt service inside §3 and is a different instrument. v1 accrues only.
+
+**§22.3 Inputs (§16 schema).** Three additive Class-B blocks, each null ≡ OFF.
+
+```
+sweet_equity: {                                  // null ≡ no strip
+  sponsor_ordinary_pct: number       // (0, 1]  — fraction of the SPONSOR's §2 plug taken as
+                                     //           institutional ORDINARIES; (1 − this) is
+                                     //           subscribed as institutional LOAN NOTES
+  loan_note_rate: number             // ≥ 0     — annual compounding yield (§22.2)
+  management_subscription: number    // ≥ 0 $m  — management's CASH for sweet ordinaries; a §2
+                                     //           SOURCE (its own line — §22.10), which reduces
+                                     //           the sponsor plug exactly as rollover does
+  management_ordinary_pct: number    // [0, 1)  — management's BASE share of the ordinary class
+  ratchet: RatchetTier[] | null      // §22.5; null ≡ [] ≡ a FLAT sweet-equity split
+} | null
+
+warrant: {                                       // null ≡ none; AT MOST ONE by construction
+  holder_label: string               // display only — see the REJECTED tranche link below
+  pct_of_ordinary: number            // (0, 1)
+  strike_total: number               // ≥ 0 $m — the WHOLE exercise cost, not per share
+} | null
+
+mip: { pool_pct, hurdle_moic, ratchet: RatchetTier[] | null }   // ratchet null ≡ [] ≡ v1
+
+RatchetTier: { hurdle_moic: number;   // > 0  [round-1 arith-M1: the first draft gave a domain
+                                      //      for every other field and none for this one, so a
+                                      //      zero/negative hurdle would make T_j ≤ 0 ≤ V₀ and
+                                      //      report a tier "reached" at a nonsense threshold]
+               share_pct: number }   // [0, 1) — see (iv); stated inline in round 3 so the
+                                     //          block matches §16 [round-2 arith-M6]
+```
+
+**Input-gate REJECTIONS (validated at Build — rejections, never computed defaults, §16).**
+There are **SEVEN** [round-1 gov-M10: the first draft's §22.13 said "the four §22.3
+REJECTIONS" while §22.3 enumerated five; the list and its fixture obligation are now counted
+together and §22.13(viii) covers each]:
+(i) `sweet_equity` non-null ∧ `mip` non-null — the DR-2 double-count rule made structural
+(§22.1);
+(ii) `sweet_equity` non-null ∧ `rollover_equity > 0` — **a v1 SCOPE gate, stated as one**:
+a rollover inside a strip must itself be allocated between the institutional strip and the
+sweet ords, and that allocation is negotiated with no defensible default; applying today's
+pari-passu-ordinary rule (§9) would silently contradict the strip it is sitting inside.
+Deferred to v2 and DISCLOSED (§22.11) rather than guessed;
+(iii) any domain violation in the table above (including `hurdle_moic ≤ 0`);
+(iv) **ratchet tier gates**: `hurdle_moic` STRICTLY ascending across tiers; the first tier's
+`hurdle_moic` strictly greater than the base threshold it sits above (`mip.hurdle_moic` for
+§22.4; §22.5 has no base threshold, its base share applying from zero); `share_pct`
+NON-DECREASING across tiers and ≥ the base share (a *ratchet* only ever ratchets up — a
+decreasing tier is a different instrument and is rejected loudly); and **every `share_pct` <
+1**. The `< 1` gate has TWO DIFFERENT reasons, one per ratchet: for **§22.5** it is arithmetic (the bracket
+walk's `(1 − s)` denominator is zero, the institution's value stops rising, and the tier can
+never be exited); for **§22.4** there is no such denominator and the gate is economic (a pool
+taking 100% of a marginal slice hands the entire top bracket to management, which no promote
+document grants);
+(v) `warrant` non-null ∧ `pct_of_ordinary` ∉ (0, 1) or `strike_total < 0`;
+(vi) **`sweet_equity` non-null ∧ a `management_subscription` that leaves a non-positive §2
+residual plug** — the qualifier is LOAD-BEARING.
+With `sweet_equity` NULL there is no subscription, so the stated residual IS the v1 §2 plug and
+`≤ 0` is byte-identical to the committed coherence condition `check.ts` uses for
+`negative_sponsor_equity`; unqualified, this gate would make `runModel` THROW on a run v1
+computes and merely flags — killing the committed insolvency case in
+`tests/engine2-facade-scenarios.test.ts` (plug −78.76), inside the very domain §14.23(f)
+declares numerically identical to v1.6.0. With `sweet_equity` NULL this gate does not apply and
+the pre-existing post-run `negative_sponsor_equity` BLOCK flag continues to govern unchanged.
+**Enforcement point:** inside `runModel`, like every other §16 structural gate. **§13's
+SENSITIVITY grid must test this gate's condition BEFORE calling `runModel` for a cell**, because
+`buildSensitivityGrid` calls `runModel` per cell with NO try/catch, so an entry-side axis that
+re-derives a non-positive plug would otherwise fail the WHOLE grid [round-10: the round-9 text
+cited `validateFund` as the precedent for per-cell reporting, but `validateFund` THROWS — the
+precedent says the opposite of what the sentence claimed] [round-1 gov-M4/arith-M7; heading de-circularised in round 3 — arith-M4 noted the r2 wording compared the subscription to a quantity defined by subtracting it]
+— i.e. Build REJECTS when the §2 residual `total_uses − debt_at_par − rollover_equity −
+management_subscription` is ≤ 0. Unlike the pre-existing `negative_sponsor_equity` COHERENCE
+flag (`check.ts`, post-run), this is deterministic at Build from the S&U identity, and it must
+be a rejection because a non-positive plug makes the ordinary/loan-note split incoherent — the older gloss `LN[0] = (1 − sponsor_ordinary_pct) × plug`
+NEGATIVE is itself FALSE at `sponsor_ordinary_pct = 1`, which §16 admits as legal (domain
+(0, 1]) and where LN[0] = 0 for ANY plug; and the gate is `≤ 0` rather than `< 0` because a ZERO
+plug leaves the institution with no subscription at all;
+(vii) `sweet_equity` non-null ∧ `management_ordinary_pct = 0` ∧ `management_subscription > 0` —
+management paying real money for a zero share is not a sweet-equity
+structure, it is a typo that silently shrinks the sponsor's own check. `management_ordinary_pct
+= 0` with a ZERO subscription stays legal (it is the "strip with no sweet layer" configuration
+— an all-institutional strip, which is a real structure).
+
+REJECTED input designs: (a) **a `warrant.tranche_name` link** to the mezzanine tranche it
+was issued with — no arithmetic depends on it, so it would be a join key that exists only to
+be displayed, and this project has already paid for one of those (§21 round 1: a join-key
+premise false against committed code). The economic link is DISCLOSED in the label, and
+§22.11 states plainly that the tranche association is not modeled. (b) **An ARRAY of
+warrants.** Two warrants' exercise decisions are mutually dependent (each dilutes the other),
+which admits multiple rational-exercise equilibria and has no closed form; v1 carries a
+SINGULAR field so "at most one" is structural rather than a gate someone must remember to
+write. (c) **A `sweetness_ratio` input** deriving `management_ordinary_pct` from the
+subscription — the price paid and the share received are INDEPENDENTLY negotiated, and
+deriving one from the other would erase exactly the asymmetry that makes sweet equity sweet.
+
+**§22.4 The MIP ratchet — §10 generalized, not replaced [DECIDED].** §10's promote is
+ALREADY a one-tier marginal ratchet: `pool_pct × max(0, X − T)` is "`pool_pct` of the slice of
+X above T", with X = pre-MIP TOTAL equity proceeds (exit equity + cumulative interim
+distributions, §10 [v1.1.0]) and T = `hurdle_moic × invested_equity_total`. §22.4 adds tiers
+2..n by the same rule, applied MARGINALLY:
+
+```
+tiers (T_j ASCENDING only while `invested_equity_total > 0` — at a negative base ascending
+                   hurdles produce DESCENDING thresholds, which is why §14.23(h) carries that
+                   domain [round-9 M5]): T_0 = hurdle_moic × invested_equity_total, s_0 = pool_pct
+                   T_j = ratchet[j].hurdle_moic × invested_equity_total, s_j = ratchet[j].share_pct
+uncapped promote  = Σ_j  s_j × ( min(X, T_{j+1}) − T_j )⁺        (T_{n+1} = +∞)
+mip_payout        = min( uncapped promote, max(0, exit_equity_pre_mip_total) )   ← §10's cap, unchanged
+```
+
+With `ratchet` null the sum has ONE term and this is `pool_pct × max(0, X − T_0)` — **§10
+verbatim**, which is why every existing golden's `mip_payout` is unchanged (§14.23(f)). This
+was verified symbolically AND over 18 numeric cases including `X < T_0` and a binding cap
+(round-1 arithmetic sign-off: zero mismatches).
+
+X does not depend on the promote (it is the PRE-promote total), so there is no circularity
+here and no walk is needed — the tiers are a plain sum of bracket terms. §10's exit-equity
+`min()` cap and its disclosed truncation-without-accrual consequence carry over unchanged.
+
+REJECTED: (a) **cliff tiers on the promote** (`pool_pct` jumps wholesale at each hurdle) —
+X is pre-promote so a cliff here IS well-defined, unlike §22.5's; it is rejected for the
+different reason that it makes the promote discontinuous in exit value, so a $1 move in EV
+transfers millions between sponsor and management. A marginal ratchet is the drafting the
+tiering language ("*of the amount by which… exceeds*") almost always carries; (b)
+**re-basing §10's hurdle onto the sponsor's own realized MOIC** to match §22.5 — that would
+silently rewrite a committed v1.1.0 convention (the hurdle tests TOTAL value returned against
+TOTAL invested equity) under cover of an unrelated feature. The divergence is deliberate and
+is stated in §22.5.
+
+**§22.5 The sweet-equity ratchet — MARGINAL, and why the cliff is REJECTED [DECIDED].**
+The market ratchet is contractual on the **institutional investor's own realized return**
+("*if the Investor achieves 2.0x, management's ordinary holding increases to X%*"). That
+phrasing is what creates the modeling problem, because the institution's realized return
+depends on what the ratchet awards management.
+
+Let `I` = the institution's invested equity (the §2 sponsor plug = loan notes + institutional
+ordinaries), `V₀` = institutional value already banked before the ordinary split (interim
+distributions received, §22.7, plus the loan-note redemption, §22.2), `P` = the ordinary pot
+available to the class (post-loan-note, post-promote, post-warrant — §22.7), `s₀` =
+`management_ordinary_pct`, and tier j = `{T_j = hurdle_moic_j × I, s_j}`.
+
+**NORMATIVE — the marginal bracket walk.** A tier's share applies to the portion of the pot
+allocated while institutional value is STRICTLY ABOVE that tier's threshold:
+
+```
+if P ≤ 0:  management_ordinary_share ← 0 ; institution_ordinary_share ← P ;
+           V_final ← V₀ + P ; RETURN HERE      ← assigns the REQUIRED OUTPUT, not the walk-local
+                                                `M` [round-10]: the branch RETURNs before the line
+                                                that would have converted `M` into the output, so
+                                                naming `M` here left a required field unassigned
+                                                on a reachable path — the round-2 defect class
+           (RETURN, not "skip the loop" [round-8, 3 lenses]: below the loop sit the ACCUMULATE
+            line (`M ← M + s·rem` — reading `M`, `s` and `rem`, none of which this branch
+            initialises), the `V_final ← V` line, and the share-ASSIGNMENT line; running them
+            here would OVERWRITE the outputs this branch just set)
+           ↑ §22.7's zero/negative-pot rule. `V_final ← V₀ + P` is NORMATIVE, not a detail
+             [round-2 arith-B3: the r2 draft said "STOP", which skipped the two lines below and
+             left `ratchet_tiers_reached`, `institution_moic_at_ratchet` and
+             `management_effective_ordinary_pct` with NO stated value on a REACHABLE path —
+             while §22.10 declares every field REQUIRED and §14.23(d) READS two of them]. The
+             REPORTING lines below the loop still run for this branch — the two ASSIGNMENT
+             lines do not, which is what `RETURN HERE` means — so the reading is VALUE-REALIZED
+             on `V₀ + P` rather than `V₀` [round-10: this gloss previously restated the count in
+             MONEY form, which §14.23(d)'s COMPARISON RULE forbids and which the round-9 fix
+             removed 24 lines below while leaving it standing here — the SAME defect, one gloss
+             over; the count itself is taken per §14.23(d) on `institution_moic_at_ratchet`, and
+             the point HERE is only WHICH VALUE feeds it],
+             NOT "nothing allocated ⇒ 0": with interim distributions
+             banked, V₀ can sit far above a tier while the pot is zero, and the
+             nothing-allocated reading would RED §14.23(d) on a coherent deal. **`V₀ + P`,
+             NOT `V₀` [round-3 arith-B1 — the r3 draft wrote `V₀`, the THIRD relocation of this
+             defect family]: with a year-N distribution outweighing a negative exit residual the
+             period-N sponsor flow stays ≥ 0, so the case sits INSIDE §14.23(d)'s new domain, and
+             `V₀` overstates the realized position by exactly `|P|` — worked: V₀ = 99, P = −25,
+             realized MOIC 0.74 vs `V₀`'s 0.99, which REPORTS TIERS REACHED at hurdles 0.8 and
+             0.9 on value that was LOST. The two readings are IDENTICAL at `P = 0`, so round 2's
+             motivating case (value banked, pot zero, tier still counted) is untouched.**
+V ← V₀ ;  rem ← P ;  M ← 0 ;  s ← s₀
+for j = 1..n while rem > 0:
+    if V < T_j:
+        need ← (T_j − V) / (1 − s)          ← linear: each $1 of pot adds (1 − s) to V
+        take ← min(need, rem)
+        M ← M + s × take ;  V ← V + (1 − s) × take ;  rem ← rem − take
+    s ← s_j
+M ← M + s × rem ;  V ← V + (1 − s) × rem            ← the top tier takes the remainder
+V_final ← V                                         ← assign EXPLICITLY on the P > 0 path
+                                                       [round-8: the count line below READS
+                                                        `V_final`, which the walk never set —
+                                                        only the P ≤ 0 opener assigned it]
+management_ordinary_share = M ;  institution_ordinary_share = P − M
+ratchet_tiers_reached      = per §14.23(d), on `institution_moic_at_ratchet` (STRICT)
+                             ← NOT a second money-form statement [round-9 F13(3)]: §14.23(d) is
+                               the single normative home and its COMPARISON RULE forbids exactly
+                               this — a count taken on two float paths. The two agree in exact
+                               arithmetic for I > 0 but NOT in float64: a 300,000-draw sweep
+                               disagreed on 4.1% of cases, at precisely the tie §22.13(iii)
+                               makes normative with a `>` → `≥` mutation test on the count
+```
+
+Every step is linear and each `need` is closed-form, so §5's **no-solver rule holds** and the
+result is exact — this is the same closed-form-over-a-solver move §3.7 made for the RP trap.
+The walk was independently exercised over nine adversarial configurations in the round-1
+sign-off (P = 0; V₀ above the top tier; P too small to reach tier 1; s₀ = 0; a tier below V₀
+followed by one above; n = 0; V₀ = 0; all tiers cleared; s = 0.99) with `M + institution ≡ P`
+and the tier count agreeing in every one, and `M/P ∈ [s₀, s_n]` in the eight with `P > 0`
+(at `P = 0` the ratio is 0/0, which is why §14.23(e) gates on a positive pot).
+
+**Worked example (normative — reproduce this exactly).** `I = 50`, `V₀ = 100`, `P = 25`,
+`s₀ = 0.10`, one tier `{hurdle 2.4 ⇒ T₁ = 120, s₁ = 0.20}`:
+`need = (120 − 100)/(1 − 0.10) = 200/9 = 22.2̄`; `take = 22.2̄`;
+`M = 0.10 × 200/9 = 20/9`; `V = 120`; `rem = 25 − 200/9 = 25/9`;
+then `M += 0.20 × 25/9 = 5/9` ⇒ **`M = 25/9 = 2.7̄`**, `V_final = 100 + 25 − 25/9 = 1100/9 =
+122.2̄`, institutional ordinary share `= 25 − 25/9 = 200/9 = 22.2̄`, institutional MOIC
+`= 1100/450 = 2.4̄`, `ratchet_tiers_reached = 1`.
+
+**THE EXACT BOUNDARY, pinned with BOTH answers [the §21 lesson: an exact-boundary case is
+where conventions diverge].** Take `I = 50`, `V₀ = 100`, `T₁ = 120` (hurdle 2.4), `s₀ = 0.20`,
+`s₁ = 0.36`, `P = 25`. Then `need = (120 − 100)/0.8 = 25 = P` exactly: the pot is exhausted at
+the instant `V = T₁`.
+- **STRICT `>` (NORMATIVE, the §3 sweep-grid convention verbatim — "a value exactly on a
+  threshold takes the LOWER tier"):** `ratchet_tiers_reached = 0`; `M = 0.20 × 25 = 5.0`.
+- **Non-strict `≥` (REJECTED):** `ratchet_tiers_reached = 1`; `M = 5.0` — **the same money**,
+  because tier 1's share applies only ABOVE T₁ and nothing lies above it.
+
+That the two conventions are **money-inert and differ only in the REPORTED tier count** is
+not an accident — it is a property of the marginal rule, and it is the reason the count needs
+its own pinned fixture (§22.13(iii)): a mutation from `>` to `≥` moves a DISPLAYED number and
+no cash, so no golden can catch it. Under a cliff the same mutation moves millions.
+
+**REJECTED — the cliff on realized institutional MOIC, with a worked counterexample.** Under
+a cliff, management's whole share jumps at the threshold. Take `V₀ = 100`, `T = 120`,
+`P = 25`, share 20% below the hurdle and 36% at-or-above:
+- Suppose the hurdle is NOT met, so `s = 0.20`: the institution takes `0.80 × 25 = 20`, so
+  `V = 120 ≥ 120` — the hurdle IS met. Contradiction.
+- Suppose the hurdle IS met, so `s = 0.36`: the institution takes `0.64 × 25 = 16`, so
+  `V = 116 < 120` — the hurdle is NOT met. Contradiction.
+
+**No fixed point exists.** This is not an edge case to handle: over a whole interval of exit
+values the cliff-on-realized-return has no solution at all, and any engine that appeared to
+compute one would be reporting an artifact of its iteration order. Rejected on those grounds.
+Two repairs were considered and also rejected: **(a) striking the cliff on a PRE-ratchet
+institutional MOIC** (well-defined, but then the tested return is a number nobody receives,
+and it reintroduces the discontinuity §22.4(a) rejects); **(b) resolving the cliff by
+picking the sponsor-favourable branch** — a modeling decision presented as a fact, which is
+the class of error §19's own preamble warns against when it refuses to let the engine choose
+an economic outcome the user should state [round-1 gov-M9: the first draft cited this as "the
+§19-preamble/B7 failure"; §19 round-1 B7 was actually the unwritten §14/§15/§16 integration,
+so the specific cite is withdrawn and only the general principle is claimed]. The marginal
+rule is adopted because it is simultaneously the closed-form one, the continuous one, and the
+one that tests the return actually realized.
+
+**Why §22.4 and §22.5 are struck on DIFFERENT bases — deliberate, not an inconsistency.**
+§22.4 tests **pre-promote TOTAL proceeds against TOTAL invested equity**, because that is
+§10's committed v1.1.0 convention and this feature does not get to rewrite it in passing.
+§22.5 tests the **institution's own realized value against the institution's own investment**,
+because that is what a strip's ratchet clause says. The two are the same number only when
+management and rollover hold nothing — which is exactly the regime in which §10 was written.
+Stating the divergence here is the point; the alternative was one basis silently applied to
+both instruments.
+
+**MIRROR (single-source) — the NORMATIVE statement is §14.23(d); this paragraph is RATIONALE
+ONLY.** `V_final / I` is, by construction, the institution's
+own realized multiple: `I` is the §2 sponsor plug (`returns.sponsor_net`'s outflow) and
+`V_final` is the sum of what the sponsor's instruments actually return (interim institutional
+shares + the loan-note redemption + the institutional ordinary share, the last of which may be
+NEGATIVE — §22.7). So the ratchet's own test and the MOIC the UI headlines must agree, or one
+of them is lying. §14.23(d) states that as an invariant WITH its THREE domain conditions (a configured strip, a
+strictly positive plug, and a non-negative period-N sponsor flow — the second is belt-and-braces
+under §22.3(vi)) and its absolute tolerance floor; neither is repeated here, on purpose.
+
+**WHY THIS PARAGRAPH NO LONGER RESTATES THE RULE — the structural fix for a defect this feature
+shipped THREE TIMES.** §22 stated the same mirror in THREE places
+(this paragraph, §22.9(d), §14.23(d)); rounds 2 and 3 corrected one or two and left the others
+byte-identical to text that had already been REFUSED — so an implementer reading the normative
+section would have built the rejected form (a count-vs-count race on `returns.sponsor_net.moic`,
+with no domain and no tolerance floor). Prose kept in step by remembering to update it is the
+same failure PHASE_G names for hand-kept lists. **§14.23 is now the SINGLE normative home for
+every §22 invariant; §22.5 and §22.9 carry domains, rationale and worked examples and CITE it.
+Any divergence is itself a defect, and §14.23 governs.**
+
+**IRR-based ratchets: DEFERRED, with the re-entry path stated.** v1 is MOIC-only, matching
+§10's existing basis and DR-2/DR-4's sizing note (~2/3 of plans MOIC-only, Goodwin 2024). The
+deferral is not "IRR is impossible": an IRR hurdle `h` is expressible as a MONEY threshold —
+the terminal value that produces `h` given the known earlier flows,
+`T = I(1+h)^N − Σ_t f_t (1+h)^{N−t}` — so the same bracket walk would apply. It is deferred
+because those earlier institutional flows are themselves ratchet-dependent once interim
+distributions exist (§22.7), which reopens the fixed point the marginal rule just closed.
+v2, DISCLOSED (§22.11).
+
+**§22.6 Warrants / equity kickers [DECIDED].** A warrant is a claim on the ordinary CLASS,
+settled at exit under **full dilution with the strike paid in** — the standard treatment, and
+the only one that conserves value. With `P₀` = the ordinary pot before exercise, `w` =
+`pct_of_ordinary`, `K` = `strike_total`:
+
+```
+exercise  ⇔  w × (P₀ + K) > K                       ← STRICT: at-the-money does NOT exercise
+if exercised:  warrant_payout_gross = w × (P₀ + K) ;  warrant_payout_net = gross − K
+               warrant_strike_paid = K        ← stated on THIS branch too [round-10]: the
+                                                round-8 fix reached only the else branch, so a
+                                                REQUIRED output was left inferable-but-unstated
+                                                on the branch G9-SWEET actually takes
+               ordinary pot P = (1 − w) × (P₀ + K)
+else:          gross = net = 0 ;  warrant_strike_paid = 0 ;  P = P₀
+               (`warrant_strike_paid` stated EXPLICITLY here [round-8, 2 lenses]: §22.10
+                declares it REQUIRED and §22.13(vi) mandates two NON-exercise fixtures, so
+                leaving it unstated left a required output undefined on a pinned path)
+```
+
+**ONE NAME per number [round-1 arith-M12; EXTENDED in round 3 to the management share, which
+r2 left with two names — gov-R2-B3/arith-M3].** The warrant net is `warrant_payout_net`
+**everywhere**: on `ExitBlock`, on `equity_strip`, and on `ValueBridge.walkdown`.
+`warrant_payout_gross` exists only on `equity_strip`. Management's exit share is
+`management_ordinary_share` **everywhere** — the `ExitBlock` field carries that name (not
+`sweet_equity_management`), and `equity_strip`'s field of the same name is its strip-block
+echo. Invariants are asserted on the UNCONDITIONAL `ExitBlock` carriers.
+
+Conservation: `P + warrant_payout_gross = P₀ + K` when exercised, and the class gives up
+exactly `P₀ − P = warrant_payout_net` — the warrant's dilution of the existing holders equals
+its own value, never more (→ §14.23(c)).
+
+**Worked example (normative).** `P₀ = 100`, `w = 0.05`, `K = 2`: `0.05 × 102 = 5.1 > 2`, so it
+exercises; `gross = 5.1`, `net = 3.1`, `P = 0.95 × 102 = 96.9`; the class gave up
+`100 − 96.9 = 3.1` ✓.
+**Exact boundary, pinned with both answers.** `w = 0.05`, `K = 2` ⇒ at-the-money at
+`P₀ = K(1 − w)/w = 38`: `0.05 × 40 = 2 = K`, `net = 0`. **NORMATIVE (strict `>`): does NOT
+exercise**, `warrant_exercised = false`, `P = 38`. Under `≥` it exercises and
+`P = 0.95 × 40 = 38` — **identical ALLOCATIONS (`ordinary_pot`, `warrant_payout_net`) and THREE differing displayed fields**: at ATM (P₀ = 38, w = 0.05, K = 2) the `≥` reading gives `warrant_exercised` true, `warrant_strike_paid` 2 and `warrant_payout_gross` 2, against false/0/0 under the normative `>` — two of the three are MONEY. All three are pinned in §22.13(vi) — the §22.5 boundary
+pattern again.
+
+**Seniority — the warrant sits BELOW the promote and the loan notes, ABOVE the ordinary
+split.** Loan notes are a contractual redemption ahead of all share capital (§22.2); the §10
+promote already comes off the top of the equity pot in v1 and stays there, so that byte-
+identity is preserved when `warrant` is null. REJECTED: placing the warrant AHEAD of the
+promote — it would change the promote's own `min()` cap base and reopen a signed §10
+convention for a feature that has no need of it.
+**The warrant does NOT dilute interim distributions.** §22.7's interim block splits institution/management only; the warrant settles once,
+at exit. A warrant is an option over share capital, not a distribution right, and an unexercised
+option has no claim on a dividend. DISCLOSED in §22.11.
+
+**§22.7 The exit waterfall, assembled — ONE pipeline with null stages.** §9 computes
+`exit_equity_pre_mip_total = E` exactly as today; §22 only re-cuts it. The stages are
+skipped (identity) when their instrument is null, which is what makes the v1.6.0 path a
+special case of this one rather than a branch beside it.
+
+**`E` IS SIGNED AND IS CARRIED SIGNED [round-1 arith-B1 / gov-B4 — the first draft clamped
+`pot ← max(0, E) − redeemed`, which made `sponsor_share = 0` where v1 gives `E`, falsifying
+§14.23(f)'s byte-identity gate, §14.23(b)'s `[ALL]` mirror and §22.13(v) all at once].**
+`exit.ts` computes `E` with no clamp and §10's own `max(0, ·)` cap exists precisely because
+`E` can be negative. The clamp appears in exactly ONE place — the redemption amount, which
+cannot be negative — and the residual is carried signed:
+
+```
+E = exit_equity_pre_mip_total                                             (§9 — UNCHANGED, SIGNED)
+1. LOAN NOTES   redeemed = min( LN[N] , max(0, E) )        ; pot ← E − redeemed      ← SIGNED
+                (sweet_equity null ⇒ LN[N] = 0, redeemed = 0, pot = E)
+2. PROMOTE      mip_payout per §22.4                        ; pot ← pot − mip_payout
+                (mip null ⇒ 0; and mip non-null ⇒ sweet_equity null, §22.3(i))
+3. WARRANT      per §22.6 on P₀ = pot                       ; pot ← P (the class residual)
+                (a negative pot is never in the money: w(P₀+K) > K fails ⇒ no exercise)
+4. ORDINARY     sweet_equity NULL (ANY sign of pot) ⇒ today's pari-passu pro-rata
+   SPLIT                          sponsor/rollover split on `pot`, verbatim (§9) — which is
+                                  ALREADY signed and already splits a negative residual
+                                  pro-rata (`exit.ts` multiplies, it does not clamp)
+                sweet_equity non-null (ANY sign of pot) ⇒ the §22.5 bracket walk, WHOSE OWN
+                                  OPENER handles `P ≤ 0` (management_ordinary_share = 0,
+                                  institution_ordinary_share = pot, V_final = V₀ + P, and the
+                                  count/MOIC lines still run). The walk is the SINGLE authority
+                                  for the strip arm at every sign [round-3 gov-B1: the r3 draft
+                                  split this into a `pot ≤ 0` arm here and a `pot > 0` arm that
+                                  invoked the walk, which made the walk's own opener UNREACHABLE
+                                  and left three REQUIRED outputs undefined — the same defect
+                                  relocated for the third time, and §22.13(v)(α) already cited
+                                  the opener, so two sections of §22 disagreed]
+sponsor_share = institution_ordinary_share + loan_notes_redeemed   ← ON THE STRIP ARM ONLY
+                [round-3 arith-M1, CORRECTED round-9 F08: on the `sweet_equity` null ∧ `warrant` null
+                 arm there is no `equity_strip` AT ALL and §9 produces `sponsor_share` directly,
+                 exactly as it does today. On the WARRANT-ONLY arm (§22.10) `equity_strip` is
+                 NON-null — §22.10 and §16 both pin the biconditional `null ⇔ sweet_equity null
+                 ∧ warrant null` — and there `institution_ordinary_share` EQUALS `sponsor_share`
+                 with `loan_notes_redeemed = 0`, so the identity holds on that arm too; it is
+                 scoped to the strip arm because that is where it DISCRIMINATES, not because the
+                 block is absent. The earlier flat existence claim would have had an implementer
+                 emit `equity_strip: null` on the shape §22.13(vi) commissions a fixture for,
+                 dropping the whole REQUIRED warrant disclosure block]
+```
+
+**Verified over the signed range, WITH the rollover domain stated** [round-2 blocking, BOTH
+reviewers — the r2 draft's `pot ≤ 0` arm was UNQUALIFIED, so it governed the v1 path too and
+handed a negative residual entirely to `sponsor_share` where `exit.ts` splits it pari-passu
+(at `E = −25`, `f = 0.25`: v1 gives −18.75/−6.25, the r2 rule gave −25.00/0.00). The r2
+verification sentence was BLIND to it because every case listed ran `rollover_equity = 0`,
+which is also why `sponsor_share ≡ E` was mistaken for the general answer — §17(viii) records
+that NO golden runs rollover > 0, so nothing would have caught it]: with all three instruments
+null the pipeline reproduces `exit.ts` EXACTLY at `E = 703.83, 0, −0.01, −25` **at both
+`rollover_fraction = 0` (`sponsor_share ≡ E`) and `rollover_fraction = 0.25`
+(703.83 → 527.8725/175.9575; −25 → −18.75/−6.25)**, and the §14.16 five-term mirror (§14.23(b)) closes
+in every one. Under an underwater strip (`LN[N] = 500`, rollover 0 by §22.3(ii)) it returns
+`sponsor_share ≡ E` at both `E = 200` and `E = −25`, which is what §22.13(v) asserts —
+and §22.13(v) now states that rollover-0 domain rather than implying generality.
+
+`sponsor_share` keeps its v1 meaning — *what the sponsor's t=0 check gets back* — which is why
+§12 (bridge) and `returns.ts` compose over it structurally unchanged.
+
+**Interim distributions under a strip (§3 step 7 [v1.1.0]).** A §3-step-7 payment is made out
+of the SAME priority: it redeems accrued loan-note yield and then principal, and only the
+remainder reaches the ordinary class, split at the **BASE** share `s₀`:
+
+```
+grown      = LN[t−1] × (1 + loan_note_rate)
+redeemed[t]= min( grown, paid[t] )                    ;  LN[t] = grown − redeemed[t]
+ords[t]    = paid[t] − redeemed[t]
+institution's share of paid[t] = redeemed[t] + (1 − s₀) × ords[t]
+management's  share of paid[t] =                 s₀   × ords[t]
+```
+
+**THIS REPLACES `sponsorShareOfDistributions` AT ALL THREE COMMITTED CALL SITES — stated
+normatively.** The pari-passu fraction `sponsor/(sponsor + rollover)` is consumed in three
+places: `returns.ts` (the sponsor stream, DPI and payback), `fund.ts` (the §19 LP interim
+leg), and `facade.ts` (the §12 `interim_distributions_sponsor` walk-down term). Under
+`sweet_equity` non-null, §22.3(ii) forces `rollover_equity = 0`, so that fraction is exactly
+**1.0** — every one of the three would credit the sponsor (and hence the LP fund) with
+management's `s₀ × ords[t]` slice. That is textually §19.1's own rejected alternative (c)
+— crediting the fund with money that is not the sponsor's — so **all three sites must read
+the §22.7 institutional share whenever `sweet_equity` is non-null**, and §19.6(a)'s
+sponsor-side conservation is re-asserted under a strip by a directed fixture (§22.13(xi)).
+**BOTH share rules stay live, and which governs is stated so the engine PR does not ship two
+competing definitions of one number:** `sponsorShareOfDistributions` (§9
+pari-passu) remains THE definition whenever `sweet_equity` is NULL — it is still needed for
+`rollover > 0` deals — and the §22.7 institutional split is THE definition whenever
+`sweet_equity` is non-null. They are selected by a single predicate at one place
+(`sweet_equity == null`), which partitions the space by construction — that tautological
+partition, not §22.3(i)/(ii), is what makes them disjoint [round-3 arith-M3: the r3 draft
+cited (i) and (ii), which govern promote∧strip and strip∧rollover and are not what separates
+the two share rules].
+
+The ratchet is **NOT applied to interim distributions** — it is struck ONCE, at exit, on the
+whole realized position. This is §10's committed rule ("*the promote is computed and paid AT
+EXIT ONLY… no interim carry, no clawback machinery*") applied to the second instrument, and
+it is what keeps §22.5's walk a single closed-form pass instead of a per-period accrual with
+a clawback ledger. REJECTED: ratcheting each distribution as it is paid (fund-accounting
+machinery §10 already rejected for the promote, with a true-up problem on top). Interim
+amounts DO count toward the ratchet's threshold at exit, through `V₀` — the §10 v1.1.0
+principle that *the hurdle tests total value RETURNED* — so deferring the strike does not
+forgive the value already taken out.
+
+**§22.8 Composition.** **§2:** `management_subscription` is its OWN SOURCE LINE
+(`SourcesUses.management_subscription`, §22.10) and enters `total_sources`; the sponsor plug is
+the residual after it, so `sources ≡ uses` (§14.1, "always") is preserved BY CONSTRUCTION
+[round-1 arith-B2 / gov-B2 — the first draft declared it "a SOURCE that reduces the plug" but
+added no field, which would have left `total_sources` short by exactly the subscription and
+reddened the committed `toBeCloseTo` assert]. The strip then splits the plug, so there is no
+cycle (plug → loan notes / institutional ords is one-directional).
+**§3:** unchanged — the strip is invisible to the waterfall except at step 7's split above,
+which allocates an already-computed `distribution_paid` and changes no cash.
+**§6:** unchanged (§22.2(b) — no deduction).
+**§7:** unchanged.
+**§8: the equity line becomes `sponsor_equity + rollover_equity + management_subscription`**
+[round-1 arith-B3 / gov-B2 — the first draft said "the §8 plug is unaffected" while
+`openingBalance.ts` computes `equity = sponsor + rollover`; with the plug falling by the
+subscription and no offsetting term, the GOODWILL plug would silently fall by the same amount
+and carry forward into every year's balance sheet, with `check` still reading 0 because
+goodwill IS the plug — a silent error §14.2 cannot catch]. With the third term added, the §8
+plug genuinely is unaffected, which is what the sentence was always meant to claim.
+**§11:** unchanged, and this is load-bearing — a strip must NOT move leverage, ICR, FCCR or
+DSCR (§22.13(x) proves it by a directed with/without pair).
+**§12:** the walk-down gains two leakage terms symmetric with `rollover_delta` —
+`sweet_equity_delta` (management's exit share − their subscription) and `warrant_payout_net` —
+and `entry_equity_pre_promote_total` now INCLUDES `management_subscription`, which is what
+keeps §14.9(a)'s frictionless identity exact (`entry equity total − entry costs ≡ EV₀ − ND₀`
+holds only if every equity source is counted; re-derived from §2 in the round-1 sign-off).
+**§20.9's coherence roster, §14.16 AND §14.9(b) ARE ALL AMENDED** — §14.16's exit-mirror clause gains the two new claimants and is their single home (§14.23(b) points at it); every committed statement of the three-term exit mirror — asserts and doc comments alike — must be widened with it; at v1.7.0 these live in `tests/engine2-exit-returns.test.ts`, `tests/engine2-facade-scenarios.test.ts`, `lib/engine2/types.ts`, `lib/engine2/exit.ts` AND `lib/engine2/bridge.ts` (whose §14.9(b) comment states the identity), and the engine PR must RE-GREP for the identity rather than trust this list. **§14.9(b) IS AMENDED** to carry the two new terms [round-1 arith-B5 — the first draft leaned
+on §14.9(b) in §22.13(ix) without amending it, and the un-amended identity reports a
+reconciliation residual of **$28.73m** on the very golden §22.12 pins].
+**§13 scenarios:** the strip, the ratchet and the warrant are STRUCTURE/POLICY — FROZEN across
+scenarios, and the freezing is AUTOMATIC rather than a new gate: `ScenarioDeltas` admits only
+`operations` fields and `exit_multiple`, so no structure field is reachable. What varies by
+scenario is whether the tiers are REACHED.
+**§18:** loan notes are not refinanceable (not tranches).
+**§19:** composes over `sponsor_share` unchanged, but its INTERIM leg does NOT — see §22.7's
+three-call-site rule. §19.6(a)'s conservation and §19.6(c)'s byte-identity both survive once
+`fund.ts` reads the §22.7 share.
+**§9 RETURN-STREAM MEMBERSHIP: the fee/flow table IS AMENDED** (three rows — management
+subscription, management's sweet-equity exit share, the warrant net) [round-1 gov-B3 /
+arith-M3; PHASE_G Tier A step 1 requires "fee/flow-membership table updates if returns are
+touched", and the first draft touched §9 not at all]. The sponsor and unlevered streams are
+UNCHANGED in membership. `pre_promote` — the TOTAL pre-incentive equity stream — takes
+`management_subscription` into its t=0 outflow, the same generalization §12 makes, and is
+byte-identical when the strip is null. **§9's naming paragraph is amended to say so**: on a promote deal the incentive is EXCLUDED from the stream, while on a
+strip deal management's sweet share settles INSIDE `exit_equity_pre_mip_total` — the same
+label over two bases is exactly the v1.1.2/v1.1.3 mislabel class, so the basis is stated on
+the label rather than left to the reader.
+
+**§22.9 Invariants — §14.23 IS THE SINGLE NORMATIVE HOME; this section carries DOMAINS and
+RATIONALE ONLY and states no rule of its own.** §22 kept its invariants in two homes; rounds 2
+and 3 corrected §14.23 and left §22.9 byte-identical to REFUSED text, and round 4's partial
+conversion then filed a correction in the SUBORDINATE copy while the normative one kept a false
+claim. **On ANY divergence, §14.23 governs and the divergence is itself a defect.**
+
+**What enforces this, stated accurately [round-7 gov-B1 — the previous wording described a guard
+that no longer exists, claimed "no whitelist to maintain", and asserted that was "the only kind
+PHASE_G's standing lesson permits", which is the OPPOSITE of PHASE_G: it requires a POSITIVE
+ALLOWLIST so the fence fails CLOSED. That stale sentence was the SIXTH instance of the staleness
+class, sitting in the section written to end it, and the guard PINNED it in place by asserting
+it verbatim].** `tests/governance-spec-single-home.test.ts` enforces three IDENTITY RELATIONS —
+the kind a machine holds better than a reader, because the texts sit hundreds of lines apart:
+every code span here is an identifier or a filename (a fail-closed ALLOWLIST, so a span may NAME
+a thing and never RELATE two); the lettered-clause sets of §14.23 and §22.9 are EQUAL, with each
+citation bound to its own clause body; and §15's §22 clause EQUALS the §22.11 block that governs
+it, in both directions.
+
+**What it does NOT enforce, said plainly so nobody relies on it:** a rule restated HERE in PROSE
+— in words rather than symbols — is not detected, and cannot be, because no text scanner
+separates a domain written in prose from a rule written in prose, and this section's domains ARE
+prose. Three guard generations each closed one NOTATION and the next round found the complement.
+That chase was ended in round 8 on the reviewers' proportionality call: across rounds 5–7 the
+guard caught ZERO §22 defects and OCCASIONED THREE. **The conformance review reads §22.9 against
+§14.23 clause by clause; that is where meaning is checked, and this section does not pretend
+otherwise.**
+
+(a) → **§14.23(a)** — the loan-note accretion walk. Domain: a strip is configured. Rationale:
+    the non-negative balance holds at t = 0 by §22.3(vi)'s BUILD REJECTION (LN[0] is a share of
+    a strictly positive plug) and at every later year by §22.7's redemption clamp — a
+    redemption is the SMALLER of the grown balance and the year's payment, so it can never
+    exceed the balance; the closed form holds only on the
+    no-distribution path, because §22.7's interim redemptions are what make the walk
+    path-dependent. There is no year-0 accretion: the first
+    accretion lands in year 1, so a five-year hold compounds five times.
+(b) → **§14.23(b)** — the EXTENDED §14.16 mirror. Domain: every run. Rationale: this is
+    §14.16's own clause widened from three claimants to five, not a parallel invariant, and it
+    holds at every SIGN of exit equity because §22.7 carries the residual signed. §14.23 states
+    it on the UNCONDITIONAL `ExitBlock` carriers rather than the nullable `equity_strip` echoes.
+(c) → **§14.23(c)** — warrant conservation. Domain: a warrant is configured and exercises.
+    Rationale: the warrant's dilution of the existing class equals its own value and never
+    exceeds it, which is what makes full-dilution-with-strike-paid-in value-conserving.
+(d) → **§14.23(d)** — the §22.5 single-source mirror, together with the definitions of
+    `institution_moic_at_ratchet` and `management_effective_ordinary_pct` and the comparison
+    rule. **Domain, SPLIT because the clause carries two kinds of statement [round-10]:** the
+    MIRROR and the COMPARISON RULE hold where a strip is configured, the sponsor's equity check
+    is strictly positive, AND the period-N sponsor flow is non-negative. The two DEFINITIONS
+    carry only the FIRST of those — a configured strip — and §14.23(d) states them ungated at
+    every sign of the pot and of the period-N flow, because §22.13(v)(α) sits outside the mirror's
+    domain (its period-N flow is negative) and still needs them. A single undifferentiated domain here would
+    re-gate what §14.23(d) deliberately ungated — the round-6 gov-B2 shape, a prose companion
+    NARROWER than its normative home, for the sixth time in this feature. Rationale: the ratchet's own test must agree
+    with the MOIC the UI headlines, or one of them is lying. The third condition is
+    load-bearing — `returns` sums STRICTLY POSITIVE cashflows, a v1.1.0 convention, so a
+    negative period-N flow is silently dropped from the reported multiple; the round-1 clamp
+    had been hiding that, and fixing the clamp exposed it. The divergence is DISCLOSED (§9 owns
+    the convention; §22.11 and §15 disclose it), never repaired: repairing it would move the
+    reported multiple on the v1 path and break §14.23(f).
+(e) → **§14.23(e)** — continuity and the share envelope. Domain: a strip is configured and the
+    ordinary pot is strictly positive. Rationale: these are the marginal rule's defining
+    properties and exactly what the REJECTED cliff violates. The strictly-positive condition
+    exists because the effective-share ratio is zero-over-zero at an empty pot, which §22.10's
+    own nullable field concedes is reachable.
+(f) → **§14.23(f)** — the compatibility gate. Domain: no strip, no warrant, and the promote
+    ratchet field either NULL or EMPTY — §22.3 pins the two as distinct values with identical
+    semantics, and BOTH produce v1 numbers, so both belong in the domain of the clause that
+    asserts v1 numeric identity. Rationale: nothing about this is trivial — it is the clause that makes §22 safe to
+    land, and its ONE carve-out, the fixture SHAPE of §22.12, is decided spec-side rather than
+    discovered as a red test.
+(g) → **§14.23(g)** — the loan-notes-unredeemed WARN. Domain: the equity-strip block is
+    NON-NULL [round-6, BOTH reviewers: "emitted" reads as "the field exists", which is ALWAYS
+    true on `ModelOutput` and would widen a deliberately narrow domain back to every run — the
+    exact failure the domain was added to prevent]. Rationale: the flag is named for its CONDITION rather than its consequence so it
+    cannot mislabel what it detects, and it reads §22.2's pinned measurement pair — the balance
+    grown to exit and BEFORE the exit redemption, against the exit redemption alone.
+(h) → **§14.23(h)** — the §22.4 ratchet bounds. Domain: the promote ratchet field is SET,
+    INCLUDING when it carries no tiers, AND the total invested equity is strictly positive
+    [round-8: at a negative invested equity the tier thresholds invert and the envelope is
+    false; clause (d) already carried the equivalent condition] [round-6 gov-B2 — "configured" excluded the empty list,
+    but §22.3 makes the empty list a legal non-null value and this clause's own sub-claim (the
+    sum equals the §10 single-tier value when the ratchet is empty) is only reachable when it
+    is in domain, so the prose was NARROWER than the rule it companions].
+    Rationale: every statement is about the UNCAPPED bracket sum, never the paid promote,
+    because §10's cap can truncate the payout. §14.23 also carries the CORRECTION to WHY that
+    scoping is needed: at a fixed exit equity the cap is a constant, so it does not break
+    monotonicity.
+(i) → **§14.23(i)** — the explicit NON-CLAIM. Domain: every run. Rationale: §22 asserts no
+    ordering between a strip deal's sponsor IRR and the same deal run with a §10 promote; they
+    are different instruments, and which is dearer depends on the exit level (§19.6(e) and
+    §20.6(f) are the precedents).
+
+**§22.10 Outputs.** `SourcesUses` gains `management_subscription` (Class C, unconditional
+`0.0`), entering `total_sources` — §22.8's §2 fix. It is also a DISPLAYED source — DISCHARGED by the
+step-4/step-5 commits, which added the `Management subscription (sweet equity)` row to BOTH
+Excel S&U SOURCES blocks (the Summary section AND the Sources & Uses worksheet) and the React
+S&U tab, and folded the subscription into the Equity and `Total capitalization` rows; those
+rows' equity subterm pre-v1.7.0 read `sponsor_equity + rollover_equity` and would have
+disagreed with §22.8's amended §8 equity line by exactly the subscription. Footing is now
+ASSERTED by the committed parity tests (enumerated sources ≡ `total_sources`, strip on and
+off). `ExitBlock` gains `management_ordinary_share`
+and `warrant_payout_net`, emitted UNCONDITIONALLY (`0.0` when off) — the G-1/G-5 committed-zero-
+column precedent, which `tests/goldens.test.ts` already asserts for the refi fields on all nine
+pre-v1.3.0 goldens. **`SourcesUses.management_subscription` is emitted the same way, and that IS
+a new emitter behaviour, decided here rather than discovered**: `spec_calc.py`
+currently OMITS `rollover_equity` from `sources_uses`, so the reference's existing habit for a
+zero-valued S&U scalar is to drop it. §22 follows the ExitBlock/G-1/G-5 precedent (emit the zero
+column). **The reason is the PRECEDENT, not a discriminator** [round-3 arith-M6: the r3 draft
+justified it as "read by an invariant (§14.1's `total_sources` identity)", but `rollover_equity`
+is read by that SAME identity and IS omitted — the stated discriminator does not discriminate];
+the decision stands on the G-1/G-5 committed-zero-column convention alone. The
+pre-existing `rollover_equity` omission is a reference-emitter gap, NOT a convention to copy,
+and is left alone rather than fixed under cover of this feature. `ModelOutput` gains
+`equity_strip: EquityStripBlock | null` (null ⇔ `sweet_equity` null ∧ `warrant` null),
+**emitted in fixtures only when non-null — the `ModelOutput.fund` precedent verbatim**
+[round-1 gov-M2: only `G7FUND/expected.json` carries a `fund` key; the first draft instead
+required all twelve goldens to gain `equity_strip: null`, a NEW convention presented as a
+continuation]: `{ loan_notes_subscribed, loan_notes_accrued_balance, loan_notes_redeemed,
+ordinary_pot_pre_warrant, warrant_exercised: boolean, warrant_strike_paid,
+warrant_payout_gross, warrant_payout_net, ordinary_pot, management_ordinary_share,
+institution_ordinary_share, ratchet_tiers_reached, management_effective_ordinary_pct:
+number | null, institution_moic_at_ratchet: number | null }` — named fields the display
+surface READS, never recomputes. ONE sanctioned exception, stated because §22.12 pins the
+figure and no field carries it: the institutional ORDINARY subscription (39.0075 on G9-SWEET)
+may be DISPLAYED as `sponsor_equity − loan_notes_subscribed` — exact by §22.2's split of the
+plug, a presentational derivation, not a second calculation path (**§14.16's single-source rule** and PHASE_G's standing
+"no second calculation path" rule [round-1 gov-B5: the first draft cited "§16's single-path
+rule", and §16 contains no such rule — only the unrelated single-DRIVER entry gate]).
+**The WARRANT-ONLY shape is pinned**: with `warrant` non-null ∧
+`sweet_equity` null, `loan_notes_*` are `0`, `management_ordinary_share` is `0`,
+`institution_ordinary_share` is the post-warrant pot LESS the rollover share — the §9
+pari-passu split governs at EVERY sign of the pot, per §22.7 stage 4's first arm, with which
+this is now consistent —
+`ratchet_tiers_reached` is `0`, and both `| null` fields are `null`: there is no strip to
+measure. `management_effective_ordinary_pct` is likewise `null` for a ZERO **or NEGATIVE**
+ordinary pot [round-2 arith-M5 — the r2 draft named only the zero case, and the signed
+pipeline makes a negative pot reachable]. **`ratchet_tiers_reached` counts §22.5 SWEET-EQUITY
+tiers ONLY**: the §22.4 promote ratchet emits no tier count (its effect is fully carried by
+`mip_payout`), so on a legal `warrant` + `mip.ratchet` deal this field reads `0` even where
+the promote ratchet tiered, and any surface showing it on such a deal must label the basis —
+the §9 naming rule applied to the second ratchet.
+**The MIRROR-IMAGE shape is pinned too [round-4 arith-M4 — the r4 draft wrote out the harder
+direction and left the obvious one unstated, which is how "obvious" defaults become divergent
+implementations]:** with `sweet_equity` non-null ∧ `warrant` NULL, `ordinary_pot_pre_warrant`
+equals `ordinary_pot`, `warrant_exercised = false`, and
+`warrant_strike_paid = warrant_payout_gross = warrant_payout_net = 0`.
+`ValueBridge.walkdown` gains `sweet_equity_delta` and `warrant_payout_net`.
+`CoherenceFlag.code` gains `loan_notes_unredeemed`. All Class C. Every field is
+REQUIRED-with-null, never optional — a dropped field must be a compile error, not a silent
+`undefined`.
+
+**§22.11 Disclosure — THE SOURCE OF THE §15 ROW.** The block below is §15's §22 clause,
+verbatim and in full. **§15 is GENERATED from it; on any divergence THIS paragraph governs, and
+`tests/governance-spec-single-home.test.ts` fails in BOTH directions** — §15 missing governed
+text, or §15 carrying §22 disclosure this block does not [round-5, BOTH reviewers: the r5 guard
+marked THREE sentences (18% of §15's clause) and checked one direction only, so §15 could gain a
+contradicting sentence, or gain §22 content absent here — which is round-4's own defect
+inverted — and stay green. The whole clause is now governed, both ways].
+
+<!--§15-BOUND-->sweet equity, ratchets and warrants [v1.7.0 — §22] model the institutional loan notes as EQUITY — outside §11 leverage/ICR/FCCR/DSCR, outside the §3 waterfall and the §9 debt payoff, and with NO interest deduction (jurisdiction-specific — UK CTA 2009 Part 5, hybrid-mismatch, US §385 — so v1 claims none, which is NEVER ANTI-CONSERVATIVE: neutral only where §163(j) binds in EVERY year so the disallowance is never released (G3's shape), lower-return elsewhere), accruing only, never cash-pay, with NO year-0 accretion; ratchets are MARGINAL top-slice step functions on MOIC struck at EXIT ONLY, never cliffs (a cliff on a REALIZED-return hurdle has NO SOLUTION OVER AN INTERVAL OF EXIT VALUES — §22.5 carries the worked counterexample), with a value exactly ON a tier threshold taking the LOWER tier (strict >, the §3 sweep-grid convention) and IRR-based ratchets deferred to v2; the §10 promote ratchet and the sweet-equity ratchet are struck on DELIBERATELY DIFFERENT bases (total pre-promote proceeds vs the institution's own realized value — §22.5); the strip, the ratchet and the warrant are FROZEN across scenarios; MANAGEMENT'S SUBSCRIPTION REDUCES THE SPONSOR'S OWN CHEQUE (a §2 source line — material to every sponsor return number on the page); a promote and a strip may NOT coexist (DR-2's double-count, an input-gate rejection) and a strip may not coexist with a rollover in v1 (the strip/sweet allocation of a rollover is negotiated, with no defensible default — §22.3(ii)); when exit equity does not cover the accreted loan notes the ordinary pot is zero, management's sweet equity is worthless and the `loan_notes_unredeemed` WARN fires, and when exit equity is NEGATIVE the ordinary pot is likewise NEGATIVE (not zero) and the whole shortfall stays with the pre-existing §9 claimants (management's ords cannot go negative) — and whenever the FINAL SPONSOR FLOW is negative — which is the true trigger, NOT a negative exit equity, since a year-N distribution can outweigh a negative exit residual and leave the flow positive — the HEADLINE sponsor MOIC exceeds the realized one, because `returns` has summed POSITIVE inflows only since v1.1.0 and a negative final flow does not reduce it (a pre-existing convention §22 surfaces rather than introduces; the §22.5 ratchet is struck on the REALIZED figure, never the headline — §14.23(d)); AT MOST ONE warrant, rationally exercised on full dilution with the strike paid in, NOT exercised exactly at-the-money, diluting a ROLLOVER holder pro-rata exactly as it dilutes the sponsor, NOT participating in interim distributions (an option is not a distribution right), and its association with a mezzanine TRANCHE is a LABEL ONLY — no arithmetic depends on it; management's subscription price and their ordinary % are INDEPENDENT inputs, so the model never checks that the terms are actually sweet<!--/§15-BOUND-->
+
+RATIONALE AND ROUND HISTORY (not part of the §15 row, and deliberately outside the markers so
+the generated text stays clean): the loan-note EQUITY treatment and its rejected alternatives
+are §22.2; the marginal-vs-cliff argument and its no-fixed-point counterexample are §22.5; the
+warrant's seniority and at-the-money convention are §22.6; the negative-exit-equity rule is
+§22.7 stage 4; the headline-vs-realized MOIC divergence is a property of `returns` whose
+NORMATIVE OWNER is §9's naming paragraph — this block and §15 disclose it, §9 owns it. The three statutory anchors inside the block were added in round 4 precisely
+because §15 carried them and this source did not, so generating §15 from here would have
+DELETED them; they are now inside the governed text and cannot be lost.
+
+**§22.12 Golden plan — TWO goldens, because §22 changes THREE numbers on TWO mutually
+exclusive instruments** [round-1 gov-B7: the first draft's single golden set `mip: null`,
+leaving §22.4 — the half of backlog #8 literally named "MIP ratchets" — with no workbook
+adjudication at all].
+
+**G9-SWEET** = **G3's facts and structure with `mip: null`** and the strip added, so G3's
+mezzanine-shaped `pik_note` is the warrant's narrative home (demonstrating §22.11's "label
+only" claim rather than asserting it in the abstract):
+`sweet_equity = { sponsor_ordinary_pct: 0.10, loan_note_rate: 0.08, management_subscription:
+2.0, management_ordinary_pct: 0.10, ratchet: [{hurdle_moic: 1.5, share_pct: 0.15},
+{hurdle_moic: 2.0, share_pct: 0.20}] }`, `warrant = { holder_label: 'Mezzanine warrant',
+pct_of_ordinary: 0.05, strike_total: 2.0 }`, `mip: null`; everything else IDENTICAL to G3.
+**TWO deltas from G3, not one**: the strip, and `mip` dropped to null —
+the latter FORCED by §22.3(i), so it is named rather than glossed as "§22 alone".
+
+Closed-form check values pinned here (exact from the inputs; the rest of the chain is
+ADJUDICATED during workbook construction, never assumed — the §20.9 rule):
+- G3's §2 uses = 765 + 15.3 + 6.075 + 2.70 + 8.0 = **797.075**; debt at par 405; rollover 0.
+  G9-SWEET's sponsor plug = 797.075 − 405 − **2.0** = **390.075**, and `total_sources`
+  = 405 + 0 + 2.0 + 390.075 = **797.075 ≡ total_uses** (§14.1 by construction — §22.10's
+  source line is what makes this true).
+- Loan notes subscribed = 0.90 × 390.075 = **351.0675**; institutional ordinaries = 0.10 ×
+  390.075 = **39.0075**.
+- No interim distributions ⇒ `LN[5] = 351.0675 × 1.08⁵ = 351.0675 × 1.4693280768 =
+  **515.833334601984**` (§14.23(a)'s closed form).
+- Ratchet thresholds, exact from the inputs: `T₁ = 1.50 × 390.075 = **585.1125**`,
+  `T₂ = 2.00 × 390.075 = **780.15**`.
+- **`exit_equity_pre_mip_total` is IDENTICAL to G3's committed value** (2dp fixture: 703.83;
+  the workbook carries full precision). The plug is a §2 residual and the strip re-cuts the
+  equity pot without changing its SIZE — traced in the round-1 sign-off and re-stated
+  precisely in round 3 [round-2 gov-M5 — `facade.ts:44` DOES pass the plug into the exit block
+  as `invested_equity_total`, so "exitFromCore reads operating/debt/cash only" over-claimed].
+  The plug reaches exit ONLY through the §10 hurdle base, and G9-SWEET runs `mip: null`, so no
+  path from the plug to `E` is live. That is the reason to state, and it is also why
+  G10-RATCHET — which keeps `mip` non-null and does NOT change the plug — is the golden that
+  exercises the hurdle base. This is the assert that discriminates §22 from any
+  implementation leaking the strip into the operating, debt or §9 path.
+- Management's sweetness: they pay 2.0 for a base 10% of a class whose institutional half cost
+  39.0075 — a pro-rata share of 2.0/41.0075 = 4.8772%, so the base share is ~2.0504× their
+  money.
+- Asserts: the warrant is IN THE MONEY and exercises; the loan notes redeem IN FULL (no
+  `loan_notes_unredeemed`); **`ratchet_tiers_reached = 1`** — tier 1 crossed, tier 2 NOT
+  (reaching T₂ needs ~306 of ordinary pot against ~180 available); §14.16's five-term mirror (§14.23(b))
+  closes; §14.23(d)'s mirror to `returns.sponsor_net.moic` agrees.
+  **G9-SWEET does NOT exercise the walk's trailing `M ← M + s_n × rem` line** [round-1 gov-B7 /
+  arith-M2 — the first draft claimed a "top-tier remainder", which is FALSE: the pot is
+  exhausted INSIDE tier 2's `if` branch, so `rem = 0` when the trailing line runs and a mutant
+  DELETING that line passes this golden]. G10-RATCHET below exercises the equivalent top-bracket
+  branch on the §22.4 side, and §22.13(xii) pins the §22.5 side directly.
+
+**G10-RATCHET** = **every field of G3 unchanged**, with `mip` gaining tiers:
+`mip = { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: [{hurdle_moic: 1.75, share_pct: 0.25}] }`;
+`sweet_equity: null`, `warrant: null`. Holding G3 otherwise constant is the point — every
+difference is attributable to §22.4 alone, and the entry S&U is byte-identical to G3's
+(a promote is post-close and cannot re-price entry — the §13 entry-frozen discipline; the
+identity holds AFTER G3's own fixture gains the `sources_uses.management_subscription: 0.0`
+column — an unqualified byte-identity claim across a shape change is exactly what §16's
+round-2 blocker was about).
+Closed-form check values, exact from the inputs: `T₀ = 1.50 × 392.075 = **588.1125**`,
+`T₁ = 1.75 × 392.075 = **686.13125**`. Against G3's committed pre-MIP total X (DERIVATION
+records the single-tier promote as **17.358111**, which the bracket form reproduces EXACTLY at
+one tier — the §22.4 ≡ §10 identity, verified numerically in the round-1 sign-off), the
+two-tier promote is **≈19.128310**, a discriminating delta of **≈1.770199** on a top-bracket
+slice of **≈17.701988** that is genuinely CONSUMED. **The seed is named**:
+these follow from `X ≈ 703.833238`, the pre-MIP total DERIVATION.md records at full precision
+(not the 2dp fixture); `dPromote/dX = 0.25`, so the 6-dp seed is safe to ~1e-7. Asserts: the
+promote is strictly greater than G3's; the top bracket is non-empty, so the `min(X, T_{j+1})`
+term is exercised and TWO distinct mutants are discriminated — dropping the ratchet reads
+**17.358111**, and applying `s_n` to the WHOLE excess reads **28.9301845**
+exactly — pinned UNROUNDED [round-3 arith-M4: the 6-dp form is an exact decimal tie, half-up
+28.930185 vs half-even 28.930184, and §21 round 4 requires a stated mutant value to be
+reproducible under the reader's own rounding] [round-2, BOTH
+reviewers: the r2 draft named the second mutant and priced the first, and §21 round 4
+established that a stated mutant value must be reproducible]; `ratchet` tiers are
+frozen across scenarios; entry S&U byte-identical to G3.
+
+**FIXTURE-SHAPE CHANGE — decided HERE, spec-side, never discovered as a red test (the
+§20.9 / v1.1.1-round-2 convention).** Two `ExitBlock` fields and one `SourcesUses` field are
+emitted unconditionally, so **each of the 12 committed §17 golden `expected.json` files**
+(G1, G2, G2D, G2DIST, G2DISTD, G3, G3DIST, G4, G5, G6REFI, G7FUND, G8PIKT) gains exactly
+THREE keys — `exit.management_ordinary_share: 0.0`, `exit.warrant_payout_net: 0.0`,
+`sources_uses.management_subscription: 0.0` — with **zero VALUE movement**. `equity_strip` is
+OMITTED when null (the `fund` precedent), so no golden gains it. Every `schedule.csv` is
+byte-UNCHANGED (per-year rows only, no exit block), and `tests/goldens/g2ltm/**` are §1.1
+stitch DATA fixtures with no engine output and are untouched. The regeneration must be
+MEASURED leaf-by-leaf (added keys only; no pre-existing leaf moves) and that measurement
+recorded in `DERIVATION.md`, exactly as the v1.0.3 correction's bounds were.
+
+**COHERENCE — the enumeration, corrected** [round-1 gov-B1: the first draft claimed
+"G9-SWEET emits ZERO flags", which is FALSE on its own inputs]. G9-SWEET and G10-RATCHET both
+inherit G3's fixed accreting `pik_note` (maturity 8 > 5, `pik_coupon` 0.12, `elections: null`),
+which is the §20.6(e) AHYDO shape, so **each emits EXACTLY ONE `ahydo_shape` WARN and nothing
+else** — joining G3, G3-DIST and G8-PIKT in the §20.9 roster rather than contradicting it.
+**No golden emits `loan_notes_unredeemed`** (only G9-SWEET configures a strip, and its notes
+redeem in full). Any other coherence delta on any golden stays a red test.
+Reference: `scripts/goldens/spec_calc.py` gains the §2 source line, the strip/ratchet/warrant
+walk and the §22.4 bracket sum in ITS OWN §2/§9/§10 blocks — no engine reuse (the independence
+rule). Adjudication: the standard two independent blind passes.
+
+**§22.13 Golden-uncovered by design** (directed fixtures, each mutation-tested):
+(i) **`mip.ratchet: []` ≡ `mip.ratchet: null` ≡ v1 §10** [round-9 M3 — "with ONE tier" was AMBIGUOUS and false under one reading: an array of LENGTH 1 does NOT reproduce §10 (19.1283095 vs 17.3581107 on G10-RATCHET's own inputs), while "one BRACKET" made the named mutant vacuous since s_n ≡ s₀. A length-1 ratchet whose tier is UNREACHED (X ≤ T₁) is a third admissible construction and is KEPT] on an otherwise-identical deal (the identity
+G10-RATCHET's base leg relies on). **The whole-excess mutant is VACUOUS on an EMPTY ratchet** — with no tiers
+`s_n` IS `s₀`, so normative and mutant BOTH read 17.3581107 — so it is pinned on
+**G10-RATCHET at 28.9301845** (§22.12) instead [round-10: the round-9 M3 fix NAMED this hazard
+and then adopted the reading that triggers it, leaving the mutant clause attached to a
+configuration on which it cannot RED];
+(ii) the **§22.4 exit-equity CAP** binding on a ratcheted promote — §17(iv) already records
+that dropping §10's `min()` leaves G3-DIST byte-identical, and the multi-tier form does not
+change that, so the cap needs its own fixture or it is untested;
+(iii) **the §22.5 EXACT TIER BOUNDARY** — the `I = 50, V₀ = 100, T₁ = 120, s₀ = 0.20,
+s₁ = 0.36, P = 25` case: `ratchet_tiers_reached = 0` and `M = 5.0`. The `>` → `≥` mutant must
+RED on the COUNT while the money is unchanged (no golden can catch it — §22.5);
+(iv) **the cliff counterexample as a NEGATIVE test** — the §22.5 no-fixed-point inputs asserted
+to produce the marginal answer, pinning that no cliff branch was smuggled in;
+(v) **`loan_notes_unredeemed`**: fires when `E < LN[N]`; does NOT fire when the shortfall is
+within `$0.005m` (the **§14.23(g)** tolerance band — §22.13(v) and §14.23(g) now agree, where
+the first draft's looser "`E < LN[N]`" did not); and the **NEGATIVE-E** cases, BOTH
+arms of §22.7 stage 4: (α) `sweet_equity` non-null, rollover 0 by
+§22.3(ii), **and NO interim distributions so that V₀ = 0** [round-10: the round-9 assert below is
+FALSE without this premise — at V₀ = 99, E = −25, I = 100 the normative value is 0.74, not −0.25
+— and the premise sat only inside a rationale bracket, which this document's own convention
+treats as non-normative] ⇒ `sponsor_share ≡ E`, `management_ordinary_share = 0`, `ratchet_tiers_reached` per
+§14.23(d), **and — the assert that actually discriminates — `institution_moic_at_ratchet = E / I`,
+which is strictly NEGATIVE here (−0.25 at §14.23(d)'s own I = 100, E = −25); the `V_final ← V₀`
+mutant reads 0.00 and MUST RED** [round-9 F05: the prescribed configuration was never blind, the
+ASSERT SET was — with E < 0 and no interim distributions, V₀ = 0 and every `T_j > 0`, so the
+normative count and the mutant's count are BOTH 0 and the other three asserts are structurally
+independent of `V_final`; this fixture was the ONLY coverage of §22.5's `P ≤ 0` opener and could
+not see the round-3 correction it exists to pin], mirror closes; and (β) **`sweet_equity` NULL
+with `rollover_equity > 0`** ⇒ the §9 pari-passu split of the NEGATIVE residual, byte-identical
+to v1.6.0 (at `E = −25`, `f = 0.25`: −18.75 / −6.25). Arm (β) is the configuration no golden
+runs (§17(viii)) and the one both the r1 clamp and the r2 unqualified arm got wrong — the
+mirror closes under the **r2** form and FAILS under the r1 clamp (with `sweet_equity` NULL the
+clamp gives pot 0 ⇒ 0/0 ⇒ the five-term sum reads 0 ≠ E; §22.7 says so itself), so only a direct assert on `rollover_share` catches it;
+(vi) **the warrant AT-THE-MONEY boundary** — `P₀ = K(1 − w)/w` ⇒ `warrant_exercised = false`,
+`warrant_strike_paid = 0` AND `warrant_payout_gross = 0`; the `≥` mutant reads true / 2 / 2 and
+must RED on ALL THREE [round-10: the round-9 M4 fix restated §22.6 but never touched THIS
+clause, so the corrected phrase "identical money" simply RELOCATED here — the ALLOCATIONS
+(`ordinary_pot` 38, `warrant_payout_net` 0) are indeed identical either way, but two MONEY
+fields are not]; plus an OUT-of-the-money warrant, a
+zero-strike (penny) warrant, and the **WARRANT-ONLY shape** of §22.10 (warrant non-null,
+sweet_equity null, with a ROLLOVER present so the pari-passu dilution is exercised);
+(vii) **the strip WITH interim distributions** — §22.7's per-year loan-note redemption and
+base-share ordinary split, including a year where a distribution EXCEEDS the grown loan-note
+balance (the split actually splits) and a year where it does not (all of it redeems notes);
+this is also the only path on which `returns.dpi` and `payback_year` read a NON-constant
+sponsor fraction, so the §9 [v1.1.0] DPI basis is exercised under a strip. **The reference
+derivation's FIXTURE-ONLY `distributions.sponsor_share_paid` block (§16) must emit the §22.7
+institutional share here, not the pari-passu one** — not a fourth engine call
+site (§16 pins it as adjudication convenience, never a ModelOutput surface), but an unstated
+emitter would adjudicate the wrong number; moot for both goldens, which run no distributions;
+(viii) **the SEVEN §22.3 REJECTIONS**, one case each — promote ∧ strip; strip ∧ rollover > 0;
+a domain violation (incl. `hurdle_moic ≤ 0`); a non-ascending / decreasing-share /
+`share_pct = 1` tier; an out-of-domain warrant; a subscription that would drive the plug ≤ 0;
+and a paid-for zero ordinary share;
+(ix) **§12's extended walk-down** — `sweet_equity_delta` and `warrant_payout_net`, and the
+AMENDED §14.9(b) reconciling to the sponsor-net TOTAL delta under a strip. No golden carries a
+`bridge` block (the reference derivation emits none — §17(x)), so this identity is
+fixture-only by construction; the fixture must FAIL against the un-amended identity (which
+reads a ≈$28.73m residual on G9-SWEET's shape);
+(x) **§11 NON-contamination** — a directed pair proving a strip moves NO credit metric: the
+same deal with and without `sweet_equity` has byte-identical `credit`, `tranches`, `waterfall`
+and `tax` blocks, and an identical §8 `goodwill` (the §22.8 fix's own regression test — a
+mutant omitting `management_subscription` from `openingBalance`'s equity line must RED);
+(xi) **§19.6(a) UNDER A STRIP** — the fund overlay's LP interim leg reads the §22.7
+institutional share, not the pari-passu 1.0; a mutant reverting `fund.ts` to
+`sponsorShareOfDistributions` must RED. Same for `facade.ts`'s `interim_distributions_sponsor`,
+whose error is INVISIBLE in `reconciliation_residual` (it cancels) and therefore needs a
+direct assert on the walk-down term itself;
+(xii) **the §22.5 walk's TOP-TIER REMAINDER branch** — a case where the pot survives every
+tier so the trailing `M ← M + s_n × rem` line runs with `rem > 0`; the delete-the-line mutant
+passes G9-SWEET and must RED here.
+
 ---
 
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v1.7.0 | 2026-08-09 | **PHASE-5 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — sweet equity + MIP ratchets + mezzanine warrants (backlog #8, with the DR-4 equity-kicker item pulled in at owner scope decision 2026-08-09). TIER A.** §22 added: the UK/European management STRIP as a real instrument (institutional loan notes + ordinaries, loan notes modeled as EQUITY — no leverage, no waterfall, no §9 payoff, NO interest deduction), MARGINAL (top-slice) MOIC ratchets on BOTH the §10 promote (§22.4 — a strict generalization: one tier ≡ §10 verbatim) and the sweet-equity ordinary split (§22.5, a closed-form bracket walk that preserves §5's no-solver rule), and a SINGULAR warrant / equity kicker settled on full dilution with the strike paid in (§22.6). The CLIFF ratchet on a realized-return hurdle is REJECTED with a worked no-fixed-point counterexample; the promote/strip blend DR-2 flagged as a double-count is now an INPUT-GATE REJECTION rather than a forward reference. Both exact-boundary conventions (tier threshold; at-the-money warrant) are pinned WITH BOTH ANSWERS and are money-inert — they move only a DISPLAYED value, so §22.13(iii)/(vi) fixtures carry them because no golden can. §14.23 invariants (incl. the EXTENDED §14.16 five-term mirror and the ratchet↔`sponsor_net.moic` single-source mirror), §15 disclosure row, §16 schema (3 additive Class-B blocks, 2 required `ExitBlock` fields, `ModelOutput.equity_strip`, 2 walkdown terms, 1 coherence code, plus `SourcesUses.management_subscription` and the §8 equity line), the §9 fee/flow membership table (3 rows) and §14.9(b) both AMENDED, and the §22.12 golden plan — **TWO** goldens, **G9-SWEET** (G3 with `mip: null` + the strip) and **G10-RATCHET** (G3 + `mip.ratchet`), because the strip and the promote are mutually exclusive by §22.3(i) so one golden cannot adjudicate both; the FIXTURE-SHAPE change to all 12 committed goldens (exactly 3 added zero keys each; `equity_strip` OMITTED when null per the `fund` precedent) decided HERE, spec-side, with zero value movement to be MEASURED leaf-by-leaf. **Round 1 REFUSED by TWO independent reviewers (arithmetic lens + governance lens), 11 blocking in union, ALL applied in r2:** (1) "G9-SWEET emits ZERO flags" FALSE — it inherits G3's maturity-8 accreting `pik_note`, i.e. §20.6(e)'s AHYDO shape, with `check.ts` and the committed enumeration as counterexamples (the v1.5.0 round-1 B1 defect repeating); (2) `management_subscription` declared a §2 SOURCE with NO `SourcesUses` field ⇒ `total_sources` short by exactly the subscription ⇒ §14.1 "always" breaks; (3) "the §8 plug is unaffected" FALSE against `openingBalance.ts` (`equity = sponsor + rollover`) ⇒ goodwill silently falls by the subscription and carries into every year, invisible to §14.2 because goodwill IS the plug; (4) "§19 composes unchanged" FALSE — `sponsorShareOfDistributions` has THREE committed call sites (`returns.ts`, `fund.ts`, `facade.ts`) and under a strip §22.3(ii) forces rollover 0 ⇒ fraction 1.0 ⇒ the LP fund credited with management's slice, textually §19.1's own rejected alternative (c); (5) §22.7's `max(0, E)` clamp made `sponsor_share = 0` where v1 gives `E`, falsifying §14.23(f)'s byte-identity gate, §14.23(b)'s `[ALL]` domain and §22.13(v) simultaneously — the residual is now carried SIGNED and the v1 identity verified at E = 703.83/0/−0.01/−25; (6) "§16's single-path rule" DANGLING (§16 has only a single-DRIVER entry rule) — the third consecutive amendment to ship a dangling cite; (7) three over-broad §14.23 domains ((d) at a non-positive plug where `moic` is null, (e) at `P = 0` where `M/P` is 0/0, (g) with no domain at all) — the §20 round-1 B2 defect repeating; (8) §22.4 — the half of #8 literally named "MIP ratchets" — had ZERO golden coverage and NO §14 invariant, and §22.12's "top-tier remainder" assert was FALSE (the pot is exhausted inside the tier's `if` branch, so a mutant deleting the trailing line passes); (9) §14.9(b) NOT amended though §22.13(ix) leaned on it — un-amended it reports a ≈$28.73m residual on G9-SWEET; (10) §16's "null ≡ OFF ≡ byte-identity" shorthand FALSE against §22.10's unconditional emission; (11) the §9 fee/flow membership table un-amended though PHASE_G Tier A step 1 requires it when returns are touched. 23 minors also applied (incl. the code home pinned to EXISTING fenced modules so neither containment list needs extending — PHASE_G's named recurring failure avoided rather than repeated; `hurdle_moic > 0`; two Build rejections added; "conservative" softened to "never anti-conservative" because the effect is NEUTRAL where §163(j) binds; one name for the warrant net; the header left at v1.6.0 until GRANT per the 01f0ec8 convention). Both reviewers independently REPRODUCED every §22 worked example and every §22.12 pinned value in exact rationals (incl. `LN[5] = 515.833334601984` and the §22.4 ≡ §10 identity over 18 numeric cases), and confirmed no number was seeded from a rounded display — the v1.0.3 defect is NOT repeated. **ROUND 3 REFUSED by both, 5 blocking in union, ALL applied in r4:** (1) the r3 `V_final ← V₀` rule on the zero/negative-pot arm reported TIERS REACHED on value subsequently LOST — worked counterexample V₀ = 99, P = −25, period-N sponsor flow 74 ≥ 0 so squarely INSIDE §14.23(d)'s own new domain, realized MOIC 0.74 against `V₀`'s 0.99, crossing legal hurdles of 0.8 and 0.9; corrected to `V₀ + P`, which is IDENTICAL at P = 0 so round 2's motivating case is untouched; (2) the r3 stage-4 split invoked the §22.5 walk only at `pot > 0`, making the walk's own `P ≤ 0` opener UNREACHABLE — three REQUIRED outputs undefined again, and §22.13(v)(α) already cited that opener, so two sections of §22 disagreed; the walk is now the SINGLE authority for the strip arm at every sign; (3) §22.9(d)/(h) were byte-identical to the text both reviewers REFUSED while §14.23 carried the corrections and this column claimed them applied; (4) §22.5's MIRROR block was byte-identical to r2 and its normative sentence to the r1 REFUTED draft — an implementer reading the normative section would have built the rejected count-vs-count form; (5) §22.11 had LOST the headline-vs-realized disclosure §15 carried, inverting round 2's staleness, so regenerating §15 from §22.11 would have silently DELETED a refused finding's disposition. **The structural cause was named and fixed rather than re-synced a fourth time:** §14.23 is the SINGLE normative home for §22's invariants and §22.11 the single home for its §15 row; §22.5/§22.9 cite rather than restate; divergence is a defect with the normative home governing. 12 further minors applied (the MIP-promote membership row corrected to "excluded as a LINE" for the same double-count reason as the warrant; the G10 mutant pinned UNROUNDED at 28.9301845 because the 6-dp form is an exact half-even/half-up tie; §22.9(h)'s monotonicity JUSTIFICATION corrected — at fixed E the cap does not break monotonicity, measured over 3,000 X values, and the scoping to `promote_uncapped` is right for a different reason; the §22.10 emission "discriminator" withdrawn since `rollover_equity` is read by the same identity and IS omitted; the MOIC-divergence disclosure moved to §9 where it belongs, since it applies to every negative-exit deal, strip or not). **ROUND 4 REFUSED by both, 5 blocking in union, ALL applied in r5:** (1) the §22.5 annotation still DEFINED the value-realized count as `#{ j : V₀ > T_j }` — the rule round 3 refused — four lines below the corrected `V_final ← V₀ + P`, giving 2 tiers where the normative line gives 0 on the block's OWN counterexample; (2) round 3's monotonicity correction sat in §22.9(h) while §14.23(h) kept "the cap breaks monotonicity in X", which is FALSE (at fixed `E` the cap is a constant and `min` of two non-decreasing functions is non-decreasing — measured twice independently, 0 non-monotone steps over 3,000 X values), so round 4's own precedence rule promoted the false claim over its correction; (3) deleting the COMPARISON RULE paragraph removed the ONLY text binding `institution_moic_at_ratchet` to the walk's `V_final`, leaving a REQUIRED output with no normative definition and §14.23(d) citing a rule that no longer existed — the FOURTH dangling cite in this project (§14.13, §16's single-path and §21.11 precede it); (4)+(5) the single-home conversion had covered 2 of §22.9's 9 clauses — the two that had already failed — while the header and changelog described the section as converted: the instance fixed, the generator left. **THE STRUCTURAL RESPONSE, and why this round differs from r2/r3/r4:** all nine clauses now cite, the deleted definitions are restored INTO the normative home, and the rule is no longer a promise — `tests/governance-spec-single-home.test.ts` (committed; +3 tests, suite 686→689) fails if §22.9 states any formula, if a §14.23(23) clause letter lacks a §22.9 citation, or if §15 drifts from the marker-delimited sentences §22.11 governs. Three mutants were run RED and reverted by string-replace with count==1 asserted; the third reproduces the EXACT round-3 defect (§15 reverting to "the conservative direction") and the guard catches it — PHASE_G's standing lesson, that a gate maintained by remembering already has a hole, applied to the spec's own prose. 4 minors also applied (§14.23(d)'s first-qualifier reason WITHDRAWN as false against the §22.3(vi) Build rejection added in r2; the strip-only warrant shape pinned as the mirror image of the warrant-only shape; the MOIC-divergence convention given §9 as its single OWNER with §22.11/§15 disclosing; the three statutory anchors added to §22.11 so generating §15 cannot delete them). **ROUND 5 REFUSED by both, 3 blocking in union, EVERY ONE IN THE GUARD — the artifact the r5 changelog sold as "the rule is no longer a promise":** (1) it keyed on the single character `≡`, which only 3 of §14.23's 9 clauses use, so mutants restating (a), (e), (g) and (h) verbatim from the normative home all passed GREEN — one of them asserting the §22.4 envelope on `mip_payout` instead of `promote_uncapped`, which is FALSE and is precisely the round-4 defect the guard was written to catch; by its own header's charter it caught 1 of the 5 historical defects it cited; (2) the clause-letter check used a hardcoded `[a-i]` class and the literal `'abcdefghi'` — a HAND-KEPT LIST, the exact construct its own header invokes PHASE_G against — so a clause (j) added to §14.23 needed no companion, and because the citation was a substring match over the whole section (and §22.9(d)'s prose happens to contain the token `§14.23(f)`), §22.9 clause (f) — the compatibility gate — could be DELETED entirely and stay green; (3) the §15 check pinned 476 of 2,653 chars (18%) in ONE direction, so §15 could carry a sentence CONTRADICTING the governed text, or carry §22 disclosure absent from its source (round-4's own defect, inverted), and stay green. **Root cause of all three: the r5 mutants were chosen for convenience and all landed inside the covered subset, so red-then-revert passed on every one while the boundary went untested — the §21-round-1 failure ("the adjudication sample was provably blind to the mutant it exists to exclude") reproduced exactly.** GUARD v2 (r6): every mathematical token banned inside §22.9's code spans with all domains rewritten as PROSE (no grammar, no whitelist — `LN[t] ≥ 0` proved a grammar-based rule still admits normative assertions wearing a domain's clothes); clause letters DERIVED from §14.23 with an OPEN character class so a new clause is required automatically; each citation bound to its OWN clause body; §15 and the §22.11 block compared over the WHOLE clause in BOTH directions. **The mutant sample is now derived FROM the property: one per clause (9) plus every structural hole the reviewers proved (4) plus the preamble hole (1) = 14, ALL RED, all reverted by string-replace with count==1 asserted, baseline green and the SPEC swept for residue.** The guard's scope is now stated honestly in its own header — §16, §22.5's annotations, and the DOMAINS duplicated between §22.9 and §14.23 are NOT enforced, the last being the largest known residual since domains went stale twice (r1 gov-B6, r2 gov-B2). 3 minors also applied (the `§14.23(23)(x)` notation normalised to the file's own `§14.23(x)` form, which the r5 guard had cemented; the grammar seam left where r4 deleted a parenthetical; §22.11 restructured so ONE marked block IS §15's clause rather than three sentences inside it). **ROUND 6 REFUSED by both, 5 blocking in union, 12 of 20 reviewer mutants passing guard v2 — and the root cause was not the token set but its POLARITY.** PHASE_G's standing lesson is that a DENYLIST fails open and the fix is a positive allowlist; guard v2's header cited PHASE_G against whitelists while implementing an enumerated character ban, the same construct one level down. It missed `+`, ASCII `-`, `*`, `**`, `÷` and unicode lookalikes (`＝` U+FF1D, `⩽` U+2A7D); its slash rule was INVERTED, firing on spaced slashes and paths while missing division itself; it read only BACKTICKED spans, so the FALSE §22.4 envelope on `mip_payout` — the very round-4 defect the guard existed to catch — passed simply by dropping its backticks; its clause scan anchored on a hand-kept punctuation set, so a clause introduced after a PERIOD needed no companion; and its §15 comparison covered 2,653 of 6,855 chars, so a §22 sentence placed elsewhere in §15 was ungoverned — round-4's defect surviving by RELOCATION, the fourth time in this feature a fix moved a defect rather than closing it. Separately §22.9(h)'s prose domain was NARROWER than §14.23(h)'s formal one, excluding the empty list §22.3 pins as a legal non-null value and that the clause's own sub-claim requires — the one place a domain's MEANING moved in the round-5 prose rewrite. **GUARD v3 (r7):** the span check is a FAIL-CLOSED ALLOWLIST — a §22.9 code span must be an identifier or a filename, so it may NAME a thing and never RELATE two, and no expression in any notation can satisfy it; a token BACKSTOP scans the PROSE, where an allowlist is impossible, closing the unbackticked-formula hole (tuned for two real forms: division is a slash BETWEEN alphanumerics, which v2 had inverted, and subtraction is a SPACED hyphen, since an unspaced one is a compound word); clause-letter sets are derived from BOTH homes with an open class and compared for EQUALITY, with no punctuation dependence; and §15 is delimited on BOTH sides, compared whole in both directions, with §22-specific terms BANNED outside the markers. **The mutant sample was rebuilt and enumerated BY OPERATOR FAMILY rather than by example — ASCII-only, `+`-only, division, fullwidth, `÷`, U+2A7D, power, bare token, unbackticked prose, operator-between-spans, clause-after-period, §15-outside-the-region — 19 mutants, ALL RED, with the SPEC verified BYTE-IDENTICAL to pre-mutation rather than merely reverted.** My own audit confirmed the reviewers' charge that all 14 round-6 mutants carried a covered token, so none tested the boundary: the third consecutive round my sample was drawn from inside the covered set, and the reason v3's is enumerated by family. 4 minors also applied (the null-vs-empty-list boundary restated in §22.9(f) and (h); §22.9(g)'s "emitted" replaced by "NON-NULL", since `ModelOutput` always carries the key and "emitted" would have widened a deliberately narrow domain to every run; §14.23(d)'s ordinals corrected — it said "the SECOND"/"the FIRST" against a THREE-condition domain while the prose companion counted correctly, i.e. the NORMATIVE home was the less precise one; the dead `≡` excision removed). **ROUND 7 REFUSED by both — and it produced the first SPEC defects since round 4, both created by the guard's own remedy cycle.** (1) §14.23(d)'s round-6 ordinal correction said "the FIRST is now REDUNDANT", naming `sweet_equity non-null` — the domain's CORE, without which there is no strip and nothing to assert — while the clause's own justification two sentences later describes the PLUG condition, i.e. the second; the NORMATIVE home was left internally contradictory while §22.9(d)'s companion stayed right, the fourth time a fix landed in the governing home and made it worse. (2) Round 7's null-vs-empty disambiguation widened §14.23(h) to admit `mip.ratchet: []` and, applying the mirror image, NARROWED §14.23(f) to exclude it — but §22.3 pins `null ≡ [] ≡ v1` and §22.4's one-term sum IS §10 verbatim, so `[]` produces v1 numbers, and (f) is the clause asserting v1 NUMERIC IDENTITY; a compatibility regression on that representation would have shipped green. Both fixed. **THE GUARD WAS CUT BACK, on the governance reviewer's requested proportionality judgement.** Its ledger across rounds 5–7: **ZERO §22 defects caught, THREE occasioned** (a domain narrowed by the prose rewrite it mandated, a domain narrowed by the disambiguation that followed, and a stale self-description it PINNED into §22.9 by asserting the sentence verbatim — a sentence which also claimed "no whitelist to maintain … the only kind PHASE_G's standing lesson permits", the exact OPPOSITE of PHASE_G, which requires a positive allowlist so the fence fails CLOSED). Meanwhile the same FALSE §22.4 envelope survived all three guard generations by changing notation — `≤`, then unbackticked `≤`, then the words "is at most" — which no lexical rule can reach, because no text scanner separates a domain written in prose from a rule written in prose, and round 6 MANDATED prose for the domains. **Retained: the three checks that enforce IDENTITY RELATIONS across widely-separated text** — a fail-closed identifier/filename ALLOWLIST on §22.9's code spans (a span may NAME a thing, never RELATE two); clause-set EQUALITY between both homes with each citation bound to its own clause body; and §15's §22 clause EQUAL to the §22.11 block governing it, in BOTH directions (this defect occurred TWICE IN OPPOSITE DIRECTIONS, r3 and r4, and both times only a reviewer holding two passages ~1,900 lines apart caught it). **Deleted: the prose token backstop and its CHARTER pin.** 15 mutants across every notation family — ASCII, `+`, division, fullwidth, `÷`, U+2A7D, power, bare token — plus all three clause-structure and all three §15 shapes remain RED under the smaller guard, and the SPEC was verified byte-identical to pre-mutation, so the cut lost nothing measurable. The residuals are now WRITTEN DOWN in both the guard header and §22.9 rather than implied: prose restatement is undetectable and belongs to the conformance review, which reads §22.9 against §14.23 clause by clause; the DOMAINS are compared by no test and are the largest known residual; §16, §22.5's annotations, and a §14.23 clause introduced without the `(x) [domain]` convention are unenforced. PHASE_G's Tier-A template asks for a spec amendment and a hostile sign-off, not a prose linter — the escalation is ended here rather than at a fourth guard generation. **Round 2 REFUSED by both, 7 blocking in union, ALL applied in r3; TWO were RELOCATIONS of round-1 findings (the §21-round-2 pattern):** (1) the `pot ≤ 0` arm was UNQUALIFIED, so on the v1 path with `rollover > 0` a negative residual went entirely to `sponsor_share` where `exit.ts` splits it pari-passu (E = −25, f = 0.25: v1 −18.75/−6.25 vs −25.00/0.00) — §14.23(f) still false, and the r2 verification was BLIND to it because every case tested ran rollover 0, which §17(viii) records no golden exercises; the arm is now gated on `sweet_equity non-null` with §9 fall-through, verified reproducing `exit.ts` at both f = 0 and f = 0.25 across the signed range; (2) §14.23(d) FAILED on the negative-E fixture §22.13(v) itself mandates — `returns.ts` sums strictly positive flows (a v1.1.0 convention), so a negative period-N flow is dropped and the realized MOIC (−0.25) diverges from the headline (0.00), with the COUNTS disagreeing too once an interim distribution is banked; the r1 clamp had been accidentally protecting this, and fixing the clamp exposed it — (d) gains the flow domain and an ABSOLUTE tolerance floor (a relative bound anchored on `moic` is an exact-equality demand at `moic = 0`), and the divergence is DISCLOSED in §15 rather than repaired, since repairing it would move `moic` on the v1 path; (3) §22.5's `STOP` skipped the count/MOIC lines, leaving three REQUIRED outputs undefined on a reachable path that §14.23(d) reads — now `V_final ← V₀` with the VALUE-REALIZED reading pinned; (4) **the §15 disclosure row was BYTE-IDENTICAL to the refuted draft** — still carrying "the conservative direction" that round 1 corrected to "never anti-conservative", and none of the r2 disclosures — while this changelog column claimed §15 amended: the v1.6.0-round-2 defect and the project's named "changelog records a correction that was not applied" failure, repeating; §15 is now REGENERATED from §22.11 and the fix VERIFIED by diff against the refuted revision; (5) §14.23(b) named `management_ordinary_share`, an `equity_strip`-only field, across its own `[ALL]` domain — §22.6's ONE-NAME rule is extended and `ExitBlock.sweet_equity_management` renamed, with every invariant asserted on the unconditional carriers; (6) the new §9 warrant row said `in (−)` on the sponsor stream although the warrant is already netted inside `sponsor_share` — a double-count, now "excluded as a LINE" with a legend addendum distinguishing the two senses of `excluded`; (7) §22.9(h) opened on the promote and closed on the uncapped sum — two different numbers once §10's cap binds. 13 further minors applied (incl. the G10 mutant priced at 28.930185 rather than the other mutant's 17.358111; the `X ≈ 703.833238` seed named; the `sources_uses` zero-column emission decided out loud against `spec_calc.py`'s existing omit-`rollover_equity` habit; the de-circularised §22.3(vi) heading; both share rules' domains stated disjoint so the engine PR cannot ship two live definitions). **STEP-1 SIGN-OFF: GRANTED at round 11 under PHASE_G's BOUNDED rule (2026-08-14) — three lenses (closure/composition/coherence), ZERO blocking, ZERO confirmed by skeptics; round-10 blocking fixes verified closed in both homes; fingerprint-anchored @ 0398fb3; ledger → rebuild/G10_LEDGER.md.** **STEPS 2–6 (2026-08-14): step 2 goldens SIGNED — G9-SWEET/G10-RATCHET reference in spec_calc.py, every §22.12 closed form to the digit, the 12-golden shape change with ZERO movement over 4,977 leaves, BOTH blind adjudication passes AGREE with zero mismatches (DERIVATION.md §22). Step 3 engine COMPLETE — §22 in the CODE-HOME modules, both adjudicated goldens reproduced, §22.13 (i)–(xii)+audit fixtures, 19 mutants RED/reverted byte-identically, the hostile accuracy audit's 2 blocking (the §22.3(vi) grid pre-test; the §14.23(g) emission coverage) FIXED in-step (G10_STEP3_MUTANTS.md). Step 4 UI — Advanced-tier editors (§22.3(i) structural BOTH ways), the EquityStrip block (named fields, absent-when-off, basis-labelled), the §15 row on BOTH methodology surfaces, M10's Excel obligations; 8 display mutants RED. Step 5 — conformance GRANTED/TIER_A_CORRECT with ONE confirmed blocking (the M10 row missing from the S&U WORKSHEET — closed with footing ASSERTED both surfaces); three-issuer walkthrough GREEN on live production data, regression-free vs the signed G8 record (G10_SWEET_WALKTHROUGH.md). Step 6 — ledger pass applied L1–L18 + conformance items in one commit; ledger EMPTY.** | DR-2 Item 4 (the promote/sweet-equity double-count, verbatim), DR-4 Cat.7 + the mezzanine warrant/equity-kicker item (2–8% of equity), Goodwin 2024 (MOIC-only plans ~2/3), §3 sweep-grid strict-`>` precedent, §10 [v1.1.0] exit-only settlement, §5 no-solver rule |
 | v1.6.0 | 2026-08-09 | **PHASE-4 FEATURE AMENDMENT (spec-first; NO extraction/UI code in this version) — sector comps band (backlog #4). TIER B, DATA-SIDE.** §21 added: a CITED, REPRODUCIBLE sector EV/EBITDA band replacing the repo's unusable hardcoded blob (`conventions.json sectorMedians_CAVEAT.verifyBeforeDisplay = true` — "NA+Europe combined, PE+corporate blended, NOT strictly buyout-entry"). Source: Damodaran industry averages (`vebitda*.xls`), free, no key, no account, FOUR VENDORED regional files (US/Europe/Japan/India — the only regions a deal can select) over an identical 94-industry taxonomy, vintage 5 Jan 2026 verified from the files' own cells. **The dataset is COMMITTED, never fetched at runtime** (§21.3 — the `.xls` are legacy BIFF8 that `exceljs` cannot read, so conversion is an offline annual step with SHA-256 + vintage pinned; no new network dependency, no allowlist entry, no secret). The NEW computation (§21.4): per (region, sector), the firm-count-weighted 25/50/75th percentiles of the constituent industries' EV/EBITDA on the POSITIVE-EBITDA firm block, with the weighted-percentile convention PINNED as LOWER/NEAREST-RANK (`first constituent with cumulative weight ≥ p·W`) because at least four inconsistent interpolated conventions are in common use and an unreproducible number fails the Tier-B bar. Industries are EXCLUDED from both the value set and the weight total when the value is NA, **≤ 0** (live: Japan `Insurance (Life)` −9.78x) or the row is empty (n=0); the 2026 US file has exactly three NA — Bank (Money Center), Banks (Regional), Brokerage & Investment Banking — but NA carries at least two distinct meanings (meaningless ratio vs empty industry) and other regions DO publish bank/broker multiples that enter the band, and a bucket with zero included constituents emits **null**, never a fabricated number. Region from reporting CURRENCY (USD→US, EUR/GBP→Europe, JPY→Japan, INR→India — the five modelled currencies EXHAUST the domain, so there is NO else arm and Global/Emerging/China are not vendored) and DISPLAYED. The 94→8 sector map is committed DATA, pinned INLINE in §21.5 with its forced assignments named, and the join key is the NUMERIC SIC code through a committed range table — NOT `facts.sector` (raw SIC text) and NOT `inferSector`'s keyword ladder, which misroutes SIC 6798 REITs to Financial Services and drops 7 of 12 real strings to 'Other'; two source typos (`Rubber& Tires`, `Heathcare Information and Technology`) are part of the join key and preserved verbatim; `Other` resolves to the file's own `Total Market (without financials)` aggregate, labelled as a whole-market fallback. **Tier-B admission ticket: the git diff over the ENGINE ARITHMETIC PATH is EMPTY** — `sector_comps` is a Class-A FACT computed in `lib/edgar/comps.ts`, feeding no engine number, no suggestion value and no coherence flag; the `entry_multiple_vs_sector` comparison flag is DEFERRED to a separately-gated Tier-A PR because it would live in `check.ts` (the per-changed-number decomposition PHASE_G mandates for backlog #10). Invariants §14.22 (a)–(e) incl. the occurs-among-constituents consequence of nearest-rank, the NA weight-exclusion identity, byte-identical regeneration, engine-output invariance, and the explicit NON-CLAIM that a public-market trading range is not a buyout-entry range. Adjudication (§21.10): a DIFFERENT-LANGUAGE reference (`derive_bands.py`, zero imports of the code under test), TWO independent blind passes over a sample chosen to DISCRIMINATE, with both conventions' numbers pinned — **Japan Real Estate is simultaneously the sole discriminator and the exact-boundary case** (W=168, p·W = 42.00 = c₁ exactly ⇒ `≥` 8.91 vs interp 10.71 vs `>` 11.31), plus US Financial Services (38.03/38.03/57.52), US Real Estate (the 19.87×3 collapse), US Consumer and the `Other` scalar; compared at FULL precision, and the gate ASSERTS the discriminator still differs, a **CI REGENERATION GATE** byte-comparing `bands.json`, and a CSV SHA-256 + vintage gate so a silent upstream re-publish cannot slip in. REJECTED: **Financial Modeling Prep** (free tier is 250 req/day, US-ONLY, and the `stock peers` endpoint is PAID — US-only alone disqualifies it for an app that imports ESEF and models GBP/EUR/INR/JPY; a keyed live feed also adds a secret, a rate limit and a runtime dependency, and a daily-moving number cannot be adjudicated against a byte-reproducible fixture); runtime/build-time fetching; the existing unverified PitchBook sector medians; interpolated or unweighted percentiles; a min/max range (one 3-firm industry would set the band — `Rubber& Tires` n=3 and `Auto & Truck` 47.76x are both live). | Phase-4 step 1 (Tier B template, rebuild/PHASE_G_EXTENSIONS.md); backlog #4; hostile sign-off round 1 REFUSED — **8 blocking**, ALL applied in r2: (B1) §21.5's join-key premise was FALSE against committed code — `facts.sector` carries raw EDGAR SIC TEXT (ESEF: always `Other`) and `inferSector` is DEAD CODE with zero call sites, so the 94→9 map would never have joined; re-keyed onto a derived `compsBucket` with `facts.sector` left untouched and the ESEF null-band stated; (B2) §21.9/§15's "financials surface as unavailable" was FALSE — US Financial Services computes to **38.03/38.03/57.52** off asset managers and non-bank financials, and 5 of 7 regions publish bank or broker multiples; restated factually and region-conditionally, and the null sample replaced; (B3) the adjudication sample was provably blind to the interpolation mutant §21.4 exists to exclude (the two conventions agree on 54 of 56 bands; 3 of 4 sample items had ZERO discriminating power) — the sample is now NAMED with both conventions' numbers pinned and compared at full precision; (B4) §14.22(b)'s biconditional was FALSE (`Other` has 0 constituents and a non-null band) and "never a point" was FALSE (US Real Estate 19.87×3, R.E.I.T. 64% of W) — scoped per basis and the collapse stated as correct; (B5) the weight `n_i` is the ALL-FIRMS population, not the ratio's sample (one firms column serves both blocks; `Electronics (Consumer & Office)` n=8 with a positive-block value and an all-firms NA proves it) — relabelled honestly; (B6) China and India carry a THIRD aggregate row DUPLICATING the `Total Market (without financials)` label (17.56 vs 16.35 on India, which is reachable) — the first-row-in-file-order rule pinned; (B7) the map was absent though the map IS the convention — the full 94→8 map, its forced assignments and two worked bands are now pinned inline per the §19.9/§20.9 precedent; (B8) `else → Global` was DEAD by type (currency is coerced to the five modelled values) leaving Global/Emerging/China as unreachable committed datasets — dropped to FOUR regions with no else arm. Minors applied: the ≤0 exclusion (Japan `Insurance (Life)` −9.78x live), n=0 rows, the live Japan Real Estate boundary preferred over a constructed vector, the PHASE_G Tier-B allowlist AMENDED to admit `data/**`+`scripts/**` (it fails closed), the aggregate-of-industry construction disclosed, NA's two meanings distinguished, the python/JSON byte contract pinned, and a 15-month vintage forcing gate added. Round 2 REFUSED — 4 blocking (the §21.5 fix RELOCATED round-1 B1 rather than removing it: the promoted `inferSector` returns "Other" for absent input so the ESEF null-band was unreachable, and its rule order sends SIC 6798 REITs to Financial Services via /invest/ before /reit/ — a 2x wrong band — while dropping 7 of 12 real EDGAR strings to "Other"; plus the §16 schema paragraph and the changelog Change column were both byte-identical to the refuted draft, the v1.4.0 round-2 defect repeating) — ALL applied in r3 by RE-KEYING onto the numeric SIC code. Round 3 REFUSED — 3 blocking ((R3-B1) the SIC premise held for only ONE SEC branch: the §D6 IFRS-in-SEC route calls mapCompanyFactsIfrs, which has no sicCode parameter, so a 20-F filer with a published SIC would show "no sector information"; named as a third null cause with a step-3 threading obligation. (R3-B2) the replacement range table was never MEASURED the way §21.5 measures the ladder it rejects — it left 2900-2999 Petroleum Refining and six other blocks uncovered, contradicted its own forced-assignment sentence on five codes, and REGRESSED SIC 7011 Hotels to a wrongly-asserted bucket; the table is now closed, measured 33/33 over a real-code set with the sole deliberate gap 9000-9999, and its residual stated. (R3-B3) "§21.11 pins it" was a DANGLING citation — the round headline fix had no fixture, so an ascending-scan mutant would ship green; §21.11(x) now pins the ordering by value with a reordering mutant) — ALL applied in r4. **Round 4 GRANTED** (fingerprint-anchored @ fc26e79, zero conditions; the reviewer independently reproduced the corrected SIC table — zero uncovered blocks and zero most-specific-wins ambiguities across all 9,900 codes, 19 of 21 fresh probes agreeing and the two disagreements being the named wholesale convention — built the §21.11(x) reordering mutant and confirmed it returns Financial Services 38.03/38.03/57.52, i.e. the fixture genuinely reds, and re-verified all 8 worked bands, the Japan Real Estate discriminator and the India duplicate-label case; 4 text-only minors folded into the grant-recording commit). TIER B and the deferred entry_multiple_vs_sector flag both SIGNED OFF by the same reviewer, per the standing Tier-B/C rule. **Post-grant dispositions applied IN-VERSION, recorded for traceability (2026-08-09; the v1.4.0 precedent):** (step 2, authority = BOTH signed blind adjudication passes) §21.10(3)'s byte contract was CORRECTED — the granted text demanded a fixed 2-decimal SERIALIZER "never repr", which the artifact it governs contradicts; the load-bearing half is the 2dp ROUNDING before serialization, and CPython's deterministic float repr then drops trailing zeros on 8 of 108 values, which is expected because the gate compares emitter-vs-emitter; §21.10(2) now NAMES the type-7 interpolation and scopes the one-discriminator claim to it (under midpoint/CDF-edge weighting all 32 bands discriminate); §21.4's n=0 example corrected from one row to the five that exist. (step 3, authority = the scoped accuracy audit) §21.5b rewritten — the D6 threading LANDED, and `store/dealEngine.ts` was NOT inside the Tier-B allowlist though §21.5b claimed it was, so the fence is amended explicitly. (step 5, this gate) the file header bumped to v1.6.0; §21.9/§15's bank clause corrected to "Europe and India enter through BROKER multiples only — only Japan publishes an actual bank multiple" (the round-1 B2 false-financials defect had reappeared on the shipped surface); the `sic-map.json` cite corrected to the committed `sector-map.json`; §16's null-cause (2) restated as CLOSED with its duplicated sentence removed. The AMENDED Tier-B allowlist reads `data/comps/**` + `scripts/comps/**` + the one `store/dealEngine.ts` call site. NO band value, gate or invariant moved in any of these — must sign off the TIER CHOICE and the diff proof as well as the convention (the standing Tier-B/C rule) |
 | v1.5.0 | 2026-08-08 | **PHASE-3 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — PIK toggle (backlog #6). TIER A.** §20 added: a per-year WHOLE-coupon cash/PIK ELECTION on the `pik_note` — 'cash' pays `beginning × cash_coupon` with NO accrual, 'pik' accrues `beginning × pik_coupon` with NO cash, `elections: null` ≡ the v1 FIXED both-legs note ⇒ every NUMERIC output and serialized fixture byte identical, with the ONE spec-side-decided coherence carve-out: G3/G3-DIST (fixed accreting, maturity 8) EMIT the new `ahydo_shape` WARN from v1.5.0 on (§20.6(c)/§20.9 — decided here, never a discovered red test). §16 gates: non-null length ≡ hold_years; entries in the union; `cash_coupon > 0` ∧ `pik_coupon ≥ cash_coupon` when non-null (a 0%-cash toggle is a free coupon holiday; the PIK premium is non-negative — DR-3.4 market shape). Tax: the §6 machine unchanged, the capped pool's per-year composition follows the elected leg (§20.4); **AHYDO stays a DISCLOSED omission** plus the new STRUCTURAL `ahydo_shape` WARN — fires on maturity > 5y ∧ an accruing year, yield leg (AFR + 5pts) stated-not-tested, the assumed contractual catch-up cure named (§20.6(e)/§20.8). Composition unchanged by construction: §5 order (elections are data), §3/§4 sweep-exemption + amort, §18.2 non-refinanceability (gate reads TYPE, not election), §9 par+accrued payoff, §13 elections FROZEN across scenarios, §19 unaffected. NO new ModelOutput fields (`TrancheYear` already splits cash/PIK). Invariants §14.21 (a)–(f) incl. the closed-form balance (domain-scoped), the null-elections byte-identity gate, the per-election pool mirror, and the all-cash-vs-all-PIK IRR NON-claim. Golden plan: **G8-PIKT** (= G3 + `{cash 9%, pik 12%, elections [pik,pik,cash,cash,pik]}`; payoff closed form 135 × 1.12³ = 189.665280; cash years pay 15.240960; the §6 binding pattern ADJUDICATED, not ported from G3) + SEVEN directed uncovered fixtures (§20.10 (i)–(vii), incl. the both-legs discriminator, the pool-membership flip, and the ahydo_shape boundary set). REJECTED: partial/50-50 elections (v2, disclosed), a `pik_premium` field, election optimizers, fixed-note-as-all-pik sugar — each recorded with its reason (§20.1). | Phase-3 step 1 (Tier A template, rebuild/PHASE_G_EXTENSIONS.md); backlog #6; hostile sign-off round 1 REFUSED — 3 blocking ((B1) the §20.6(c) "byte-identity on every output" claim was CONTRADICTED by §20.6(e) with the counterexample already committed as G3/G3-DIST — coherence gains `ahydo_shape` on null-elections deals and two committed coherence-clean tests would red undecided; rescoped to numeric/fixture identity + the spec-side-decided exception per the v1.1.1 convention; (B2) §14.21's blanket non-null domain preamble was FALSE on clauses (b)/(c)/(e) — replaced with per-clause domains; (B3) the "§14.13 pool mirror" citation was DANGLING — re-anchored to §6.1's capped-pool definition) — ALL applied in r2 with minors (header un-bumped to v1.4.0 until grant per the 01f0ec8 precedent; the suggestion-layer premise rescoped to the conventions.json mezz template; the significant-OID proxy leg named as proxied; the §3 sweep cite; the maturity-5 negative fixture's hold ≤ 4 note; "every COMPUTED output" on §20.10(ii); the §9 membership-unchanged adjudication recorded); **round 2 GRANTED** (fingerprint-anchored @ ebfae5c, zero blocking conditions; the reviewer independently reproduced the ENTIRE committed G3 fixture, pre-verified G8-PIKT's feasibility — minimum cash-floor headroom 16.68, MIP in the money, closed forms to 6dp, the §163(j) carryforward path non-monotone so "adjudicated-not-ported" is NECESSARY — and constructed both §20.6(f) IRR directions numerically; 4 text-only residuals folded into the grant-recording commit). **Post-grant step-5 conformance edits, recorded for traceability (2026-08-09, commits 203da16/7a5ad62; the v1.4.0 precedent):** the FILE header bumped v1.4.0 → v1.5.0 (the precedented step-5 item — it was deliberately held at v1.4.0 while §20 was DRAFT), and §20.9's coherence-exception sentence rescoped from "every other golden stays coherence-clean" to "no other golden emits `ahydo_shape`" (the DIST goldens' v1.1.1 `distribution_blocked` was never in scope). NO normative rule, number, gate or assert moved — the operative §20 text remains byte-identical to the granted text @ ebfae5c |
 | v1.4.0 | 2026-08-07 | **PHASE-2 FEATURE AMENDMENT (spec-first; NO engine/UI code in this version) — fund/LP overlay (backlog #3). TIER A.** §19 added: a fund-of-one overlay computing the FOURTH return stream (net-to-LP after management fees and carried interest, per the ILPA definitions DR-2 pins). LP flows = sponsor equity at t=0 + annual fee draws (2%/basis, ILPA 100% monitoring-fee offset, floored at 0) vs deal distributions + exit proceeds; waterfall = return-of-capital → 8% compounded pref → catch-up (domain {0} ∪ [carry_pct, 1]) → TERMINAL carry split, with 'european' (all-contributions hurdle + pref base; year-N fee drawn before the final distribution) vs 'american' (invested-capital hurdle + pref base; NO fee-recovery tier — fees recovered only through the LP profit share) as the SPEC'D single difference for a single-asset fund. §10 promote explicitly NOT fund carry (different layer — the DR-2 double-count trap). Default `fund: null` = OFF ⇒ byte-identity; stream ABSENT when OFF. Invariants §19.6 incl. the LP+GP ≡ sponsor-share-inflows conservation (fee draws cancel identically; the offset is GP fee income, not a deal flow) and the explicit NON-claim on american-vs-european ordering. Golden plan: G7-FUND on G2-DIST + SEVEN directed uncovered fixtures (§19.10 (i)–(vii), incl. the rollover sponsor-share discriminator). REJECTED: multi-deal funds, subscription lines, clawback (nothing to claw back by construction), GP commitment, fee step-downs — each disclosed (§19.8). | Phase-2 step 1 (Tier A template); hostile sign-off round 1 REFUSED — 7 blocking (total-vs-sponsor-share LP inflow; dead 'american' fee-recovery tier; unpinned pref base/event order; §19.6(d) false under 'american' (worked counterexample); circular committed ∧ committed-basis under the golden; unbound dpi/payback; unwritten §14/§15/§16 integration + suggestion stance) — ALL applied in r2; round 2 REFUSED (3 closure-of-closure: the draw-after fee order broke the 'european' GP bound via fee_N — order flipped to accrue→draw→distribute; the Change column still described r1 — resynced; §14.20(d)'s dpi monotonicity false on the to-date basis — replaced with cum-dist monotone + dpi[N] ≡ moic) — ALL applied in r3; **round 3 GRANTED** (fingerprint-anchored @ 01f0ec8, zero conditions; both GP-share bounds machine-verified to EQUALITY on the reviewer's worked deal under both elections). **Post-grant step-3 accuracy-audit dispositions applied IN-VERSION (2026-08-08, commit 6d611d3; conformance-ruled no-new-version — normative surface untouched):** §19.4 minor-7 equivalence note RESCOPED on a worked 'european' re-trigger counterexample (the normative stop-equation UNCHANGED; the implementation already conformed); §19.5 layer note + §19.7 v1-reality note added; §19.10 extended (viii)–(x) (event-order, pref-magnitude, re-trigger pins — two of the three close audit coverage holes θ/δ). The granted text is @ 01f0ec8; audit deltas are annotated inline with their finding tags |

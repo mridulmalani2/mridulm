@@ -220,3 +220,83 @@ describe('§15 completeness — the v1.1.0 interim-distributions row is on the E
     expect(methodText.some((l) => l.startsWith('Interim distributions:') && l.includes('no solver')), 'distributions Methodology row').toBe(true);
   });
 });
+
+describe('§22 [v1.7.0] — the Excel twins: M10 S&U obligations, the strip section, the §15 row', () => {
+  const g9 = GOLDEN_DEALS.G9SWEET;
+  const g3 = GOLDEN_DEALS.G3;
+
+  const summaryRows = async (facts: typeof g9.facts, assumptions: typeof g9.assumptions) => {
+    const { runModel } = await import('../lib/engine2/facade');
+    const o = runModel(facts, assumptions);
+    const rb = await roundTrip(buildEngine2Workbook(o as never, 'USD'));
+    const rows: [string, unknown][] = [];
+    rb.getWorksheet('Summary')!.eachRow((row) => rows.push([String(row.getCell(1).value ?? ''), row.getCell(2).value]));
+    return { o, rows, cell: (label: string) => rows.find(([l]) => l === label)?.[1] };
+  };
+
+  it('M10: the subscription is a DISPLAYED source; Equity and Total capitalization fold it (labels state the basis)', async () => {
+    const { o, cell, rows } = await summaryRows(g9.facts, g9.assumptions);
+    expect(cell('Management subscription (sweet equity)')).toBe(o.sources_uses.management_subscription); // 2.0
+    expect(cell('Equity (sponsor + rollover + mgmt subscription)')).toBe(
+      o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity + o.sources_uses.management_subscription,
+    );
+    expect(cell('Total capitalization')).toBe(
+      o.derived.total_debt_at_par + o.sources_uses.rollover_equity + o.sources_uses.sponsor_equity + o.sources_uses.management_subscription,
+    );
+    // the OLD label must be gone on a strip deal — one label, one basis
+    expect(rows.some(([l]) => l === 'Equity (sponsor + rollover)')).toBe(false);
+  });
+
+  it('M10 regression: a strip-less deal keeps the OLD label and the numerically identical rows', async () => {
+    const { o, cell, rows } = await summaryRows(g3.facts, g3.assumptions);
+    expect(cell('Equity (sponsor + rollover)')).toBe(o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity);
+    expect(rows.some(([l]) => l === 'Management subscription (sweet equity)')).toBe(false); // never a zero row
+    expect(rows.some(([l]) => l.includes('SWEET EQUITY / WARRANT'))).toBe(false); // §22.10: section ABSENT when off
+  });
+
+  it('the §22 section reads NAMED equity_strip fields; the sanctioned derivation is labelled; tier count states its basis', async () => {
+    const { o, cell } = await summaryRows(g9.facts, g9.assumptions);
+    const es = o.equity_strip!;
+    expect(cell('Loan notes subscribed (institutional strip)')).toBe(es.loan_notes_subscribed);
+    expect(cell('Institutional ordinaries subscribed (= sponsor equity − loan notes)')).toBe(
+      o.sources_uses.sponsor_equity - es.loan_notes_subscribed,
+    );
+    expect(cell('Loan notes accrued at exit (pre-redemption)')).toBe(es.loan_notes_accrued_balance);
+    expect(cell('Loan notes redeemed at exit')).toBe(es.loan_notes_redeemed);
+    expect(cell('Management ordinary share at exit')).toBe(es.management_ordinary_share);
+    expect(cell('Sweet-equity ratchet tiers reached (§22.5 basis)')).toBe(es.ratchet_tiers_reached);
+    expect(cell('Institution MOIC at ratchet (REALIZED figure)')).toBe(es.institution_moic_at_ratchet);
+    expect(cell('Warrant payout (net of strike)')).toBe(es.warrant_payout_net);
+    expect(cell(`Warrant exercised (${g9.assumptions.warrant!.holder_label} — label only)`)).toBe('YES');
+  });
+
+  it('[conformance B1] the S&U WORKSHEET SOURCES block FOOTS: enumerated rows sum to Total sources, strip on AND off', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    for (const deal of [g9, g3]) {
+      const o = runModel(deal.facts, deal.assumptions);
+      const rb = await roundTrip(buildEngine2Workbook(o as never, 'USD'));
+      const rows: [string, unknown][] = [];
+      rb.getWorksheet('Sources & Uses')!.eachRow((row) => rows.push([String(row.getCell(1).value ?? ''), row.getCell(2).value]));
+      const si = rows.findIndex(([l]) => l === 'SOURCES');
+      const ti = rows.findIndex(([l]) => l === 'Total sources');
+      expect(si).toBeGreaterThan(-1);
+      const enumerated = rows.slice(si + 1, ti).reduce((t, [, v]) => t + (typeof v === 'number' ? v : 0), 0);
+      expect(enumerated, `${o.facts.entity_name === 'Golden' ? 'deal' : ''} sources must foot`).toBeCloseTo(rows[ti][1] as number, 9);
+      const hasRow = rows.some(([l]) => l === 'Management subscription (sweet equity)');
+      expect(hasRow).toBe(o.assumptions.sweet_equity !== null); // strip-ON only, never a zero row
+    }
+  });
+
+  it('the §22/§15 Methodology row is present with its load-bearing clauses', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    const o = runModel(g9.facts, g9.assumptions);
+    const rb = await roundTrip(buildEngine2Workbook(o as never, 'USD'));
+    const methodText: string[] = [];
+    rb.getWorksheet('Methodology')!.eachRow((row) => methodText.push(String(row.getCell(1).value ?? '')));
+    const row = methodText.find((l) => l.startsWith('Sweet equity/ratchets/warrants:'));
+    expect(row, '§22 Methodology row').toBeTruthy();
+    for (const clause of ['EQUITY', 'MARGINAL', 'LOWER tier', 'DIFFERENT bases', 'input-gate rejections', 'HEADLINE MOIC', 'AT MOST ONE warrant', 'sweetness is never checked']) {
+      expect(row!, clause).toContain(clause);
+    }
+  });
+});

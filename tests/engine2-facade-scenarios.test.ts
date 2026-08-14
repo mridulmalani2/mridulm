@@ -103,7 +103,7 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
         ...assumptions.fees,
         monitoring: { annual: 2, termination_years: 3, discount_rate: 0.1 },
       },
-      mip: { pool_pct: 0.15, hurdle_moic: 1.0 },
+      mip: { pool_pct: 0.15, hurdle_moic: 1.0, ratchet: null },
     });
     expect(Math.abs(out.bridge.reconciliation_residual)).toBeLessThan(1e-9);
     expect(out.bridge.walkdown.rollover_delta).not.toBe(0); // rollover leg genuinely live
@@ -522,7 +522,7 @@ describe('§17 golden-uncovered branches (the list each needs a fixture for)', (
     const { facts } = g2();
     const a = {
       ...g2().assumptions,
-      mip: { pool_pct: 1.0, hurdle_moic: 0 }, // pool 100%, no hurdle ⇒ uncapped ≫ exit equity
+      mip: { pool_pct: 1.0, hurdle_moic: 0, ratchet: null }, // pool 100%, no hurdle ⇒ uncapped ≫ exit equity
       structure: { ...g2().assumptions.structure, distributions: [10, 10, 10, 10, 10] },
     };
     const out = runModel(facts, a);
@@ -585,7 +585,7 @@ describe('§17 golden-uncovered branches (the list each needs a fixture for)', (
     const a = {
       ...g2().assumptions,
       rollover_equity: 100,
-      mip: { pool_pct: 0.15, hurdle_moic: 1.0 }, // low hurdle ⇒ promote in the money
+      mip: { pool_pct: 0.15, hurdle_moic: 1.0, ratchet: null }, // low hurdle ⇒ promote in the money
       structure: { ...g2().assumptions.structure, distributions: [20, 20, 20, 20, 20] },
     };
     const out = runModel(facts, a);

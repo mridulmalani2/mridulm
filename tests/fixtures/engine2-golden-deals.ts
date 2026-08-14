@@ -35,6 +35,8 @@ function makeAssumptions(p: {
   growth_capex: number[]; nwc: DealAssumptions['operations']['nwc'];
   tax?: DealAssumptions['tax']; exit_multiple: number;
   mip?: DealAssumptions['mip'];
+  sweet_equity?: DealAssumptions['sweet_equity'];
+  warrant?: DealAssumptions['warrant'];
   distributions?: number[] | null;
   rp_trap?: DealAssumptions['covenants']['rp_trap'];
   refinancing?: DealAssumptions['structure']['refinancing'];
@@ -53,6 +55,8 @@ function makeAssumptions(p: {
     rollover_equity: 0,
     exit: { multiple: p.exit_multiple, basis: 'fy', fees_pct: 0.015 },
     mip: p.mip ?? null,
+    sweet_equity: p.sweet_equity ?? null,
+    warrant: p.warrant ?? null,
     covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: p.rp_trap ?? null },
     mid_year_irr: false,
     fund: null,
@@ -90,7 +94,7 @@ export const GOLDEN_DEALS: Record<string, { facts: DealFacts; assumptions: DealA
       ],
       growth: [0.05, 0.04, 0.04, 0.03, 0.03], target_margin: 0.3, da_pct: 0.04, maint_pct: 0.035,
       growth_capex: [0, 0, 0, 0, 0], nwc: { method: 'days', dso: 45, dio: 30, dpo: 40 },
-      mip: { pool_pct: 0.15, hurdle_moic: 1.5 },
+      mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: null },
     }),
   },
   G4: {
@@ -228,3 +232,31 @@ export function g2DownsideAssumptions(): DealAssumptions {
     exit: { ...base.exit, multiple: 8.5 },
   };
 }
+
+// §22.12 [v1.7.0]: the two Phase-5 goldens — G9-SWEET = G3's facts and structure with
+// `mip: null` (FORCED by §22.3(i)) + the strip + warrant; G10-RATCHET = every field of G3
+// unchanged with `mip` gaining one ratchet tier. Defined by spreading G3 so a drift in G3's
+// transcription cannot silently diverge the pair.
+GOLDEN_DEALS.G9SWEET = {
+  facts: GOLDEN_DEALS.G3.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G3.assumptions,
+    mip: null,
+    sweet_equity: {
+      sponsor_ordinary_pct: 0.10, loan_note_rate: 0.08, management_subscription: 2.0,
+      management_ordinary_pct: 0.10,
+      ratchet: [
+        { hurdle_moic: 1.5, share_pct: 0.15 },
+        { hurdle_moic: 2.0, share_pct: 0.20 },
+      ],
+    },
+    warrant: { holder_label: 'Mezzanine warrant', pct_of_ordinary: 0.05, strike_total: 2.0 },
+  },
+};
+GOLDEN_DEALS.G10RATCHET = {
+  facts: GOLDEN_DEALS.G3.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G3.assumptions,
+    mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: [{ hurdle_moic: 1.75, share_pct: 0.25 }] },
+  },
+};

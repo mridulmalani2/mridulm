@@ -16,13 +16,16 @@
  */
 
 import { irr } from './kernel/irr';
-import { sponsorShareOfDistributions } from './returns';
 import type { FundOverlayAssumption, FundBlock, SourcesUses } from './types';
 
 export interface FundOverlayInputs {
   /** §3 step 7 TOTAL equity distributions per year (the sponsor share is taken HERE via
    *  the one §9 rule — round-1 B1: rollover holders are not LPs of the fund-of-one). */
   distributions_paid: number[];
+  /** §9/§22.7 [v1.7.0]: the sponsor's interim shares, selected by facade.ts's single
+   *  predicate (§9 pari-passu when `sweet_equity` is null, else the §22.7 institutional
+   *  split) — the LP fund is never credited with management's slice (§19.1 alt (c)). */
+  sponsor_interim_shares: number[];
   /** §9 sponsor exit proceeds — post-§10-promote, post-rollover (exit.sponsor_share). */
   exit_sponsor_share: number;
   sources_uses: Pick<SourcesUses, 'sponsor_equity' | 'rollover_equity'>;
@@ -62,10 +65,10 @@ export function validateFund(fund: FundOverlayAssumption): void {
 export function buildFundOverlay(fund: FundOverlayAssumption, x: FundOverlayInputs): FundBlock {
   const N = x.distributions_paid.length;
   const se = x.sources_uses.sponsor_equity;
-  // §19.7/§9 pari-passu (B1): the sponsor share comes through the ONE share rule — never a
-  // local re-derivation (audit 2026-08-08 M2: the inline copy's degenerate fallback had
-  // already drifted from returns.ts — 1 vs 0 on a non-positive check).
-  const inflow = sponsorShareOfDistributions(x.distributions_paid, se, x.sources_uses.rollover_equity ?? 0);
+  // §19.7/§9/§22.7 [v1.7.0]: the sponsor share comes through the ONE selected share rule —
+  // never a local re-derivation (audit 2026-08-08 M2), and under a strip the §22.7
+  // institutional split governs, selected upstream by facade.ts's single predicate.
+  const inflow = [...x.sponsor_interim_shares];
   inflow[N - 1] += x.exit_sponsor_share;
 
   const basis = fund.fee_basis === 'invested' ? se : (fund.committed_capital as number);

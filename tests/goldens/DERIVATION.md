@@ -719,3 +719,49 @@ example is corrected from one row to the five that exist.
 The SECTOR COMPS GOSPEL is the committed `data/comps/bands.json`. Blind derivations, seals and
 comparison records for both passes were preserved in the session scratchpad; this record is the
 durable summary.
+
+## G9-SWEET + G10-RATCHET (§22 v1.7.0, Phase-5 step 2) — adjudication record
+
+Both passes derived every §22 number from SPEC text and §22.12's pinned inputs ALONE — no
+reference path (`spec_calc.py` never opened), no fixture until the derivation was committed to
+scratch, and no sight of each other. The only DERIVATION-side seeds taken were G3's recorded
+full-precision values (pre-MIP total **X = 703.833238**, single-tier promote **17.3581107**,
+and G3's exact §2 inputs), never a 2dp display value; both passes proved seed-safety (every G9
+money output is linear in E with slope ≤ 1; every G10 output has |d/dX| ≤ 1, so the 6dp seed's
+±5e-7 cannot move a 2dp/4dp comparison). G3 runs no interim distributions, so X = E.
+
+**Pass 1 (2026-08-14, blind) — SIGNED. AGREE, zero mismatches.** EXACT RATIONALS end-to-end
+(`1.08⁵ = 14348907/9765625 = 1.4693280768` exact; `LN[5] = 3510675 × 14693280768 / 10¹⁴`),
+decimal only at the display comparison. Derived: plug **390.075** (= 797.075 − 405 − 2.0),
+`total_sources ≡ total_uses` 797.075; loan notes **351.0675** → **LN[5] =
+515.833334601984 EXACT, digit-for-digit against the §22.12 pin**; full redemption (no WARN);
+`P₀ = 187.999903398016`; warrant exercises strictly (9.4999951699008 > 2), gross/net
+9.4999951699008 / 7.4999951699008, pot **180.4999082281152**; §22.5 walk: need₁
+76.97685044224, rem 103.5230577858752, **M = 23.22614371210528**, institution
+157.27376451600992, **V_final = 673.10709911799392**, MOIC **1.7255837957** (> 1.5, not
+> 2.0 ⇒ **tiers = 1**, STRICT), M/P 0.12867676; `sponsor_share = 673.10709911799392` and the
+§14.16 five-term mirror closes EXACTLY on the seed. G10: T₀ 588.1125 / T₁ 686.13125 exact,
+promote **19.1283095** (bracket 14.7028125 + 4.425497; delta vs G3 **1.7701988**), cap not
+binding, sponsor 684.7049285, MOIC 1.7463621. Every fixture leaf matches at its precision;
+the three .075 half-ties (390.075 / 392.075 / 797.075) resolve to .08 under half-up AND
+half-even, and the fixtures carry .08 — no ambiguity survived.
+
+**Pass 2 (2026-08-14, blind, independent) — SIGNED. AGREE, zero mismatches.** High-precision
+DECIMAL (30+ sig figs), every intermediate stated to ≥ 12 significant figures. Reproduced the
+identical full-precision internals independently (M = 23.22614371210528, V_final =
+673.10709911799392, LN[5] = 515.833334601984, promote 19.1283095) — agreement to the last
+digit across two different arithmetic systems. Five-term mirror closes to 0 at 40 digits on
+full precision (the 2dp term-sum artifact 703.84 vs 703.83 is the v1.0.2 display-rounding
+note, not a defect). Verified G10 carries NO `equity_strip` key (checked against the key
+list, not a null get) and all three committed-zero columns on both fixtures. Near-tie
+disclosed: G10 `sponsor_share = 684.7049285` sits 7.15e-5 below the .005 boundary — safe at
+seed accuracy.
+
+**Both passes independently confirmed §22.12's mutant-coverage note:** G9-SWEET's pot is
+exhausted INSIDE tier 2's `if` branch, so the walk's trailing `M ← M + s·rem` line runs with
+`rem = 0` and this golden cannot discriminate its deletion — §22.13(xii)'s directed engine
+fixture carries that mutant, exactly as the spec states.
+
+Scratch protocol upheld: `blind_pass_1.md` / `blind_pass_2.md` were committed to the session
+scratchpad BEFORE either fixture was opened; their full content is reproduced above (the
+scratch paths are session-scoped and do not survive — this record is the durable copy).
