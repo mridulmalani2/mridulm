@@ -102,10 +102,17 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   ZERO movement over 4,977 leaves; engine zero-columns added so gates stay green, 698/698);
   BOTH blind adjudication passes SIGNED, AGREE, zero mismatches, identical full-precision
   internals across rationals vs decimal (DERIVATION.md §22 record).
-- **Next for #8: step 3 (engine)** — implement §22 in `lib/engine2/**` (exit.ts pipeline,
-  sourcesUses/openingBalance/§16 schema/types, check.ts invariants §14.23(a)–(i)), run the
-  documented mutants RED and revert by string-replace with count==1, then one hostile
-  accuracy audit over the math. §22.13's directed fixtures (i)–(xii) belong here too.
+- **#8 step 3 (engine) NEARLY COMPLETE 2026-08-14** (branch @ `c8d40de`): §22 implemented
+  across the CODE-HOME modules (`3255395` — pipeline in exit.ts, stripInterimSplit in
+  sequence.ts, the single share predicate in facade.ts, §22.3 gates, equity_strip,
+  five-term §14.9(b)/§14.16, loan_notes_unredeemed WARN); engine reproduces BOTH
+  adjudicated goldens + all §22.13 (i)–(xii) directed fixtures (vitest **717/717**);
+  15 documented mutants ALL RED and reverted byte-identically (`rebuild/G10_STEP3_MUTANTS.md`).
+  **Outstanding for step 3: the hostile accuracy audit** (workflow wf_a32db2cb-385 in
+  flight at last save) — if it returns only ledger items, step 3 is done; fix any confirmed
+  blocking finding first. Then step 4 (UI: input surface + output surface + label/provenance
+  mutation tests + the §15 row on BOTH methodology surfaces incl. `excelExport.ts` — see
+  G10_LEDGER L1–L12 and M10's Excel S&U obligation).
 
 ### Backlog — 12 items, 5 merged
 
