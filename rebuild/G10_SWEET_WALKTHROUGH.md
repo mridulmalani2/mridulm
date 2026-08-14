@@ -7,8 +7,8 @@ suggest → `runModel`, driving the REAL stores (`dealEngineStore.importFromEdga
 → `engine2Store` import → confirm → build) — the harness one-off, per the G-2/G-5/G-7/G-8
 precedent, now COMMITTED as the opt-in `tests/walkthrough-g10.live.test.ts`
 (`LIVE_WALKTHROUGH=1`; skipped in CI); SSR of the actual `EquityStrip` component covers the
-render surface. Branch gates first: `tsc` 0 · vitest **730/730** (incl. the 2 harness
-placeholders) · build green.
+render surface. Branch gates first: `tsc` 0 · vitest **729 passed + 3 live-skipped**
+(the three live legs skip in CI and ran GREEN under `LIVE_WALKTHROUGH=1`) · build green.
 
 | Issuer | Path | basis | revenue ($/€m) | EBITDA | margin | gaps confirmed (value) | BS max\|check\| | IRR / MOIC | §22 silence |
 |---|---|---|---|---|---|---|---|---|---|
