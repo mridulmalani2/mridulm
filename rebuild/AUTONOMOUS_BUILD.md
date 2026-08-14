@@ -84,18 +84,22 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 - **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
   any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
   `.claude/worktrees/`; in a cloud session it is a fresh clone.
-- **main** @ `64625fe`, SPEC v1.6.0, vitest **686/686**.
+- **main** @ `881b38b` (= 64625fe + PR #122, the bounded criterion + this runbook), SPEC
+  v1.6.0 on main, vitest **686/686**.
 - **In flight:** backlog **#8** (sweet equity strip + MIP ratchets + warrants) = SPEC v1.7.0
   §22, branch `claude/deal-engine-exits-mip-5ee40a`, **DRAFT PR #121**, vitest **689/689**
   (the +3 are `tests/governance-spec-single-home.test.ts`).
-- **#8 progress:** step 1 of 5 (spec) — ten rounds run, NOT signed under the old unbounded
-  rule. Round 10's arithmetic and contracts lenses both GRANTED with **zero** blocking; the
-  numbers, schema, output contracts and fixture shape are clean.
-- **Open for #8:** `rebuild/G10_ROUND10_OPEN_MINORS.md` (15 items — under the new rule these
-  are almost all LEDGER, not blocking; triage them with rule 1).
-- **Parked:** `git stash@{0}` on that branch — a cosmetic pass stripping 29 round-history
-  brackets from §22. Unadjudicated. **Recommendation: apply it**, re-run gates, and ledger any
-  doubt; §22 at 908 lines is itself a defect generator.
+- **#8 progress: step 1 of 5 (spec) SIGNED 2026-08-14 at round 11** under the bounded rule
+  (branch @ `0f431c4`): the parked cosmetic stash was applied+dropped (`a6897a5` — two
+  conflicts resolved in favor of the round-10 fixes), all 15 round-10 minors dispositioned
+  (`0398fb3`, six were already fixed by 6b51bfb), and a 3-lens workflow
+  (closure/composition/coherence) GRANTED with ZERO blocking; SPEC header bumped to v1.7.0,
+  grant + fingerprint stamped in the §22 header and changelog row.
+- **Open for #8:** `rebuild/G10_LEDGER.md` items L1–L12 — fix in ONE pass at step 6, never
+  blocking. `G10_ROUND10_OPEN_MINORS.md` is superseded.
+- **Next for #8: step 2 (goldens)** — G9-SWEET + G10-RATCHET in `scripts/goldens/spec_calc.py`
+  (independent reference, zero engine imports), then TWO INDEPENDENT BLIND adjudication passes
+  recorded in `tests/goldens/DERIVATION.md`. §22.12 pins the exact inputs and closed forms.
 
 ### Backlog — 12 items, 5 merged
 
