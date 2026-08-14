@@ -14,6 +14,11 @@ single flat sweep pct, at most one revolver. Anything outside that scope raises.
 restricted-payment cash trap, §9 DPI/payback, §10's distribution-inclusive promote hurdle,
 and the §1 mid-year IRR of the sponsor-side streams (recorded alongside the period-end IRR;
 the goldens' DISPLAYED convention stays period-end — §17 "mid-year off").
+[v1.7.0] Scope extended for Phase 5 / backlog #8 (§22): the sweet-equity strip (§22.2 loan
+notes as EQUITY + the §22.5 marginal ordinary ratchet), the §22.4 marginal promote ratchet
+(one tier ≡ §10 verbatim), the SINGULAR §22.6 warrant, and the §22.7 exit pipeline. Golden
+scope only: no interim distributions under a strip or warrant (§22.13(vii) is a directed
+engine fixture, not a golden).
 """
 
 import json, csv, math, os, sys
@@ -112,7 +117,20 @@ def run(golden):
     oid_total = sum(oid_by_t.values())
     min_cash = a["min_cash"]
     uses = ev + txn + finfees + oid_total + min_cash
-    sponsor_equity = uses - total_par  # §2 plug (rollover 0)
+    # §22 [v1.7.0] instruments (all null ≡ OFF ≡ v1 numbers — §14.23(f))
+    sweet = a.get("sweet_equity")
+    warr = a.get("warrant")
+    if sweet:
+        assert a.get("mip") is None, "§22.3(i): promote ∧ strip is rejected"
+        assert a.get("rollover_equity", 0) == 0, "§22.3(ii): strip ∧ rollover is rejected"
+        assert 0 < sweet["sponsor_ordinary_pct"] <= 1 and 0 <= sweet["management_ordinary_pct"] < 1
+        assert sweet["loan_note_rate"] >= 0 and sweet["management_subscription"] >= 0
+    if sweet or warr:
+        assert not any(dist_request), "golden scope: no interim distributions under §22 (§22.13(vii) is engine-side)"
+    mgmt_sub = sweet["management_subscription"] if sweet else 0.0
+    sponsor_equity = uses - total_par - mgmt_sub  # §2 plug (rollover 0; §22.8: the management subscription is its OWN source line and the plug is the residual AFTER it)
+    if sweet:
+        assert sponsor_equity > 0, "§22.3(vi): a subscription leaving a non-positive plug is a Build rejection"
 
     # §7 fee allocation: pro-rata by commitment over each tranche's maturity
     fee_alloc = {t["name"]: finfees * par[t["name"]] / commitments for t in terms}
@@ -141,7 +159,7 @@ def run(golden):
     acq_usable = a["tax"]["nol"]["acquired_usable"]
     post_nol = 0.0
     ppe = f["net_ppe"]
-    equity_bs = sponsor_equity
+    equity_bs = sponsor_equity + mgmt_sub  # §22.8/§8: equity = sponsor + rollover(0) + subscription — the goodwill plug is genuinely unaffected
     dfc = finfees + oid_total
     goodwill = (total_par + drawn + equity_bs) - (cash + nwc0 + ppe + dfc)  # §8 plug
 
@@ -155,7 +173,9 @@ def run(golden):
                             "financing_fees": r2(finfees), "oid_funded": r2(oid_total),
                             "cash_to_balance_sheet": r2(min_cash), "total_uses": r2(uses),
                             "debt_at_par": [{"name": k, "amount": r2(v)} for k, v in par.items()],
-                            "sponsor_equity": r2(sponsor_equity), "total_sources": r2(total_par + sponsor_equity)},
+                            "sponsor_equity": r2(sponsor_equity),
+                            "management_subscription": r2(mgmt_sub),  # §22.10: Class C, unconditional 0.0
+                            "total_sources": r2(total_par + sponsor_equity + mgmt_sub)},
            "operating": [], "tax": [], "tranches": {t["name"]: [] for t in terms},
            "revolver": [] if rev_t else None, "waterfall": [], "balance_sheet": [], "credit": []}
     out["balance_sheet"].append(bs_row(cash, nwc0, ppe, dfc, goodwill, total_par + drawn, equity_bs))
@@ -444,23 +464,108 @@ def run(golden):
     exit_eq = exit_ev - payoff + cash - exit_fees
     cum_dist = sum(paid_by_year)                       # total equity distributions over the hold
     sponsor_paid = [p * sponsor_dist_share for p in paid_by_year]
+    # ── §22.2 loan notes (EQUITY) — the accretion walk; no year-0 accretion ──────
+    # Golden scope runs no interim distributions under a strip, so redeemed[t] = 0 for
+    # t < N and the walk lands on the §14.23(a) closed form LN[N] = LN[0] × (1+rate)^N.
+    ln0 = (1.0 - sweet["sponsor_ordinary_pct"]) * sponsor_equity if sweet else 0.0
+    ln_bal = ln0
+    if sweet:
+        for _t in range(N):
+            ln_bal = ln_bal * (1.0 + sweet["loan_note_rate"]) - 0.0
+    ln_n = ln_bal  # §22.2 measurement point: grown to exit, BEFORE the exit redemption
+
+    # ── §22.7 the exit waterfall, ONE pipeline with null stages (E stays SIGNED) ─
+    E = exit_eq
+    ln_redeemed = min(ln_n, max(0.0, E))               # stage 1 (strip null ⇒ 0)
+    pot = E - ln_redeemed                              # SIGNED residual
     mip_payout = 0.0
     if a.get("mip"):
-        hurdle_val = a["mip"]["hurdle_moic"] * sponsor_equity
-        # §10 [v1.1.0]: "pre-MIP total equity proceeds" INCLUDES cumulative interim
-        # distributions (the hurdle tests total value returned); the promote is still
-        # computed and paid AT EXIT ONLY, capped at the exit equity available — a cap that
-        # can now genuinely bind (large cumulative distributions, small exit residual).
-        mip_payout = min(a["mip"]["pool_pct"] * max(0.0, exit_eq + cum_dist - hurdle_val),
-                         max(0.0, exit_eq))
-    sponsor_share = exit_eq - mip_payout
+        # §22.4 [v1.7.0]: the MARGINAL bracket walk on §10's base X = exit_eq + cum_dist
+        # (the hurdle tests total value returned); ONE tier reproduces §10 verbatim
+        # (s₀ × max(0, X − T₀) ≡ pool_pct × max(0, X − hurdle_val)). The promote is still
+        # computed and paid AT EXIT ONLY, capped at the exit equity available.
+        tiers22 = [(a["mip"]["hurdle_moic"], a["mip"]["pool_pct"])] + \
+                  [(r["hurdle_moic"], r["share_pct"]) for r in (a["mip"].get("ratchet") or [])]
+        _hs = [h for h, _ in tiers22]; _ss = [sp for _, sp in tiers22]
+        assert _hs == sorted(_hs) and len(set(_hs)) == len(_hs), "§22.3(iii): hurdles strictly ascending"
+        assert _ss == sorted(_ss) and all(sp < 1 for sp in _ss), "§22.3(iv): shares non-decreasing, every share < 1"
+        assert all(h > 0 for h in _hs), "§22.3: hurdle_moic > 0"
+        X = exit_eq + cum_dist
+        thresholds = [h * sponsor_equity for h, _ in tiers22]
+        promote_uncapped = 0.0
+        for _j, (_h, _sp) in enumerate(tiers22):
+            hi = thresholds[_j + 1] if _j + 1 < len(tiers22) else float("inf")
+            promote_uncapped += _sp * max(0.0, min(X, hi) - thresholds[_j])
+        mip_payout = min(promote_uncapped, max(0.0, exit_eq))
+        pot -= mip_payout
+    # stage 3 — §22.6 warrant: full dilution with the strike paid in; STRICT > at ATM;
+    # a negative pot is never in the money (w(P₀+K) > K fails ⇒ no exercise).
+    p0 = pot
+    warrant_exercised, w_gross, w_net, w_strike = False, 0.0, 0.0, 0.0
+    if warr:
+        w, K = warr["pct_of_ordinary"], warr["strike_total"]
+        assert 0 < w < 1 and K >= 0, "§22.3(v)"
+        if w * (p0 + K) > K:
+            warrant_exercised = True
+            w_gross = w * (p0 + K)
+            w_net = w_gross - K
+            w_strike = K
+            pot = (1.0 - w) * (p0 + K)
+    # stage 4 — the ordinary split
+    if sweet:
+        # §22.5 bracket walk — the SINGLE authority for the strip arm at every sign of P
+        s0 = sweet["management_ordinary_pct"]
+        rat = sweet.get("ratchet") or []
+        _hs = [r["hurdle_moic"] for r in rat]; _ss = [r["share_pct"] for r in rat]
+        assert _hs == sorted(_hs) and len(set(_hs)) == len(_hs), "§22.3(iii)"
+        assert _ss == sorted(_ss) and all(s0 <= sp < 1 for sp in _ss) and s0 < 1, "§22.3(iv)"
+        assert all(h > 0 for h in _hs), "§22.3: hurdle_moic > 0"
+        I = sponsor_equity
+        V0 = ln_redeemed  # institutional value banked: interim shares (0 in golden scope) + the loan-note redemption
+        P = pot
+        if P <= 0:
+            mgmt_share = 0.0
+            inst_ord = P
+            V_final = V0 + P
+        else:
+            V = V0; rem = P; M = 0.0; sshare = s0
+            for r in rat:
+                if not rem > 0:
+                    break
+                T = r["hurdle_moic"] * I
+                if V < T:
+                    need = (T - V) / (1.0 - sshare)
+                    take = min(need, rem)
+                    M += sshare * take; V += (1.0 - sshare) * take; rem -= take
+                sshare = r["share_pct"]
+            M += sshare * rem; V += (1.0 - sshare) * rem   # the top tier takes the remainder
+            V_final = V
+            mgmt_share = M
+            inst_ord = P - M
+        inst_moic = V_final / I                            # §14.23(d) definition
+        tiers_reached = sum(1 for r in rat if inst_moic > r["hurdle_moic"])  # STRICT, on the ratio
+        mgmt_eff_pct = (mgmt_share / P) if P > 0 else None # §14.23(e): NULL at P ≤ 0
+        sponsor_share = inst_ord + ln_redeemed
+    else:
+        sponsor_share = pot   # §9 pari-passu on rollover 0: the sponsor takes the (signed) pot
+        mgmt_share = 0.0
+        inst_ord = pot        # warrant-only arm: institution_ordinary_share ≡ sponsor_share (§22.7)
+        V_final = None; inst_moic = None; tiers_reached = 0; mgmt_eff_pct = None
+    # §14.16 five-term mirror, asserted on full-precision internals (rollover 0 in scope)
+    assert abs(sponsor_share + 0.0 + mip_payout + mgmt_share + w_net - exit_eq) < 1e-9, \
+        "§14.16 five-term mirror violated in the reference!"
+    if sweet and (sponsor_share + sponsor_paid[-1] if sponsor_paid else sponsor_share) >= 0:
+        # §14.23(d) mirror on its own domain (configured strip, positive plug, period-N flow ≥ 0)
+        assert abs((ln_redeemed + inst_ord) - V_final) < 1e-9, "§14.23(d): V_final must equal the sponsor's realized value!"
 
     # §9 [v1.1.0] membership: interim distributions are IN the sponsor stream (sponsor share)
     # and IN the pre-promote stream (total), EXCLUDED from the unlevered stream (an
     # equity/financing flow — the unlevered stream is capital-structure-blind). §14.16: the
     # year-N distribution and the exit settle in the SAME period-N flow.
     sponsor_cfs = [-sponsor_equity] + sponsor_paid[:-1] + [sponsor_share + sponsor_paid[-1]]
-    prepromote_cfs = [-sponsor_equity] + paid_by_year[:-1] + [exit_eq + paid_by_year[-1]]
+    # §9 [v1.7.0]: pre_promote — the TOTAL pre-incentive equity stream — takes the
+    # management subscription into its t=0 outflow (byte-identical when the strip is null).
+    prepromote_cfs = [-(sponsor_equity + mgmt_sub)] + paid_by_year[:-1] + [exit_eq + paid_by_year[-1]]
     unlev_cfs = [-(ev + txn)] + ufcf_stream[:-1] + [ufcf_stream[-1] + exit_ev - exit_fees]
 
     # §9 [v1.1.0] DPI & payback — on DISTRIBUTIONS ALONE; exit proceeds never count toward
@@ -476,7 +581,29 @@ def run(golden):
                    "exit_fees": r2(exit_fees), "monitoring_termination": 0.0,
                    "unamortized_fees_written_off": r2(sum(oid_rem.values()) + sum(fee_rem.values())),
                    "exit_equity_pre_mip_total": r2(exit_eq), "mip_payout": r2(mip_payout),
-                   "sponsor_share": r2(sponsor_share), "rollover_share": 0.0}
+                   "sponsor_share": r2(sponsor_share), "rollover_share": 0.0,
+                   # §22.10 [v1.7.0]: unconditional carriers, 0.0 when the instruments are off
+                   "management_ordinary_share": r2(mgmt_share),
+                   "warrant_payout_net": r2(w_net)}
+    # §22.10 [v1.7.0]: equity_strip is emitted iff sweet_equity or warrant is configured
+    # (null ⇔ both null — omitted from the fixture per the ModelOutput.fund precedent).
+    if sweet or warr:
+        out["equity_strip"] = {
+            "loan_notes_subscribed": r2(ln0),
+            "loan_notes_accrued_balance": r2(ln_n),   # grown to exit, BEFORE the exit redemption (§22.2)
+            "loan_notes_redeemed": r2(ln_redeemed),   # the EXIT redemption alone (§22.2)
+            "ordinary_pot_pre_warrant": r2(p0),
+            "warrant_exercised": warrant_exercised,
+            "warrant_strike_paid": r2(w_strike),
+            "warrant_payout_gross": r2(w_gross),
+            "warrant_payout_net": r2(w_net),
+            "ordinary_pot": r2(pot),
+            "management_ordinary_share": r2(mgmt_share),
+            "institution_ordinary_share": r2(inst_ord),
+            "ratchet_tiers_reached": tiers_reached,
+            "management_effective_ordinary_pct": (r4(mgmt_eff_pct) if mgmt_eff_pct is not None else None),
+            "institution_moic_at_ratchet": (r4(inst_moic) if inst_moic is not None else None),
+        }
     # §19 [v1.4.0]: the overlay runs INSIDE run() on full-precision locals (v1.0.3 lesson)
     if golden.get("fund") is not None:
         out["fund"] = fund_overlay(golden["fund"], sponsor_equity, sponsor_paid, sponsor_share, None)
@@ -485,7 +612,7 @@ def run(golden):
         # §1: the mid-year option is a display alternative on the SPONSOR-SIDE streams only;
         # the unlevered stream always uses period-end times.
         "sponsor_net": stream(sponsor_cfs, sponsor_equity, mid_year=True),
-        "pre_promote": stream(prepromote_cfs, sponsor_equity, mid_year=True),
+        "pre_promote": stream(prepromote_cfs, sponsor_equity + mgmt_sub, mid_year=True),
         "unlevered": stream(unlev_cfs, ev + txn),
         "dpi": dpi,
         "payback_year": payback,
@@ -649,6 +776,30 @@ def g8_pikt():
     note["elections"] = ["pik", "pik", "cash", "cash", "pik"]
     return g
 
+# §22.12 [v1.7.0]: G9-SWEET = G3's facts and structure with mip → null (FORCED by
+# §22.3(i) — TWO deltas, named) and the strip + warrant added; G10-RATCHET = every field
+# of G3 unchanged with mip gaining one ratchet tier. Entry S&U: G10 byte-identical to G3;
+# G9 differs ONLY by the management_subscription source line and the plug it re-cuts.
+def g9_sweet():
+    import copy
+    g = copy.deepcopy(GOLDENS["G3"])
+    a = g["assumptions"]
+    a["mip"] = None
+    a["sweet_equity"] = {"sponsor_ordinary_pct": 0.10, "loan_note_rate": 0.08,
+                         "management_subscription": 2.0, "management_ordinary_pct": 0.10,
+                         "ratchet": [{"hurdle_moic": 1.5, "share_pct": 0.15},
+                                     {"hurdle_moic": 2.0, "share_pct": 0.20}]}
+    a["warrant"] = {"holder_label": "Mezzanine warrant", "pct_of_ordinary": 0.05,
+                    "strike_total": 2.0}
+    return g
+
+def g10_ratchet():
+    import copy
+    g = copy.deepcopy(GOLDENS["G3"])
+    g["assumptions"]["mip"] = {"pool_pct": 0.15, "hurdle_moic": 1.5,
+                               "ratchet": [{"hurdle_moic": 1.75, "share_pct": 0.25}]}
+    return g
+
 def g2_dist_downside():
     g = dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP)
     g["assumptions"]["operations"]["growth"] = [x - 0.02 for x in GOLDENS["G2"]["assumptions"]["operations"]["growth"]]
@@ -793,6 +944,27 @@ if __name__ == "__main__":
     # so entry CANNOT move (S&U byte-identical to G3), and the operating build is
     # capital-structure-blind (byte-identical too) — every other difference is §20's alone.
     results["G8-PIKT"] = run(g8_pikt())
+    # §22 [v1.7.0]: the two Phase-5 goldens (§22.12)
+    results["G9-SWEET"] = run(g9_sweet())
+    results["G10-RATCHET"] = run(g10_ratchet())
+    _g3, _g9, _g10 = results["G3"], results["G9-SWEET"], results["G10-RATCHET"]
+    # a promote is post-close and cannot re-price entry (§13); the strip IS entry-side but
+    # re-cuts the pot without changing its size, so E is byte-identical for both (§22.12)
+    assert _g10["sources_uses"] == _g3["sources_uses"], "G10-RATCHET entry not frozen!"
+    assert _g10["operating"] == _g3["operating"], "G10-RATCHET operating diverged from G3!"
+    assert _g9["operating"] == _g3["operating"], "G9-SWEET operating diverged from G3!"
+    assert _g9["exit"]["exit_equity_pre_mip_total"] == _g3["exit"]["exit_equity_pre_mip_total"], \
+        "G9-SWEET exit_equity_pre_mip_total moved — the strip leaked into the operating/debt/§9 path!"
+    assert _g10["exit"]["exit_equity_pre_mip_total"] == _g3["exit"]["exit_equity_pre_mip_total"], \
+        "G10-RATCHET E moved!"
+    assert _g9["equity_strip"]["ratchet_tiers_reached"] == 1, "§22.12: tier 1 crossed, tier 2 not"
+    assert _g9["equity_strip"]["warrant_exercised"] is True, "§22.12: the warrant is in the money"
+    assert abs(_g9["equity_strip"]["loan_notes_redeemed"] - _g9["equity_strip"]["loan_notes_accrued_balance"]) <= 0.005, \
+        "§22.12: the loan notes redeem in full"
+    assert _g10["exit"]["mip_payout"] > _g3["exit"]["mip_payout"], "§22.12: the two-tier promote must exceed G3's"
+    assert "equity_strip" not in _g10, "§22.10: equity_strip omitted when both instruments are null"
+    assert _g9["returns"]["sponsor_net"]["moic"] == _g9["equity_strip"]["institution_moic_at_ratchet"], \
+        "§14.23(d): the ratchet's own test must agree with the headline MOIC (4dp fixture)!"
     # §18 [v1.3.0]: the refi is post-close, so it cannot move entry (S&U byte-identical to G2);
     # §9 is capital-structure-blind, so the unlevered stream is byte-identical to G2 as well.
     assert results["G6-REFI"]["sources_uses"] == results["G2"]["sources_uses"], "G6-REFI entry not frozen!"

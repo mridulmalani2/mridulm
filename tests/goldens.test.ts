@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT', 'G9SWEET', 'G10RATCHET']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);
@@ -350,5 +350,78 @@ describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; GOSPEL — bot
     // §20.6(f) is an explicit NON-claim: the fixture happens to beat G3's all-accrual shape
     // (12.28% > 11.85%) but NO ordering between election patterns is asserted as a rule —
     // the round-1 sign-off constructed the counter-direction numerically.
+  });
+});
+
+describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet equity / ratchets / warrants; adjudication passes pending)', () => {
+  const g3 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G3/expected.json'), 'utf8'));
+  const g9 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G9SWEET/expected.json'), 'utf8'));
+  const g10 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G10RATCHET/expected.json'), 'utf8'));
+  const strip = g9.equity_strip;
+
+  it('the fixture-SHAPE change is exactly three zero keys on every pre-v1.7.0 golden (§22.12)', () => {
+    for (const name of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT']) {
+      const g = load(name);
+      expect(g.sources_uses.management_subscription, `${name} S&U zero column`).toBe(0.0);
+      expect(g.exit.management_ordinary_share, `${name} exit zero column`).toBe(0.0);
+      expect(g.exit.warrant_payout_net, `${name} exit zero column`).toBe(0.0);
+      expect(g.equity_strip, `${name} must omit equity_strip (the fund precedent)`).toBeUndefined();
+    }
+  });
+  it('G9-SWEET §2: the subscription is its OWN source line and the plug is the residual after it (§22.8/§14.1)', () => {
+    expect(g9.sources_uses.management_subscription).toBe(2.0);
+    expect(g9.sources_uses.sponsor_equity).toBe(390.08);        // 797.075 − 405 − 2.0 = 390.075
+    expect(g9.sources_uses.total_sources).toBe(797.08);
+    expect(g9.sources_uses.total_uses).toBe(797.08);            // sources ≡ uses, always
+    expect(g9.sources_uses.total_uses).toBe(g3.sources_uses.total_uses);
+  });
+  it('G9-SWEET: exit_equity_pre_mip_total IDENTICAL to G3 — the strip re-cuts the pot, never re-prices it (§22.12)', () => {
+    expect(g9.exit.exit_equity_pre_mip_total).toBe(g3.exit.exit_equity_pre_mip_total);
+    expect(g9.operating).toEqual(g3.operating);                 // capital-structure-blind
+    expect(g9.returns.unlevered).toEqual(g3.returns.unlevered);
+  });
+  it('G9-SWEET loan notes: LN[0] = 0.90 × plug; LN[5] = LN[0] × 1.08⁵ (§22.2/§14.23(a)); redeemed IN FULL', () => {
+    expect(strip.loan_notes_subscribed).toBe(351.07);           // 0.90 × 390.075 = 351.0675
+    expect(strip.loan_notes_accrued_balance).toBe(515.83);      // 351.0675 × 1.4693280768 = 515.833334601984
+    expect(strip.loan_notes_redeemed).toBe(515.83);             // E > LN[5] ⇒ full redemption, no WARN
+  });
+  it('G9-SWEET warrant: in the money, full dilution with the strike paid in (§22.6)', () => {
+    expect(strip.ordinary_pot_pre_warrant).toBe(188.0);         // E − LN[5]
+    expect(strip.warrant_exercised).toBe(true);
+    expect(strip.warrant_strike_paid).toBe(2.0);
+    expect(strip.warrant_payout_gross).toBe(9.5);               // 0.05 × (188 + 2) = 9.5
+    expect(strip.warrant_payout_net).toBe(7.5);
+    expect(strip.ordinary_pot).toBe(180.5);                     // 0.95 × 190
+    expect(g9.exit.warrant_payout_net).toBe(strip.warrant_payout_net); // ONE name per number (§22.6)
+  });
+  it('G9-SWEET §22.5 walk: tier 1 crossed, tier 2 not; the §14.23(d) mirror agrees', () => {
+    expect(strip.ratchet_tiers_reached).toBe(1);                // T₂ needs ~306 of pot vs ~180 available
+    expect(strip.management_ordinary_share).toBe(23.23);
+    expect(strip.institution_ordinary_share).toBe(157.27);
+    expect(strip.management_effective_ordinary_pct).toBe(0.1287); // M/P ∈ [s₀ 0.10, s₂ 0.20]
+    expect(strip.institution_moic_at_ratchet).toBe(1.7256);
+    expect(g9.returns.sponsor_net.moic).toBe(strip.institution_moic_at_ratchet); // §14.23(d), 4dp fixture
+    expect(g9.exit.management_ordinary_share).toBe(strip.management_ordinary_share);
+  });
+  it('G9-SWEET §14.16 five-term mirror closes on the displayed values (±2dp accumulation)', () => {
+    const five = g9.exit.sponsor_share + g9.exit.rollover_share + g9.exit.mip_payout
+      + g9.exit.management_ordinary_share + g9.exit.warrant_payout_net;
+    expect(Math.abs(five - g9.exit.exit_equity_pre_mip_total)).toBeLessThan(0.03);
+    expect(g9.exit.sponsor_share).toBe(673.11);                 // loan notes + institutional ords
+    expect(g9.exit.mip_payout).toBe(0.0);                       // mip null, FORCED by §22.3(i)
+  });
+  it('G10-RATCHET: entry and operating BYTE-identical to G3 — a promote cannot re-price entry (§13/§22.12)', () => {
+    expect(g10.sources_uses).toEqual(g3.sources_uses);
+    expect(g10.operating).toEqual(g3.operating);
+    expect(g10.exit.exit_equity_pre_mip_total).toBe(g3.exit.exit_equity_pre_mip_total);
+    expect(g10.equity_strip).toBeUndefined();                   // both instruments null ⇒ omitted
+  });
+  it('G10-RATCHET §22.4: the two-tier marginal promote strictly exceeds G3\'s single-tier §10 promote', () => {
+    expect(g10.exit.mip_payout).toBe(19.13);                    // ≈19.128310 (T₀ 588.1125, T₁ 686.13125)
+    expect(g3.exit.mip_payout).toBe(17.36);                     // ≈17.358111 — delta ≈1.770199, the top slice consumed
+    expect(g10.exit.mip_payout).toBeGreaterThan(g3.exit.mip_payout);
+    expect(g10.exit.sponsor_share).toBe(684.7);
+    expect(g10.exit.management_ordinary_share).toBe(0.0);       // a promote is not the strip's field
+    expect(g10.exit.warrant_payout_net).toBe(0.0);
   });
 });

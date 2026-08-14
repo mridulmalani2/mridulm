@@ -485,6 +485,9 @@ export interface SourcesUses {
   debt_at_par: { name: string; amount: number }[];
   rollover_equity: number;
   sponsor_equity: number; // the plug (SPEC §2)
+  /** §22.10 [v1.7.0]: the management subscription is its OWN source line entering
+   *  total_sources (unconditional `0.0` until the §22 engine lands — step 3). */
+  management_subscription: number;
   total_sources: number;
 }
 
@@ -502,6 +505,11 @@ export interface ExitBlock {
   /** sponsor_share + rollover_share + mip_payout ≡ exit_equity_pre_mip_total; sponsor_share ≡ final sponsor_net cashflow (§14.16). */
   sponsor_share: number;
   rollover_share: number;
+  /** §22.10 [v1.7.0]: unconditional carriers, `0.0` when the instruments are off — the
+   *  G-1/G-5 committed-zero-column precedent. Values land with the §22 engine (step 3);
+   *  the §14.16 mirror widens from three to five terms with them. */
+  management_ordinary_share: number;
+  warrant_payout_net: number;
 }
 
 /**

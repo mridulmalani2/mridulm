@@ -71,7 +71,7 @@
  "derived": {
   "enterprise_value": 765.0,
   "entry_gross_leverage_fy": 4.5,
-  "sponsor_equity": 392.08,
+  "sponsor_equity": 390.08,
   "total_debt_at_par": 405.0
  },
  "distributions": {
@@ -100,6 +100,22 @@
   ],
   "trap_level": null
  },
+ "equity_strip": {
+  "institution_moic_at_ratchet": 1.7256,
+  "institution_ordinary_share": 157.27,
+  "loan_notes_accrued_balance": 515.83,
+  "loan_notes_redeemed": 515.83,
+  "loan_notes_subscribed": 351.07,
+  "management_effective_ordinary_pct": 0.1287,
+  "management_ordinary_share": 23.23,
+  "ordinary_pot": 180.5,
+  "ordinary_pot_pre_warrant": 188.0,
+  "ratchet_tiers_reached": 1,
+  "warrant_exercised": true,
+  "warrant_payout_gross": 9.5,
+  "warrant_payout_net": 7.5,
+  "warrant_strike_paid": 2.0
+ },
  "exit": {
   "cash_at_exit": 59.72,
   "debt_payoff_at_par_plus_pik": 263.77,
@@ -107,13 +123,13 @@
   "exit_equity_pre_mip_total": 703.83,
   "exit_ev": 921.7,
   "exit_fees": 13.83,
-  "management_ordinary_share": 0.0,
-  "mip_payout": 17.36,
+  "management_ordinary_share": 23.23,
+  "mip_payout": 0.0,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
-  "sponsor_share": 686.48,
+  "sponsor_share": 673.11,
   "unamortized_fees_written_off": 2.93,
-  "warrant_payout_net": 0.0
+  "warrant_payout_net": 7.5
  },
  "operating": [
   {
@@ -216,16 +232,16 @@
   },
   "sponsor_net": {
    "cashflows": [
-    -392.08,
+    -390.08,
     0.0,
     0.0,
     0.0,
     0.0,
-    686.48
+    673.11
    ],
-   "irr": 0.118539,
-   "irr_mid_year": 0.118539,
-   "moic": 1.7509
+   "irr": 0.115288,
+   "irr_mid_year": 0.115288,
+   "moic": 1.7256
   },
   "unlevered": {
    "cashflows": [
@@ -255,9 +271,9 @@
   ],
   "enterprise_value": 765.0,
   "financing_fees": 6.08,
-  "management_subscription": 0.0,
+  "management_subscription": 2.0,
   "oid_funded": 2.7,
-  "sponsor_equity": 392.08,
+  "sponsor_equity": 390.08,
   "total_sources": 797.08,
   "total_uses": 797.08,
   "transaction_costs": 15.3

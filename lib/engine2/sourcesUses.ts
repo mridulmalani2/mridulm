@@ -201,6 +201,9 @@ export function buildSourcesUses(
     debt_at_par: sized.terms.map((t) => ({ name: t.assumption.name, amount: t.par })),
     rollover_equity: assumptions.rollover_equity,
     sponsor_equity: sponsorEquity,
-    total_sources: sized.total_par + assumptions.rollover_equity + sponsorEquity,
+    // §22.10 [v1.7.0]: unconditional zero column until the §22 engine lands (step 3);
+    // it enters total_sources, which a 0.0 leaves unchanged.
+    management_subscription: 0.0,
+    total_sources: sized.total_par + assumptions.rollover_equity + sponsorEquity + 0.0,
   };
 }

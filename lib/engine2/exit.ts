@@ -111,5 +111,8 @@ export function buildExit(
     mip_payout: mip,
     sponsor_share: sponsorShare,
     rollover_share: rolloverShare,
+    // §22.10 [v1.7.0]: unconditional zero columns until the §22 engine lands (step 3).
+    management_ordinary_share: 0.0,
+    warrant_payout_net: 0.0,
   };
 }
