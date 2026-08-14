@@ -43,6 +43,43 @@ SPLIT domain ~3083–3090 agree.
   branch initialises") is verified accurate. Applying the prescribed text would have
   introduced a false claim.
 
-## Open ledger items (fix before conformance, never blocking)
+## Open ledger items (fix in ONE pass at step 6, before conformance — never blocking)
 
-- (none)
+From the round-11 GRANTING review (closure/composition/coherence all GRANTED, 0 blocking;
+workflow wf_6aac0d6d-5ef, 2026-08-14). Verification records from that review are not
+repeated here — only the actionable items:
+
+- **L1 [§16, SPEC ~1274]** Two stale §22.9(x)-as-home cites survive M4's sweep:
+  "(§22.9(f) states the precise form)" and "`CoherenceFlag.code` gains
+  `loan_notes_unredeemed` (§22.9(g), WARN)". Re-point to §14.23(f)/(g), same as the four
+  M4 sites.
+- **L2 [§22.10 M10 edit]** "which today compute `sponsor_equity + rollover_equity`" is
+  exact for the line-83 Equity row; the line-49 capTotal row's FULL formula also includes
+  debt (the equity subterm is as stated). Tighten the wording; both cites verified correct.
+- **L3 [G10_ROUND10_OPEN_MINORS.md]** "15 spec-minors, none fixed" was stale at its own
+  commit time (b042c1b postdates 6b51bfb). Superseded-by pointer added in the grant commit.
+- **L4 [§12, SPEC ~897]** §12's own walk-down enumeration is not widened with
+  `sweet_equity_delta` / `warrant_payout_net` (which §14.9, §16 and §22.8 all carry).
+  Widen with a [v1.7.0] marker — the hand-sync class §22 itself documents.
+- **L5 [§22.5 opener]** "RETURN HERE" semantics live entirely in the bracket, and the
+  bracket says "the two ASSIGNMENT lines" where three assignment lines follow the loop.
+  NAME the skipped lines (the accumulate line and the share-assignment line) instead of
+  counting them. (Raised independently by composition AND coherence.)
+- **L6 [§22.9(a)/§14.23(a)]** "guaranteed by §22.3(vi)'s Build rejection" is compressed:
+  §22.3(vi) guarantees LN[0] ≥ 0; LN[t] ≥ 0 for t ≥ 1 comes from §22.7's
+  min(grown, paid[t]) redemption rule. State both.
+- **L7 [§16, SPEC ~1274]** The equity_strip null-semantics sentence asserts a cause and
+  its retraction in one breath ("a zero invested equity" then "UNREACHABLE"). Delete the
+  stale half.
+- **L8 [§14.23(d) worked bracket]** The count-disagreement example under-specifies its
+  inputs (s₀ unstated; rate 0.08 only implied via LN[N] = 132.2395). Pin the full inputs.
+- **L9 [§22.5 vs §22.11/§15]** "§3 sweep-step-down convention" vs "§3 sweep-grid
+  convention" — same committed rule, two names. Unify (NB: the §15/§22.11 instance must be
+  edited in BOTH marker-delimited homes identically or the guard reddens).
+- **L10 [§16 rejection list]** share_pct = 1 rejection carries only the §22.5 arithmetic
+  reason; §22.3(iv) gives the per-ratchet pair. Cite §22.3(iv) or add the economic half.
+- **L11 [§22.11/§15 governed block]** 15 opening vs 16 closing parens — the trailing ")"
+  after "actually sweet" is unmatched. Fix in BOTH homes identically (guard).
+- **L12 [M7 disposition note]** The "eight with P > 0" premise is about an uncommitted
+  sign-off exercise; plausible, nothing committed contradicts it. No action unless step 2's
+  derivation re-runs the nine configs — if it does, record the actual split.
