@@ -353,7 +353,7 @@ describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; GOSPEL — bot
   });
 });
 
-describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet equity / ratchets / warrants; adjudication passes pending)', () => {
+describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet equity / ratchets / warrants; GOSPEL — both blind adjudication passes SIGNED, zero mismatches)', () => {
   const g3 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G3/expected.json'), 'utf8'));
   const g9 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G9SWEET/expected.json'), 'utf8'));
   const g10 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G10RATCHET/expected.json'), 'utf8'));
