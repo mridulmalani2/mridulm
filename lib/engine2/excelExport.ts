@@ -137,6 +137,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
   sum.eachRow((row, r) => {
     const labelCell = String(row.getCell(1).value ?? '');
     if (/IRR/.test(labelCell)) sum.getCell(r, 2).numFmt = PCT;
+    if (/tiers reached/.test(labelCell)) sum.getCell(r, 2).numFmt = '0'; // an integer COUNT, never '1.0'
     if (/multiple|MOIC|TVPI|leverage/i.test(labelCell)) sum.getCell(r, 2).numFmt = MULT;
     if (/DSCR/.test(labelCell)) sum.getCell(r, 2).numFmt = '0.00';
   });

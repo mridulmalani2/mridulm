@@ -179,7 +179,13 @@ const AssumptionsPanel: React.FC = () => {
           </Row>
           <Row label="MIP pool" path="mip">
             <NumInput value={a.mip ? toPctInput(a.mip.pool_pct) : ''} suffix="%"
-              onCommit={pctCommit((v) => [{ ...a, mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0, ratchet: null } }, ['mip']])} />
+              onCommit={pctCommit((v) => [{
+                ...a,
+                mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0, ratchet: null },
+                // §22.3(i) BOTH ways (conformance): setting a promote drops the strip, exactly
+                // as setting a strip drops the promote — never a Build error the user must decode.
+                sweet_equity: v > 0 ? null : a.sweet_equity,
+              }, ['mip', ...(v > 0 && a.sweet_equity ? ['sweet_equity'] : [])]])} />
           </Row>
           {/* ── §22.4 [v1.7.0] MIP ratchet — Class B, Advanced tier ────────────────────
               MARGINAL tier ABOVE the base hurdle on §10's own basis (one tier ≡ §10). The

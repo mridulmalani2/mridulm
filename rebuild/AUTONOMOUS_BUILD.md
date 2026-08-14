@@ -104,7 +104,7 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   internals across rationals vs decimal (DERIVATION.md §22 record).
 - **#8 step 3 (engine) COMPLETE 2026-08-14** (branch @ `2f50836`): §22 implemented across
   the CODE-HOME modules (`3255395`); engine reproduces BOTH adjudicated goldens + §22.13
-  (i)–(xiv) directed fixtures; 19 documented mutants ALL RED, reverted byte-identically
+  (i)–(xii) + audit-commissioned (xiii)/(xiv) directed fixtures; 19 documented mutants ALL RED, reverted byte-identically
   (`rebuild/G10_STEP3_MUTANTS.md`). The hostile accuracy audit REFUSED with 2 blocking
   (skeptic-confirmed) — BOTH FIXED in-step (`2f50836`): the §22.3(vi) sensitivity-grid
   pre-test (null cell, single-condition `stripPlugRejection` home) and the

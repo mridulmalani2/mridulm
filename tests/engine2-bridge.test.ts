@@ -53,7 +53,7 @@ function bridgeInputs(core: EngineCore, exit: ExitBlock, assumptions: DealAssump
     sponsor_equity: su.sponsor_equity,
     monitoring_annual_total: 0,
     interim_distributions_sponsor: 0,
-  management_subscription: su.management_subscription,
+    management_subscription: su.management_subscription,
     management_ordinary_share: exit.management_ordinary_share,
     warrant_payout_net: exit.warrant_payout_net,
   };

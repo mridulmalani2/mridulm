@@ -91,8 +91,11 @@ export function validateSweetEquity(
   if (a.mip) validateRatchetTiers(a.mip.ratchet, a.mip.hurdle_moic, a.mip.pool_pct, 'mip.ratchet');
   const w = a.warrant;
   if (w) {
-    if (!(w.pct_of_ordinary > 0 && w.pct_of_ordinary < 1)) bad('warrant.pct_of_ordinary must be in (0, 1) (§22.3(v))');
-    if (!(w.strike_total >= 0)) bad('warrant.strike_total must be ≥ 0 (§22.3(v))');
+    // L15: the warrant's rejections carry their OWN prefix — an out-of-domain warrant must
+    // not throw under a 'sweet_equity:' label.
+    const badW = (msg: string): never => { throw new RangeError(`warrant: ${msg} (SPEC §22.3)`); };
+    if (!(w.pct_of_ordinary > 0 && w.pct_of_ordinary < 1)) badW('pct_of_ordinary must be in (0, 1) (§22.3(v))');
+    if (!(w.strike_total >= 0)) badW('strike_total must be ≥ 0 (§22.3(v))');
   }
 }
 
@@ -244,7 +247,7 @@ export function buildExitWaterfall(
       managementShare = M;
       institutionOrdinary = P - M;
     }
-    institutionMoic = vFinal / I; // I > 0 by §22.3(vi)'s Build rejection
+    institutionMoic = vFinal / I; // I > 0 on the runModel path (§22.3(vi) Build rejection); direct buildExitWaterfall callers own the domain
     for (const t of sweet.ratchet ?? []) {
       if (institutionMoic > t.hurdle_moic) tiersReached += 1; // STRICT (§14.23(d))
     }

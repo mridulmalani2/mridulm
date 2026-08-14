@@ -43,7 +43,7 @@ SPLIT domain ~3083–3090 agree.
   branch initialises") is verified accurate. Applying the prescribed text would have
   introduced a false claim.
 
-## Open ledger items (fix in ONE pass at step 6, before conformance — never blocking)
+## Ledger items (fixed in the step-6 pass — never blocking; conformance ran at step 5 per the runbook's order)
 
 From the round-11 GRANTING review (closure/composition/coherence all GRANTED, 0 blocking;
 workflow wf_6aac0d6d-5ef, 2026-08-14). Verification records from that review are not
@@ -117,3 +117,28 @@ null-instrument path; residualB ≡ 0 derived symbolically incl. under strip dis
 the walk/interim-split/check conformance verified line-by-line; the warrant edge cases
 (K=0∧P₀=0, negative-pot no-exercise, warrant-only+rollover+negative-pot) probed; all
 §22.12 golden values independently recomputed.
+
+## Step-6 pass — FINAL DISPOSITIONS (2026-08-14, one commit)
+
+FIXED: L1 (both §16 cites re-pointed to §14.23(f)/(g) with the domain-carrier noted),
+L2+the conformance 'today' staleness (§22.10's M10 paragraph rewritten past-tense as
+DISCHARGED, both blocks + footing asserts named), L4 (§12's walk-down enumeration widened
+with the two [v1.7.0] terms), L5 (the opener bracket NAMES the skipped lines), L6 (the
+non-negativity attribution split t=0 / t≥1 — rewritten in PROSE after the single-home
+guard rejected an expression span in §22.9, firing exactly as designed), L7 (the stale
+second cause deleted), L8 (the worked bracket's inputs pinned: LN[0]=90 @ 0.08, s₀=0.10),
+L9 (one name: the §3 sweep-grid convention), L10 (the per-ratchet `< 1` pair cited),
+L11 (the unmatched trailing paren deleted in BOTH governed homes — byte-equality verified
+in-script), L15 (warrant rejections carry their own `warrant:` prefix), plus the
+conformance items: the MIP editor now mirrors §22.3(i) BOTH ways, the Excel tier-count
+renders as an integer, the bridge-test indentation, the ledger-header/runbook wording.
+
+DISPOSITIONED WITHOUT CHANGE: L3 (already fixed at grant), L12 (no committed contradiction),
+L13/L14 (future-facing spec_calc obligations — recorded, moot for the signed goldens),
+L16 (comment scoped to the runModel path — done in this pass, code unchanged),
+L17 (selectInterimShares stays a single pure function called at three sites; drift requires
+editing the ONE function, so no second path exists — recorded as accepted), L18 (float-
+stability note — no action by design), the Sensitivity[0]-only export (pre-existing §E3
+behavior, not §22's), and the §22.13(v)-flag-mutant note (closed by M16a/M16b at step 3c).
+
+The ledger is EMPTY. Nothing is carried into the merge.
