@@ -9,18 +9,40 @@ binding. The rules below are what make them compatible.
 
 ---
 
-## 0. FIRST ACTION — set the resume timer, before anything else
+## 0. BOOTSTRAP — where you are, then the resume timer
 
-Create a **recurring 5-hour** scheduled task so you resume after each usage-limit reset:
+### 0a. Locate yourself (works locally AND in a cloud session)
 
-- Use the `schedule` skill (or `CronCreate` via ToolSearch) to create a task that fires
-  **every 5 hours**, with this prompt:
+Do NOT assume a path. Run:
+
+```
+git rev-parse --show-toplevel && git log --oneline -3 && git status -sb
+```
+
+- **Cloud session (laptop can be off):** you get a fresh clone. `git fetch origin`, then
+  `git checkout claude/deal-engine-exits-mip-5ee40a` to continue #8, or branch from `origin/main`
+  for a new feature.
+- **Local session:** the worktree is under `.claude/worktrees/` in the `mridulm` checkout.
+
+Then install and verify the gates before touching anything:
+`npm ci` (or `npm install`) → `npx tsc --noEmit` → `npx vitest run` → `npm run build`.
+Expected: **686/686 on `main`**, **689/689 on the #8 branch**. If the numbers differ, STOP and
+find out why before writing code — a moved baseline is the first thing to explain, never to
+absorb.
+
+### 0b. Set the resume timer
+
+Create a **recurring 5-hour** schedule so you resume after each usage-limit reset:
+
+- Prefer a **scheduled cloud agent / routine** (the `schedule` skill, or `CronCreate` via
+  ToolSearch) — a cloud routine keeps running with the laptop off, which is the point.
+- Prompt for the scheduled run:
   `hi — resume the autonomous Deal Engine build; read rebuild/AUTONOMOUS_BUILD.md and continue from the STATE section`
-- Confirm it was created (list the scheduled tasks and see it) before starting work.
-- If scheduling is unavailable in this environment, **say so plainly in your first message**
-  and continue working anyway — do not silently skip it.
+- Confirm it exists (list the scheduled tasks) before starting work.
+- If scheduling is unavailable here, **say so plainly in your first message** and work anyway —
+  do not silently skip it.
 
-Then start work immediately. Do not wait for the timer.
+Then start immediately. Do not wait for the timer.
 
 ---
 
@@ -59,8 +81,9 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 
 ## 2. STATE (update this section as you go — it is the resume point)
 
-- **Repo** `mridulmalani2/mridulm`. **Worktree**
-  `/Users/mridulmalani/Desktop/mridulm/.claude/worktrees/phase-g1-goldens-a3df47`
+- **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
+  any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
+  `.claude/worktrees/`; in a cloud session it is a fresh clone.
 - **main** @ `64625fe`, SPEC v1.6.0, vitest **686/686**.
 - **In flight:** backlog **#8** (sweet equity strip + MIP ratchets + warrants) = SPEC v1.7.0
   §22, branch `claude/deal-engine-exits-mip-5ee40a`, **DRAFT PR #121**, vitest **689/689**
@@ -178,7 +201,8 @@ landed **by diff**, not by assertion.
 
 - **Commit early and often**, with messages that state what was verified and how. A limit can
   hit mid-task; uncommitted work is lost work.
-- **Push the branch after every few commits.** Origin is the durable record.
+- **Push the branch after every few commits.** Origin is the durable record — and in a cloud
+  session it is the ONLY record; an unpushed commit does not survive the session.
 - **Keep this file's STATE section current** — it is the resume point when the timer fires.
 - **Persist anything a future session needs into the REPO**, not scratch. Session-scoped paths
   do not survive; `rebuild/G10_ROUND10_OPEN_MINORS.md` exists because of that lesson.
