@@ -97,9 +97,15 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   grant + fingerprint stamped in the §22 header and changelog row.
 - **Open for #8:** `rebuild/G10_LEDGER.md` items L1–L12 — fix in ONE pass at step 6, never
   blocking. `G10_ROUND10_OPEN_MINORS.md` is superseded.
-- **Next for #8: step 2 (goldens)** — G9-SWEET + G10-RATCHET in `scripts/goldens/spec_calc.py`
-  (independent reference, zero engine imports), then TWO INDEPENDENT BLIND adjudication passes
-  recorded in `tests/goldens/DERIVATION.md`. §22.12 pins the exact inputs and closed forms.
+- **#8 step 2 (goldens) COMPLETE 2026-08-14** (branch @ `9bea84f`): spec_calc.py carries the
+  §22 reference (c0fcb52 — every §22.12 closed form to the digit; 12-golden shape change with
+  ZERO movement over 4,977 leaves; engine zero-columns added so gates stay green, 698/698);
+  BOTH blind adjudication passes SIGNED, AGREE, zero mismatches, identical full-precision
+  internals across rationals vs decimal (DERIVATION.md §22 record).
+- **Next for #8: step 3 (engine)** — implement §22 in `lib/engine2/**` (exit.ts pipeline,
+  sourcesUses/openingBalance/§16 schema/types, check.ts invariants §14.23(a)–(i)), run the
+  documented mutants RED and revert by string-replace with count==1, then one hostile
+  accuracy audit over the math. §22.13's directed fixtures (i)–(xii) belong here too.
 
 ### Backlog — 12 items, 5 merged
 
