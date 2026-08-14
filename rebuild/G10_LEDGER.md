@@ -83,3 +83,37 @@ repeated here — only the actionable items:
 - **L12 [M7 disposition note]** The "eight with P > 0" premise is about an uncommitted
   sign-off exercise; plausible, nothing committed contradicts it. No action unless step 2's
   derivation re-runs the nine configs — if it does, record the actual split.
+
+## From the step-3 hostile accuracy audit (2026-08-14, workflow wf_a32db2cb-385)
+
+The audit REFUSED with two blocking findings — BOTH FIXED IN-STEP (the §22.3(vi) grid
+pre-test implemented in scenarios.ts via the refactored `stripPlugRejection` single home;
+the `loan_notes_unredeemed` emission + band pinned by fixtures (xiii)/(xiv) and mutants
+M16a/M16b/M17/M15r). Its ledger items, for the step-6 pass:
+
+- **L13 [spec_calc.py ~557]** The reference's §14.23(d) mirror assert checks the internal
+  identity (`ln_redeemed + inst_ord ≡ V_final`, true by construction), not a cross-check
+  against a returns-side MOIC. Adequate for golden scope (both blind passes signed);
+  strengthen if a future golden adds strip distributions.
+- **L14 [spec_calc.py ~129]** Golden scope forbids strip/warrant + distributions by assert
+  (fail-loud). A future strip+distribution adjudication must FIRST write the §22.7
+  institutional-share emitter for the fixture-only `sponsor_share_paid` block
+  (§22.13(vii)'s note) — the pari-passu emitter would adjudicate the wrong number.
+- **L15 [exit.ts ~77]** `validateSweetEquity`'s `bad` closure prefixes 'sweet_equity:' and
+  is reused for warrant-domain rejections — an out-of-domain warrant throws under a
+  sweet_equity label. Cosmetic; split the prefix.
+- **L16 [exit.ts ~247]** "I > 0 by §22.3(vi)" holds on the runModel path only;
+  `buildExitWaterfall` is exported and directly callable with I ≤ 0 (moic would read
+  ±Infinity). Doc-precision: scope the comment to the runModel path.
+- **L17 [facade.ts 42–62]** `selectInterimShares` is EXECUTED at three call sites (pure and
+  float-identical today); consider computing once in runModel and threading, so argument
+  drift at one site cannot be silent. Efficiency/robustness only.
+- **L18 [test (iii)]** Float-stability note for the record: fl(20/0.8) < 25 exactly, so the
+  boundary fixture is stable as committed; the documented 4.1% divergence is between the
+  two COUNT paths and the code implements only the normative ratio path. No action.
+
+Audit verification records (no action): the v1 float-identity verified BIT-exact on the
+null-instrument path; residualB ≡ 0 derived symbolically incl. under strip distributions;
+the walk/interim-split/check conformance verified line-by-line; the warrant edge cases
+(K=0∧P₀=0, negative-pot no-exercise, warrant-only+rollover+negative-pot) probed; all
+§22.12 golden values independently recomputed.

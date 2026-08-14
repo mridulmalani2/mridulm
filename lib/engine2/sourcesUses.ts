@@ -195,16 +195,7 @@ export function buildSourcesUses(
   const managementSubscription = assumptions.sweet_equity?.management_subscription ?? 0;
   const sponsorEquity =
     totalUses - sized.total_par - assumptions.rollover_equity - managementSubscription;
-  // §22.3(vi) [v1.7.0], deterministic at Build from the S&U identity: WITH a strip, a
-  // subscription leaving a non-positive plug makes the ordinary/loan-note split incoherent
-  // — a REJECTION here, never the post-run `negative_sponsor_equity` flag. UNQUALIFIED it
-  // would throw on runs v1 merely FLAGS (a committed insolvency test sits inside
-  // §14.23(f)'s domain), so the `sweet_equity` qualifier is LOAD-BEARING.
-  if (assumptions.sweet_equity && !(sponsorEquity > 0)) {
-    throw new RangeError(
-      `sourcesUses: the management subscription leaves a non-positive sponsor plug (${sponsorEquity.toFixed(4)}) — rejected at Build (SPEC §22.3(vi))`,
-    );
-  }
+
   return {
     enterprise_value: entry.enterprise_value,
     transaction_costs: transactionCosts,
@@ -221,4 +212,24 @@ export function buildSourcesUses(
     total_sources:
       sized.total_par + assumptions.rollover_equity + sponsorEquity + managementSubscription,
   };
+}
+
+/**
+ * §22.3(vi) [v1.7.0]: the ONE statement of the strip-plug Build rejection — WITH a strip,
+ * a subscription leaving a non-positive §2 residual plug makes the ordinary/loan-note
+ * split incoherent. QUALIFIED on `sweet_equity`: unqualified it would reject runs v1
+ * merely FLAGS (`negative_sponsor_equity`), killing a committed insolvency test inside
+ * §14.23(f)'s domain — the qualifier is LOAD-BEARING. Returns the rejection message, or
+ * null when the run may proceed. `runCore` THROWS on it (the Build enforcement point);
+ * §13's sensitivity grid tests it BEFORE calling runModel for a cell and renders a NULL
+ * cell instead — same condition, same home, two consumers.
+ */
+export function stripPlugRejection(
+  su: Pick<SourcesUses, 'sponsor_equity'>,
+  assumptions: Pick<DealAssumptions, 'sweet_equity'>,
+): string | null {
+  if (assumptions.sweet_equity && !(su.sponsor_equity > 0)) {
+    return `sourcesUses: the management subscription leaves a non-positive sponsor plug (${su.sponsor_equity.toFixed(4)}) — rejected at Build (SPEC §22.3(vi))`;
+  }
+  return null;
 }

@@ -12,6 +12,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runModel } from '../lib/engine2/facade';
 import { buildExitWaterfall, validateSweetEquity, type ExitInputs } from '../lib/engine2/exit';
+import { buildSensitivityGrid } from '../lib/engine2/scenarios';
+import { runCoherence } from '../lib/engine2/check';
 import { stripInterimSplit } from '../lib/engine2/sequence';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import type { DealAssumptions } from '../lib/engine2/types';
@@ -363,6 +365,58 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     const gp = run.fund!.gp_carry.reduce((s, v) => s + v, 0);
     expect(lp + gp).toBeCloseTo(instTotal + run.exit.sponsor_share, 6);
     expect(run.returns.dpi[0]).toBeCloseTo(split.institution_share[0] / run.sources_uses.sponsor_equity, 9);
+  });
+
+  it('(xiii) [audit B1] the §22.3(vi) sensitivity-grid pre-test: a plug-killing entry axis renders a NULL cell, never destroys the grid', () => {
+    const base = runModel(GOLDEN_DEALS.G9SWEET.facts, GOLDEN_DEALS.G9SWEET.assumptions);
+    // entry_multiple 0.5 re-derives uses far below debt + subscription ⇒ plug ≤ 0 for that
+    // cell; runModel would THROW (§22.3(vi)) and the loop has no try/catch. The pre-test
+    // must test the gate's condition FIRST and emit null — the grid and its healthy cells
+    // survive. (Mutant: drop the pre-test ⇒ this test sees the RangeError.)
+    const grid = buildSensitivityGrid(GOLDEN_DEALS.G9SWEET.facts, GOLDEN_DEALS.G9SWEET.assumptions, base, {
+      row_axis: 'entry_multiple', col_axis: 'exit_multiple',
+      row_values: [0.5, 8.5], col_values: [8.5],
+      base_row_index: 1, base_col_index: 0,
+    });
+    expect(grid.irr[0][0]).toBeNull(); // the rejected cell — N/A, never a sentinel
+    expect(grid.moic[0][0]).toBeNull();
+    expect(grid.irr[1][0]).not.toBeNull(); // the base cell survives
+    expect(grid.moic[1][0]).toBeCloseTo(base.returns.sponsor_net.moic!, 9);
+  });
+
+  it('(xiv) [audit B2] loan_notes_unredeemed EMISSION: fires on an underwater strip, pinned to the $0.005m band', () => {
+    // ENGINE-LEVEL firing arm: G9-SWEET with loan_note_rate 0.5 accretes past exit equity.
+    const under = runModel(GOLDEN_DEALS.G9SWEET.facts, {
+      ...GOLDEN_DEALS.G9SWEET.assumptions,
+      sweet_equity: { ...GOLDEN_DEALS.G9SWEET.assumptions.sweet_equity!, loan_note_rate: 0.5 },
+    });
+    expect(under.equity_strip!.loan_notes_accrued_balance).toBeGreaterThan(
+      under.equity_strip!.loan_notes_redeemed + 0.005,
+    );
+    expect(under.coherence.map((f) => f.code).sort()).toEqual(['ahydo_shape', 'loan_notes_unredeemed']);
+    const flag = under.coherence.find((f) => f.code === 'loan_notes_unredeemed')!;
+    expect(flag.severity).toBe('warn');
+    // THRESHOLD pin, both sides of §14.23(g)'s band, on the same real run's inputs with only
+    // equity_strip overridden (a widen-the-band or drop-the-emission mutant REDs here).
+    const coherenceInputs = (shortfall: number) => ({
+      facts: GOLDEN_DEALS.G9SWEET.facts,
+      assumptions: GOLDEN_DEALS.G9SWEET.assumptions,
+      sources_uses: under.sources_uses,
+      derived: { entry_multiple: under.derived.entry_multiple },
+      waterfall: under.waterfall,
+      balance_sheet: under.balance_sheet,
+      credit: under.credit,
+      covenants: GOLDEN_DEALS.G9SWEET.assumptions.covenants,
+      ppe_seeded_at_zero: false,
+      tranches: under.tranches,
+      equity_strip: {
+        ...under.equity_strip!,
+        loan_notes_accrued_balance: 100,
+        loan_notes_redeemed: 100 - shortfall,
+      },
+    });
+    expect(runCoherence(coherenceInputs(0.006)).map((f) => f.code)).toContain('loan_notes_unredeemed');
+    expect(runCoherence(coherenceInputs(0.004)).map((f) => f.code)).not.toContain('loan_notes_unredeemed');
   });
 
   it('(xii) the §22.5 TOP-TIER REMAINDER branch: the pot survives every tier (rem > 0 at the trailing line)', () => {

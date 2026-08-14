@@ -24,8 +24,29 @@ not from convenience — every §22.13 mutant clause is covered.
 | M14 | strike not paid in `P = (1−w)·P₀` (exit.ts) | G9 ordinary_pot 180.5 + the five-term mirror | §14.23(c) |
 | M15 | §22.3(vi) gate unqualified (sourcesUses.ts) | the committed insolvency test inside §14.23(f)'s domain — proving the `sweet_equity` qualifier is LOAD-BEARING | (viii)/§22.3(vi) |
 
+## Audit-closure mutants (2026-08-14, after the step-3 hostile accuracy audit)
+
+The audit REFUSED with 2 confirmed blocking findings (B1: the §22.3(vi) sensitivity-grid
+pre-test was unimplemented, so a plug-killing entry axis destroyed the WHOLE grid — clause
+(e); B2: no committed test exercised the `loan_notes_unredeemed` EMISSION, so a check.ts
+mutant family passed green — clause (c)). Both fixed (grid pre-test via the refactored
+single-condition `stripPlugRejection`; fixtures (xiii)/(xiv) added incl. the ±band pin),
+and the closure mutants run under the same discipline:
+
+| # | Mutant (file) | What REDs |
+|---|---|---|
+| M16a | `loan_notes_unredeemed` emission disabled (check.ts) | fixture (xiv)'s firing arm |
+| M16b | the §14.23(g) band widened 0.005 → 5 (check.ts) | fixture (xiv)'s threshold pin |
+| M17 | the grid pre-test disabled (scenarios.ts) | fixture (xiii) — the grid dies on the RangeError |
+| M15r | the plug gate unqualified, re-anchored post-refactor (sourcesUses.ts) | the committed insolvency test |
+
 Process note, recorded for honesty: M4's FIRST run used an empty-string revert, which
 re-inserted the deleted line at file position 0 — caught immediately by the driver's own
 SHA-256 check and the red baseline, repaired by string-replace, and the file verified
 byte-identical to the committed blob before the clean re-run above. The driver's per-mutant
 hash check is exactly the fence the runbook prescribes; it fired as designed.
+
+Second process note: M17's FIRST run repeated the M4 empty-string-revert misfire on the
+deletion form — caught again by the hash/count fence, restored by string-replace, and
+re-run as a guard TOGGLE (`if (false && …)`), which reverts symmetrically. Deletion
+mutants are now always expressed as toggles.

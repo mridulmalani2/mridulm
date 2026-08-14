@@ -27,7 +27,7 @@
  */
 
 import { runModel, type Engine2ModelOutput } from './facade';
-import { deriveEntry, rescaleTermTranchesToLeverage } from './sourcesUses';
+import { buildSourcesUses, deriveEntry, rescaleTermTranchesToLeverage, sizeStructure, stripPlugRejection } from './sourcesUses';
 import type {
   DealAssumptions,
   DealFacts,
@@ -161,6 +161,20 @@ export function buildSensitivityGrid(
         cellEv = deriveEntry(facts, entryPricing).enterprise_value;
       }
       const cell: DealAssumptions = { ...withBoth, entry: frozenEntry(withBoth, cellEv) };
+      // §22.3(vi) [v1.7.0]: test the gate's condition BEFORE calling runModel for this
+      // cell — runModel THROWS on it and this loop has no try/catch, so an entry-side
+      // axis re-deriving a non-positive plug under a strip would otherwise destroy the
+      // WHOLE grid. Same single condition (`stripPlugRejection`), same arithmetic path
+      // (`buildSourcesUses`); the cell renders null — N/A semantics, never a sentinel.
+      if (cell.sweet_equity) {
+        const cellEntry = deriveEntry(facts, cell);
+        const cellSized = sizeStructure(cell.structure, cellEntry.entry_ebitda_for_sizing);
+        if (stripPlugRejection(buildSourcesUses(cellEntry, cellSized, cell), cell) !== null) {
+          irrRow.push(null);
+          moicRow.push(null);
+          continue;
+        }
+      }
       const run = runModel(facts, cell);
       irrRow.push(run.returns.sponsor_net.irr);
       moicRow.push(run.returns.sponsor_net.moic);

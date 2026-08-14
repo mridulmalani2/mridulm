@@ -40,7 +40,7 @@ import {
 } from './debt';
 import { validateSweetEquity } from './exit';
 import { openingTaxState, runTaxYear, runUnleveredTaxYear } from './tax';
-import { buildSourcesUses, deriveEntry, sizeStructure, type SizedStructure } from './sourcesUses';
+import { buildSourcesUses, deriveEntry, sizeStructure, stripPlugRejection, type SizedStructure } from './sourcesUses';
 import type {
   BalanceSheetYear,
   DealAssumptions,
@@ -89,7 +89,10 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   validateRefinancing(sized, assumptions.structure.refinancing, N); // §16/§18 input-gate rejections
   validatePikElections(sized, N); // §16/§20.2 input-gate rejections [v1.5.0]
   validateSweetEquity(assumptions); // §16/§22.3 input-gate rejections [v1.7.0]
-  const su = buildSourcesUses(entry, sized, assumptions); // carries the §22.3(vi) plug gate
+  const su = buildSourcesUses(entry, sized, assumptions);
+  // §22.3(vi) [v1.7.0]: the Build enforcement point (the grid pre-tests the same condition).
+  const stripRejection = stripPlugRejection(su, assumptions);
+  if (stripRejection !== null) throw new RangeError(stripRejection);
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
   const costInputs: AmortizingCostInput[] = [
