@@ -88,6 +88,20 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
   });
 });
 
+describe('§22 display surface — the S&U tab (conformance B1 twin)', () => {
+  it('the Sources table carries the subscription row on a strip deal and foots; absent when off', async () => {
+    const { SU } = await import('../components/deal-engine/v2/OutputTabs');
+    const { facts, assumptions } = GOLDEN_DEALS.G9SWEET;
+    const o = runModel(facts, assumptions);
+    const html = renderToStaticMarkup(React.createElement(SU, { o: o as never, ccy: 'USD' as const }));
+    expect(html).toContain('Management subscription (sweet equity)');
+    expect(html).toContain(money(o.sources_uses.management_subscription, 'USD'));
+    const off = runModel(GOLDEN_DEALS.G3.facts, GOLDEN_DEALS.G3.assumptions);
+    const offHtml = renderToStaticMarkup(React.createElement(SU, { o: off as never, ccy: 'USD' as const }));
+    expect(offHtml).not.toContain('Management subscription');
+  });
+});
+
 describe('§22 methodology surface (React) — the §15 row', () => {
   it('the §22.11 disclosure row is present and carries the load-bearing clauses', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));

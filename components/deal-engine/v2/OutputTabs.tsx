@@ -247,7 +247,8 @@ const Operating: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
   </Table>
 );
 
-const SU: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
+// Exported for the directed §22 display test (the M10 sources-row twin).
+export const SU: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
   <div className="grid grid-cols-2 gap-6">
     <Table head={['Uses', '']}>
       {[
@@ -262,6 +263,11 @@ const SU: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy 
     <Table head={['Sources', '']}>
       {[
         ...o.sources_uses.debt_at_par.map((d) => [d.name, d.amount] as const),
+        // §22.10/M10 [v1.7.0]: the subscription is a DISPLAYED source here too — the same
+        // misfoot the Excel S&U block carried (conformance B1's ledger twin); strip-ON only.
+        ...(o.assumptions.sweet_equity !== null
+          ? [['Management subscription (sweet equity)', o.sources_uses.management_subscription] as const]
+          : []),
         ['Sponsor equity', o.sources_uses.sponsor_equity] as const,
         ['Total sources', o.sources_uses.total_sources] as const,
       ].map(([l, v]) => <tr key={l} style={rowB}><td className="px-2 py-1">{l}</td><td className={td}>{money(v, ccy)}</td></tr>)}

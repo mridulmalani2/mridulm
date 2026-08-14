@@ -61,3 +61,5 @@ mutants are now always expressed as toggles.
 | D4 | the React §15 row deleted (OutputTabs) | the methodology-row pin |
 | D5 | Excel Equity row drops the subscription fold (excelExport) | the M10 parity pin |
 | D6 | Excel derivation row reads the WRONG named field (redeemed for subscribed) | the sanctioned-derivation parity pin |
+| D7 | S&U-worksheet subscription row dropped (excelExport) | the conformance-B1 footing test (sources sum ≠ Total sources) |
+| D8 | React SU subscription row dropped (OutputTabs) | the B1-twin display pin |

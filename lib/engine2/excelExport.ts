@@ -159,6 +159,12 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['SOURCES', null],
     ...o.sources_uses.debt_at_par.map((d): Cell[] => [d.name, d.amount]),
     ['Rollover equity', o.sources_uses.rollover_equity],
+    // §22.10/M10 [v1.7.0]: the subscription is a DISPLAYED source in THIS sheet's SOURCES
+    // block — without it the enumerated sources misfoot Total sources by exactly the
+    // subscription on every strip deal (conformance B1; strip-ON only, the §19 discipline).
+    ...(o.assumptions.sweet_equity !== null
+      ? [['Management subscription (sweet equity)', o.sources_uses.management_subscription] as Cell[]]
+      : []),
     ['Sponsor equity (plug)', o.sources_uses.sponsor_equity],
     ['Total sources', o.sources_uses.total_sources],
   ], [null, MONEY]);

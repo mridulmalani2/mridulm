@@ -270,6 +270,23 @@ describe('§22 [v1.7.0] — the Excel twins: M10 S&U obligations, the strip sect
     expect(cell(`Warrant exercised (${g9.assumptions.warrant!.holder_label} — label only)`)).toBe('YES');
   });
 
+  it('[conformance B1] the S&U WORKSHEET SOURCES block FOOTS: enumerated rows sum to Total sources, strip on AND off', async () => {
+    const { runModel } = await import('../lib/engine2/facade');
+    for (const deal of [g9, g3]) {
+      const o = runModel(deal.facts, deal.assumptions);
+      const rb = await roundTrip(buildEngine2Workbook(o as never, 'USD'));
+      const rows: [string, unknown][] = [];
+      rb.getWorksheet('Sources & Uses')!.eachRow((row) => rows.push([String(row.getCell(1).value ?? ''), row.getCell(2).value]));
+      const si = rows.findIndex(([l]) => l === 'SOURCES');
+      const ti = rows.findIndex(([l]) => l === 'Total sources');
+      expect(si).toBeGreaterThan(-1);
+      const enumerated = rows.slice(si + 1, ti).reduce((t, [, v]) => t + (typeof v === 'number' ? v : 0), 0);
+      expect(enumerated, `${o.facts.entity_name === 'Golden' ? 'deal' : ''} sources must foot`).toBeCloseTo(rows[ti][1] as number, 9);
+      const hasRow = rows.some(([l]) => l === 'Management subscription (sweet equity)');
+      expect(hasRow).toBe(o.assumptions.sweet_equity !== null); // strip-ON only, never a zero row
+    }
+  });
+
   it('the §22/§15 Methodology row is present with its load-bearing clauses', async () => {
     const { runModel } = await import('../lib/engine2/facade');
     const o = runModel(g9.facts, g9.assumptions);
