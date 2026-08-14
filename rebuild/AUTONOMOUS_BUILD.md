@@ -96,8 +96,18 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
   ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
   `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
-- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23), CLAIMED by the local
-  session 2026-08-14 ~16:40 IST on branch `claude/partial-exits-spec`.** A concurrently
+- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23) on branch
+  `claude/partial-exits-spec`.** Progress 2026-08-14 evening: constraints dossier done
+  (DR research is EMPTY on selldowns — every rule derived from committed conventions);
+  ten design decisions recorded in `rebuild/G11_PARTIAL_EXITS_BRIEF.md`; TWO escalations
+  filed in `rebuild/OWNER_QUESTIONS.md` (Q-A DPI basis — conservative default taken;
+  Q-B rollover coexistence — rejected v1); **§23 DRAFTED @ `13d450c`** (203 lines, all
+  companions amended: §1, §9 table, §12, §14.16 six-term, §14.24(a)–(g), §15-SELL governed
+  block both homes, §16, changelog v1.8.0 row); hostile ROUND 1 workflow launched
+  (wf_8ee9e1df-f24: arithmetic/contracts/coherence lenses + two-skeptic verification).
+  On resume: check the round-1 result; fix confirmed blocking; ledger the rest; round 2
+  only per the bounded cap; then GRANT + stamp + step 2 (G11-SELL goldens on the G2-DIST
+  host, the same blind-adjudication machinery as #8). A concurrently
   running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
   stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
   Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
