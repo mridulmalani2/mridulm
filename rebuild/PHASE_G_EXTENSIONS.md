@@ -187,11 +187,11 @@ hand-kept list of what to check, assume it already has a hole.
 | 1 | A | ✅ **DONE 2026-07-25** — **Interim distributions + cash trap** | Unlocks DPI/RVPI/TVPI + payback properly (ILPA defs from DR-2); the feared same-year cycle DISSOLVED: §3.7's pro-forma test is linear in the payment, so rp_max has a closed form and the no-solver rule holds (SPEC v1.1.0 §5). Shipped as SPEC v1.1.0/v1.1.1 + goldens G2-DIST / G3-DIST / G2-DIST-D + engine + UI |
 | 2 | **B** | **Quarter-stitched LTM** | FY + YTD − prior-YTD, Q4 = FY − 9M, 52/53-week fixtures; FPI stays FY with staleness badge. DATA-SIDE: computes a more-current LTM fact the engine consumes. Admission ticket = EMPTY git-diff over the engine arithmetic path (NOT golden byte-identity — that is necessary-secondary). Adjudicate the STITCH with a different-language reference derivation + two passes + a CI regeneration gate (the DERIVATION.md method) |
 | 3 | A | ✅ **DONE 2026-08-08** — **Fund/LP overlay** | Net-to-LP after fees/carry (European/American), reuses old fundReturns spec knowledge; feeds a fourth return row clearly labelled fund-level |
-| 4 | B | 🔄 **IN FLIGHT 2026-08-09** — **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |
+| 4 | B | ✅ **DONE 2026-08-09** (PR #120, SPEC v1.6.0 §21) — **Reality check, done right** | Only now: comps from a real source (FMP/Damodaran per old roadmap 2C), sector bands with citations, no hardcoded thresholds; extends the D5 trading anchor |
 | 5 | A | ✅ **DONE 2026-07-26** — **Refinancing events** | Repricing, premium, extend; OID/DFC write-off interplay already spec'd in §7/§9 |
 | 6 | A | ✅ **DONE 2026-08-09** — **PIK toggle (per-year election)** | Extends the v1 fixed PIK note; AHYDO disclosure from DR-3.4 (changes the §4 PIK accrual path ⇒ engine arithmetic) |
 | 7 | A | **Partial exits / IPO selldown** | Interacts with MIP cap (SPEC §10 already forward-compatible) |
-| 8 | A | **MIP ratchets + sweet equity** | Sweet equity as a REAL strip structure (institutional loan notes + ordinaries) — the v1 promote stays separate; never blend the two instruments |
+| 8 | A | 🔄 **IN FLIGHT 2026-08-09** (SPEC v1.7.0 §22; the DR-4 mezzanine-warrant item pulled in at owner scope decision) — **MIP ratchets + sweet equity** | Sweet equity as a REAL strip structure (institutional loan notes + ordinaries) — the v1 promote stays separate; never blend the two instruments |
 | 9 | A | **Add-on acquisitions** | The old engine's deepest wound (debt discarded, scenario bases diverged): spec must state add-on debt enters the SAME waterfall, scenario/sensitivity bases include add-ons by construction (single code path guarantees it) |
 | 10 | **B/A** | **Market-data suggestions** | FRED SOFR curve + spreads by rating → SUGGESTED (market) badge tier goes live. The suggestion VALUES are Tier B (data-side). **But a forward base-rate path into §4 interest is Tier A** and MUST be a separate PR gated as full Tier A (golden extension + accuracy audit) — static rates are golden-uncovered, so byte-identity would hide it. Per-changed-number decomposition, not one B stamp |
 | 11 | **B** | **Covenant step-downs / springing** | A step-down SCHEDULE and the springing trigger are DATA the engine consumes to decide a breach STATE that is then displayed — not pure exposure. No golden trips a covenant (G5 is "no breach"), so this is the un-disprovable golden-uncovered case: it must PROVE source-containment (empty engine-arithmetic diff) and mutation-test the displayed breach label, or escalate |
@@ -211,8 +211,48 @@ Recorded so every spec deferral has a tracked re-entry path (verifier finding, 2
 - **Actual/360 day-count gross-up per tranche** — SPEC §4 v2 refinement (~1.0–1.4% interest
   understatement disclosed meanwhile).
 - **Transaction-cost 70/30 success-fee split** (Rev. Proc. 2011-29) — SPEC §6 v2 refinement.
-- **Mezzanine warrants / equity kicker** (2–8% of equity — DR-4) — belongs with backlog #8
-  (sweet equity/strips).
+- ~~**Mezzanine warrants / equity kicker** (2–8% of equity — DR-4)~~ — PULLED INTO backlog #8
+  (sweet equity/strips) at the owner's scope decision 2026-08-09; specified as SPEC §22.6.
+
+## Sign-off exit criterion — BOUNDED [amended 2026-08-12, owner-approved]
+
+**The problem this fixes, measured on backlog #8.** §22's spec amendment ran **TEN** hostile
+sign-off rounds. Rounds 1–4 found 23 real defects — worth every token. Rounds 5–7 found ~10,
+**most of them inside a prose linter the author invented**, which by its own ledger caught
+**ZERO** §22 defects and **OCCASIONED THREE**. By round 10 the arithmetic and contracts lenses
+both GRANTED with zero findings while composition and coherence still returned
+prose-synchronisation defects.
+
+**Root cause:** reviewers were told to "default REFUSE" against a 908-line prose section with
+**no definition of GRANTED**. Against prose that long a hostile reader can always find
+something, so the loop had no exit by construction. That is an authoring error, not a reviewer
+error, and it is what this clause removes.
+
+**THE RULE. A finding is BLOCKING if and only if it would:**
+- (a) change a computed NUMBER, or
+- (b) break a gate (`tsc` / `vitest` / `build` / a committed test), or
+- (c) make a fixture or mutant VACUOUS — i.e. it cannot fail, or
+- (d) state something FALSE about committed code or a committed artifact, or
+- (e) leave a REQUIRED output undefined on a reachable path.
+
+Everything else — wording, cross-references, consistency between prose homes, stale narration,
+guard incompleteness — is a **LEDGER** item. Ledger items are recorded in the feature's
+`rebuild/G*_LEDGER.md`, fixed in ONE pass before the feature's conformance review, and **NEVER
+block a step**. A reviewer that returns only ledger items has GRANTED.
+
+**Round cap.** TWO review rounds per step. A third only if round 2 produced a finding under
+(a)–(e). If a third round ALSO produces one, STOP and escalate to the owner — three rounds of
+number-moving defects in one step means the DESIGN is wrong, not the prose.
+
+**Where accuracy actually lives.** The 100%-accuracy guarantee is defended by the GOLDENS
+(step 2: a different-language reference derivation plus two independent blind adjudications)
+and the ENGINE MUTANTS (step 3: documented mutants run RED and reverted), not by spec prose
+being unimprovable. **A spec review that has stopped moving numbers has stopped protecting
+accuracy** — it is then consuming budget that steps 2 and 3 need.
+
+**Corollary — do not build governance tooling mid-feature.** The template asks for a spec
+amendment and a hostile sign-off. A linter, guard or meta-check invented during a feature is
+out of scope; if one seems necessary, ledger it and raise it with the owner between features.
 
 ## Standing rules
 - A feature that would add a second calculation path for an existing number is rejected by
