@@ -102,17 +102,24 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   ZERO movement over 4,977 leaves; engine zero-columns added so gates stay green, 698/698);
   BOTH blind adjudication passes SIGNED, AGREE, zero mismatches, identical full-precision
   internals across rationals vs decimal (DERIVATION.md §22 record).
-- **#8 step 3 (engine) NEARLY COMPLETE 2026-08-14** (branch @ `c8d40de`): §22 implemented
-  across the CODE-HOME modules (`3255395` — pipeline in exit.ts, stripInterimSplit in
-  sequence.ts, the single share predicate in facade.ts, §22.3 gates, equity_strip,
-  five-term §14.9(b)/§14.16, loan_notes_unredeemed WARN); engine reproduces BOTH
-  adjudicated goldens + all §22.13 (i)–(xii) directed fixtures (vitest **717/717**);
-  15 documented mutants ALL RED and reverted byte-identically (`rebuild/G10_STEP3_MUTANTS.md`).
-  **Outstanding for step 3: the hostile accuracy audit** (workflow wf_a32db2cb-385 in
-  flight at last save) — if it returns only ledger items, step 3 is done; fix any confirmed
-  blocking finding first. Then step 4 (UI: input surface + output surface + label/provenance
-  mutation tests + the §15 row on BOTH methodology surfaces incl. `excelExport.ts` — see
-  G10_LEDGER L1–L12 and M10's Excel S&U obligation).
+- **#8 step 3 (engine) COMPLETE 2026-08-14** (branch @ `2f50836`): §22 implemented across
+  the CODE-HOME modules (`3255395`); engine reproduces BOTH adjudicated goldens + §22.13
+  (i)–(xiv) directed fixtures; 19 documented mutants ALL RED, reverted byte-identically
+  (`rebuild/G10_STEP3_MUTANTS.md`). The hostile accuracy audit REFUSED with 2 blocking
+  (skeptic-confirmed) — BOTH FIXED in-step (`2f50836`): the §22.3(vi) sensitivity-grid
+  pre-test (null cell, single-condition `stripPlugRejection` home) and the
+  `loan_notes_unredeemed` emission coverage (±band pinned). Audit ledger L13–L18 recorded.
+  vitest **719/719**.
+- **Next for #8: step 4 (UI)** — input surface at the Advanced tier
+  (sweet_equity/warrant/mip.ratchet in `components/deal-engine/v2/AssumptionsPanel.tsx`;
+  suggestion layer proposes NONE, badge TEMPLATE/YOU per §16); output surface reading
+  `equity_strip` (never recomputing — the ONE sanctioned derivation is
+  `sponsor_equity − loan_notes_subscribed`); label/value-provenance MUTATION tests on every
+  displayed/relabelled field; the §15 disclosure row on BOTH methodology surfaces (the
+  React table AND `lib/engine2/excelExport.ts`), plus M10's Excel S&U obligation
+  (`Management subscription (sweet equity)` row folded into Equity/Total capitalization).
+  Then step 5 (conformance + the three-issuer E-gate walkthrough), step 6 (ledger pass
+  L1–L18 in one commit), step 7 (merge PR #121 with a MERGE COMMIT).
 
 ### Backlog — 12 items, 5 merged
 
