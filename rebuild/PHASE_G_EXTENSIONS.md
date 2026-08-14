@@ -214,6 +214,46 @@ Recorded so every spec deferral has a tracked re-entry path (verifier finding, 2
 - ~~**Mezzanine warrants / equity kicker** (2–8% of equity — DR-4)~~ — PULLED INTO backlog #8
   (sweet equity/strips) at the owner's scope decision 2026-08-09; specified as SPEC §22.6.
 
+## Sign-off exit criterion — BOUNDED [amended 2026-08-12, owner-approved]
+
+**The problem this fixes, measured on backlog #8.** §22's spec amendment ran **TEN** hostile
+sign-off rounds. Rounds 1–4 found 23 real defects — worth every token. Rounds 5–7 found ~10,
+**most of them inside a prose linter the author invented**, which by its own ledger caught
+**ZERO** §22 defects and **OCCASIONED THREE**. By round 10 the arithmetic and contracts lenses
+both GRANTED with zero findings while composition and coherence still returned
+prose-synchronisation defects.
+
+**Root cause:** reviewers were told to "default REFUSE" against a 908-line prose section with
+**no definition of GRANTED**. Against prose that long a hostile reader can always find
+something, so the loop had no exit by construction. That is an authoring error, not a reviewer
+error, and it is what this clause removes.
+
+**THE RULE. A finding is BLOCKING if and only if it would:**
+- (a) change a computed NUMBER, or
+- (b) break a gate (`tsc` / `vitest` / `build` / a committed test), or
+- (c) make a fixture or mutant VACUOUS — i.e. it cannot fail, or
+- (d) state something FALSE about committed code or a committed artifact, or
+- (e) leave a REQUIRED output undefined on a reachable path.
+
+Everything else — wording, cross-references, consistency between prose homes, stale narration,
+guard incompleteness — is a **LEDGER** item. Ledger items are recorded in the feature's
+`rebuild/G*_LEDGER.md`, fixed in ONE pass before the feature's conformance review, and **NEVER
+block a step**. A reviewer that returns only ledger items has GRANTED.
+
+**Round cap.** TWO review rounds per step. A third only if round 2 produced a finding under
+(a)–(e). If a third round ALSO produces one, STOP and escalate to the owner — three rounds of
+number-moving defects in one step means the DESIGN is wrong, not the prose.
+
+**Where accuracy actually lives.** The 100%-accuracy guarantee is defended by the GOLDENS
+(step 2: a different-language reference derivation plus two independent blind adjudications)
+and the ENGINE MUTANTS (step 3: documented mutants run RED and reverted), not by spec prose
+being unimprovable. **A spec review that has stopped moving numbers has stopped protecting
+accuracy** — it is then consuming budget that steps 2 and 3 need.
+
+**Corollary — do not build governance tooling mid-feature.** The template asks for a spec
+amendment and a hostile sign-off. A linter, guard or meta-check invented during a feature is
+out of scope; if one seems necessary, ledger it and raise it with the owner between features.
+
 ## Standing rules
 - A feature that would add a second calculation path for an existing number is rejected by
   construction — it must flow through `runModel`.
