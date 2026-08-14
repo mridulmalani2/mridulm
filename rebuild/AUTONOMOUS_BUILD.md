@@ -110,16 +110,19 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   pre-test (null cell, single-condition `stripPlugRejection` home) and the
   `loan_notes_unredeemed` emission coverage (±band pinned). Audit ledger L13–L18 recorded.
   vitest **719/719**.
-- **Next for #8: step 4 (UI)** — input surface at the Advanced tier
-  (sweet_equity/warrant/mip.ratchet in `components/deal-engine/v2/AssumptionsPanel.tsx`;
-  suggestion layer proposes NONE, badge TEMPLATE/YOU per §16); output surface reading
-  `equity_strip` (never recomputing — the ONE sanctioned derivation is
-  `sponsor_equity − loan_notes_subscribed`); label/value-provenance MUTATION tests on every
-  displayed/relabelled field; the §15 disclosure row on BOTH methodology surfaces (the
-  React table AND `lib/engine2/excelExport.ts`), plus M10's Excel S&U obligation
-  (`Management subscription (sweet equity)` row folded into Equity/Total capitalization).
-  Then step 5 (conformance + the three-issuer E-gate walkthrough), step 6 (ledger pass
-  L1–L18 in one commit), step 7 (merge PR #121 with a MERGE COMMIT).
+- **#8 step 4 (UI) COMPLETE 2026-08-14** (branch @ `ba002df`): Advanced-tier editors for
+  sweet_equity/warrant/mip.ratchet (strip DROPS the promote — §22.3(i) structural in the
+  editor); the EquityStrip Returns block (named fields only, §22.10 absent-when-off, the
+  sanctioned derivation labelled, basis-labelled tier count); §15 row on BOTH methodology
+  surfaces; M10's Excel S&U obligations (subscription row + Equity/Total-cap fold with
+  basis-stating labels). 9 new display tests; 6 display-provenance mutants ALL RED
+  (G10_STEP3_MUTANTS.md). vitest **728/728**.
+- **Next for #8: step 5 (conformance + walkthrough)** — adversarial review of the FULL
+  branch DIFF vs main (main...claude/deal-engine-exits-mip-5ee40a) + the Tier-A choice,
+  bounded rule; then the three-issuer E-gate walkthrough (Apple CIK 320193 / SAP CIK
+  1000184 / Vinci via ESEF, through the PRODUCTION proxy — record
+  rebuild/G10_SWEET_WALKTHROUGH.md). Then step 6 (ledger pass L1–L18 in one commit),
+  step 7 (merge PR #121 with a MERGE COMMIT, verify main CI, update memory + STATE).
 
 ### Backlog — 12 items, 5 merged
 
