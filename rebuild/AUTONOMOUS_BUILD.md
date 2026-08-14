@@ -26,7 +26,7 @@ git rev-parse --show-toplevel && git log --oneline -3 && git status -sb
 
 Then install and verify the gates before touching anything:
 `npm ci` (or `npm install`) → `npx tsc --noEmit` → `npx vitest run` → `npm run build`.
-Expected: **686/686 on `main`**, **689/689 on the #8 branch**. If the numbers differ, STOP and
+Expected: **731 passed + 3 live-skipped on `main`** (the 3 are the opt-in live walkthrough). If the numbers differ, STOP and
 find out why before writing code — a moved baseline is the first thing to explain, never to
 absorb.
 
@@ -86,45 +86,24 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   `.claude/worktrees/`; in a cloud session it is a fresh clone.
 - **main** @ `881b38b` (= 64625fe + PR #122, the bounded criterion + this runbook), SPEC
   v1.6.0 on main, vitest **686/686**.
-- **In flight:** backlog **#8** (sweet equity strip + MIP ratchets + warrants) = SPEC v1.7.0
-  §22, branch `claude/deal-engine-exits-mip-5ee40a`, **DRAFT PR #121**, vitest **689/689**
-  (the +3 are `tests/governance-spec-single-home.test.ts`).
-- **#8 progress: step 1 of 5 (spec) SIGNED 2026-08-14 at round 11** under the bounded rule
-  (branch @ `0f431c4`): the parked cosmetic stash was applied+dropped (`a6897a5` — two
-  conflicts resolved in favor of the round-10 fixes), all 15 round-10 minors dispositioned
-  (`0398fb3`, six were already fixed by 6b51bfb), and a 3-lens workflow
-  (closure/composition/coherence) GRANTED with ZERO blocking; SPEC header bumped to v1.7.0,
-  grant + fingerprint stamped in the §22 header and changelog row.
-- **Open for #8:** `rebuild/G10_LEDGER.md` items L1–L12 — fix in ONE pass at step 6, never
-  blocking. `G10_ROUND10_OPEN_MINORS.md` is superseded.
-- **#8 step 2 (goldens) COMPLETE 2026-08-14** (branch @ `9bea84f`): spec_calc.py carries the
-  §22 reference (c0fcb52 — every §22.12 closed form to the digit; 12-golden shape change with
-  ZERO movement over 4,977 leaves; engine zero-columns added so gates stay green, 698/698);
-  BOTH blind adjudication passes SIGNED, AGREE, zero mismatches, identical full-precision
-  internals across rationals vs decimal (DERIVATION.md §22 record).
-- **#8 step 3 (engine) COMPLETE 2026-08-14** (branch @ `2f50836`): §22 implemented across
-  the CODE-HOME modules (`3255395`); engine reproduces BOTH adjudicated goldens + §22.13
-  (i)–(xii) + audit-commissioned (xiii)/(xiv) directed fixtures; 19 documented mutants ALL RED, reverted byte-identically
-  (`rebuild/G10_STEP3_MUTANTS.md`). The hostile accuracy audit REFUSED with 2 blocking
-  (skeptic-confirmed) — BOTH FIXED in-step (`2f50836`): the §22.3(vi) sensitivity-grid
-  pre-test (null cell, single-condition `stripPlugRejection` home) and the
-  `loan_notes_unredeemed` emission coverage (±band pinned). Audit ledger L13–L18 recorded.
-  vitest **719/719**.
-- **#8 step 4 (UI) COMPLETE 2026-08-14** (branch @ `ba002df`): Advanced-tier editors for
-  sweet_equity/warrant/mip.ratchet (strip DROPS the promote — §22.3(i) structural in the
-  editor); the EquityStrip Returns block (named fields only, §22.10 absent-when-off, the
-  sanctioned derivation labelled, basis-labelled tier count); §15 row on BOTH methodology
-  surfaces; M10's Excel S&U obligations (subscription row + Equity/Total-cap fold with
-  basis-stating labels). 9 new display tests; 6 display-provenance mutants ALL RED
-  (G10_STEP3_MUTANTS.md). vitest **728/728**.
-- **Next for #8: step 5 (conformance + walkthrough)** — adversarial review of the FULL
-  branch DIFF vs main (main...claude/deal-engine-exits-mip-5ee40a) + the Tier-A choice,
-  bounded rule; then the three-issuer E-gate walkthrough (Apple CIK 320193 / SAP CIK
-  1000184 / Vinci via ESEF, through the PRODUCTION proxy — record
-  rebuild/G10_SWEET_WALKTHROUGH.md). Then step 6 (ledger pass L1–L18 in one commit),
-  step 7 (merge PR #121 with a MERGE COMMIT, verify main CI, update memory + STATE).
+- **#8 MERGED 2026-08-14 — PR #121, main @ `353e52a`, SPEC v1.7.0, vitest 731 passed +
+  3 live-skipped (53 files).** The full bounded Tier-A ritual ran end-to-end in one day:
+  spec SIGNED r11 (3 lenses, 0 blocking; fingerprint 0398fb3) → goldens G9-SWEET/G10-RATCHET
+  with TWO blind adjudication passes (zero mismatches; DERIVATION.md §22) → engine (both
+  goldens reproduced; §22.13 fixtures; 19 mutants RED/reverted; accuracy audit's 2 blocking
+  fixed in-step) → UI (both §15 surfaces; M10 Excel; 8 display mutants) → conformance
+  (TIER_A_CORRECT; 1 blocking closed: the M10 row on the S&U WORKSHEET, footing asserted)
+  + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
+  ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
+  `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
+- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23), CLAIMED by the local
+  session 2026-08-14 ~16:40 IST on branch `claude/partial-exits-spec`.** A concurrently
+  running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
+  stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
+  Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
+  continue it; do not restart #7 from scratch.
 
-### Backlog — 12 items, 5 merged
+### Backlog — 12 items, 6 merged
 
 | # | Tier | Feature | State |
 |---|---|---|---|
@@ -133,8 +112,8 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 | 4 | B | Sector comps §21 | ✅ merged (PR #120) |
 | 5 | A | Refinancing §18 | ✅ merged |
 | 6 | A | PIK toggle §20 | ✅ merged |
-| **8** | **A** | **Sweet equity + ratchets + warrants §22** | 🔄 **step 1 of 5** |
-| **7** | **A** | **Partial exits / IPO selldown** | next |
+| 8 | A | Sweet equity + ratchets + warrants §22 | ✅ merged (PR #121) |
+| **7** | **A** | **Partial exits / IPO selldown** | 🔄 **step 1 (spec)** |
 | **9** | **A** | **Add-on acquisitions** | then |
 | 2 | B | Quarter-stitched LTM | then |
 | 10 | B/A | Market-data suggestions | then |
