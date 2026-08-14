@@ -159,6 +159,72 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
           draws continue annually.
         </p>
       )}
+      <EquityStrip o={o} ccy={ccy} />
+    </div>
+  );
+};
+
+/** §22 [v1.7.0] — the sweet-equity strip / warrant block. Exported for the directed display
+ *  test (label/value provenance). Rendered ONLY when `equity_strip` is non-null (§22.10's
+ *  biconditional — ABSENT when both instruments are off, never a zero table). Every cell
+ *  READS a named EquityStripBlock field; the ONE sanctioned presentational derivation is
+ *  the institutional ordinary subscription = sponsor_equity − loan_notes_subscribed
+ *  (§22.10 — exact by §22.2's split, never a second calculation path). Labels state their
+ *  BASIS per the §9 naming rule: the tier count is the §22.5 SWEET-EQUITY ratchet's (the
+ *  §22.4 promote ratchet emits no count), and the ratchet MOIC is the REALIZED figure,
+ *  never the headline. */
+export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  const es = o.equity_strip;
+  if (!es) return null;
+  const sw = o.assumptions.sweet_equity;
+  const rows: [string, string][] = [
+    ...(sw
+      ? ([
+          ['Loan notes subscribed (institutional strip)', money(es.loan_notes_subscribed, ccy)],
+          ['Institutional ordinaries subscribed (= sponsor equity − loan notes)', money(o.sources_uses.sponsor_equity - es.loan_notes_subscribed, ccy)],
+          ['Management subscription (a §2 source)', money(o.sources_uses.management_subscription, ccy)],
+          ['Loan notes accrued at exit (pre-redemption)', money(es.loan_notes_accrued_balance, ccy)],
+          ['Loan notes redeemed at exit', money(es.loan_notes_redeemed, ccy)],
+        ] as [string, string][])
+      : []),
+    ['Ordinary pot (pre-warrant)', money(es.ordinary_pot_pre_warrant, ccy)],
+    ['Warrant exercised', es.warrant_exercised ? 'YES' : 'no'],
+    ...(es.warrant_exercised
+      ? ([
+          ['Warrant strike paid in', money(es.warrant_strike_paid, ccy)],
+          ['Warrant payout (net of strike)', money(es.warrant_payout_net, ccy)],
+        ] as [string, string][])
+      : []),
+    ['Ordinary pot (post-warrant, signed)', money(es.ordinary_pot, ccy)],
+    ...(sw
+      ? ([
+          ['Management ordinary share at exit', money(es.management_ordinary_share, ccy)],
+          ['Institutional ordinary share at exit', money(es.institution_ordinary_share, ccy)],
+          ['Sweet-equity ratchet tiers reached (§22.5 basis — the promote ratchet emits no count)', String(es.ratchet_tiers_reached)],
+          ['Management effective ordinary % (N/A at a non-positive pot)', es.management_effective_ordinary_pct === null ? 'N/A' : pct(es.management_effective_ordinary_pct)],
+          ['Institution MOIC at ratchet (REALIZED — the figure the ratchet is struck on)', multiple(es.institution_moic_at_ratchet)],
+        ] as [string, string][])
+      : []),
+  ];
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>
+        {sw ? 'Sweet equity strip' : 'Warrant'} (SPEC §22)
+      </p>
+      <Table head={['', '']}>
+        {rows.map(([l, v]) => (
+          <tr key={l} style={rowB}>
+            <td className="px-2 py-1">{l}</td>
+            <td className={td}>{v}</td>
+          </tr>
+        ))}
+      </Table>
+      <p className="text-[10px] mt-1" style={label}>
+        Loan notes are EQUITY (§22.2) — outside §11 leverage/ICR/FCCR/DSCR and the §3 waterfall, accruing
+        only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC — when the final sponsor flow is negative the headline MOIC exceeds the realized one (§9), and the ratchet reads the realized figure. ' : ''}
+        {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value (§22.6). ' : ''}
+        Management&apos;s subscription reduces the sponsor&apos;s own cheque (§2).
+      </p>
     </div>
   );
 };
@@ -457,6 +523,8 @@ const DISCLOSURES: [string, string][] = [
   ['Sector comps band (§21)', "public-market TRADING multiples, NOT buyout-entry multiples — control premia, synergies, leverage and illiquidity all sit between the two, and NO ordering against your entry multiple is asserted; each figure is an INDUSTRY AGGREGATE (aggregate EV ÷ aggregate EBITDA), not a median firm, on data trailing through the prior year's Q3; annual vintage, stated per band, from a COMMITTED dataset refreshed manually (no live feed); positive-EBITDA block only, with NA and non-positive values excluded; the displayed firm count is the industry POPULATION, which includes firms outside the ratio's own aggregate; the sector map is a stated convention keyed on the numeric SIC — a 1987 taxonomy recording PRIMARY activity, so a conglomerate can sit in a bucket its business has outgrown; financials are NOT uniformly unavailable (the US bank/broker rows are NA and drop out, leaving a band set by asset managers, while Europe and India enter through BROKER multiples only — their bank rows are NA too — and only Japan publishes an actual bank multiple); a band may collapse to a point under a dominant constituent; region is inferred from reporting currency, a proxy for listing market"],
   // §20.8 [v1.5.0]: the PIK-toggle simplifications — the SPEC §15 sentence mirrored here
   ['PIK toggle (§20)', 'per-year WHOLE-coupon election only (no partial/50-50 elections — v2); elections are frozen across scenarios; PIK is deducted as ACCRUED, with AHYDO (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the disqualified-portion disallowance are NOT modelled; qualifying notes carry the structural ahydo_shape warning (maturity > 5y + an accruing year), whose yield leg is untested (it needs the monthly AFR) and whose significant-OID leg is proxied, so the flag deliberately over-fires; PIK notes remain non-refinanceable and sweep-exempt by default'],
+  // §22.11 [v1.7.0]: the sweet-equity/ratchet/warrant simplifications — the SPEC §15 sentence mirrored here
+  ['Sweet equity / ratchets / warrants (§22)', "the institutional loan notes are EQUITY — outside §11 leverage/ICR/FCCR/DSCR, outside the §3 waterfall and the §9 debt payoff, with NO interest deduction (jurisdiction-specific, so v1 claims none — NEVER anti-conservative: neutral only where §163(j) binds every year, lower-return elsewhere), accruing only, never cash-pay, no year-0 accretion; ratchets are MARGINAL top-slice step functions on MOIC struck at EXIT ONLY, never cliffs (a cliff on a realized-return hurdle has NO SOLUTION over an interval of exit values), a value exactly ON a tier threshold takes the LOWER tier (strict >), and IRR-based ratchets are deferred to v2; the promote ratchet and the sweet-equity ratchet are struck on DELIBERATELY DIFFERENT bases (total pre-promote proceeds vs the institution's own realized value); the strip, the ratchet and the warrant are FROZEN across scenarios; MANAGEMENT'S SUBSCRIPTION REDUCES THE SPONSOR'S OWN CHEQUE (a §2 source line); a promote and a strip may NOT coexist (the DR-2 double-count — an input-gate rejection) and a strip may not coexist with a rollover in v1; when exit equity does not cover the accreted notes the ordinary pot is zero, management's sweet equity is worthless and the loan_notes_unredeemed warning fires — and when the FINAL SPONSOR FLOW is negative the HEADLINE sponsor MOIC exceeds the realized one (returns sums positive inflows only — a pre-existing convention §22 surfaces; the ratchet is struck on the REALIZED figure); AT MOST ONE warrant, rationally exercised on full dilution with the strike paid in, NOT exercised exactly at-the-money, not participating in interim distributions, its tranche association a LABEL only; the subscription price and the ordinary % are INDEPENDENT inputs — the model never checks that the terms are actually sweet"],
 ];
 
 export const Methodology: React.FC = () => (

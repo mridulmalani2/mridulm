@@ -50,3 +50,14 @@ Second process note: M17's FIRST run repeated the M4 empty-string-revert misfire
 deletion form — caught again by the hash/count fence, restored by string-replace, and
 re-run as a guard TOGGLE (`if (false && …)`), which reverts symmetrically. Deletion
 mutants are now always expressed as toggles.
+
+## Step-4 display-provenance mutants (2026-08-14) — all RED, byte-identical reverts
+
+| # | Mutant | What REDs |
+|---|---|---|
+| D1 | EquityStrip net row shows GROSS (OutputTabs) | the value-provenance pin (7.50 vs 9.50) |
+| D2 | tier-count label drops its §22.5 basis (OutputTabs) | the basis-label pin (§9 naming rule) |
+| D3 | strip block rendered unconditionally (OutputTabs) | the §22.10 absent-when-off pin |
+| D4 | the React §15 row deleted (OutputTabs) | the methodology-row pin |
+| D5 | Excel Equity row drops the subscription fold (excelExport) | the M10 parity pin |
+| D6 | Excel derivation row reads the WRONG named field (redeemed for subscribed) | the sanctioned-derivation parity pin |

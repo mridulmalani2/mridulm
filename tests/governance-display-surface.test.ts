@@ -138,6 +138,30 @@ const ALLOWED_AGGREGATIONS: { file: string; snippet: string; why: string }[] = [
     snippet: 'Math.max(0, Math.floor((today.getTime() - endMs) / (30.44 * 86_400_000)))',
     why: 'a DATE formatter (months-elapsed for a staleness/"N months ago" label) — arithmetic on dates, not on any ModelOutput financial value; lib/format is the formatting-primitive layer where presentational math is expected',
   },
+  // §22 [v1.7.0] — four INPUT-editor clamps/defaults in the sweet-equity/warrant/ratchet
+  // editors: each acts on the USER'S TYPED VALUE (or seeds a tier-share default from the
+  // sibling assumption field) BEFORE it reaches the engine. No ModelOutput value is read,
+  // so no calculation path exists to duplicate.
+  {
+    file: 'components/deal-engine/v2/AssumptionsPanel.tsx',
+    snippet: "? [{ hurdle_moic: v, share_pct: a.mip!.ratchet?.[0]?.share_pct ?? Math.max(a.mip!.pool_pct, 0.25) }]",
+    why: '§22.4 ratchet-tier editor default: the seeded share must be ≥ the base pool (§22.3(iv) — a ratchet only ratchets up); input-side, reads assumptions only',
+  },
+  {
+    file: 'components/deal-engine/v2/AssumptionsPanel.tsx',
+    snippet: 'onCommit={numCommit((v) => withSweet({ management_subscription: Math.max(0, v) }))} />',
+    why: '§22.3 input clamp: a negative typed subscription is coerced to 0 (the §16 domain) before the engine sees it — input-side only',
+  },
+  {
+    file: 'components/deal-engine/v2/AssumptionsPanel.tsx',
+    snippet: "? [{ hurdle_moic: v, share_pct: sw.ratchet?.[0]?.share_pct ?? Math.max(sw.management_ordinary_pct, 0.15) }]",
+    why: '§22.5 ratchet-tier editor default: the seeded share must be ≥ the base share (§22.3(iv)); input-side, reads assumptions only',
+  },
+  {
+    file: 'components/deal-engine/v2/AssumptionsPanel.tsx',
+    snippet: "onCommit={numCommit((v) => [{ ...a, warrant: { ...a.warrant!, strike_total: Math.max(0, v) } }, ['warrant']])} />",
+    why: '§22.3(v) input clamp: a negative typed strike is coerced to 0 (the §16 domain) before the engine sees it — input-side only',
+  },
 ];
 
 /**

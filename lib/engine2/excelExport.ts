@@ -46,7 +46,9 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
   //    conventions.json presentation.summaryPanelOrder (§E2 DR-5 alignment):
   //    price & multiples → S&U → returns → capitalization → credit → FCF. The
   //    on-screen Summary tab is the returns-first dashboard VARIANT of the same data.
-  const capTotal = o.derived.total_debt_at_par + o.sources_uses.rollover_equity + o.sources_uses.sponsor_equity;
+  // §22.10/M10 [v1.7.0]: the subscription folds into Total capitalization (0 when the
+  // strip is off — the row is numerically identical to pre-v1.7.0 on every old deal).
+  const capTotal = o.derived.total_debt_at_par + o.sources_uses.rollover_equity + o.sources_uses.sponsor_equity + o.sources_uses.management_subscription;
   const entryMult = entryMultipleDisplay(o);
   sheetFromRows(wb, 'Summary', [`${o.facts.entity_name} — ${currency}m (R&P panel order)`, ''], [
     ['— PURCHASE PRICE & MULTIPLES —', null],
@@ -64,6 +66,11 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ['Total uses', o.sources_uses.total_uses],
     ['Debt at par', o.derived.total_debt_at_par],
     ['Sponsor equity (plug)', o.sources_uses.sponsor_equity],
+    // §22.10/M10 [v1.7.0]: the management subscription is a DISPLAYED §2 source entering
+    // total_sources; rendered only when the strip is ON (the §19 no-zero-row discipline).
+    ...(o.assumptions.sweet_equity !== null
+      ? [['Management subscription (sweet equity)', o.sources_uses.management_subscription] as Cell[]]
+      : []),
     ['— RETURNS —', null],
     ['Sponsor IRR', o.returns.sponsor_net.irr],
     ['Sponsor MOIC', o.returns.sponsor_net.moic],
@@ -78,9 +85,41 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
           ['LP paid-in (equity + fee draws)', o.fund.paid_in_total] as Cell[],
         ]
       : []),
+    // §22.10 [v1.7.0]: the strip/warrant block — ABSENT when both instruments are off
+    // (§22.10's biconditional; never a zero section). Every cell reads a NAMED
+    // EquityStripBlock field; the ONE sanctioned derivation is the institutional ordinary
+    // subscription = sponsor_equity − loan_notes_subscribed (§22.10). The tier count is
+    // labelled by its §22.5 basis (the §9 naming rule — the promote ratchet emits none).
+    ...(o.equity_strip !== null
+      ? [
+          ['— SWEET EQUITY / WARRANT (§22) —', null] as Cell[],
+          ...(o.assumptions.sweet_equity !== null
+            ? [
+                ['Loan notes subscribed (institutional strip)', o.equity_strip.loan_notes_subscribed] as Cell[],
+                ['Institutional ordinaries subscribed (= sponsor equity − loan notes)', o.sources_uses.sponsor_equity - o.equity_strip.loan_notes_subscribed] as Cell[],
+                ['Loan notes accrued at exit (pre-redemption)', o.equity_strip.loan_notes_accrued_balance] as Cell[],
+                ['Loan notes redeemed at exit', o.equity_strip.loan_notes_redeemed] as Cell[],
+              ]
+            : []),
+          ['Ordinary pot pre-warrant', o.equity_strip.ordinary_pot_pre_warrant] as Cell[],
+          [`Warrant exercised (${o.assumptions.warrant?.holder_label ?? 'no warrant'} — label only)`, o.equity_strip.warrant_exercised ? 'YES' : 'no'] as Cell[],
+          ['Warrant payout (net of strike)', o.equity_strip.warrant_payout_net] as Cell[],
+          ...(o.assumptions.sweet_equity !== null
+            ? [
+                ['Management ordinary share at exit', o.equity_strip.management_ordinary_share] as Cell[],
+                ['Institutional ordinary share at exit', o.equity_strip.institution_ordinary_share] as Cell[],
+                ['Sweet-equity ratchet tiers reached (§22.5 basis)', o.equity_strip.ratchet_tiers_reached] as Cell[],
+                ['Institution MOIC at ratchet (REALIZED figure)', o.equity_strip.institution_moic_at_ratchet] as Cell[],
+              ]
+            : []),
+        ]
+      : []),
     ['— CAPITALIZATION —', null],
     ...o.sources_uses.debt_at_par.map((d): Cell[] => [`${d.name} (x EBITDA · % of cap)`, d.amount]),
-    ['Equity (sponsor + rollover)', o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity],
+    // §22.10/M10 [v1.7.0]: the Equity line carries the subscription (§22.8's §8 rule) —
+    // labelled by its basis when the strip is ON, byte-identical to the old row when OFF.
+    [o.assumptions.sweet_equity !== null ? 'Equity (sponsor + rollover + mgmt subscription)' : 'Equity (sponsor + rollover)',
+      o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity + o.sources_uses.management_subscription],
     ['Total capitalization', capTotal],
     ['— CREDIT STATISTICS —', null],
     // §11 [v1.1.2]: entry is GROSS, final-year is NET — two different bases, so both are
@@ -194,6 +233,7 @@ export function buildEngine2Workbook(o: Engine2ModelOutput, currency: string): E
     ["Fund/LP overlay: fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs/NAV); no subscription line, no GP commitment, no clawback (nothing to claw back by construction); european = all-contributions hurdle + pref base, american = invested-capital base with NO fee-recovery tier; the §10 promote is NOT fund carry; the year-N fee draws BEFORE the final distribution", 'SPEC §19/§15'],
     ["Sector comps band: public-market TRADING multiples, NOT buyout-entry multiples (no ordering against your entry multiple is asserted); industry AGGREGATES (aggregate EV ÷ aggregate EBITDA), not median firms, trailing through the prior year's Q3; annual vintage from a COMMITTED dataset, refreshed manually (no live feed); positive-EBITDA block only, NA and non-positive excluded; the firm count is the industry POPULATION; the sector map is a stated convention keyed on the numeric SIC (primary activity only); financials are not uniformly unavailable; a band may collapse to a point; region inferred from reporting currency", 'SPEC §21/§15'],
     ['PIK toggle: per-year WHOLE-coupon election only (no partial/50-50 — v2); elections frozen across scenarios; PIK deducted as ACCRUED with AHYDO (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the disqualified-portion disallowance are NOT modelled; qualifying notes carry the structural ahydo_shape warning (maturity > 5y + an accruing year), yield leg untested (needs the monthly AFR) and significant-OID leg proxied, so it deliberately over-fires; PIK notes stay non-refinanceable and sweep-exempt by default', 'SPEC §20/§15'],
+    ["Sweet equity/ratchets/warrants: loan notes are EQUITY — outside §11 leverage, the §3 waterfall and the §9 payoff, NO interest deduction (never anti-conservative), accruing only, no year-0 accretion; ratchets are MARGINAL top-slice MOIC step functions struck at EXIT ONLY, never cliffs (no solution over an interval), exact-threshold takes the LOWER tier (strict >), IRR ratchets deferred; the two ratchets are struck on DIFFERENT bases (total proceeds vs the institution's own realized value); strip/ratchet/warrant frozen across scenarios; the subscription reduces the sponsor's own cheque (a §2 source); promote ∧ strip and strip ∧ rollover are input-gate rejections; an unredeemed accreted balance warns and zeroes the sweet layer; a negative final sponsor flow makes the HEADLINE MOIC exceed the realized one (the ratchet reads the realized figure); AT MOST ONE warrant, full dilution with strike paid in, not exercised at-the-money, non-participating, tranche association a label; subscription price and ordinary % are independent — sweetness is never checked", 'SPEC §22/§15'],
     [`Entry leverage is GROSS (debt at par ÷ ${entryMult.sizing_label} EBITDA — the quoted sizing basis); the Credit sheet is NET of cash. Different bases: entry and final-year leverage are NOT a single deleveraging series`, 'SPEC §11'],
     ['A model is a range, not a point — the sensitivity/scenario exhibits are the primary caveat mechanism', 'SPEC §15'],
   ], [null, null]);

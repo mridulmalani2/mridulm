@@ -162,7 +162,7 @@ const AssumptionsPanel: React.FC = () => {
       {/* ── Advanced (collapsed) ── */}
       <details className="mt-3">
         <summary className="text-[10px] tracking-widest uppercase cursor-pointer" style={labelStyle}>
-          Advanced — tax · fees · sweep · MIP · distributions · fund · PIK
+          Advanced — tax · fees · sweep · MIP · distributions · fund · PIK · sweet equity · warrant
         </summary>
         <div className="mt-2">
           <Row label="Tax rate" path="tax.rate">
@@ -181,6 +181,126 @@ const AssumptionsPanel: React.FC = () => {
             <NumInput value={a.mip ? toPctInput(a.mip.pool_pct) : ''} suffix="%"
               onCommit={pctCommit((v) => [{ ...a, mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0, ratchet: null } }, ['mip']])} />
           </Row>
+          {/* ── §22.4 [v1.7.0] MIP ratchet — Class B, Advanced tier ────────────────────
+              MARGINAL tier ABOVE the base hurdle on §10's own basis (one tier ≡ §10). The
+              suggestion layer proposes NONE (§16 — a negotiated term); fields start OFF and
+              wear YOU when touched. v1 UI edits ONE tier; the full array is on the
+              assumptions object for programmatic use (the §18 refi-editor precedent). */}
+          {a.mip && (
+            <Row label="MIP ratchet tier (hurdle ×)" path="mip.ratchet">
+              <NumInput value={a.mip.ratchet?.length ? num(a.mip.ratchet[0].hurdle_moic, 2) : ''} suffix="x"
+                onCommit={numCommit((v) => [{
+                  ...a,
+                  mip: {
+                    ...a.mip!,
+                    // §22.3(iii): the tier must sit STRICTLY above the base hurdle; a
+                    // non-positive or non-exceeding entry clears the ratchet (OFF).
+                    ratchet: v > a.mip!.hurdle_moic
+                      ? [{ hurdle_moic: v, share_pct: a.mip!.ratchet?.[0]?.share_pct ?? Math.max(a.mip!.pool_pct, 0.25) }]
+                      : null,
+                  },
+                }, ['mip.ratchet']])} />
+            </Row>
+          )}
+          {a.mip?.ratchet?.length ? (
+            <Row label="MIP ratchet share above tier" path="mip.ratchet">
+              <NumInput value={toPctInput(a.mip.ratchet[0].share_pct)} suffix="%"
+                onCommit={pctCommit((v) => [{
+                  ...a,
+                  mip: { ...a.mip!, ratchet: [{ ...a.mip!.ratchet![0], share_pct: v }] },
+                }, ['mip.ratchet']])} />
+            </Row>
+          ) : null}
+          {/* ── §22 [v1.7.0] sweet-equity strip — Class B, Advanced tier ───────────────
+              The UK/European management strip: institutional loan notes (EQUITY — outside
+              leverage, the waterfall and the §9 payoff, NO interest deduction) + ordinaries,
+              with management subscribing REAL money for a base ordinary share and an optional
+              MARGINAL ratchet on the INSTITUTION'S OWN realized MOIC (§22.5). The suggestion
+              layer proposes NO strip (§16 — a negotiated cap-table structure); the group
+              starts OFF (sweet_equity: null) and wears YOU when touched. Setting a strip
+              DROPS the promote — §22.3(i)'s DR-2 double-count rejection made structural in
+              the editor rather than surfaced as a Build error. */}
+          <Row label="Sweet equity (mgmt ordinary %)" path="sweet_equity">
+            <NumInput value={a.sweet_equity ? toPctInput(a.sweet_equity.management_ordinary_pct) : ''} suffix="%"
+              onCommit={pctCommit((v) => [{
+                ...a,
+                sweet_equity: v > 0
+                  ? {
+                      sponsor_ordinary_pct: a.sweet_equity?.sponsor_ordinary_pct ?? 0.10,
+                      loan_note_rate: a.sweet_equity?.loan_note_rate ?? 0.08,
+                      management_subscription: a.sweet_equity?.management_subscription ?? 0,
+                      management_ordinary_pct: v,
+                      ratchet: a.sweet_equity?.ratchet ?? null,
+                    }
+                  : null,
+                mip: v > 0 ? null : a.mip, // §22.3(i): a promote and a strip may not coexist
+              }, ['sweet_equity', ...(v > 0 && a.mip ? ['mip'] : [])]])} />
+          </Row>
+          {a.sweet_equity && (() => {
+            const sw = a.sweet_equity;
+            const withSweet = (over: Partial<NonNullable<DealAssumptions['sweet_equity']>>): [DealAssumptions, string[]] => [
+              { ...a, sweet_equity: { ...sw, ...over } },
+              ['sweet_equity'],
+            ];
+            return (
+              <>
+                <Row label="Strip ordinary share (institution)" path="sweet_equity">
+                  <NumInput value={toPctInput(sw.sponsor_ordinary_pct)} suffix="% of strip"
+                    onCommit={pctCommit((v) => withSweet({ sponsor_ordinary_pct: v }))} />
+                </Row>
+                <Row label="Loan-note rate (accruing)" path="sweet_equity">
+                  <NumInput value={toPctInput(sw.loan_note_rate)} suffix="%"
+                    onCommit={pctCommit((v) => withSweet({ loan_note_rate: v }))} />
+                </Row>
+                <Row label="Mgmt subscription" path="sweet_equity">
+                  <NumInput value={num(sw.management_subscription, 1)} suffix="m"
+                    onCommit={numCommit((v) => withSweet({ management_subscription: Math.max(0, v) }))} />
+                </Row>
+                <Row label="Sweet ratchet tier (hurdle ×)" path="sweet_equity.ratchet">
+                  <NumInput value={sw.ratchet?.length ? num(sw.ratchet[0].hurdle_moic, 2) : ''} suffix="x"
+                    onCommit={numCommit((v) => withSweet({
+                      ratchet: v > 0
+                        ? [{ hurdle_moic: v, share_pct: sw.ratchet?.[0]?.share_pct ?? Math.max(sw.management_ordinary_pct, 0.15) }]
+                        : null,
+                    }))} />
+                </Row>
+                {sw.ratchet?.length ? (
+                  <Row label="Sweet share above tier" path="sweet_equity.ratchet">
+                    <NumInput value={toPctInput(sw.ratchet[0].share_pct)} suffix="%"
+                      onCommit={pctCommit((v) => withSweet({ ratchet: [{ ...sw.ratchet![0], share_pct: v }] }))} />
+                  </Row>
+                ) : null}
+                <p className="text-[10px] text-right" style={labelStyle}>
+                  loan notes are EQUITY (§22.2) — outside leverage/ICR/FCCR/DSCR, no interest deduction; the ratchet
+                  is struck ONCE at exit on the institution&apos;s own realized MOIC (§22.5), marginal, never a cliff;
+                  a strip replaces the promote (§22.3) and needs a positive residual sponsor cheque
+                </p>
+              </>
+            );
+          })()}
+          {/* ── §22.6 [v1.7.0] warrant / equity kicker — Class B, Advanced tier ────────
+              SINGULAR by construction; settles at exit on FULL DILUTION with the strike paid
+              in; strict > at the money. The suggestion layer proposes NONE (§16); the label's
+              tranche association is a LABEL ONLY — no arithmetic depends on it (§22.11). */}
+          <Row label="Warrant (% of ordinary)" path="warrant">
+            <NumInput value={a.warrant ? toPctInput(a.warrant.pct_of_ordinary) : ''} suffix="%"
+              onCommit={pctCommit((v) => [{
+                ...a,
+                warrant: v > 0
+                  ? {
+                      holder_label: a.warrant?.holder_label ?? 'Warrant',
+                      pct_of_ordinary: v,
+                      strike_total: a.warrant?.strike_total ?? 0,
+                    }
+                  : null,
+              }, ['warrant']])} />
+          </Row>
+          {a.warrant && (
+            <Row label="Warrant strike (total)" path="warrant">
+              <NumInput value={num(a.warrant.strike_total, 1)} suffix="m"
+                onCommit={numCommit((v) => [{ ...a, warrant: { ...a.warrant!, strike_total: Math.max(0, v) } }, ['warrant']])} />
+            </Row>
+          )}
           {/* ── §3 step 7 / §3.7 [v1.1.0] interim distributions ──────────────────────
               Class B, Advanced tier. The suggestion layer proposes NEITHER field (§16): a
               distribution policy is a sponsor decision with no history or convention basis,
