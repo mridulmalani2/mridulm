@@ -179,7 +179,7 @@ const AssumptionsPanel: React.FC = () => {
           </Row>
           <Row label="MIP pool" path="mip">
             <NumInput value={a.mip ? toPctInput(a.mip.pool_pct) : ''} suffix="%"
-              onCommit={pctCommit((v) => [{ ...a, mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0 } }, ['mip']])} />
+              onCommit={pctCommit((v) => [{ ...a, mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0, ratchet: null } }, ['mip']])} />
           </Row>
           {/* ── §3 step 7 / §3.7 [v1.1.0] interim distributions ──────────────────────
               Class B, Advanced tier. The suggestion layer proposes NEITHER field (§16): a

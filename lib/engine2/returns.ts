@@ -54,6 +54,9 @@ function sponsorSideStream(cashflows: number[], invested: number): ReturnStreams
 export interface ReturnsInputs {
   sponsor_equity: number;
   rollover_equity: number;
+  /** §9 [v1.7.0]: the management subscription (0 with no strip) — enters the PRE-PROMOTE
+   *  stream's t=0 outflow and invested base only; the sponsor stream never carries it. */
+  management_subscription: number;
   enterprise_value: number;
   transaction_costs: number;
   /** Interim unlevered FCF per hold year (sequence.ts §9 run). */
@@ -62,6 +65,13 @@ export interface ReturnsInputs {
   distributions_paid: number[];
   exit: Pick<ExitBlock, 'sponsor_share' | 'exit_equity_pre_mip_total' | 'exit_ev' | 'exit_fees'>;
   hold_years: number;
+  /**
+   * §9/§22.7 [v1.7.0]: the sponsor's share of each paid distribution, SELECTED UPSTREAM by
+   * facade.ts's single predicate — `sponsorShareOfDistributions` (§9 pari-passu) when
+   * `sweet_equity` is null, the §22.7 institutional split when it is not. Passed in so this
+   * module never re-derives it (one number, one path). DPI and payback read THIS array.
+   */
+  sponsor_interim_shares: number[];
 }
 
 /**
@@ -87,7 +97,7 @@ export function buildReturns(
 ): ReturnStreams {
   const N = inputs.hold_years;
   const paid = inputs.distributions_paid;
-  const sponsorPaid = sponsorShareOfDistributions(paid, inputs.sponsor_equity, inputs.rollover_equity);
+  const sponsorPaid = inputs.sponsor_interim_shares;
 
   // §14.16: the year-N distribution and the exit settle in the SAME period-N flow.
   const sponsorCfs = [
@@ -95,7 +105,11 @@ export function buildReturns(
     ...sponsorPaid.slice(0, -1),
     inputs.exit.sponsor_share + (sponsorPaid[N - 1] ?? 0),
   ];
-  const prePromoteTotal = inputs.sponsor_equity + inputs.rollover_equity;
+  // §9 [v1.7.0]: pre_promote — the TOTAL pre-incentive equity stream — takes the
+  // management subscription into its t=0 outflow and invested base (byte-identical when
+  // the strip is null; management's sweet share settles INSIDE exit_equity_pre_mip_total).
+  const prePromoteTotal =
+    inputs.sponsor_equity + inputs.rollover_equity + inputs.management_subscription;
   const prePromoteCfs = [
     -prePromoteTotal,
     ...paid.slice(0, -1),

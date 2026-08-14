@@ -20,10 +20,10 @@ import { buildBridge, type Engine2ValueBridge } from './bridge';
 import { runCoherence } from './check';
 import { buildFundOverlay, validateFund } from './fund';
 import { buildCreditYear, type CreditYearInputs } from './credit';
-import { buildExit, monitoringTermination, type ExitInputs } from './exit';
+import { buildExitWaterfall, monitoringTermination, type ExitInputs } from './exit';
 import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './returns';
-import { runCore, type EngineCore } from './sequence';
-import type { CreditYear, DealAssumptions, DealFacts, ExitBlock, ModelOutput, ReturnStreams } from './types';
+import { runCore, stripInterimSplit, type EngineCore, type StripInterimSplit } from './sequence';
+import type { CreditYear, DealAssumptions, DealFacts, EquityStripBlock, ExitBlock, ModelOutput, ReturnStreams } from './types';
 
 export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2ValueBridge };
 
@@ -31,9 +31,43 @@ export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2
 // OFF the engine-arithmetic path, so a facade.ts diff still means "engine arithmetic changed"
 // (tier-governance sign-off round 4). facade.ts assembles the MODEL; display.ts formats it.
 
-/** Assemble the §9 exit block from the core (shared by facade and scenarios.ts). */
-export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock {
+/**
+ * §22.7 [v1.7.0]: THE single predicate selecting which interim share rule governs —
+ * `sponsorShareOfDistributions` (§9 pari-passu) whenever `sweet_equity` is null, the §22.7
+ * institutional split whenever it is not. The tautological partition (`sweet_equity ==
+ * null`) is what makes the two rules disjoint; all three consumers (returns.ts, fund.ts,
+ * the §12 bridge term) read THIS selection, so the engine never ships two competing
+ * definitions of one number.
+ */
+export function selectInterimShares(
+  core: EngineCore,
+  assumptions: DealAssumptions,
+): { shares: number[]; split: StripInterimSplit | null } {
+  if (assumptions.sweet_equity) {
+    const split = stripInterimSplit(
+      assumptions.sweet_equity,
+      core.sources_uses.sponsor_equity,
+      core.distributions_paid,
+    );
+    return { shares: split.institution_share, split };
+  }
+  return {
+    shares: sponsorShareOfDistributions(
+      core.distributions_paid,
+      core.sources_uses.sponsor_equity,
+      core.sources_uses.rollover_equity,
+    ),
+    split: null,
+  };
+}
+
+/** Assemble the §9/§22.7 exit waterfall from the core (shared by facade and scenarios.ts). */
+export function exitWaterfallFromCore(
+  core: EngineCore,
+  assumptions: DealAssumptions,
+): { exit: ExitBlock; equity_strip: EquityStripBlock | null; split: StripInterimSplit | null } {
   const N = assumptions.entry.hold_years;
+  const { split } = selectInterimShares(core, assumptions);
   const inputs: ExitInputs = {
     exit_year_ebitda_adj: core.operating[N - 1].ebitda_adj,
     last_growth: assumptions.operations.growth[N - 1],
@@ -47,8 +81,17 @@ export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): Ex
     // sides of the test are on a total-equity basis (§17 item (x): the two coincide only
     // at rollover 0, which is every golden, so a fixture cannot discriminate them).
     cumulative_distributions: core.distributions_paid.reduce((a, b) => a + b, 0),
+    // §22.2 [v1.7.0]: the loan-note walk's outputs, computed ONCE in sequence.ts.
+    loan_notes_subscribed: split?.loan_notes_subscribed ?? 0,
+    loan_note_balance_at_exit: split?.loan_note_balance_at_exit ?? 0,
+    institutional_interim_value: split ? split.institution_share.reduce((a, b) => a + b, 0) : 0,
   };
-  return buildExit(assumptions, inputs);
+  return { ...buildExitWaterfall(assumptions, inputs), split };
+}
+
+/** The ExitBlock alone (pre-v1.7.0 surface; same single computation path). */
+export function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock {
+  return exitWaterfallFromCore(core, assumptions).exit;
 }
 
 /** Assemble §9/§10 returns from core + exit (shared by facade and scenarios.ts). */
@@ -60,12 +103,14 @@ export function returnsFromCore(
   return buildReturns(assumptions, {
     sponsor_equity: core.sources_uses.sponsor_equity,
     rollover_equity: core.sources_uses.rollover_equity,
+    management_subscription: core.sources_uses.management_subscription,
     enterprise_value: core.derived.enterprise_value,
     transaction_costs: core.sources_uses.transaction_costs,
     unlevered_fcf: core.unlevered_fcf,
     distributions_paid: core.distributions_paid,
     exit,
     hold_years: assumptions.entry.hold_years,
+    sponsor_interim_shares: selectInterimShares(core, assumptions).shares,
   });
 }
 
@@ -92,9 +137,11 @@ export function creditFromCore(core: EngineCore, assumptions: DealAssumptions): 
  */
 export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine2ModelOutput {
   const core = runCore(facts, assumptions);
-  const exit = exitFromCore(core, assumptions);
+  const { exit, equity_strip } = exitWaterfallFromCore(core, assumptions);
   const returns = returnsFromCore(core, exit, assumptions);
   const credit = creditFromCore(core, assumptions);
+  // §22.7 [v1.7.0]: the ONE selected interim share array (see selectInterimShares).
+  const sponsorInterim = selectInterimShares(core, assumptions).shares;
 
   const monitoringAnnualByYear = core.build.years.map((y) => y.monitoring_fee);
   const gpFeeIncome = buildGpFeeIncome(
@@ -109,7 +156,12 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     entry_net_debt: core.derived.total_debt_at_par - core.sources_uses.cash_to_balance_sheet,
     entry_costs:
       core.sources_uses.transaction_costs + core.sources_uses.financing_fees + core.sources_uses.oid_funded,
-    entry_equity_pre_promote_total: core.sources_uses.sponsor_equity + core.sources_uses.rollover_equity,
+    // §12/§22.8 [v1.7.0]: every equity source counts — incl. the management subscription —
+    // which is what keeps §14.9(a)'s frictionless identity exact.
+    entry_equity_pre_promote_total:
+      core.sources_uses.sponsor_equity +
+      core.sources_uses.rollover_equity +
+      core.sources_uses.management_subscription,
     exit_multiple: assumptions.exit.multiple,
     exit_ebitda: exit.exit_ebitda_basis_value,
     exit_net_debt: exit.debt_payoff_at_par_plus_pik - exit.cash_at_exit,
@@ -125,11 +177,10 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     // same (smaller) paydown bar and is not sponsor money. Deliberately differs from §10's
     // hurdle base, which takes the total; §17 item (x) records that no rollover-0 fixture
     // can tell them apart, so this is the one place the distinction has to be written down.
-    interim_distributions_sponsor: sponsorShareOfDistributions(
-      core.distributions_paid,
-      core.sources_uses.sponsor_equity,
-      core.sources_uses.rollover_equity,
-    ).reduce((a, b) => a + b, 0),
+    interim_distributions_sponsor: sponsorInterim.reduce((a, b) => a + b, 0),
+    management_subscription: core.sources_uses.management_subscription,
+    management_ordinary_share: exit.management_ordinary_share,
+    warrant_payout_net: exit.warrant_payout_net,
   });
 
   // §19 [v1.4.0] — the fund-of-one overlay: a POST-ENGINE layer on sponsor-side outputs
@@ -140,6 +191,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
   if (assumptions.fund) {
     const fi = {
       distributions_paid: core.distributions_paid,
+      sponsor_interim_shares: sponsorInterim,
       exit_sponsor_share: exit.sponsor_share,
       sources_uses: core.sources_uses,
       gp_fee_income: gpFeeIncome,
@@ -159,6 +211,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     covenants: assumptions.covenants,
     ppe_seeded_at_zero: core.ppe_seeded_at_zero,
     tranches: core.tranches, // §18.8 [v1.3.1] refi no-op flag reads named TrancheYear fields
+    equity_strip, // §14.23(g) [v1.7.0] loan_notes_unredeemed WARN
   });
 
   const output: Engine2ModelOutput = {
@@ -179,6 +232,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     bridge,
     coherence,
     fund,
+    equity_strip, // §22.10 [v1.7.0]
     scenarios: null,
     sensitivity: null,
   };

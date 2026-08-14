@@ -183,14 +183,28 @@ export function sizeStructure(
 export function buildSourcesUses(
   entry: EntryDerivation,
   sized: SizedStructure,
-  assumptions: Pick<DealAssumptions, 'fees' | 'structure' | 'rollover_equity'>,
+  assumptions: Pick<DealAssumptions, 'fees' | 'structure' | 'rollover_equity' | 'sweet_equity'>,
 ): SourcesUses {
   const transactionCosts = assumptions.fees.transaction_pct_of_ev * entry.enterprise_value;
   const financingFees = assumptions.fees.financing_pct_of_commitments * sized.total_commitments;
   const cashToBs = assumptions.structure.min_cash;
   const totalUses =
     entry.enterprise_value + transactionCosts + financingFees + sized.oid_total + cashToBs;
-  const sponsorEquity = totalUses - sized.total_par - assumptions.rollover_equity;
+  // §22.8 [v1.7.0]: the management subscription is its OWN source line and the sponsor
+  // plug is the residual AFTER it (0 when the strip is null — byte-identical arithmetic).
+  const managementSubscription = assumptions.sweet_equity?.management_subscription ?? 0;
+  const sponsorEquity =
+    totalUses - sized.total_par - assumptions.rollover_equity - managementSubscription;
+  // §22.3(vi) [v1.7.0], deterministic at Build from the S&U identity: WITH a strip, a
+  // subscription leaving a non-positive plug makes the ordinary/loan-note split incoherent
+  // — a REJECTION here, never the post-run `negative_sponsor_equity` flag. UNQUALIFIED it
+  // would throw on runs v1 merely FLAGS (a committed insolvency test sits inside
+  // §14.23(f)'s domain), so the `sweet_equity` qualifier is LOAD-BEARING.
+  if (assumptions.sweet_equity && !(sponsorEquity > 0)) {
+    throw new RangeError(
+      `sourcesUses: the management subscription leaves a non-positive sponsor plug (${sponsorEquity.toFixed(4)}) — rejected at Build (SPEC §22.3(vi))`,
+    );
+  }
   return {
     enterprise_value: entry.enterprise_value,
     transaction_costs: transactionCosts,
@@ -201,9 +215,10 @@ export function buildSourcesUses(
     debt_at_par: sized.terms.map((t) => ({ name: t.assumption.name, amount: t.par })),
     rollover_equity: assumptions.rollover_equity,
     sponsor_equity: sponsorEquity,
-    // §22.10 [v1.7.0]: unconditional zero column until the §22 engine lands (step 3);
-    // it enters total_sources, which a 0.0 leaves unchanged.
-    management_subscription: 0.0,
-    total_sources: sized.total_par + assumptions.rollover_equity + sponsorEquity + 0.0,
+    // §22.10 [v1.7.0]: a DISPLAYED source entering total_sources — `sources ≡ uses`
+    // (§14.1, "always") is preserved BY CONSTRUCTION because the plug is the residual.
+    management_subscription: managementSubscription,
+    total_sources:
+      sized.total_par + assumptions.rollover_equity + sponsorEquity + managementSubscription,
   };
 }

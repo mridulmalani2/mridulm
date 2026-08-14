@@ -38,6 +38,7 @@ import {
   validateStructureForHold,
   type DebtState,
 } from './debt';
+import { validateSweetEquity } from './exit';
 import { openingTaxState, runTaxYear, runUnleveredTaxYear } from './tax';
 import { buildSourcesUses, deriveEntry, sizeStructure, type SizedStructure } from './sourcesUses';
 import type {
@@ -87,7 +88,8 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   validateStructureForHold(sized, N);
   validateRefinancing(sized, assumptions.structure.refinancing, N); // §16/§18 input-gate rejections
   validatePikElections(sized, N); // §16/§20.2 input-gate rejections [v1.5.0]
-  const su = buildSourcesUses(entry, sized, assumptions);
+  validateSweetEquity(assumptions); // §16/§22.3 input-gate rejections [v1.7.0]
+  const su = buildSourcesUses(entry, sized, assumptions); // carries the §22.3(vi) plug gate
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
   const costInputs: AmortizingCostInput[] = [
@@ -379,5 +381,57 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     sized,
     build,
     ppe_seeded_at_zero: opening.ppe_seeded_at_zero,
+  };
+}
+
+/**
+ * §22.7 [v1.7.0]: interim distributions under a strip — a §3-step-7 payment redeems accrued
+ * loan-note yield and then principal, and only the remainder reaches the ordinary class,
+ * split at the BASE share s₀ (the ratchet is struck ONCE, at exit — §10's committed rule
+ * applied to the second instrument). This is THE definition of the sponsor's interim share
+ * whenever `sweet_equity` is non-null; `sponsorShareOfDistributions` (§9 pari-passu)
+ * remains THE definition whenever it is null. The two are selected by a single predicate
+ * in facade.ts — that tautological partition is what keeps one number one path.
+ * No year-0 accretion: the first accretion lands in year 1 (§22.2).
+ */
+export interface StripInterimSplit {
+  /** LN[0] = (1 − sponsor_ordinary_pct) × the §2 plug (§22.2). */
+  loan_notes_subscribed: number;
+  /** Interim redemptions per year: min(grown balance, paid[t]). */
+  redeemed: number[];
+  /** redeemed[t] + (1 − s₀) × ords[t] — the institution's (sponsor's) slice. */
+  institution_share: number[];
+  /** s₀ × ords[t] — management's slice; excluded from the sponsor stream. */
+  management_share: number[];
+  /** LN[N] grown to exit, net of interim redemptions, BEFORE the exit redemption (§22.2). */
+  loan_note_balance_at_exit: number;
+}
+
+export function stripInterimSplit(
+  sweet: NonNullable<DealAssumptions['sweet_equity']>,
+  sponsorEquity: number,
+  distributionsPaid: number[],
+): StripInterimSplit {
+  const ln0 = (1 - sweet.sponsor_ordinary_pct) * sponsorEquity;
+  const s0 = sweet.management_ordinary_pct;
+  let balance = ln0;
+  const redeemed: number[] = [];
+  const institution: number[] = [];
+  const management: number[] = [];
+  for (const paid of distributionsPaid) {
+    const grown = balance * (1 + sweet.loan_note_rate);
+    const r = Math.min(grown, paid); // the ONE clamp: a redemption cannot exceed the balance
+    balance = grown - r;
+    const ords = paid - r;
+    redeemed.push(r);
+    institution.push(r + (1 - s0) * ords);
+    management.push(s0 * ords);
+  }
+  return {
+    loan_notes_subscribed: ln0,
+    redeemed,
+    institution_share: institution,
+    management_share: management,
+    loan_note_balance_at_exit: balance,
   };
 }

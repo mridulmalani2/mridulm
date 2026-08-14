@@ -113,6 +113,7 @@ function derive(spec: GoldenSpec) {
     fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null },
     structure,
     rollover_equity: 0,
+    sweet_equity: null,
   });
   return { entry, sized, su };
 }
@@ -252,6 +253,7 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       fees: { transaction_pct_of_ev: r.txnPct, financing_pct_of_commitments: r.finPct, monitoring: null },
       structure,
       rollover_equity: r.rollover,
+      sweet_equity: null,
     });
     return { entry, sized, su };
   }

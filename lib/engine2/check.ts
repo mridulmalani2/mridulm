@@ -16,7 +16,7 @@
 
 import { covenantBreachYear } from './credit';
 import { RETIRED_TOL } from './debt';
-import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, SourcesUses, TrancheYear, WaterfallYear } from './types';
+import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, EquityStripBlock, SourcesUses, TrancheYear, WaterfallYear } from './types';
 
 export interface CoherenceInputs {
   facts: Pick<DealFacts, 'implied_trading_ev_ebitda'>;
@@ -31,6 +31,8 @@ export interface CoherenceInputs {
   ppe_seeded_at_zero: boolean;
   /** §18.8 [v1.3.1]: per-tranche year rows — read for the refi no-op flag (named fields only). */
   tranches: TrancheYear[][];
+  /** §14.23(g) [v1.7.0]: read for the loan_notes_unredeemed WARN; null when no strip/warrant. */
+  equity_strip: EquityStripBlock | null;
 }
 
 /** Entry multiple further above the trading anchor than this ⇒ warn (DR-4 Cat.7 discipline). */
@@ -40,6 +42,25 @@ const DAYS_MAX = { dso: 180, dio: 365, dpo: 180 };
 
 export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
   const flags: CoherenceFlag[] = [];
+
+  // §14.23(g) [v1.7.0]: fires EXACTLY on `loan_notes_accrued_balance > loan_notes_redeemed
+  // + $0.005m`, on §22.2's pinned measurement pair (balance grown to exit BEFORE the exit
+  // redemption; redeemed = the EXIT redemption alone). Once per run; WARN — the run's
+  // arithmetic already carries the shortfall truthfully (a zero-or-negative ordinary pot).
+  // Named for its CONDITION, so the flag cannot mislabel what it detects. The strip fields
+  // do not exist when the block is null, hence the domain gate.
+  if (
+    x.equity_strip &&
+    x.equity_strip.loan_notes_accrued_balance > x.equity_strip.loan_notes_redeemed + 0.005
+  ) {
+    const b = x.equity_strip.loan_notes_accrued_balance;
+    const r = x.equity_strip.loan_notes_redeemed;
+    flags.push({
+      code: 'loan_notes_unredeemed',
+      severity: 'warn',
+      message: `Exit equity does not cover the accreted loan notes: $${b.toFixed(2)}m accrued vs $${r.toFixed(2)}m redeemed at exit. The ordinary pot is zero-or-negative to that extent and management's sweet equity is worthless on this run (SPEC §22.2/§14.23(g)).`,
+    });
+  }
 
   // §20.6(e) [v1.5.0]: the AHYDO SHAPE — structural, on the tranche TERMS alone (no run data),
   // so it is deterministic and fires identically under every election pattern that accrues.

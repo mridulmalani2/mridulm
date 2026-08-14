@@ -182,7 +182,13 @@ export function suggestAssumptions(
     },
     rollover_equity: 0,
     exit: { multiple: entryMultiple, basis: 'fy', fees_pct: 0.015 },
-    mip: { pool_pct: cv(['mip', 'poolPctOfFdEquity'], 0.15), hurdle_moic: cv(['mip', 'hurdleMoic'], 2.0) },
+    mip: { pool_pct: cv(['mip', 'poolPctOfFdEquity'], 0.15), hurdle_moic: cv(['mip', 'hurdleMoic'], 2.0), ratchet: null },
+    // §22 [v1.7.0]: the suggestion layer proposes NO strip, NO promote ratchet and NO
+    // warrant — a cap-table structure is a negotiated term with no history/convention
+    // basis (the distributions/refi/fund/elections precedent). Fields start off; the
+    // badge is TEMPLATE via template paths, YOU when set (§16).
+    sweet_equity: null,
+    warrant: null,
     covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: null },
     // §19/§16: the suggestion layer proposes NO fund overlay — an LP-agreement fact with no
     // history/convention basis (the distributions/refinancing precedent). Starts null = OFF.

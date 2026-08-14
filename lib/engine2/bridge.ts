@@ -67,6 +67,12 @@ export interface BridgeInputs {
    * degenerate case.
    */
   interim_distributions_sponsor: number;
+  /** §12/§22.8 [v1.7.0]: management's subscription (inside entry_equity_pre_promote_total)
+   *  and their exit share — their delta is the strip's leakage term; 0 when null. */
+  management_subscription: number;
+  management_ordinary_share: number;
+  /** §12/§22.8 [v1.7.0]: the warrant's net take — the second new leakage term; 0 when null. */
+  warrant_payout_net: number;
 }
 
 export function buildBridge(i: BridgeInputs): ValueBridge {
@@ -89,15 +95,21 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
   const residualA =
     barSum -
     (i.exit_equity_pre_mip_total - i.entry_equity_pre_promote_total + i.entry_costs + i.exit_costs);
-  // §14.9(b): the walk-down lands exactly on the sponsor. Adding the sponsor slice back is
-  // EXACT by the same §9 algebra — barSum − costs ≡ exit equity total − entry equity total,
-  // and exit equity total = sponsor_share + rollover_share + mip.
+  // §14.9(b) [v1.7.0]: the walk-down lands exactly on the sponsor. Adding the sponsor slice
+  // back is EXACT by the same §9 algebra — barSum − costs ≡ exit equity total − entry equity
+  // total, and exit equity total = sponsor_share + rollover_share + mip_payout +
+  // management_ordinary_share + warrant_payout_net (§14.16's FIVE-term mirror; the two new
+  // terms are 0 whenever their instruments are null, so the three-term form is the
+  // degenerate case). Un-amended, this identity reports a ≈$28.73m residual on G9-SWEET.
+  const sweetEquityDelta = i.management_ordinary_share - i.management_subscription;
   const residualB =
     barSum -
     i.entry_costs -
     i.exit_costs -
     i.mip_payout -
-    rolloverDelta +
+    rolloverDelta -
+    sweetEquityDelta -
+    i.warrant_payout_net +
     i.interim_distributions_sponsor -
     sponsorNetDelta;
 
@@ -115,6 +127,8 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
       mip: i.mip_payout,
       rollover_delta: rolloverDelta,
       interim_distributions_sponsor: i.interim_distributions_sponsor,
+      sweet_equity_delta: sweetEquityDelta,
+      warrant_payout_net: i.warrant_payout_net,
       sponsor_net_delta: sponsorNetDelta,
     },
     reconciliation_residual: Math.max(Math.abs(residualA), Math.abs(residualB)),

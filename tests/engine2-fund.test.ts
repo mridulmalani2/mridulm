@@ -175,7 +175,7 @@ describe('§19.10 (viii) — the B8 event-order pin, unit-level (the only branch
     const f = buildFundOverlay(
       { committed_capital: null, mgmt_fee_pct: 0.10, fee_basis: 'invested',
         carry_pct: 0.20, pref_rate: 0.08, catchup_pct: 0, waterfall: 'european', fee_offset_pct: 1.0 },
-      { distributions_paid: [0], exit_sponsor_share: 130,
+      { distributions_paid: [0], sponsor_interim_shares: [0], exit_sponsor_share: 130,
         sources_uses: { sponsor_equity: 100, rollover_equity: 0 }, gp_fee_income: null },
     );
     expect(f.gp_carry[0]).toBeCloseTo(2.4, 12);
@@ -196,7 +196,7 @@ describe('§19.10 (ix)/(x) — the pref-magnitude / catch-up-memory pins (audit 
     const f = buildFundOverlay(
       { committed_capital: null, mgmt_fee_pct: 0, fee_basis: 'invested',
         carry_pct: 0.20, pref_rate: 0.08, catchup_pct: 0, waterfall: 'european', fee_offset_pct: 1.0 },
-      { distributions_paid: [0, 0, 0, 0, 0], exit_sponsor_share: 200,
+      { distributions_paid: [0, 0, 0, 0, 0], sponsor_interim_shares: [0, 0, 0, 0, 0], exit_sponsor_share: 200,
         sources_uses: { sponsor_equity: 100, rollover_equity: 0 }, gp_fee_income: null },
     );
     expect(f.gp_carry[4]).toBeCloseTo(10.613438464, 9);
@@ -215,7 +215,7 @@ describe('§19.10 (ix)/(x) — the pref-magnitude / catch-up-memory pins (audit 
     const f = buildFundOverlay(
       { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested',
         carry_pct: 0.20, pref_rate: 0.08, catchup_pct: 1.0, waterfall: 'european', fee_offset_pct: 1.0 },
-      { distributions_paid: [0, 125.2, 0, 0, 0], exit_sponsor_share: 30,
+      { distributions_paid: [0, 125.2, 0, 0, 0], sponsor_interim_shares: [0, 125.2, 0, 0, 0], exit_sponsor_share: 30,
         sources_uses: { sponsor_equity: 100, rollover_equity: 0 }, gp_fee_income: null },
     );
     expect(f.gp_carry[0]).toBe(0);
