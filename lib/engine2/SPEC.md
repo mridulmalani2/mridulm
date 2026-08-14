@@ -2501,7 +2501,7 @@ All three are OFF by default (`sweet_equity: null`, `mip.ratchet: null`, `warran
 with all three off every computed number is identical to v1.6.0 (§22.9(f)); the ONE deliberate
 fixture-SHAPE change is decided spec-side in §22.12, never discovered as a red test.
 
-**CODE HOME [round-1 gov-M1 — stated so the containment fence demonstrably covers it].** All
+**CODE HOME.** All
 §22 arithmetic lands in modules ALREADY on the ENGINE ARITHMETIC PATH: the exit waterfall in
 `lib/engine2/exit.ts`, the interim split in `sequence.ts` with its three consumers
 (`returns.ts`, `fund.ts`, `facade.ts` — §22.7), the §2 source line in `sourcesUses.ts`, the
@@ -2509,7 +2509,7 @@ fixture-SHAPE change is decided spec-side in §22.12, never discovered as a red 
 **§22 introduces NO new engine module**, so neither PHASE_G's ENGINE-ARITHMETIC-PATH
 enumeration nor `tests/governance-display-surface.test.ts`'s `ENGINE_ARITHMETIC_MODULES`
 regex needs amending — the §19 precedent (which DID add `fund.ts` and amended both) is
-deliberately not repeated. PRECISION [round-2 gov-M8]: PHASE_G's enumeration covers all nine
+deliberately not repeated. PRECISION: PHASE_G's enumeration covers all nine
 modules including `facade.ts`; the governance REGEX deliberately omits `facade` (display
 surfaces read ModelOutput via `facade` types), which is a pre-existing and intended asymmetry
 §22 neither creates nor relies on. PHASE_G names hand-kept lists as the recurring enforcement hole;
@@ -2528,7 +2528,7 @@ subordinated to every external lender. v1 models them **entirely inside the equi
   redemption (§22.7): `LN[t] = LN[t−1] × (1 + rate) − redeemed[t]`, `LN[0] = the subscribed
   amount` (NO year-0 accretion — the first accretion lands in year 1). With no interim
   distributions this is the closed form `LN[N] = LN[0] × (1 + rate)^N`.
-- **MEASUREMENT POINT, pinned [round-1 gov-M3].** `loan_notes_accrued_balance` is `LN[N]`
+- **MEASUREMENT POINT, pinned.** `loan_notes_accrued_balance` is `LN[N]`
   **grown to exit and BEFORE the exit redemption** (i.e. net of any INTERIM redemptions but
   gross of the exit one); `loan_notes_redeemed` is the **EXIT** redemption alone, not a
   cumulative figure. §22.9(g)'s flag condition only reads correctly under exactly this pair,
@@ -2598,15 +2598,14 @@ Deferred to v2 and DISCLOSED (§22.11) rather than guessed;
 §22.4; §22.5 has no base threshold, its base share applying from zero); `share_pct`
 NON-DECREASING across tiers and ≥ the base share (a *ratchet* only ever ratchets up — a
 decreasing tier is a different instrument and is rejected loudly); and **every `share_pct` <
-1**. The `< 1` gate has TWO DIFFERENT reasons, one per ratchet [round-1 arith-M10 — the first
-draft gave one reason and it was false for §22.4]: for **§22.5** it is arithmetic (the bracket
+1**. The `< 1` gate has TWO DIFFERENT reasons, one per ratchet: for **§22.5** it is arithmetic (the bracket
 walk's `(1 − s)` denominator is zero, the institution's value stops rising, and the tier can
 never be exited); for **§22.4** there is no such denominator and the gate is economic (a pool
 taking 100% of a marginal slice hands the entire top bracket to management, which no promote
 document grants);
 (v) `warrant` non-null ∧ `pct_of_ordinary` ∉ (0, 1) or `strike_total < 0`;
 (vi) **`sweet_equity` non-null ∧ a `management_subscription` that leaves a non-positive §2
-residual plug** — the qualifier is LOAD-BEARING [round-8/9 F06, confirmed by both skeptics].
+residual plug** — the qualifier is LOAD-BEARING.
 With `sweet_equity` NULL there is no subscription, so the stated residual IS the v1 §2 plug and
 `≤ 0` is byte-identical to the committed coherence condition `check.ts` uses for
 `negative_sponsor_equity`; unqualified, this gate would make `runModel` THROW on a run v1
@@ -2626,9 +2625,9 @@ flag (`check.ts`, post-run), this is deterministic at Build from the S&U identit
 be a rejection because a non-positive plug makes the ordinary/loan-note split incoherent — the older gloss `LN[0] = (1 − sponsor_ordinary_pct) × plug`
 NEGATIVE is itself FALSE at `sponsor_ordinary_pct = 1`, which §16 admits as legal (domain
 (0, 1]) and where LN[0] = 0 for ANY plug; and the gate is `≤ 0` rather than `< 0` because a ZERO
-plug leaves the institution with no subscription at all [round-9 M10];
-(vii) `sweet_equity` non-null ∧ `management_ordinary_pct = 0` ∧ `management_subscription > 0`
-[round-1 gov-M5] — management paying real money for a zero share is not a sweet-equity
+plug leaves the institution with no subscription at all;
+(vii) `sweet_equity` non-null ∧ `management_ordinary_pct = 0` ∧ `management_subscription > 0` —
+management paying real money for a zero share is not a sweet-equity
 structure, it is a typo that silently shrinks the sponsor's own check. `management_ordinary_pct
 = 0` with a ZERO subscription stays legal (it is the "strip with no sweet layer" configuration
 — an all-institutional strip, which is a real structure).
@@ -2809,7 +2808,7 @@ Stating the divergence here is the point; the alternative was one basis silently
 both instruments.
 
 **MIRROR (single-source) — the NORMATIVE statement is §14.23(d); this paragraph is RATIONALE
-ONLY [round-3 arith-B2 restructured it].** `V_final / I` is, by construction, the institution's
+ONLY.** `V_final / I` is, by construction, the institution's
 own realized multiple: `I` is the §2 sponsor plug (`returns.sponsor_net`'s outflow) and
 `V_final` is the sum of what the sponsor's instruments actually return (interim institutional
 shares + the loan-note redemption + the institutional ordinary share, the last of which may be
@@ -2819,7 +2818,7 @@ strictly positive plug, and a non-negative period-N sponsor flow — the second 
 under §22.3(vi)) and its absolute tolerance floor; neither is repeated here, on purpose.
 
 **WHY THIS PARAGRAPH NO LONGER RESTATES THE RULE — the structural fix for a defect this feature
-shipped THREE TIMES [round-3, BOTH reviewers].** §22 stated the same mirror in THREE places
+shipped THREE TIMES.** §22 stated the same mirror in THREE places
 (this paragraph, §22.9(d), §14.23(d)); rounds 2 and 3 corrected one or two and left the others
 byte-identical to text that had already been REFUSED — so an implementer reading the normative
 section would have built the rejected form (a count-vs-count race on `returns.sponsor_net.moic`,
@@ -2875,7 +2874,7 @@ exercises; `gross = 5.1`, `net = 3.1`, `P = 0.95 × 102 = 96.9`; the class gave 
 `P₀ = K(1 − w)/w = 38`: `0.05 × 40 = 2 = K`, `net = 0`. **NORMATIVE (strict `>`): does NOT
 exercise**, `warrant_exercised = false`, `P = 38`. Under `≥` it exercises and
 `P = 0.95 × 40 = 38` — **identical money and THREE differing displayed fields** [round-9 M4, a residual CREATED by the round-9 fix pinning `warrant_strike_paid = 0` on the else branch]: at ATM (P₀ = 38, w = 0.05, K = 2) the `≥` reading gives `warrant_exercised` true, `warrant_strike_paid` 2 and `warrant_payout_gross` 2, against false/0/0 under the normative `>` — two of the three are MONEY. All three are pinned in §22.13(vi) — the §22.5 boundary
-pattern again [round-10: the duplicated trailing cite left by the round-9 edit is removed].
+pattern again.
 
 **Seniority — the warrant sits BELOW the promote and the loan notes, ABOVE the ordinary
 split.** Loan notes are a contractual redemption ahead of all share capital (§22.2); the §10
@@ -2883,8 +2882,7 @@ promote already comes off the top of the equity pot in v1 and stays there, so th
 identity is preserved when `warrant` is null. REJECTED: placing the warrant AHEAD of the
 promote — it would change the promote's own `min()` cap base and reopen a signed §10
 convention for a feature that has no need of it.
-**The warrant does NOT dilute interim distributions [round-1 arith-M6 — a convention, so it is
-stated].** §22.7's interim block splits institution/management only; the warrant settles once,
+**The warrant does NOT dilute interim distributions.** §22.7's interim block splits institution/management only; the warrant settles once,
 at exit. A warrant is an option over share capital, not a distribution right, and an unexercised
 option has no claim on a dividend. DISCLOSED in §22.11.
 
@@ -2965,8 +2963,7 @@ management's  share of paid[t] =                 s₀   × ords[t]
 ```
 
 **THIS REPLACES `sponsorShareOfDistributions` AT ALL THREE COMMITTED CALL SITES — stated
-normatively [round-1 arith-B4 / gov-B3; the first draft said §19 "composes unchanged", which
-is FALSE].** The pari-passu fraction `sponsor/(sponsor + rollover)` is consumed in three
+normatively.** The pari-passu fraction `sponsor/(sponsor + rollover)` is consumed in three
 places: `returns.ts` (the sponsor stream, DPI and payback), `fund.ts` (the §19 LP interim
 leg), and `facade.ts` (the §12 `interim_distributions_sponsor` walk-down term). Under
 `sweet_equity` non-null, §22.3(ii) forces `rollover_equity = 0`, so that fraction is exactly
@@ -2976,7 +2973,7 @@ management's `s₀ × ords[t]` slice. That is textually §19.1's own rejected al
 the §22.7 institutional share whenever `sweet_equity` is non-null**, and §19.6(a)'s
 sponsor-side conservation is re-asserted under a strip by a directed fixture (§22.13(xi)).
 **BOTH share rules stay live, and which governs is stated so the engine PR does not ship two
-competing definitions of one number [round-2 gov-M6]:** `sponsorShareOfDistributions` (§9
+competing definitions of one number:** `sponsorShareOfDistributions` (§9
 pari-passu) remains THE definition whenever `sweet_equity` is NULL — it is still needed for
 `rollover > 0` deals — and the §22.7 institutional split is THE definition whenever
 `sweet_equity` is non-null. They are selected by a single predicate at one place
@@ -3020,7 +3017,7 @@ DSCR (§22.13(x) proves it by a directed with/without pair).
 and `entry_equity_pre_promote_total` now INCLUDES `management_subscription`, which is what
 keeps §14.9(a)'s frictionless identity exact (`entry equity total − entry costs ≡ EV₀ − ND₀`
 holds only if every equity source is counted; re-derived from §2 in the round-1 sign-off).
-**§20.9's coherence roster, §14.16 AND §14.9(b) ARE ALL AMENDED** — §14.16's exit-mirror clause gains the two new claimants and is their single home (§14.23(b) points at it); the engine PR must widen the committed three-term asserts in `tests/engine2-exit-returns.test.ts`, `tests/engine2-facade-scenarios.test.ts`, `lib/engine2/types.ts` and `lib/engine2/exit.ts` alongside it [round-9 M6a]. **§14.9(b) IS AMENDED** to carry the two new terms [round-1 arith-B5 — the first draft leaned
+**§20.9's coherence roster, §14.16 AND §14.9(b) ARE ALL AMENDED** — §14.16's exit-mirror clause gains the two new claimants and is their single home (§14.23(b) points at it); the engine PR must widen the committed three-term asserts in `tests/engine2-exit-returns.test.ts`, `tests/engine2-facade-scenarios.test.ts`, `lib/engine2/types.ts` and `lib/engine2/exit.ts` alongside it. **§14.9(b) IS AMENDED** to carry the two new terms [round-1 arith-B5 — the first draft leaned
 on §14.9(b) in §22.13(ix) without amending it, and the un-amended identity reports a
 reconciliation residual of **$28.73m** on the very golden §22.12 pins].
 **§13 scenarios:** the strip, the ratchet and the warrant are STRUCTURE/POLICY — FROZEN across
@@ -3037,8 +3034,7 @@ arith-M3; PHASE_G Tier A step 1 requires "fee/flow-membership table updates if r
 touched", and the first draft touched §9 not at all]. The sponsor and unlevered streams are
 UNCHANGED in membership. `pre_promote` — the TOTAL pre-incentive equity stream — takes
 `management_subscription` into its t=0 outflow, the same generalization §12 makes, and is
-byte-identical when the strip is null. **§9's naming paragraph is amended to say so**
-[round-1 gov-M8]: on a promote deal the incentive is EXCLUDED from the stream, while on a
+byte-identical when the strip is null. **§9's naming paragraph is amended to say so**: on a promote deal the incentive is EXCLUDED from the stream, while on a
 strip deal management's sweet share settles INSIDE `exit_equity_pre_mip_total` — the same
 label over two bases is exactly the v1.1.2/v1.1.3 mislabel class, so the basis is stated on
 the label rather than left to the reader.
@@ -3078,8 +3074,7 @@ otherwise.**
 (b) → **§14.23(b)** — the EXTENDED §14.16 mirror. Domain: every run. Rationale: this is
     §14.16's own clause widened from three claimants to five, not a parallel invariant, and it
     holds at every SIGN of exit equity because §22.7 carries the residual signed. §14.23 states
-    it on the UNCONDITIONAL `ExitBlock` carriers rather than the nullable `equity_strip` echoes
-    [round-2 gov-B3].
+    it on the UNCONDITIONAL `ExitBlock` carriers rather than the nullable `equity_strip` echoes.
 (c) → **§14.23(c)** — warrant conservation. Domain: a warrant is configured and exercises.
     Rationale: the warrant's dilution of the existing class equals its own value and never
     exceeds it, which is what makes full-dilution-with-strike-paid-in value-conserving.
@@ -3107,7 +3102,7 @@ otherwise.**
 (f) → **§14.23(f)** — the compatibility gate. Domain: no strip, no warrant, and the promote
     ratchet field either NULL or EMPTY — §22.3 pins the two as distinct values with identical
     semantics, and BOTH produce v1 numbers, so both belong in the domain of the clause that
-    asserts v1 numeric identity [round-7 gov-B3]. Rationale: nothing about this is trivial — it is the clause that makes §22 safe to
+    asserts v1 numeric identity. Rationale: nothing about this is trivial — it is the clause that makes §22 safe to
     land, and its ONE carve-out, the fixture SHAPE of §22.12, is decided spec-side rather than
     discovered as a red test.
 (g) → **§14.23(g)** — the loan-notes-unredeemed WARN. Domain: the equity-strip block is
@@ -3126,7 +3121,7 @@ otherwise.**
     Rationale: every statement is about the UNCAPPED bracket sum, never the paid promote,
     because §10's cap can truncate the payout. §14.23 also carries the CORRECTION to WHY that
     scoping is needed: at a fixed exit equity the cap is a constant, so it does not break
-    monotonicity [round-3 arith-M2 / round-4 arith-B2].
+    monotonicity.
 (i) → **§14.23(i)** — the explicit NON-CLAIM. Domain: every run. Rationale: §22 asserts no
     ordering between a strip deal's sponsor IRR and the same deal run with a §10 promote; they
     are different instruments, and which is dearer depends on the exit level (§19.6(e) and
@@ -3137,7 +3132,7 @@ otherwise.**
 and `warrant_payout_net`, emitted UNCONDITIONALLY (`0.0` when off) — the G-1/G-5 committed-zero-
 column precedent, which `tests/goldens.test.ts` already asserts for the refi fields on all nine
 pre-v1.3.0 goldens. **`SourcesUses.management_subscription` is emitted the same way, and that IS
-a new emitter behaviour, decided here rather than discovered** [round-2 gov-M1]: `spec_calc.py`
+a new emitter behaviour, decided here rather than discovered**: `spec_calc.py`
 currently OMITS `rollover_equity` from `sources_uses`, so the reference's existing habit for a
 zero-valued S&U scalar is to drop it. §22 follows the ExitBlock/G-1/G-5 precedent (emit the zero
 column). **The reason is the PRECEDENT, not a discriminator** [round-3 arith-M6: the r3 draft
@@ -3158,11 +3153,11 @@ number | null, institution_moic_at_ratchet: number | null }` — named fields th
 surface READS, never recomputes (**§14.16's single-source rule** and PHASE_G's standing
 "no second calculation path" rule [round-1 gov-B5: the first draft cited "§16's single-path
 rule", and §16 contains no such rule — only the unrelated single-DRIVER entry gate]).
-**The WARRANT-ONLY shape is pinned** [round-1 arith-M4]: with `warrant` non-null ∧
+**The WARRANT-ONLY shape is pinned**: with `warrant` non-null ∧
 `sweet_equity` null, `loan_notes_*` are `0`, `management_ordinary_share` is `0`,
 `institution_ordinary_share` is the post-warrant pot LESS the rollover share — the §9
 pari-passu split governs at EVERY sign of the pot, per §22.7 stage 4's first arm, with which
-this is now consistent [round-2 arith-B1 noted the r2 draft contradicted itself here] —
+this is now consistent —
 `ratchet_tiers_reached` is `0`, and both `| null` fields are `null`: there is no strip to
 measure. `management_effective_ordinary_pct` is likewise `null` for a ZERO **or NEGATIVE**
 ordinary pot [round-2 arith-M5 — the r2 draft named only the zero case, and the signed
@@ -3192,8 +3187,7 @@ the generated text stays clean): the loan-note EQUITY treatment and its rejected
 are §22.2; the marginal-vs-cliff argument and its no-fixed-point counterexample are §22.5; the
 warrant's seniority and at-the-money convention are §22.6; the negative-exit-equity rule is
 §22.7 stage 4; the headline-vs-realized MOIC divergence is a property of `returns` whose
-NORMATIVE OWNER is §9's naming paragraph — this block and §15 disclose it, §9 owns it [round-4
-gov-M5]. The three statutory anchors inside the block were added in round 4 [gov-M2] precisely
+NORMATIVE OWNER is §9's naming paragraph — this block and §15 disclose it, §9 owns it. The three statutory anchors inside the block were added in round 4 precisely
 because §15 carried them and this source did not, so generating §15 from here would have
 DELETED them; they are now inside the governed text and cannot be lost.
 
@@ -3209,7 +3203,7 @@ only" claim rather than asserting it in the abstract):
 2.0, management_ordinary_pct: 0.10, ratchet: [{hurdle_moic: 1.5, share_pct: 0.15},
 {hurdle_moic: 2.0, share_pct: 0.20}] }`, `warrant = { holder_label: 'Mezzanine warrant',
 pct_of_ordinary: 0.05, strike_total: 2.0 }`, `mip: null`; everything else IDENTICAL to G3.
-**TWO deltas from G3, not one** [round-1 gov-M11]: the strip, and `mip` dropped to null —
+**TWO deltas from G3, not one**: the strip, and `mip` dropped to null —
 the latter FORCED by §22.3(i), so it is named rather than glossed as "§22 alone".
 
 Closed-form check values pinned here (exact from the inputs; the rest of the chain is
@@ -3254,13 +3248,13 @@ difference is attributable to §22.4 alone, and the entry S&U is byte-identical 
 (a promote is post-close and cannot re-price entry — the §13 entry-frozen discipline; the
 identity holds AFTER G3's own fixture gains the `sources_uses.management_subscription: 0.0`
 column — an unqualified byte-identity claim across a shape change is exactly what §16's
-round-2 blocker was about [round-2 arith-M8]).
+round-2 blocker was about).
 Closed-form check values, exact from the inputs: `T₀ = 1.50 × 392.075 = **588.1125**`,
 `T₁ = 1.75 × 392.075 = **686.13125**`. Against G3's committed pre-MIP total X (DERIVATION
 records the single-tier promote as **17.358111**, which the bracket form reproduces EXACTLY at
 one tier — the §22.4 ≡ §10 identity, verified numerically in the round-1 sign-off), the
 two-tier promote is **≈19.128310**, a discriminating delta of **≈1.770199** on a top-bracket
-slice of **≈17.701988** that is genuinely CONSUMED. **The seed is named** [round-2 arith-M7]:
+slice of **≈17.701988** that is genuinely CONSUMED. **The seed is named**:
 these follow from `X ≈ 703.833238`, the pre-MIP total DERIVATION.md records at full precision
 (not the 2dp fixture); `dPromote/dX = 0.25`, so the 6-dp seed is safe to ~1e-7. Asserts: the
 promote is strictly greater than G3's; the top bracket is non-empty, so the `min(X, T_{j+1})`
@@ -3312,11 +3306,9 @@ RED on the COUNT while the money is unchanged (no golden can catch it — §22.5
 (iv) **the cliff counterexample as a NEGATIVE test** — the §22.5 no-fixed-point inputs asserted
 to produce the marginal answer, pinning that no cliff branch was smuggled in;
 (v) **`loan_notes_unredeemed`**: fires when `E < LN[N]`; does NOT fire when the shortfall is
-within `$0.005m` (the **§14.23(g)** tolerance band — §22.13(v) and §14.23(g) now agree, where the first draft's
-looser "`E < LN[N]`" did not [round-1 arith-M11; re-anchored round-10: §22.9(g) states NO
-tolerance and by its own charter CANNOT — it carries domains and rationale only, so the cite
-named a home that could not hold the rule]); and the **NEGATIVE-E** cases, BOTH
-arms of §22.7 stage 4 [round-2, BOTH reviewers]: (α) `sweet_equity` non-null, rollover 0 by
+within `$0.005m` (the **§14.23(g)** tolerance band — §22.13(v) and §14.23(g) now agree, where
+the first draft's looser "`E < LN[N]`" did not); and the **NEGATIVE-E** cases, BOTH
+arms of §22.7 stage 4: (α) `sweet_equity` non-null, rollover 0 by
 §22.3(ii), **and NO interim distributions so that V₀ = 0** [round-10: the round-9 assert below is
 FALSE without this premise — at V₀ = 99, E = −25, I = 100 the normative value is 0.74, not −0.25
 — and the premise sat only inside a rationale bracket, which this document's own convention
@@ -3332,7 +3324,7 @@ with `rollover_equity > 0`** ⇒ the §9 pari-passu split of the NEGATIVE residu
 to v1.6.0 (at `E = −25`, `f = 0.25`: −18.75 / −6.25). Arm (β) is the configuration no golden
 runs (§17(viii)) and the one both the r1 clamp and the r2 unqualified arm got wrong — the
 mirror closes under the **r2** form and FAILS under the r1 clamp (with `sweet_equity` NULL the
-clamp gives pot 0 ⇒ 0/0 ⇒ the five-term sum reads 0 ≠ E; §22.7 says so itself) [round-9 M8], so only a direct assert on `rollover_share` catches it;
+clamp gives pot 0 ⇒ 0/0 ⇒ the five-term sum reads 0 ≠ E; §22.7 says so itself), so only a direct assert on `rollover_share` catches it;
 (vi) **the warrant AT-THE-MONEY boundary** — `P₀ = K(1 − w)/w` ⇒ `warrant_exercised = false`,
 `warrant_strike_paid = 0` AND `warrant_payout_gross = 0`; the `≥` mutant reads true / 2 / 2 and
 must RED on ALL THREE [round-10: the round-9 M4 fix restated §22.6 but never touched THIS
@@ -3347,7 +3339,7 @@ balance (the split actually splits) and a year where it does not (all of it rede
 this is also the only path on which `returns.dpi` and `payback_year` read a NON-constant
 sponsor fraction, so the §9 [v1.1.0] DPI basis is exercised under a strip. **The reference
 derivation's FIXTURE-ONLY `distributions.sponsor_share_paid` block (§16) must emit the §22.7
-institutional share here, not the pari-passu one** [round-3 arith-M7] — not a fourth engine call
+institutional share here, not the pari-passu one** — not a fourth engine call
 site (§16 pins it as adjudication convenience, never a ModelOutput surface), but an unstated
 emitter would adjudicate the wrong number; moot for both goldens, which run no distributions;
 (viii) **the SEVEN §22.3 REJECTIONS**, one case each — promote ∧ strip; strip ∧ rollover > 0;
