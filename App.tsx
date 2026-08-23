@@ -1,10 +1,11 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Background from './components/Background';
 import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
 import NotFound from './pages/NotFound';
 import { motion, useScroll, useSpring, MotionConfig } from 'framer-motion';
+import { SHOW_RESEARCH } from './config/features';
 
 // Secondary routes are code-split so the homepage payload no longer ships the
 // deal engine (exceljs, recharts, the LBO engine) or the research surfaces.
@@ -23,8 +24,11 @@ const App: React.FC = () => {
     restDelta: 0.001
   });
   const location = useLocation();
-  const isResearch = location.pathname.startsWith('/research');
-  const isResearchArticles = location.pathname.startsWith('/research/reports') || location.pathname.startsWith('/research/newsletter');
+  // Gated on the flag: with research archived these paths render the 404, which
+  // belongs to the light theme. Matching them here anyway would paint the dark
+  // research background behind it and leave the ink-coloured text unreadable.
+  const isResearch = SHOW_RESEARCH && location.pathname.startsWith('/research');
+  const isResearchArticles = SHOW_RESEARCH && (location.pathname.startsWith('/research/reports') || location.pathname.startsWith('/research/newsletter'));
   const isDealEngine = location.pathname.startsWith('/deal-engine') || location.pathname.startsWith('/research/toolkit');
   // The home page (and anything that isn't research/deal-engine) uses the light theme.
   const isLight = !isResearch && !isResearchArticles && !isDealEngine;
@@ -62,12 +66,29 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/deal-engine" element={<DealEngine />} />
-          <Route path="/research/toolkit" element={<DealEngine />} />
-          <Route path="/research" element={<ResearchLanding />} />
-          <Route path="/research/reports" element={<ResearchIndex />} />
-          <Route path="/research/reports/:slug" element={<ResearchArticle />} />
-          <Route path="/research/newsletter" element={<NewsletterIndex />} />
-          <Route path="/research/newsletter/:slug" element={<NewsletterArticle />} />
+
+          {/* The toolkit moved to /deal-engine. Old links keep working — the edge
+              redirect in vercel.json catches a cold load, this catches an in-app
+              navigation. */}
+          <Route path="/research/toolkit" element={<Navigate to="/deal-engine" replace />} />
+
+          {/* ARCHIVED, NOT DELETED. The research surfaces are the old dark-theme
+              site and are gated off the public build: with SHOW_RESEARCH false
+              these routes are never registered, so /research/* falls through to
+              NotFound. Every page, component, and article stays on disk and keeps
+              compiling — flip the flag to bring the whole section back in one edit.
+              vercel.json redirects these at the edge too, so a direct URL is turned
+              away before the SPA even loads. */}
+          {SHOW_RESEARCH && (
+            <>
+              <Route path="/research" element={<ResearchLanding />} />
+              <Route path="/research/reports" element={<ResearchIndex />} />
+              <Route path="/research/reports/:slug" element={<ResearchArticle />} />
+              <Route path="/research/newsletter" element={<NewsletterIndex />} />
+              <Route path="/research/newsletter/:slug" element={<NewsletterArticle />} />
+            </>
+          )}
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

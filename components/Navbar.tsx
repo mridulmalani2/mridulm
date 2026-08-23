@@ -10,7 +10,10 @@ const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const isResearch = location.pathname.startsWith('/research');
+  // Gated on the flag: research is archived, so /research/* now renders the 404
+  // — and per the rule below a 404 is light. Matching the path unconditionally
+  // would leave the dark research chrome stranded on top of the light page.
+  const isResearch = SHOW_RESEARCH && location.pathname.startsWith('/research');
 
   // Research keeps the original dark chrome; the home page (and 404) are light.
   const isLight = !isResearch;
