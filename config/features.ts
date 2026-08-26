@@ -6,9 +6,14 @@
  * Flip a flag back to `true` to restore the section instantly.
  */
 
-// The research section is unfinished. Hidden from navigation for now.
-// (The /research routes still resolve by direct URL — this only removes the
-// nav entry points.) Flip to true to bring Research back into the navbar.
+// The research section is the OLD dark-theme site. ARCHIVED (2026-08-23): it is
+// gated off the public build entirely, not merely unlinked. This flag now gates
+// the /research routes in App.tsx as well as the navbar entry, so with it false
+// /research/* falls through to NotFound instead of resolving by direct URL; the
+// edge redirects in vercel.json turn those URLs away before the SPA even loads.
+// Nothing is deleted — every page, component, and article stays on disk and keeps
+// compiling. Flip to true (and drop the /research redirects from vercel.json) to
+// restore the whole section.
 export const SHOW_RESEARCH = false;
 
 // The AI-HireVue video is being replaced. Hidden until a new video is ready.

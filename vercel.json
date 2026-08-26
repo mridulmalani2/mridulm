@@ -1,6 +1,21 @@
 {
   "redirects": [
     {
+      "source": "/research/toolkit",
+      "destination": "/deal-engine",
+      "permanent": true
+    },
+    {
+      "source": "/research",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/research/:path*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         {
