@@ -96,12 +96,30 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
   ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
   `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
-- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23), CLAIMED by the local
-  session 2026-08-14 ~16:40 IST on branch `claude/partial-exits-spec`.** A concurrently
-  running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
-  stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
-  Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
-  continue it; do not restart #7 from scratch.
+- **BRANCH CONSOLIDATION 2026-08-26 (owner-directed).** The owner asked for prod to be
+  `main` + ONE working branch. Audit of all 48 remote branches: **41 were already merged into
+  `main`**; **6 more had an EMPTY merge-base diff** (squash-merged — entry-leverage-naming,
+  f-tail-deletion, phase-g1-goldens, phase-c-drafts, phase-c1-operating, phase-c2-sources-opening);
+  **1 held unique work** (`claude/partial-exits-spec`, the #7 draft). There were **ZERO open
+  PRs**, so nothing required merging. The #7 draft was NOT merged into `main` — it was still in
+  sign-off round 1, and un-GRANTED normative prose must never enter the governing SPEC — it is
+  preserved instead as files under `rebuild/drafts/` (brief + patch + owner questions + README).
+  **Branch DELETION could not be executed from the cloud sandbox:** `git push --delete` returns
+  **HTTP 403** at the agent proxy (ref-deletes are blocked; branch *creation* succeeds), the
+  GitHub MCP server exposes **no delete-branch tool**, and credential inspection is blocked.
+  The 47 stale branches are therefore still on origin and must be deleted by the owner
+  (GitHub UI → Branches → delete, or `git push origin --delete <branch>` from the laptop).
+  A ready-to-run list is in `rebuild/drafts/STALE_BRANCHES_TO_DELETE.md`.
+- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23).** Originally claimed by the
+  local session 2026-08-14 on branch `claude/partial-exits-spec`; that session went quiet and
+  the branch has had no commit since 2026-08-14. **Resumed 2026-08-26 on
+  `claude/fund-lp-overlay-feature-go3xav`** (the single consolidated working branch), seeded
+  from the preserved draft in `rebuild/drafts/` — which still applies cleanly to `main`, so no
+  work was redone. Do not restart #7 from scratch.
+- **Baseline moved:** `main` @ `c1c87a2`, vitest **755 passed + 3 live-skipped (54 files)**,
+  tsc clean, build green. Higher than this doc's earlier 731 because PRs #123/#124/#125
+  (docs, cookieless analytics, research-section gating) landed after #8; none touches engine
+  arithmetic.
 
 ### Backlog — 12 items, 6 merged
 
