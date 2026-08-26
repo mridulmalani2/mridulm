@@ -116,6 +116,29 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   `claude/fund-lp-overlay-feature-go3xav`** (the single consolidated working branch), seeded
   from the preserved draft in `rebuild/drafts/` — which still applies cleanly to `main`, so no
   work was redone. Do not restart #7 from scratch.
+- **RESUME POINT (2026-08-26, session ended on usage limit).** Working branch
+  `claude/fund-lp-overlay-feature-go3xav` @ `a2f82cf`, pushed. The §23 DRAFT is APPLIED to
+  `lib/engine2/SPEC.md` and all its companion amendments were VERIFIED PRESENT BY DIFF
+  (§14.24(a)-(g), §14.16 six-term mirror, §15-SELL in both homes, §16 schema, §9 table's 3
+  rows, §1 sentence, §14.9(b), v1.8.0 changelog row). Gates green with it applied: 755 passed
+  + 3 live-skipped. **NEXT ACTION: step 1 hostile sign-off of §23.** A round-1 review was
+  dispatched but the session ended before its verdict landed — re-run it. Brief it with the
+  BOUNDED criterion (blocking only if it moves a NUMBER, breaks a gate, makes a fixture
+  vacuous, states something FALSE about committed code, or leaves a REQUIRED output
+  undefined; ledger-only ⇒ GRANTED). Two known things for that review to rule on, found
+  while restoring the draft, neither yet adjudicated:
+  (1) **`selldown_below_cost` is stated in TWO homes with DIFFERENT algebra** — §23.10 says
+  `implied_event_equity × fraction < fraction × sponsor_equity − 0.005`, §14.24(f) says
+  `selldown_proceeds < fraction × sponsor_equity − 0.005`. These reduce to the same thing
+  only because §23.2 defines `selldown_proceeds ≡ fraction × implied_event_equity`; confirm
+  and collapse to ONE home (§14.24 governs per §23.9's charter).
+  (2) **§23.12's year-3 flow clause is garbled** — "(12.09 × 1.0 pre-event rule… the year-3
+  distribution is 15.34 — the SELLER's)" names two different numbers; 12.09 is G2-DIST's
+  YEAR-2 payment and 15.34 is year 3. Decide whether it is untidy prose (LEDGER) or a real
+  ambiguity about which number the period-3 flow carries (BLOCKING).
+  After GRANT: step 2 = extend `scripts/goldens/spec_calc.py` with G11-SELL + two blind
+  adjudications; step 3 = engine; step 4 = UI; step 5 = conformance. Then merge (standing
+  delegation) — noting the sandbox CANNOT delete branches or push tags (HTTP 403).
 - **Baseline moved:** `main` @ `c1c87a2`, vitest **755 passed + 3 live-skipped (54 files)**,
   tsc clean, build green. Higher than this doc's earlier 731 because PRs #123/#124/#125
   (docs, cookieless analytics, research-section gating) landed after #8; none touches engine
