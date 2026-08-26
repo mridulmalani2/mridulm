@@ -84,8 +84,12 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 - **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
   any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
   `.claude/worktrees/`; in a cloud session it is a fresh clone.
-- **main** @ `881b38b` (= 64625fe + PR #122, the bounded criterion + this runbook), SPEC
-  v1.6.0 on main, vitest **686/686**.
+- **main** @ `c1c87a2`, SPEC **v1.7.0** (§22 shipped). A PARALLEL session owns the SITE
+  surface and has merged PRs #123–#125 (cookieless analytics, research-section archiving,
+  a STATE doc commit). It has touched **zero** engine files — the split is clean:
+  **this line of work owns `lib/engine2/**`, `tests/engine2-*`, `tests/goldens/**`,
+  `scripts/goldens/**`, `rebuild/**`; the other owns the site.** Both edit
+  `rebuild/AUTONOMOUS_BUILD.md` and `package.json`, so expect merges there only.
 - **#8 MERGED 2026-08-14 — PR #121, main @ `353e52a`, SPEC v1.7.0, vitest 731 passed +
   3 live-skipped (53 files).** The full bounded Tier-A ritual ran end-to-end in one day:
   spec SIGNED r11 (3 lenses, 0 blocking; fingerprint 0398fb3) → goldens G9-SWEET/G10-RATCHET
@@ -105,10 +109,21 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   companions amended: §1, §9 table, §12, §14.16 six-term, §14.24(a)–(g), §15-SELL governed
   block both homes, §16, changelog v1.8.0 row); hostile ROUND 1 workflow launched
   (wf_8ee9e1df-f24: arithmetic/contracts/coherence lenses + two-skeptic verification).
-  On resume: check the round-1 result; fix confirmed blocking; ledger the rest; round 2
-  only per the bounded cap; then GRANT + stamp + step 2 (G11-SELL goldens on the G2-DIST
-  host, the same blind-adjudication machinery as #8). A concurrently
-  running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
+  **RESUME POINT (2026-08-14, verified): branch `claude/partial-exits-spec` @ `b77aeb6`,
+  which is the §23 draft WITH `origin/main` merged in (the parallel session's site work +
+  its dependency bump). Gates on it: tsc clean, vitest 755 passed + 3 live-skipped
+  (54 files), build green.** The round-1 workflow referenced below (`wf_8ee9e1df-f24`) was
+  launched by a session that has since ended — **its result is NOT retrievable; re-run
+  round 1 from scratch.** Then: fix only findings that are blocking under the bounded rule
+  (§PHASE_G "Sign-off exit criterion"), ledger the rest into `rebuild/G11_LEDGER.md`,
+  round 2 only per the cap, then GRANT + stamp + step 2 (G11-SELL on the G2-DIST host,
+  the same blind-adjudication machinery as #8).
+  **ASK THE OWNER FIRST — `rebuild/OWNER_QUESTIONS.md` Q-A** (does DPI/payback include
+  selldown proceeds?). The draft took the conservative letter-of-the-rule default
+  (distributions-only + a separately-labelled memo line). Flipping it after step 2 costs a
+  fixture re-pin, so raise it BEFORE the goldens are adjudicated. Q-B (selldown ∧ rollover)
+  is pre-resolved by rejection; it only reopens if the owner wants the combination.
+  A concurrently running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
   stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
   Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
   continue it; do not restart #7 from scratch.
