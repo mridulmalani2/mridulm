@@ -542,7 +542,7 @@ export interface ExitBlock {
   /** = exit_ev − payoff + cash_at_exit − exit_fees − monitoring_termination (SPEC §9). */
   exit_equity_pre_mip_total: number;
   mip_payout: number;
-  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net ≡ exit_equity_pre_mip_total (§14.16 five-term [v1.7.0]); sponsor_share ≡ final sponsor_net cashflow. */
+  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net + selldown_buyer_share ≡ exit_equity_pre_mip_total (§14.16 SIX-term [v1.8.0]); sponsor_share ≡ final sponsor_net cashflow, net of any §23 selldown. */
   sponsor_share: number;
   rollover_share: number;
   /** §22.10 [v1.7.0]: unconditional carriers, `0.0` when the instruments are off — the
@@ -552,6 +552,13 @@ export interface ExitBlock {
    *  their instruments are null, so the three-term form is the degenerate case). */
   management_ordinary_share: number;
   warrant_payout_net: number;
+  /** §23.10 [v1.8.0]: the §14.16 mirror's SIXTH term — the selldown buyer's exit claim.
+   *  Unconditional carrier, `0.0` when no `structure.selldown` is configured (the same
+   *  committed-zero-column precedent as the two fields above), so the five-term form is
+   *  the degenerate case and every pre-v1.8.0 golden still closes. When an event IS
+   *  configured, `sponsor_share` carries the RETAINED (1 − fraction) only and this field
+   *  carries `fraction ×` the same post-§10/post-§22.6 split (§23.5). */
+  selldown_buyer_share: number;
 }
 
 /**

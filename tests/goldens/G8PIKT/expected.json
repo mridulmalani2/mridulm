@@ -111,6 +111,7 @@
   "mip_payout": 19.7,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
+  "selldown_buyer_share": 0.0,
   "sponsor_share": 699.72,
   "unamortized_fees_written_off": 2.93,
   "warrant_payout_net": 0.0

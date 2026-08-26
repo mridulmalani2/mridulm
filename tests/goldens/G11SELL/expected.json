@@ -98,8 +98,8 @@
    0.0,
    12.09,
    15.34,
-   10.0,
-   8.0
+   7.5,
+   6.0
   ],
   "trap_level": 2.75
  },
@@ -114,55 +114,10 @@
   "mip_payout": 0.0,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
-  "selldown_buyer_share": 0.0,
-  "sponsor_share": 1044.06,
+  "selldown_buyer_share": 261.02,
+  "sponsor_share": 783.05,
   "unamortized_fees_written_off": 1.89,
   "warrant_payout_net": 0.0
- },
- "fund": {
-  "committed_capital": 645.9475,
-  "fund_lp_net": {
-   "dpi": [
-    0.0,
-    0.019796,
-    0.044069,
-    0.05902,
-    1.549326
-   ],
-   "irr": 0.098058,
-   "moic": 1.549326,
-   "payback_year": null
-  },
-  "gp_carry": [
-   0.0,
-   0.0,
-   0.0,
-   0.0,
-   88.708992
-  ],
-  "lp_contributions": [
-   587.225,
-   11.7445,
-   11.7445,
-   11.7445,
-   11.7445,
-   11.7445
-  ],
-  "lp_distributions": [
-   0.0,
-   12.089724,
-   15.341142,
-   10.0,
-   963.352602
-  ],
-  "mgmt_fees_net": [
-   11.7445,
-   11.7445,
-   11.7445,
-   11.7445,
-   11.7445
-  ],
-  "paid_in_total": 645.9475
  },
  "operating": [
   {
@@ -245,9 +200,9 @@
   "dpi": [
    0.0,
    0.0206,
-   0.0467,
-   0.0637,
-   0.0774
+   0.3841,
+   0.3968,
+   0.4071
   ],
   "payback_year": null,
   "pre_promote": {
@@ -268,13 +223,13 @@
     -587.22,
     0.0,
     12.09,
-    15.34,
-    10.0,
-    1052.06
+    213.45,
+    7.5,
+    789.05
    ],
-   "irr": 0.133906,
-   "irr_mid_year": 0.134572,
-   "moic": 1.8553
+   "irr": 0.131313,
+   "irr_mid_year": 0.135917,
+   "moic": 1.7405
   },
   "unlevered": {
    "cashflows": [
@@ -336,6 +291,13 @@
    "undrawn_commitment": 55.0
   }
  ],
+ "selldown": {
+  "fraction": 0.25,
+  "implied_event_equity": 792.44,
+  "implied_event_ev": 1082.28,
+  "selldown_proceeds": 198.11,
+  "year": 3
+ },
  "sources_uses": {
   "cash_to_balance_sheet": 10.0,
   "debt_at_par": [

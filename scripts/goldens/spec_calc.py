@@ -19,6 +19,13 @@ notes as EQUITY + the §22.5 marginal ordinary ratchet), the §22.4 marginal pro
 (one tier ≡ §10 verbatim), the SINGULAR §22.6 warrant, and the §22.7 exit pipeline. Golden
 scope only: no interim distributions under a strip or warrant (§22.13(vii) is a directed
 engine fixture, not a golden).
+[v1.8.0] Scope extended for Phase 6 / backlog #7 (§23): the SECONDARY selldown — one event at
+the end of year t < N, valued at `event_multiple × EBITDA_adj[t]` less §11 net debt at t, with
+the seller/buyer partition applied to every later sponsor-side flow (§23.5) and the §9 DPI /
+payback headline on the REALIZED-PROCEEDS basis (owner question Q-A, resolved 2026-08-27 —
+distributions AND selldown proceeds; the final exit is still excluded). Golden scope: no
+rollover, no strip and no MIP under a selldown (§23.3 gates; §23.13 (iii)/(x) are directed
+engine fixtures, not goldens).
 """
 
 import json, csv, math, os, sys
@@ -186,6 +193,7 @@ def run(golden):
     ufcf_stream = []          # unlevered (§9): interim UFCF inflows
     u_acq, u_post = (a["tax"]["nol"]["acquired_opening"] if acq_usable else 0.0), 0.0  # unlevered NOL state
     ebitda_adj_full = None    # full-precision exit-year EBITDA_adj (§15: no intermediate rounding)
+    event_state = []          # §23.2 [v1.8.0]: per-year (EBITDA_adj[t], §11 net debt END of t)
 
     for t in range(N):
         exit_year = (t == N - 1)
@@ -363,6 +371,13 @@ def run(golden):
         c -= paid
         paid_by_year.append(paid)
         closing_cash = c
+        # §23.2 [v1.8.0]: the selldown's year-t measurement pair, taken at the END of t —
+        # AFTER the year's step-7 distribution, because the sale settles after the year's
+        # flows (§23.2's boundary, which is also what makes the year-t distribution the
+        # SELLER's). `gross_debt_end` is already par+PIK outstanding PLUS the drawn
+        # revolver — verbatim the debt definition §11 net leverage uses, which is what
+        # §23.2 names. Full precision: no r2 anywhere on this pair (§15).
+        event_state.append((ebitda_adj, gross_debt_end - closing_cash))
 
         # balances forward
         for tr in terms:
@@ -463,7 +478,31 @@ def run(golden):
     exit_fees = a["exit"]["fees_pct"] * exit_ev
     exit_eq = exit_ev - payoff + cash - exit_fees
     cum_dist = sum(paid_by_year)                       # total equity distributions over the hold
-    sponsor_paid = [p * sponsor_dist_share for p in paid_by_year]
+
+    # ── §23 [v1.8.0] the SECONDARY selldown — the event, then the partition ─────
+    sd = golden.get("selldown")
+    sell_year, sell_f, sell_proceeds = None, 0.0, 0.0
+    implied_ev = implied_eq = None
+    if sd is not None:
+        # §23.3 input gates. In the reference these are ASSERTIONS: the golden may not
+        # carry a rejected shape, and a silently-accepted one would make the fixture lie.
+        assert a.get("rollover_equity", 0.0) == 0.0, "§23.3(i): selldown ∧ rollover REJECTED"
+        assert sweet is None, "§23.3: selldown ∧ sweet_equity REJECTED"
+        assert 0.0 < sd["fraction"] < 1.0, "§23.3: fraction ∈ (0,1), OPEN"
+        assert 1 <= sd["year"] <= N - 1, "§23.3: year ∈ {1..N−1} (t = N collides with the §9 exit)"
+        assert sd["event_multiple"] > 0.0, "§23.3: event_multiple > 0"
+        sell_year, sell_f = sd["year"], sd["fraction"]
+        ev_ebitda, ev_net_debt = event_state[sell_year - 1]
+        # §23.2: the §9 valuation FORM evaluated at t — never an engine-invented mark.
+        implied_ev = sd["event_multiple"] * ev_ebitda
+        implied_eq = implied_ev - ev_net_debt          # SIGNED; may be ≤ 0 (§23.2)
+        sell_proceeds = sell_f * implied_eq            # the sponsor's year-t inflow, SIGNED
+    # §23.5 the seller/buyer partition, interim leg: flows STRICTLY AFTER the event year
+    # scale by (1 − f). The year-t distribution is the SELLER's WHOLE share (§23.2's
+    # boundary), so the comparison is `>`, not `>=` — the off-by-one that would move
+    # `f × share` of period-t money is §23.13(iv)'s mutant.
+    sponsor_paid = [p * sponsor_dist_share * ((1.0 - sell_f) if (t + 1) > (sell_year or N + 1) else 1.0)
+                    for t, p in enumerate(paid_by_year)]
     # ── §22.2 loan notes (EQUITY) — the accretion walk; no year-0 accretion ──────
     # Golden scope runs no interim distributions under a strip, so redeemed[t] = 0 for
     # t < N and the walk lands on the §14.23(a) closed form LN[N] = LN[0] × (1+rate)^N.
@@ -551,9 +590,16 @@ def run(golden):
         mgmt_share = 0.0
         inst_ord = pot        # warrant-only arm: institution_ordinary_share ≡ sponsor_share (§22.7)
         V_final = None; inst_moic = None; tiers_reached = 0; mgmt_eff_pct = None
-    # §14.16 five-term mirror, asserted on full-precision internals (rollover 0 in scope)
-    assert abs(sponsor_share + 0.0 + mip_payout + mgmt_share + w_net - exit_eq) < 1e-9, \
-        "§14.16 five-term mirror violated in the reference!"
+    # §23.5 the partition's EXIT leg: the buyer takes f of the POST-§10 / POST-§22.6
+    # sponsor split — i.e. of exactly the number the sponsor would otherwise have kept.
+    # Taking it before the promote would hand the buyer a share of the MIP (§23.4).
+    sell_buyer_share = sell_f * sponsor_share
+    sponsor_share = sponsor_share - sell_buyer_share
+    # §14.16 SIX-term mirror [v1.8.0 — §23.5], asserted on full-precision internals
+    # (rollover 0 in scope; the sixth term is 0 whenever no selldown is configured, so
+    # the five-term form is the degenerate case and every pre-v1.8.0 golden still closes).
+    assert abs(sponsor_share + 0.0 + mip_payout + mgmt_share + w_net + sell_buyer_share - exit_eq) < 1e-9, \
+        "§14.16 six-term mirror violated in the reference!"
     if sweet and (sponsor_share + sponsor_paid[-1] if sponsor_paid else sponsor_share) >= 0:
         # §14.23(d) mirror on its own domain (configured strip, positive plug, period-N flow ≥ 0)
         assert abs((ln_redeemed + inst_ord) - V_final) < 1e-9, "§14.23(d): V_final must equal the sponsor's realized value!"
@@ -563,19 +609,47 @@ def run(golden):
     # equity/financing flow — the unlevered stream is capital-structure-blind). §14.16: the
     # year-N distribution and the exit settle in the SAME period-N flow.
     sponsor_cfs = [-sponsor_equity] + sponsor_paid[:-1] + [sponsor_share + sponsor_paid[-1]]
+    if sd is not None:
+        # §9 membership [v1.8.0]: the proceeds are IN sponsor_net at year t and MERGE with
+        # the seller's year-t distribution share into ONE period-t flow (one flow per
+        # period — the §14.16 year-N precedent applied at an interim year). Index `sell_year`
+        # is the year-t slot because cfs[0] is t=0 (§23.3 pins year ≤ N−1, so this never
+        # lands on the exit slot).
+        sponsor_cfs[sell_year] += sell_proceeds
+        # NOT added to pre_promote: the buyer's exit share already settles INSIDE
+        # exit_equity_pre_mip_total, which is that stream's exit inflow, so adding the
+        # proceeds at t would count the sold slice twice (§9's netted-inside sense).
+        # NOT added to unlevered: an equity/financing flow — capital-structure-blind.
     # §9 [v1.7.0]: pre_promote — the TOTAL pre-incentive equity stream — takes the
     # management subscription into its t=0 outflow (byte-identical when the strip is null).
     prepromote_cfs = [-(sponsor_equity + mgmt_sub)] + paid_by_year[:-1] + [exit_eq + paid_by_year[-1]]
     unlev_cfs = [-(ev + txn)] + ufcf_stream[:-1] + [ufcf_stream[-1] + exit_ev - exit_fees]
 
-    # §9 [v1.1.0] DPI & payback — on DISTRIBUTIONS ALONE; exit proceeds never count toward
-    # payback (the de-degeneration, ledger L-10). Payback is N/A when never reached in-hold.
+    # §9 DPI & payback — the REALIZED-PROCEEDS basis [v1.1.0 de-degenerated; v1.8.0 §23.6,
+    # owner question Q-A resolved 2026-08-27]. The numerator is cash the sponsor has actually
+    # received BEFORE the exit: §3-step-7 distributions PLUS §23 selldown proceeds. The FINAL
+    # EXIT still never counts in either — that, and only that, is what L-10 de-degenerated
+    # (a ratio that counts its own exit reports DPI ≡ MOIC and payback ≡ N for every deal).
+    # An interim realization causes no such collapse, so it counts. Payback is N/A when the
+    # check is never repaid inside the hold.
     cum, dpi, payback = 0.0, [], None
     for t in range(N):
         cum += sponsor_paid[t]
+        if sd is not None and (t + 1) == sell_year:
+            cum += sell_proceeds                       # SIGNED — see the monotonicity note
         dpi.append(r4(cum / sponsor_equity) if sponsor_equity > 0 else None)
         if payback is None and sponsor_equity > 0 and cum >= sponsor_equity:
             payback = t + 1
+    # §14.18 [v1.8.0] monotonicity with its ONE bounded carve-out: `implied_event_equity` may
+    # be ≤ 0 (§23.2), and a negative-proceeds sale genuinely LOWERS realized cash — so dpi[]
+    # may fall at exactly `sell_year` and at NO other year. Asserted, not assumed: a floor on
+    # the numerator would fabricate cash, and an unbounded carve-out would hide a real defect.
+    for t in range(1, N):
+        if dpi[t] is None or dpi[t - 1] is None:
+            continue
+        if dpi[t] < dpi[t - 1] - 1e-12:
+            assert sd is not None and (t + 1) == sell_year and sell_proceeds < 0.0, \
+                "§14.18/§14.24(h): dpi fell at year %d outside the selldown carve-out!" % (t + 1)
     out["exit"] = {"exit_ebitda_basis_value": r2(exit_ebitda), "exit_ev": r2(exit_ev),
                    "debt_payoff_at_par_plus_pik": r2(payoff), "cash_at_exit": r2(cash),
                    "exit_fees": r2(exit_fees), "monitoring_termination": 0.0,
@@ -584,7 +658,10 @@ def run(golden):
                    "sponsor_share": r2(sponsor_share), "rollover_share": 0.0,
                    # §22.10 [v1.7.0]: unconditional carriers, 0.0 when the instruments are off
                    "management_ordinary_share": r2(mgmt_share),
-                   "warrant_payout_net": r2(w_net)}
+                   "warrant_payout_net": r2(w_net),
+                   # §23.10 [v1.8.0]: the §14.16 mirror's SIXTH term, likewise unconditional
+                   # (0.0 when no selldown is configured — the committed-zero-column precedent)
+                   "selldown_buyer_share": r2(sell_buyer_share)}
     # §22.10 [v1.7.0]: equity_strip is emitted iff sweet_equity or warrant is configured
     # (null ⇔ both null — omitted from the fixture per the ModelOutput.fund precedent).
     if sweet or warr:
@@ -604,6 +681,39 @@ def run(golden):
             "management_effective_ordinary_pct": (r4(mgmt_eff_pct) if mgmt_eff_pct is not None else None),
             "institution_moic_at_ratchet": (r4(inst_moic) if inst_moic is not None else None),
         }
+    # §23.10 [v1.8.0]: `selldown` is emitted iff the event is configured (null ⇔ input null —
+    # OMITTED from the fixture, the ModelOutput.fund / equity_strip precedent verbatim).
+    # NO cumulative-realized memo array: under §23.6's realized basis that series IS
+    # dpi[] × sponsor_equity, and a derivable number may not become a second surface.
+    if sd is not None:
+        out["selldown"] = {"year": sell_year, "fraction": sell_f,
+                           "implied_event_ev": r2(implied_ev),
+                           "implied_event_equity": r2(implied_eq),
+                           "selldown_proceeds": r2(sell_proceeds)}
+        # §23.9(f)/§14.24(f): the reference emits no `coherence` block (§17 item (xi)), and
+        # the WARN's condition is fully derivable from committed leaves — `selldown_proceeds`
+        # vs `fraction × sources_uses.sponsor_equity` — so it is pinned in __main__ from the
+        # fixture rather than added as a leaf ModelOutput does not have.
+        # ── §14.9(b) [v1.8.0] the walk-down identity, INDEPENDENTLY re-derived here ──
+        # The reference emits no `bridge` block (§17 item (x)), so this is an ASSERT rather
+        # than a fixture leaf — and it is worth asserting precisely because residual (b)
+        # cannot catch an error in this term (v1.1.2: residual (b) re-verifies only (a)).
+        # With the company path byte-identical (§14.24(g)) the ENTIRE correction to the
+        # sponsor's delta is `proceeds − buyer_share`, i.e. MINUS the buyer Δ and nothing
+        # else. A second `+ proceeds` line would double-count by exactly the proceeds.
+        sell_buyer_delta = sell_buyer_share - sell_proceeds
+        # the no-event counterfactual delta, reconstructed from the partition itself:
+        base_sponsor_share = sponsor_share + sell_buyer_share
+        base_sponsor_dist = sum(p * sponsor_dist_share for p in paid_by_year)
+        base_delta = base_sponsor_share + base_sponsor_dist - sponsor_equity
+        this_delta = sponsor_share + sum(sponsor_paid) + sell_proceeds - sponsor_equity
+        buyer_interim = base_sponsor_dist - sum(sponsor_paid)   # leaves via the paydown bar
+        assert abs((base_delta - buyer_interim - sell_buyer_delta) - this_delta) < 1e-9, \
+            "§14.9(b): the ONE-term selldown walk-down does not land on the sponsor delta!"
+        assert abs((base_delta - buyer_interim + sell_proceeds - sell_buyer_delta) - this_delta) > 1e-9 \
+               or abs(sell_proceeds) < 1e-9, \
+            "§14.9(b): the TWO-TERM form must NOT also close — the mutant would be vacuous!"
+
     # §19 [v1.4.0]: the overlay runs INSIDE run() on full-precision locals (v1.0.3 lesson)
     if golden.get("fund") is not None:
         out["fund"] = fund_overlay(golden["fund"], sponsor_equity, sponsor_paid, sponsor_share, None)
@@ -793,6 +903,15 @@ def g9_sweet():
                     "strike_total": 2.0}
     return g
 
+# G11-SELL — the §23 [v1.8.0] partial-exit golden (§23.12). Host = G2-DIST, because it
+# already carries the live distribution schedule, the RP trap and the v1.1.0 DPI machinery
+# the selldown has to interact with. EXACTLY ONE field differs from G2-DIST — the event —
+# so every difference is attributable to §23 alone (the dist_variant discipline).
+def g11_sell():
+    g = dist_variant("G2", G2_DIST_REQUESTS, G2_DIST_TRAP)
+    g["selldown"] = {"year": 3, "fraction": 0.25, "event_multiple": 8.5}
+    return g
+
 def g10_ratchet():
     import copy
     g = copy.deepcopy(GOLDENS["G3"])
@@ -945,6 +1064,8 @@ if __name__ == "__main__":
     # capital-structure-blind (byte-identical too) — every other difference is §20's alone.
     results["G8-PIKT"] = run(g8_pikt())
     # §22 [v1.7.0]: the two Phase-5 goldens (§22.12)
+    # §23 [v1.8.0]: G11-SELL = G2-DIST + exactly one event (§23.12)
+    results["G11-SELL"] = run(g11_sell())
     results["G9-SWEET"] = run(g9_sweet())
     results["G10-RATCHET"] = run(g10_ratchet())
     _g3, _g9, _g10 = results["G3"], results["G9-SWEET"], results["G10-RATCHET"]
@@ -965,6 +1086,101 @@ if __name__ == "__main__":
     assert "equity_strip" not in _g10, "§22.10: equity_strip omitted when both instruments are null"
     assert _g9["returns"]["sponsor_net"]["moic"] == _g9["equity_strip"]["institution_moic_at_ratchet"], \
         "§14.23(d): the ratchet's own test must agree with the headline MOIC (4dp fixture)!"
+    # ── §23.12 [v1.8.0] G11-SELL's committed claims, checked at generation time ─────────
+    _g11, _g2d = results["G11-SELL"], results["G2-DIST"]
+    # §14.24(g) COMPANY INVARIANCE — the sale never transits the company, so every
+    # company-side block is byte-identical to the host. This is the feature's structural
+    # claim; if it fails, "secondary-only" is not true of the reference either.
+    # NOTE `distributions` is deliberately NOT in this list: its `sponsor_share_paid` leaf is
+    # a SPONSOR-side quantity and genuinely partitions (§23.5), which is asserted separately
+    # below. Its company leaves — what was requested, what the company paid, the trap — must
+    # not move, and that is the real content of the invariance claim for this block.
+    for blk in ("sources_uses", "operating", "tax", "waterfall", "tranches",
+                "balance_sheet", "credit", "revolver"):
+        assert _g11.get(blk) == _g2d.get(blk), f"§14.24(g): G11-SELL {blk} diverged from G2-DIST!"
+    # §9: the unlevered stream is capital-structure-blind and the event is an equity flow.
+    assert _g11["returns"]["unlevered"] == _g2d["returns"]["unlevered"], \
+        "§9: G11-SELL unlevered stream moved — the selldown leaked into the unlevered path!"
+    # §23.2's event chain, re-derived from the HOST's own committed year-3 leaves rather
+    # than from a copied digit. NOTE the fixture carries the FULL-PRECISION chain and the
+    # §23.12 display seeds are 2dp-derived, so they differ in the cents (the v1.0.3 rule:
+    # never re-read a display value as an input). These bounds are the 2dp reconstruction
+    # error, and the exact digits are what the two blind adjudication passes sign.
+    _sd = _g11["selldown"]
+    _y3 = 2                                  # year 3 → 0-indexed
+    _ev_seed = 8.5 * _g2d["operating"][_y3]["ebitda_adj"]
+    _nd_seed = (_g2d["tranches"]["TLB"][_y3]["ending_balance"]
+                - _g2d["waterfall"][_y3]["closing_cash"])          # no revolver drawn in y3
+    assert abs(_sd["implied_event_ev"] - _ev_seed) < 0.05, \
+        f"§23.2: implied_event_ev {_sd['implied_event_ev']} ≠ 8.5 × EBITDA_adj[3] ({_ev_seed})"
+    assert abs(_sd["implied_event_equity"] - (_ev_seed - _nd_seed)) < 0.05, \
+        f"§23.2: implied_event_equity {_sd['implied_event_equity']} ≠ EV − net debt ({_ev_seed - _nd_seed})"
+    assert abs(_sd["selldown_proceeds"] - 0.25 * _sd["implied_event_equity"]) < 5e-3, \
+        "§23.2: selldown_proceeds ≠ fraction × implied_event_equity"
+    # §23.5 the partition: the buyer takes f of the post-promote sponsor split, the seller 1−f
+    _E = _g2d["exit"]["sponsor_share"]
+    assert abs(_g11["exit"]["sponsor_share"] - 0.75 * _E) < 5e-3, "§23.5: sponsor exit share ≠ (1−f) × the host's"
+    assert abs(_g11["exit"]["selldown_buyer_share"] - 0.25 * _E) < 5e-3, "§23.5: buyer share ≠ f × the host's"
+    # §14.16 six-term mirror on the COMMITTED (r2) leaves, not just the internals
+    # (the identity is EXACT on the full-precision internals — asserted at 1e-9 inside run().
+    #  Here the six claimant leaves and the total are each r2-rounded independently, so the
+    #  admissible residual is 7 × half-a-cent = 0.035, NOT §15's single-flow ±$0.005m. Using
+    #  the flow tolerance here would be a display-precision artifact, the v1.0.3 mistake.)
+    _x = _g11["exit"]
+    _mirror = (_x["sponsor_share"] + _x["rollover_share"] + _x["mip_payout"]
+               + _x["management_ordinary_share"] + _x["warrant_payout_net"]
+               + _x["selldown_buyer_share"] - _x["exit_equity_pre_mip_total"])
+    assert abs(_mirror) <= 0.035, \
+        f"§14.16: the six-term mirror does not close on G11-SELL's committed leaves (residual {_mirror})!"
+    # The COMPANY leaves of `distributions` must not move — the company pays what it always
+    # paid, and the trap binds where it always bound (§14.24(g) for this block).
+    for _k in ("requested", "paid", "cumulative_paid", "trap_level", "blocked_years"):
+        assert _g11["distributions"][_k] == _g2d["distributions"][_k], \
+            f"§14.24(g): G11-SELL distributions.{_k} moved — the event touched the company!"
+    # §23.2/§23.5 the boundary, on the SPONSOR-side leaf: years 1..t match the host EXACTLY
+    # (the year-t distribution is the SELLER'S WHOLE share) and only years t+1.. scale by
+    # (1−f). The `>=` off-by-one that would hand the buyer year 3 is §23.13(iv)'s mutant.
+    _sp11, _sp2d = _g11["distributions"]["sponsor_share_paid"], _g2d["distributions"]["sponsor_share_paid"]
+    assert _sp11[:3] == _sp2d[:3], "§23.2: the seller keeps the WHOLE year-t distribution"
+    for _t in (3, 4):
+        assert abs(_sp11[_t] - 0.75 * _sp2d[_t]) < 5e-3, f"§23.5: year {_t+1} sponsor share ≠ (1−f) × the host's"
+    _c11, _c2d = _g11["returns"]["sponsor_net"]["cashflows"], _g2d["returns"]["sponsor_net"]["cashflows"]
+    assert _c11[:3] == _c2d[:3], "§23.2: the pre-event sponsor flows (t=0..2) must be untouched"
+    assert abs(_c11[3] - (_c2d[3] + _sd["selldown_proceeds"])) < 5e-3, \
+        "§23.2/§9: year 3 must carry the SELLER's whole distribution PLUS the proceeds, in ONE flow"
+    assert abs(_c11[4] - 0.75 * _c2d[4]) < 5e-3, "§23.5: year 4 must scale by (1−f)"
+    # §23.6 the REALIZED basis (owner question Q-A) — the year-3 leaf is the discriminator a
+    # distributions-only engine cannot pass. Asserted as a RATIO, never against a copied digit.
+    # Rebuilt from G11-SELL's OWN committed sponsor-share leaves plus the proceeds — never
+    # from a copied digit, so the assert re-derives the basis rather than restating it.
+    _E0 = _g2d["sources_uses"]["sponsor_equity"]
+    _cum = 0.0
+    for _t in range(5):
+        _cum += _sp11[_t] + (_sd["selldown_proceeds"] if _t + 1 == 3 else 0.0)
+        assert abs(_g11["returns"]["dpi"][_t] - round(_cum / _E0, 4)) < 1e-4, \
+            f"§23.6: dpi[{_t+1}] is not on the realized-proceeds basis!"
+    # and the EXIT is still excluded from the numerator — the L-10 half that survives Q-A
+    assert _cum < _g11["returns"]["sponsor_net"]["moic"] * _E0 - 5e-3, \
+        "§9/§23.6: the final-exit flow leaked into the DPI numerator!"
+    assert _g11["returns"]["dpi"][2] > 8 * _g2d["returns"]["dpi"][2], \
+        "§23.12: the year-3 DPI leaf must be an ~8x discriminator of the Q-A basis"
+    # §23.13(v)'s pin is a DIRECTED fixture, not this golden: 239.04 never reaches the 587.22
+    # check, so payback stays null on BOTH bases here and the golden cannot discriminate it.
+    assert _g11["returns"]["payback_year"] is None and _g2d["returns"]["payback_year"] is None, \
+        "§23.12: payback must stay null on both — the reachability pin belongs to §23.13(v)"
+    # §23.12's direction claims. IRR FALLS and MOIC falls: the sold slice's own implied return
+    # is ABOVE the deal's, so releasing it two years early gives up return. "Earlier money
+    # lifts IRR" holds only at or below the deal's own rate — this is the assert that says so.
+    assert _g11["returns"]["sponsor_net"]["irr"] < _g2d["returns"]["sponsor_net"]["irr"], \
+        "§23.12: sponsor IRR must FALL — an 8.5x event under a 9x exit is value-dilutive"
+    assert _g11["returns"]["sponsor_net"]["moic"] < _g2d["returns"]["sponsor_net"]["moic"], \
+        "§23.12: sponsor MOIC must FALL"
+    # §23.12: NO below-cost WARN on this golden (the firing arm is §23.13(ix)'s directed pair).
+    assert _sd["selldown_proceeds"] >= 0.25 * _E0 - 5e-3, \
+        "§23.12: the golden must NOT trip selldown_below_cost"
+    # §23.10: `selldown` is OMITTED wherever the event is null (the ModelOutput.fund precedent)
+    assert "selldown" not in _g2d, "§23.10: selldown must be omitted when the event is null"
+
     # §18 [v1.3.0]: the refi is post-close, so it cannot move entry (S&U byte-identical to G2);
     # §9 is capital-structure-blind, so the unlevered stream is byte-identical to G2 as well.
     assert results["G6-REFI"]["sources_uses"] == results["G2"]["sources_uses"], "G6-REFI entry not frozen!"

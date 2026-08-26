@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT', 'G9SWEET', 'G10RATCHET']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT', 'G9SWEET', 'G10RATCHET', 'G11SELL']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);
@@ -423,5 +423,104 @@ describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet eq
     expect(g10.exit.sponsor_share).toBe(684.7);
     expect(g10.exit.management_ordinary_share).toBe(0.0);       // a promote is not the strip's field
     expect(g10.exit.warrant_payout_net).toBe(0.0);
+  });
+});
+
+describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO selldown)', () => {
+  const g2dist = load('G2DIST');
+  const g11 = load('G11SELL');
+  const sd = g11.selldown;
+  const E0 = g2dist.sources_uses.sponsor_equity;               // 587.22 — the t=0 check
+
+  it('the fixture-SHAPE change is exactly ONE zero key on every pre-v1.8.0 golden (§23.12)', () => {
+    for (const name of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD',
+                        'G6REFI', 'G7FUND', 'G8PIKT', 'G9SWEET', 'G10RATCHET']) {
+      const g = load(name);
+      expect(g.exit.selldown_buyer_share, `${name} exit zero column`).toBe(0.0);
+      expect(g.selldown, `${name} must OMIT selldown (the fund/equity_strip precedent)`).toBeUndefined();
+    }
+  });
+
+  it('§14.24(g) COMPANY INVARIANCE — a secondary never transits the company', () => {
+    for (const blk of ['sources_uses', 'operating', 'tax', 'waterfall', 'tranches',
+                       'balance_sheet', 'credit', 'revolver'] as const) {
+      expect(g11[blk], `${blk} moved under a secondary selldown`).toEqual(g2dist[blk]);
+    }
+    // §9: the unlevered stream is capital-structure-blind, and the event is an equity flow
+    expect(g11.returns.unlevered).toEqual(g2dist.returns.unlevered);
+    // the COMPANY leaves of `distributions` are untouched; only the SPONSOR-side leaf partitions
+    for (const k of ['requested', 'paid', 'cumulative_paid', 'trap_level', 'blocked_years'] as const) {
+      expect(g11.distributions[k], `distributions.${k} moved`).toEqual(g2dist.distributions[k]);
+    }
+  });
+
+  it('§23.2 the event chain — the §9 valuation FORM at year 3, never an invented mark', () => {
+    expect(sd.year).toBe(3);
+    expect(sd.fraction).toBe(0.25);
+    // 8.5 x EBITDA_adj[3], less (TLB ending y3 + 0 drawn - closing cash y3)
+    const evSeed = 8.5 * g2dist.operating[2].ebitda_adj;                       // ~1082.305 at 2dp
+    const ndSeed = g2dist.tranches.TLB[2].ending_balance - g2dist.waterfall[2].closing_cash;
+    expect(Math.abs(sd.implied_event_ev - evSeed)).toBeLessThan(0.05);         // full-precision vs 2dp seed
+    expect(Math.abs(sd.implied_event_equity - (evSeed - ndSeed))).toBeLessThan(0.05);
+    expect(Math.abs(sd.selldown_proceeds - 0.25 * sd.implied_event_equity)).toBeLessThan(0.005);
+    // §23.12: the golden must NOT trip selldown_below_cost (the firing arm is §23.13(ix)'s)
+    expect(sd.selldown_proceeds).toBeGreaterThan(0.25 * E0);
+  });
+
+  it('§23.5 the seller/buyer partition and the §14.16 SIX-term mirror', () => {
+    const base = g2dist.exit.sponsor_share;                                    // 1044.06
+    expect(Math.abs(g11.exit.sponsor_share - 0.75 * base)).toBeLessThan(0.005);
+    expect(Math.abs(g11.exit.selldown_buyer_share - 0.25 * base)).toBeLessThan(0.005);
+    const six = g11.exit.sponsor_share + g11.exit.rollover_share + g11.exit.mip_payout
+      + g11.exit.management_ordinary_share + g11.exit.warrant_payout_net
+      + g11.exit.selldown_buyer_share;
+    // seven independently r2-rounded leaves => 0.035, NOT §15's single-flow tolerance
+    expect(Math.abs(six - g11.exit.exit_equity_pre_mip_total)).toBeLessThan(0.035);
+    // exit_equity_pre_mip_total is a COMPANY number and cannot move (§14.24(g))
+    expect(g11.exit.exit_equity_pre_mip_total).toBe(g2dist.exit.exit_equity_pre_mip_total);
+  });
+
+  it('§23.2 the boundary — the SELLER takes the WHOLE year-t distribution; ONE period-t flow', () => {
+    const a = g11.distributions.sponsor_share_paid, b = g2dist.distributions.sponsor_share_paid;
+    expect(a.slice(0, 3)).toEqual(b.slice(0, 3));                              // years 1-3 untouched
+    expect(Math.abs(a[3] - 0.75 * b[3])).toBeLessThan(0.005);                  // year 4 partitions
+    expect(Math.abs(a[4] - 0.75 * b[4])).toBeLessThan(0.005);
+    const c = g11.returns.sponsor_net.cashflows, d = g2dist.returns.sponsor_net.cashflows;
+    expect(c.slice(0, 3)).toEqual(d.slice(0, 3));
+    // year 3 = the seller's whole 15.34 PLUS the proceeds, merged into ONE flow (§9)
+    expect(Math.abs(c[3] - (d[3] + sd.selldown_proceeds))).toBeLessThan(0.005);
+  });
+
+  it('§23.6 DPI is on the REALIZED-PROCEEDS basis (owner question Q-A) — the year-3 discriminator', () => {
+    let cum = 0;
+    g11.distributions.sponsor_share_paid.forEach((p: number, i: number) => {
+      cum += p + (i + 1 === sd.year ? sd.selldown_proceeds : 0);
+      expect(Math.abs(g11.returns.dpi[i] - Math.round((cum / E0) * 1e4) / 1e4),
+        `dpi[${i + 1}] off the realized basis`).toBeLessThan(1e-4);
+    });
+    // years 1-2 are pre-event and IDENTICAL to the host; year 3 steps up ~8x
+    expect(g11.returns.dpi.slice(0, 2)).toEqual(g2dist.returns.dpi.slice(0, 2));
+    expect(g11.returns.dpi[2]).toBeGreaterThan(8 * g2dist.returns.dpi[2]);
+    // the L-10 half that SURVIVES Q-A: the final exit is still excluded from the numerator
+    expect(cum).toBeLessThan(g11.returns.sponsor_net.moic * E0 - 0.005);
+    // payback stays null on BOTH bases here (239.04 never reaches 587.22) — the
+    // reachability pin is §23.13(v)'s DIRECTED fixture, which no golden can supply
+    expect(g11.returns.payback_year).toBeNull();
+    expect(g2dist.returns.payback_year).toBeNull();
+  });
+
+  it('§23.12 the direction claims — IRR and MOIC both FALL', () => {
+    // The sold slice runs [-proceeds, +buyer's y4 distribution, +buyer's y5 + exit share]:
+    // an implied ~15.9%, ABOVE the deal's own rate, so releasing it early gives up return.
+    // "Earlier money lifts IRR" holds only at or below the deal's own rate.
+    expect(g11.returns.sponsor_net.irr).toBeLessThan(g2dist.returns.sponsor_net.irr);
+    expect(g11.returns.sponsor_net.moic).toBeLessThan(g2dist.returns.sponsor_net.moic);
+    const buyer = g2dist.distributions.sponsor_share_paid.map(
+      (p: number, i: number) => (i + 1 > sd.year ? 0.25 * p : 0));
+    const slice = [-sd.selldown_proceeds, buyer[3], buyer[4] + g11.exit.selldown_buyer_share];
+    const npv = (r: number) => slice.reduce((a, c, i) => a + c / Math.pow(1 + r, i), 0);
+    let lo = 0, hi = 2;
+    for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (npv(m) > 0) lo = m; else hi = m; }
+    expect(lo).toBeGreaterThan(g2dist.returns.sponsor_net.irr);   // the whole reason IRR falls
   });
 });

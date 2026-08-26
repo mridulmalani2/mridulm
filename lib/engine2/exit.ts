@@ -12,7 +12,8 @@
  *   MIP = min(pool_pct × max(0, pre-MIP total proceeds − hurdle_moic × invested equity),
  *             exit equity available); rollover shares the post-MIP pot pari-passu
  *   (sponsor_share + rollover_share + mip_payout + management_ordinary_share +
- *   warrant_payout_net ≡ pre-MIP total — the §14.16 FIVE-term mirror [v1.7.0]; the two
+ *   warrant_payout_net + selldown_buyer_share ≡ pre-MIP total — the §14.16 SIX-term
+ *   mirror [v1.8.0]; the sixth term is 0 until §23 lands its engine step; the two
  *   new terms are 0 whenever their instruments are null).
  *
  * No imports from lib/engine (boundary test).
@@ -276,9 +277,14 @@ export function buildExitWaterfall(
     mip_payout: mip,
     sponsor_share: sponsorShare,
     rollover_share: rolloverShare,
-    // §22.10 [v1.7.0]: unconditional carriers (§14.16's FIVE-term mirror).
+    // §22.10 [v1.7.0]: unconditional carriers (§14.16's mirror).
     management_ordinary_share: managementShare,
     warrant_payout_net: warrantNet,
+    // §23.10 [v1.8.0]: the mirror's SIXTH term. The §23 event is not wired into the
+    // engine yet (that is backlog #7 step 3) — this is the SHAPE landing ahead of the
+    // arithmetic, exactly as §22.10's two carriers did, so the fixtures and the type
+    // agree today and the value stays a committed zero until the event can produce one.
+    selldown_buyer_share: 0,
   };
 
   // §22.10: null ⇔ both instruments null (the `fund` precedent).
