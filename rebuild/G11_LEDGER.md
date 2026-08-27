@@ -83,18 +83,21 @@ says STOP and escalate rather than run a third.
 Not yet done: the ledger pass below, the GRANT + fingerprint stamp + SPEC header bump to
 v1.8.0, then step 3 (engine + §23.13 fixtures + documented mutants RED and reverted).
 
-### OPEN LEDGER — fix in ONE pass before conformance
+### LEDGER PASS — DONE (one commit). All eight open items applied.
+
+| # | Item | Applied as |
+|---|---|---|
+| L1 | §23.9's clause map had no `(h)` row | Added, with the carve-out's proof sketch and an explicit pointer that §14.20(d)'s fund-layer carve-out is deliberately WIDER |
+| L2 | §17 had no entry for the realized-basis DPI on a negative-proceeds run | Folded into item (v) alongside CO-L5 |
+| L3 | §23.6 carried the whole Q-A rationale, duplicating `OWNER_QUESTIONS.md` | Trimmed to the rule + its three consequences; the evidence and rejected alternatives live in `OWNER_QUESTIONS.md` alone |
+| C-L3 | `selldown_buyer_delta`'s null-arm value unstated; §16's blanket would have typed it nullable | §23.10 now states both new `number` fields are unconditional `0.0` and are the two exceptions to the REQUIRED-with-null blanket, with the reason (nullable would break the §14.16 mirror on every pre-v1.8.0 run) |
+| C-L4 | §23.10 omitted `walkdown.sponsor_net_delta` | Named in §23.10, its outputs home |
+| C-L5 | §23.10 restated §14.24(f)'s below-cost condition in a second algebraic form | Replaced by a citation; §23.10 now carries rationale only, per §23.9's charter |
+| CO-L2 | §19.7's closed enumeration was one home short | Extended, with the point that matters: the `(1 − fraction)` scaling sits AFTER the share rule, because that rule returns 100% at rollover 0 and §23.3(i) forces rollover 0 |
+| CO-L5 | §17 items (v) and (x) stale under the realized basis | Both restated; (x) also gains the selldown walk-down term and the note that G11-SELL is the first golden where "sponsor share" ≠ "total paid" without a rollover |
+
+### OPEN LEDGER — carried to the conformance pass
 
 | # | Class | Item |
 |---|---|---|
-| L1 | wording | §23.9's clause map needs an `(h)` row for §14.24(h). |
-| L2 | consistency | §17's golden-uncovered list has no entry for the realized-basis DPI on a negative-proceeds run (§23.13(v) arm 2 covers it; only the index entry is missing). |
-| L3 | wording | §23.6 is the longest subsection in §23; its Q-A rationale lives in full in `OWNER_QUESTIONS.md`. Trim to the rule + its three consequences. |
-| C-L3 | contract gap | §23.10 is silent on `selldown_buyer_delta`'s null-arm value while §16's blanket "REQUIRED-with-null" would type it `number \| null`; every committed sibling is non-nullable. |
-| C-L4 | omission | §23.10 omits `walkdown.sponsor_net_delta`, which §23.8 and §16 both amend. |
-| C-L5 | two-home restatement | §23.10 restates §14.24(f)'s below-cost condition in a different algebraic form. Cite, don't restate (§23.9's charter; the §14.23(d) shape that cost round 9 a 4.1% float disagreement). |
-| CO-L2 | un-amended companion home | §19.7's closed enumeration of what the overlay reads is one home short — §19.3 now scales the interim leg by `(1 − fraction)` OUTSIDE the share rule and adds `selldown_proceeds`. §19.10's directed-fixture list has no §23 entry. The C-B2 shape, one subsection over; under-specifies scope rather than restating a false identity, hence ledger. |
-| CO-L5 | stale index | §17's golden-uncovered item (v) still says payback needs cumulative DISTRIBUTIONS (stale under the realized basis); item (x) needs the selldown walk-down term. |
-
-Applied in-round rather than deferred, because each had been made FALSE rather than merely
-untidy: C-L1, C-L2 (step 2a's zero column), CO-L1, CO-L3, CO-L4, CO-L6, A-L1, A-L2, A-L3, A-L4.
+| L4 | prose length | §23 is **332 lines** against PHASE_G's ~250 guideline. Two drivers: §23.13's constructed fixture inputs (genuinely normative — step 3 needs them) and inline round-1 attributions, which rule 4 says belong in the changelog row, not in normative text. Strip the attributions at conformance; keep the "un-amended, this is false by X" protective notes, which follow the committed §22 style. |

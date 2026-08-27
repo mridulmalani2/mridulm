@@ -1537,7 +1537,11 @@ not constructible in float from a full model chain;
 (iv) §10's exit-equity CAP binding on the promote (needs cumulative distributions large
 against a near-zero exit residual). Note the consequence: **dropping the `min()` entirely
 would produce a byte-identical G3-DIST**, so the cap needs its own fixture or it is untested;
-(v) payback REACHED inside the hold (needs cumulative distributions ≥ the entry check);
+(v) payback REACHED inside the hold — under the v1.8.0 REALIZED basis this needs cumulative
+distributions **plus any selldown proceeds** ≥ the entry check (§9/§14.24(h); the pre-v1.8.0
+"distributions" wording is stale). No golden reaches it; §23.13(v) arm 1 is the directed
+fixture, and arm 2 covers the realized-basis DPI FALLING on a negative-proceeds run, which
+no golden carries either;
 (vi) step 7 inside a REVOLVER-DRAW or floor-breach year — the "paid = 0 by arithmetic"
 clause of §3 (G2-DIST never draws; G5 draws but requests nothing). The draw-invariance
 result in §3.7 argues it, but no golden exercises it;
@@ -1559,6 +1563,15 @@ also the one place where §10's and §12's "cumulative distributions" differ: §
 base takes the **TOTAL** paid, §12's walk-down adds back only the **SPONSOR SHARE**. Both
 degenerate to the same number at rollover = 0 — which every golden runs — so a fixture
 CANNOT distinguish them and the engine fixture must (found by the hostile sign-off, round 1).
+**[v1.8.0]** The walk-down gains `− selldown Δ` and `sponsor_net_delta` gains
+`+ selldown_proceeds` (§14.9/§23.8); both are likewise unexercised by any golden for the same
+reason — no `bridge` block is emitted — so §23.13(vii) carries them, and it must assert BOTH
+the direct recomputation AND `bridge.reconciliation_residual`, because the two-term mutant
+moves only the residual while a wrong proceeds VALUE moves only the recomputation.
+Note G11-SELL is the FIRST golden on which "sponsor share" and "total paid" DIVERGE without a
+rollover — the §23.5 partition separates them — so its `dpi[4]`/`dpi[5]` leaves do
+discriminate the share rule, even though the §10-vs-§12 divergence above remains
+golden-invisible.
 **Now pinned** by a rollover > 0 ∧ MIP ∧ distributions case that asserts `mip_payout` matches
 the TOTAL-base formula and differs from the sponsor-share base by > $0.5m (the `total→share`
 mutant fails it), and asserts `walkdown.sponsor_net_delta` directly (closing accuracy audit
@@ -2010,7 +2023,12 @@ cuts both ways with interim distributions) — explicitly a non-claim.
 
 **§19.7 Composition.** Reads ONLY sponsor-side outputs — `distributions_paid` WITH
 `sources_uses.{sponsor_equity, rollover_equity}` through the ONE share rule
-(`sponsorShareOfDistributions`), `exit.sponsor_share`, and `gp_fee_income` [B1] — a
+(`sponsorShareOfDistributions`), `exit.sponsor_share`, and `gp_fee_income` [B1]
+**— plus, [v1.8.0 — §19.3/§23.7], `structure.selldown.{year, fraction}` and
+`selldown.selldown_proceeds`. The `(1 − fraction)` scaling of the interim leg sits AFTER the
+share rule, not inside it: `sponsorShareOfDistributions` returns 100% at rollover 0, and
+§23.3(i) forces rollover 0 wherever a selldown exists, so the share rule alone is exactly
+wrong there** — a
 POST-ENGINE layer inside `runModel` after §9/§10, before §16 coherence; it touches NO
 waterfall/tax/BS arithmetic (the §14.19 refi invariants, §3.7 trap, §11 covenants are
 upstream and unaffected). Scenarios (§13) recompute the overlay per scenario from that
@@ -3610,28 +3628,21 @@ conservation is untouched.
 count the sold slice twice (the §9 legend's situation-(2), netted-inside sense); **EXCLUDED**
 from `unlevered` (an equity/financing flow — capital-structure-blind, verbatim §9).
 **DPI and payback move to the REALIZED-PROCEEDS basis — selldown proceeds COUNT**
-[owner question Q-A, RESOLVED 2026-08-27]. `dpi[t]` = (cumulative sponsor distribution
-share through t + `selldown_proceeds` once `year ≤ t`) ÷ `sponsor_equity`; `payback_year`
-is the first t whose numerator reaches the check and is therefore REACHABLE by a selldown.
-The FINAL-EXIT flow stays excluded from both. **Why this is not a mislabel** (the v1.1.2
-class is the binding constraint, so the test is explicit): DPI's numerator is realized cash
-returned to the capital provider, and a secondary sale is realized cash — at the fund layer
-it is distributed to LPs the quarter it closes, and the ILPA-basis numerator counts it, so
-the realized basis is what "DPI" ALREADY means to the reader. The distributions-only
-reading over-applied L-10: L-10's degeneracy is caused by counting the ratio's OWN EXIT
-(at t = N that forces DPI ≡ MOIC, payback ≡ N, for every deal), and an interim realization
-at t < N causes no such collapse — it is the early liquidity the ratio exists to measure.
-CONSEQUENCES, all stated here and pinned: (i) §14.18's DPI monotonicity gains ONE carve-out,
-because `implied_event_equity` may be < 0 (§23.2) and a negative-proceeds sale genuinely
-lowers realized cash — the fall is legal at `year` and at no other year (§14.24(h));
-(ii) headline-eligibility widens — a selldown with no distribution makes DPI/payback
-headline-eligible where v1.1.0 would have de-headlined them; (iii) NO memo field is emitted:
-the distributions-only figure remains derivable from `interim_distributions_sponsor[]`, and
-a derivable number may not become a second output surface (§16's v1.1.1 precedent).
-REJECTED: distributions-only with a basis-labelled memo (the draft's conservative default —
-it blinds the headline to real cash, forces a deal-vs-fund basis asymmetry the reader must
-reconcile by hand, and buys nothing L-10 actually asked for); a THIRD ratio alongside the
-two (two ratios for one concept is the mislabel risk it claims to avoid).
+[owner question Q-A, RESOLVED 2026-08-27; §9 carries the amended definition, `rebuild/
+OWNER_QUESTIONS.md` the evidence and the rejected alternatives — neither is restated here].
+`dpi[t]` = (the POST-partition cumulative sponsor distribution share through t +
+`selldown_proceeds` once `year ≤ t`) ÷ `sponsor_equity`; `payback_year` is the first t whose
+numerator reaches the check and is therefore REACHABLE by a selldown. **The FINAL-EXIT flow
+stays excluded from both** — that half of L-10 survives Q-A untouched, and it is the half
+that does the de-degenerating work. THREE CONSEQUENCES, each pinned elsewhere and listed
+here only so none is missed: (i) §14.18's deal-layer DPI monotonicity gains ONE carve-out —
+`implied_event_equity` may be < 0 (§23.2) and a negative-proceeds sale genuinely lowers
+realized cash, so the fall is legal at `year` and at no other year (§14.24(h); the fund-layer
+sibling §14.20(d) needs a WIDER one — §19.4); (ii) headline-eligibility widens — a selldown
+with no distribution makes DPI/payback headline-eligible where v1.1.0 de-headlined them;
+(iii) NO memo field is emitted — the distributions-only series stays derivable from
+`interim_distributions_sponsor[]`, and a derivable number may not become a second output
+surface (§16's v1.1.1 precedent).
 
 **§23.7 The §19 fund overlay.** Selldown proceeds are sponsor-side money; §19.6(a)'s
 conservation extends to them, and they enter the LP assembly through the YEAR-t INTERIM leg
@@ -3700,6 +3711,13 @@ splits by the same fraction, so seller-plus-buyer conservation is exact by const
 exclusion. Domain: a selldown and a promote are configured. Rationale: §23.4. (f) →
 §14.24(f), the below-cost WARN. Domain: a selldown is configured. (g) → §14.24(g), company
 invariance. Domain: a selldown is configured. Rationale: secondary-only made structural.
+(h) → §14.24(h), the realized DPI/payback basis and its monotonicity carve-out. Domain: a
+selldown is configured. Rationale: §23.6 (owner question Q-A); the carve-out is bounded to
+`year` because for every other t the increment is `(1 − f) × paid[t] ÷ sponsor_equity`, and
+§3 step 7 floors `paid` at zero — see §23.13(v) arm 2. NOTE the FUND-layer sibling
+§14.20(d) carries a WIDER carve-out (any year whose `D < 0`, including a negative year-N
+exit share with no selldown at all — §19.4); the two are deliberately different and §19.4
+governs the fund side.
 
 **§23.10 Outputs (§16 schema, all REQUIRED-with-null, the §22.10 pattern).**
 `ModelOutput.selldown: SelldownBlock | null` (null ⇔ `selldown` input null; OMITTED from a
@@ -3713,12 +3731,23 @@ a second output surface (§16's v1.1.1 fixture-only precedent). `returns.dpi[]` 
 when off — the committed-zero-column precedent; the §14.16 mirror's sixth term).
 `ValueBridge.walkdown` gains `selldown_buyer_delta` — ONE field, `selldown_buyer_share −
 selldown_proceeds` (§14.9's amended walk; a companion `selldown_proceeds_sponsor` line is
-REJECTED as a double-count, proved there). `CoherenceFlag.code` gains
-`selldown_below_cost` (WARN, once per run): fires exactly on `implied_event_equity ×
-fraction < fraction × sponsor_equity − $0.005m` — the sold slice fetched less than its
-pro-rata share of the sponsor's entry check (COST, un-accreted — the simplest condition
-that cannot mislabel; an IRR-bearing comparator would need a mark the engine refuses to
-invent). Both sides of the band are §23.13(ix)'s fixture.
+REJECTED as a double-count, proved there) — and `walkdown.sponsor_net_delta` WIDENS to carry
+`+ selldown_proceeds` (§14.9's v1.1.2 testing note, amended; named here because §23.10 is the
+outputs home and omitting it left §23.8 and §16 as its only mention). **Both
+`ExitBlock.selldown_buyer_share` and `walkdown.selldown_buyer_delta` are unconditional
+`number` at `0.0` when no event is configured — NOT `number | null`.** They are therefore the
+two exceptions to this section's closing "REQUIRED-with-null" blanket, which describes
+`ModelOutput.selldown` alone; every committed sibling of these two
+(`ExitBlock.management_ordinary_share`, `walkdown.sweet_equity_delta`,
+`walkdown.warrant_payout_net`) is likewise non-nullable, and typing them nullable would
+break the §14.16 mirror's arithmetic on every pre-v1.8.0 run. `CoherenceFlag.code` gains
+`selldown_below_cost` (WARN, once per run), whose condition has ONE normative home —
+**§14.24(f)** — and is NOT restated here (§23.9's charter: this section states no rule of its
+own; two algebraic forms of one quantity is the §14.23(d) shape that cost round 9 a 4.1%
+float disagreement). Rationale only: the comparator is the sold slice's pro-rata share of the
+sponsor's entry check, COST and un-accreted — the simplest condition that cannot mislabel,
+since an IRR-bearing comparator would need a mark the engine refuses to invent. Both sides of
+the band are §23.13(ix)'s fixture.
 
 **§23.11 Disclosure — THE SOURCE OF THE §15 ROW** (§15 is generated from this block; the
 §22.11 discipline, both directions):
