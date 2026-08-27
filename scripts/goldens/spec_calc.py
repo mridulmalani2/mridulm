@@ -716,7 +716,8 @@ def run(golden):
 
     # §19 [v1.4.0]: the overlay runs INSIDE run() on full-precision locals (v1.0.3 lesson)
     if golden.get("fund") is not None:
-        out["fund"] = fund_overlay(golden["fund"], sponsor_equity, sponsor_paid, sponsor_share, None)
+        out["fund"] = fund_overlay(golden["fund"], sponsor_equity, sponsor_paid, sponsor_share, None,
+                                   sell_year=sell_year, sell_proceeds=sell_proceeds)
 
     out["returns"] = {
         # §1: the mid-year option is a display alternative on the SPONSOR-SIDE streams only;
@@ -977,15 +978,23 @@ def write_csv(path, res):
 
 
 # ── §19 fund/LP overlay (v1.4.0) — INDEPENDENT reference path ────────────────
-def fund_overlay(fund, sponsor_equity, sponsor_paid, exit_sponsor_share, gp_income):
+def fund_overlay(fund, sponsor_equity, sponsor_paid, exit_sponsor_share, gp_income,
+                 sell_year=None, sell_proceeds=0.0):
     """§19.3-19.5 on the run's FULL-PRECISION sponsor-side internals [v1.0.3 lesson:
     never seed from rounded display values]. Year-end order [r3/B8]: (1) ACCRUE pref on
     the pre-draw state; (2) DRAW fee_t; (3) APPLY the distribution. 'european': fee draws
-    enter unreturned + the pref base; 'american': never (§19.4)."""
+    enter unreturned + the pref base; 'american': never (§19.4).
+    [v1.8.0 — §19.3/§23.7] Under a selldown the interim leg takes BOTH amendments: the
+    caller passes an ALREADY-PARTITIONED `sponsor_paid` (limb i — the (1−f) scaling, which
+    matters precisely because §23.3(i) forces rollover to 0, the case where the pari-passu
+    share is 100%), and `selldown_proceeds` is added at t = `sell_year` here (limb ii).
+    `exit_sponsor_share` needs no amendment — it already carries the retained (1−f) only."""
     N = len(sponsor_paid)
     se = sponsor_equity
     inflow = list(sponsor_paid)
     inflow[N - 1] += exit_sponsor_share
+    if sell_year is not None:
+        inflow[sell_year - 1] += sell_proceeds
     basis = se if fund["fee_basis"] == "invested" else fund["committed_capital"]
     c, q = fund["carry_pct"], fund["catchup_pct"]
     contributions = [se] + [0.0] * N
@@ -1023,7 +1032,9 @@ def fund_overlay(fund, sponsor_equity, sponsor_paid, exit_sponsor_share, gp_inco
             payback = t
     paid_in = sum(contributions)
     # §19.6(a) conservation — EXACT on the full-precision internals
-    assert abs(sum(lp_dist) + sum(gp_carry) - (sum(sponsor_paid) + exit_sponsor_share)) < 1e-9, "§19.6(a) violated in the reference!"
+    assert abs(sum(lp_dist) + sum(gp_carry)
+               - (sum(sponsor_paid) + sell_proceeds + exit_sponsor_share)) < 1e-9, \
+        "§19.6(a) violated in the reference!"   # RHS widened v1.8.0 (§23.7): the proceeds are LP cash
     flows = [-contributions[0]] + [lp_dist[t] - contributions[t + 1] for t in range(N)]
     return {
         "lp_contributions": [r6(x) for x in contributions],

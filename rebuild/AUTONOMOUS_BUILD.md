@@ -100,33 +100,72 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
   ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
   `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
-- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23) on branch
-  `claude/partial-exits-spec`.** Progress 2026-08-14 evening: constraints dossier done
-  (DR research is EMPTY on selldowns — every rule derived from committed conventions);
-  ten design decisions recorded in `rebuild/G11_PARTIAL_EXITS_BRIEF.md`; TWO escalations
-  filed in `rebuild/OWNER_QUESTIONS.md` (Q-A DPI basis — conservative default taken;
-  Q-B rollover coexistence — rejected v1); **§23 DRAFTED @ `13d450c`** (203 lines, all
-  companions amended: §1, §9 table, §12, §14.16 six-term, §14.24(a)–(g), §15-SELL governed
-  block both homes, §16, changelog v1.8.0 row); hostile ROUND 1 workflow launched
-  (wf_8ee9e1df-f24: arithmetic/contracts/coherence lenses + two-skeptic verification).
-  **RESUME POINT (2026-08-14, verified): branch `claude/partial-exits-spec` @ `b77aeb6`,
-  which is the §23 draft WITH `origin/main` merged in (the parallel session's site work +
-  its dependency bump). Gates on it: tsc clean, vitest 755 passed + 3 live-skipped
-  (54 files), build green.** The round-1 workflow referenced below (`wf_8ee9e1df-f24`) was
-  launched by a session that has since ended — **its result is NOT retrievable; re-run
-  round 1 from scratch.** Then: fix only findings that are blocking under the bounded rule
-  (§PHASE_G "Sign-off exit criterion"), ledger the rest into `rebuild/G11_LEDGER.md`,
-  round 2 only per the cap, then GRANT + stamp + step 2 (G11-SELL on the G2-DIST host,
-  the same blind-adjudication machinery as #8).
-  **ASK THE OWNER FIRST — `rebuild/OWNER_QUESTIONS.md` Q-A** (does DPI/payback include
-  selldown proceeds?). The draft took the conservative letter-of-the-rule default
-  (distributions-only + a separately-labelled memo line). Flipping it after step 2 costs a
-  fixture re-pin, so raise it BEFORE the goldens are adjudicated. Q-B (selldown ∧ rollover)
-  is pre-resolved by rejection; it only reopens if the owner wants the combination.
-  A concurrently running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
-  stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
-  Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
-  continue it; do not restart #7 from scratch.
+- **IN FLIGHT: #7 partial exits / IPO selldown — step 2b (blind adjudication).**
+  Branch `claude/deal-engine-partial-exits-586f25`, which fast-forwarded the earlier
+  `claude/partial-exits-spec` work (that branch is still checked out in a DEAD worktree —
+  do not try to check it out; this branch contains its full history).
+
+  **Step 1 (spec §23) — DONE except the round-1 grant.** Constraints dossier + ten design
+  decisions in `rebuild/G11_PARTIAL_EXITS_BRIEF.md`; §23 drafted @ `13d450c`.
+
+  **OWNER QUESTION Q-A: RESOLVED 2026-08-27 @ `25a53e1` — DPI/payback moved to the
+  REALIZED-PROCEEDS basis (selldown proceeds COUNT).** The owner delegated the call with an
+  instruction to research market practice and adopt it; practice is not split (fund-layer DPI
+  counts a secondary the quarter it closes; deal-layer modelling splits inflows into
+  realized/unrealized). The draft's distributions-only default was L-10 OVER-APPLIED: L-10's
+  degeneracy comes from counting the ratio's OWN EXIT, which an interim realization does not
+  do. Full rationale + sources in `rebuild/OWNER_QUESTIONS.md`. It landed BEFORE adjudication,
+  so there was NO fixture re-pin, and it is a net simplification (no memo field — the
+  distributions-only series stays derivable; the deal-vs-fund layer note became one of
+  AGREEMENT). **Q-A is CLOSED. Do not reopen it.** Q-B stays rejected-by-design.
+
+  **TWO BLOCKING defects were found while re-deriving the golden under the flip** (not by
+  review — by doing the arithmetic), both fixed in `25a53e1` and recorded in
+  `rebuild/G11_LEDGER.md`: (B1) §23.8/§14.9(b)'s walk-down had TWO terms and double-counted
+  the proceeds — the whole correction is `proceeds − buyer_share`, ONE term, and residual (b)
+  could never have caught it (v1.1.2); (B2) §23.12 asserted the WRONG IRR direction — it
+  FALLS, because the sold slice's own implied return (≈15.9%) is ABOVE the deal's.
+
+  **Step 2a — DONE @ `3e40cbe`.** `scripts/goldens/spec_calc.py` gained the §23 arithmetic
+  (spec-literal, engine-import-free) and **G11-SELL** = G2-DIST + `{year 3, fraction 0.25,
+  event_multiple 8.5}`. Fixture SHAPE change landed with **ZERO value movement**: 14
+  insertions, 0 deletions across the whole fixture tree (one `exit.selldown_buyer_share: 0.0`
+  key each), with the matching unconditional carrier in `types.ts`/`exit.ts` — the §22.10
+  precedent verbatim, which is what keeps the gate green before step 3.
+  Reference output: proceeds 198.11, sponsor exit 783.05, buyer 261.02, buyer Δ 62.91,
+  IRR 13.1313% (host 13.3906%), MOIC 1.7405 (host 1.8553), payback null,
+  dpi [0.0, 0.0206, 0.3841, 0.3968, 0.4071] — the year-3 leaf is an **8.2× discriminator**
+  of the Q-A basis, so no distributions-only engine can pass it.
+  NOTE §23.12's DISPLAY seeds are 2dp reconstructions and differ in the cents from the
+  full-precision fixture (1082.305 vs 1082.28) — restate them from the adjudicated chain.
+
+  **Round 1 (post-flip text) — PARTIAL.** Three lenses launched; a session usage limit killed
+  two mid-read. The CONTRACTS lens REFUSED with **3 blocking, all verified against the file
+  and all applied**: (C-B1) §14.9 clause 9 — the bridge identity's OTHER full-restatement
+  home — was never amended, leaving it false by ≈$62.90m on every selldown run (the §22
+  G9-SWEET residual repeated); (C-B2) §19's LP interim leg was un-amended in BOTH directions
+  — the proceeds missing from §19.3/§19.6(a) (≈$198.11m on a `selldown ∧ fund` run, which
+  §23.3 permits) and §14.24(c)'s (1−f) partition never reaching the fund layer at all (≈$4.5m)
+  — the §22.7 three-call-site lesson repeated; (C-B3) a negative `implied_event_equity`
+  reaches §19.4's waterfall, which has no `D < 0` arm, leaving four `fund_lp_net` outputs
+  undefined on a reachable input and violating §14.20(d). Two ledger items were PROMOTED and
+  fixed because step 2a had just made them FALSE. Full record: `rebuild/G11_LEDGER.md`.
+
+  **RESUME POINT — gates green: tsc clean, vitest 762 passed + 3 live-skipped (54 files),
+  build green.** TWO things are OWED before this feature may be granted, both killed by the
+  same usage limit, and NEITHER may be skipped:
+  1. **Round 1's ARITHMETIC and COHERENCE lenses.** Re-run against the CURRENT §23 (not the
+     `13d450c` draft, and not the pre-C-B fixes text). Under the round cap this still counts
+     as round 1. Given that the one lens that DID finish found three real blocking defects —
+     two of them exact repeats of §22 findings in un-amended companion homes — do not assume
+     the other two lenses will come back clean.
+  2. **Step 2b: the TWO blind adjudication passes on G11-SELL** (each derives from SPEC text
+     alone and WRITES its numbers to scratch BEFORE opening the fixture), recorded in
+     `tests/goldens/DERIVATION.md`, which currently carries NO §23 record.
+     **G11-SELL is NOT gospel until they sign. Do not start step 3's mutants against it.**
+  Then: apply blocking findings only (bounded rule), fix the four open ledger items
+  (C-L3..C-L6 + L1..L3) in ONE pass, GRANT + stamp the fingerprint + bump the SPEC header to
+  v1.8.0, then step 3 (engine + §23.13 fixtures + documented mutants RED and reverted).
 
 ### Backlog — 12 items, 6 merged
 
