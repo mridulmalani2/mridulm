@@ -765,3 +765,91 @@ fixture carries that mutant, exactly as the spec states.
 Scratch protocol upheld: `blind_pass_1.md` / `blind_pass_2.md` were committed to the session
 scratchpad BEFORE either fixture was opened; their full content is reproduced above (the
 scratch paths are session-scoped and do not survive — this record is the durable copy).
+
+## G11-SELL (§23 v1.8.0, Phase-6 step 2) — adjudication record
+
+**Golden.** `G11-SELL = G2-DIST + exactly one event` — `selldown = {year: 3, fraction: 0.25,
+event_multiple: 8.5}`, every other input identical (the `dist_variant` discipline), so every
+difference is attributable to §23 alone. Host chosen because G2-DIST already carries the live
+distribution schedule, the RP trap and the v1.1.0 DPI machinery the selldown interacts with.
+
+**Owner question Q-A was RESOLVED to the REALIZED-PROCEEDS basis BEFORE this step ran**
+(2026-08-27) — DPI/payback include selldown proceeds; only the final exit stays out. Had it
+flipped after adjudication it would have cost a fixture re-pin. The year-3 DPI leaf is the
+discriminator: **0.3841 realized vs 0.0467 distributions-only, an 8.2× gap** no
+distributions-only engine can pass.
+
+**Governing full-precision chain** (`selldown_proceeds` etc. carried at float64 throughout;
+2dp/4dp only at the fixture leaf — §15):
+
+```
+EBITDA_adj[3]         127.32720000000001      sponsor_equity        587.2249999999999
+implied_event_ev     1082.2812000000001       event net debt        289.8455547381833
+implied_event_equity  792.4356452618167       selldown_proceeds     198.10891131545418
+exit.sponsor_share    783.0461951091401       selldown_buyer_share  261.01539836971335
+selldown_buyer_delta   62.90648705425917      walkdown.sponsor_net_delta  434.8609719238829
+sponsor cashflows  [−587.225, 0, 12.0897240, 213.4500529, 7.5, 789.0461951]
+irr 0.13131299105716   irr_mid_year 0.13591701796144   moic 1.740535522029687
+dpi [0, 0.0205878904, 0.3840772733, 0.3968492091, 0.4070667577]   payback_year null
+```
+
+**Pass 1 (2026-08-27, blind, independent) — SIGNED. AGREE, zero mismatches.** Refused to seed
+from §23.12's 2dp display values and instead RECONSTRUCTED the entire G2-DIST engine run at
+full precision from §17's stated input deck, verifying it reproduces every committed
+`G2DIST/expected.json` leaf (including the 6dp IRR 0.133906 and all five DPI leaves) before
+applying §23 on top — so the base is validated, not assumed. Every governing leaf matched to
+the digit. Confirmed `pre_promote` byte-identical (§9's table takes the TOTAL paid, which
+§14.24(g) leaves untouched — a partitioning implementer would move it, and the golden
+discriminates that), the six-term mirror closing at residual 0.0 exactly, and `irr_mid_year`
+under §23.8's shift convention (validated against the HOST first: the alternative reading
+that also shifts the year-N distribution gives 0.150199 and is refuted by G2-DIST's committed
+0.134572).
+
+**Pass 2 (2026-08-27, blind, independent) — SIGNED. AGREE, delta 0.0 on every leaf** (exact,
+not merely within tolerance). Independently performed the same full-precision reconstruction
+and reproduced Pass 1's internals to the last digit across a separately written derivation.
+Verified byte-identity by whole-dict comparison: `exit` differs in exactly two leaves,
+`distributions` in exactly one, `schedule.csv` in exactly one line.
+
+### What the two passes established beyond agreement
+
+1. **The 2dp display seeds are NOT a safe adjudication basis, and the margin is thinner than
+   it looks.** `event_multiple` is a LEVER on the seed error: EBITDA_adj[3]'s display
+   truncation (127.33 vs 127.3272, Δ 0.0028) is amplified 8.5× to **0.0238** at the EV — 4.8×
+   §15's flow tolerance. Five leaves round differently on a seeded chain: `implied_event_ev`
+   1082.31 vs **1082.28**, `implied_event_equity` 792.46 vs **792.44**, `selldown_buyer_delta`
+   62.90 vs **62.91** (Δ 0.005237, OUTSIDE §15's ±$0.005m), `dpi[4]` 0.3969 vs **0.3968**,
+   `moic` 1.7406 vs **1.7405**; seeded IRR is off by 0.309bp, 3× the ±0.1bp gate.
+   `selldown_proceeds` survives **only by luck** — Δ 0.00484, $0.00016m of headroom, because
+   `fraction = 0.25` divides the error by four and the net-debt seed error partly cancels it;
+   **at `fraction = 0.5` the same seeding would fail.** Separately, `sponsor_equity` 587.225
+   truncated to 587.22 flips `dpi[4]`'s emitted leaf on its own (0.3968492 sits 5.1e-5 under
+   the 0.39685 cut). This is the v1.0.3 rule earning its keep a second time.
+2. **§14.18's monotonicity carve-out is EXACTLY TIGHT, and provably so.** Pass 2 constructed a
+   violating input on this very deck — `selldown = {year: 2, fraction: 0.25, event_multiple:
+   2.0}` ⇒ `implied_event_equity` −91.82, proceeds −22.96, `dpi[2]` = −0.0185 < `dpi[1]` = 0.0
+   (re-run and confirmed against the reference). And for every `t ≠ year`,
+   `dpi[t] − dpi[t−1] = (1 − f) × paid[t] ÷ sponsor_equity`, where §3 step 7 floors `paid` at
+   zero and `(1 − f) ∈ (0,1)` by §23.3(iii) — so no other year *can* fall. §14.24(h)'s
+   "no other year may fall" is a theorem, not an assertion.
+3. **Two coverage holes the golden CANNOT close, both named with their discriminants.**
+   (a) `mip: null`, so `f × PRE-promote` and `f × POST-promote` give the identical
+   261.0153984 and a swapped-reading mutant passes G11-SELL GREEN. The mechanism that forces
+   post-promote is the §14.16 mirror: under a promote M the pre-promote reading gives
+   `(1−f)(E−M) + fE + M = E + f·M`, over-closing by exactly `f × mip_payout` — §23.13(iii) is
+   the only home that catches it. (b) `payback_year` is null on both goldens (cumulative
+   realized 239.04 never reaches the 587.225 check), so payback is indiscriminable here —
+   §23.13(v) is its home. Both were disclosed in §23.12 before the passes ran; both passes
+   independently rediscovered them.
+4. **G11-SELL is the FIRST fixture where "sponsor share" ≠ "paid"** (rollover is 0 everywhere
+   else, so the two coincide). `dpi[4]`/`dpi[5]` therefore discriminate the §23.5 PARTITION
+   as well as the Q-A basis: the total-paid reading would emit [.., 0.3841, 0.3999, 0.4135].
+
+**Scratch protocol upheld:** `adjudication_A.md` and `adjudication_B.md` were written to the
+session scratchpad BEFORE either pass opened `G11SELL/expected.json`, and neither pass read
+the engine, `spec_calc.py`, `goldens.test.ts`, any `rebuild/` doc, git history, or the other
+pass's file. Pass 2 disclosed one deviation — it read §17's input deck, which is the golden's
+INPUT and was required precisely because §23.12 forbids seeding from its own display values.
+Both passes stopped reading §23.12 at the "REFERENCE-DERIVED ACTUALS" heading and opened that
+block only after their leaf-by-leaf comparison was complete. Scratch paths are session-scoped
+and do not survive; this record is the durable copy.
