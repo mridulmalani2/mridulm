@@ -16,7 +16,7 @@ undefined on a reachable path.
 | # | Rule | Finding | Disposition |
 |---|---|---|---|
 | B1 | (a) | **§23.8/§14.9(b)'s walk-down double-counted the proceeds.** The draft gave the bridge TWO terms, `+ selldown_proceeds_sponsor` and `− buyer Δ (buyer exit share − proceeds)`. With the company path byte-identical (§14.24(g)) the required correction to the sponsor's delta is `proceeds − buyer_share` and nothing else, i.e. **minus the buyer Δ alone**. On G11-SELL the two-term form lands on +135.2125 where −62.90125 is required — a $198.11375m error exactly equal to the proceeds. Residual (b) could never have caught it: the v1.1.2 accuracy audit established that residual (b) re-verifies only identity (a). | FIXED. §14.9 (the single home) now carries ONE term with the proof; §23.8, §23.10, §16 and §23.13(vii) restated; the TWO-TERM form became a documented mutant that must RED. |
-| B2 | (a) | **§23.12 asserted the WRONG IRR direction.** The draft claimed sponsor IRR RISES vs G2-DIST's 13.3906% on the reasoning "earlier money at an 8.5× event multiple below the 9× exit". It FALLS, to ≈13.13%, and MOIC falls 1.8553 → ≈1.7406. The discriminant is closed-form: the sold slice runs [−198.11375, +2.5, +263.015] from t=3, an implied ≈15.9% — ABOVE the deal's own rate — so releasing it early gives up return. "Earlier money lifts IRR" holds only when the money is released at or below the deal's own rate; an 8.5× event multiple under a 9× exit is precisely what puts the slice above it. Left standing, this was the fixture's stated sanity line and would have been asserted the wrong way at step 2. | FIXED. §23.12 states the direction, both display figures and the discriminant; the changelog row records the correction. |
+| B2 | (a) | **§23.12 asserted the WRONG IRR direction.** The draft claimed sponsor IRR RISES vs G2-DIST's 13.3906% on the reasoning "earlier money at an 8.5× event multiple below the 9× exit". It FALLS, to ≈13.13%, and MOIC falls 1.8553 → ≈1.7406. The discriminant is closed-form: the sold slice runs [−198.11375, +2.5, +263.015] from t=3, an implied ≈15.85% — ABOVE the deal's own rate — so releasing it early gives up return. "Earlier money lifts IRR" holds only when the money is released at or below the deal's own rate; an 8.5× event multiple under a 9× exit is precisely what puts the slice above it. Left standing, this was the fixture's stated sanity line and would have been asserted the wrong way at step 2. | FIXED. §23.12 states the direction, both display figures and the discriminant; the changelog row records the correction. |
 
 Both were found by re-deriving the golden by hand under the Q-A flip, not by review — which
 is the runbook's own point about where accuracy lives (steps 2–3, not prose).
@@ -29,46 +29,72 @@ is the runbook's own point about where accuracy lives (steps 2–3, not prose).
 | L2 | consistency | §17's golden-uncovered list has no entry for the realized-basis DPI on a NEGATIVE-proceeds run. §23.13(v)'s companion arm covers it as a directed fixture, so coverage exists; only the §17 index entry is missing. | Add alongside the other §23 entries. |
 | L3 | wording | §23.6 is now the longest subsection in §23 (the Q-A rationale lives there). The rationale belongs in `OWNER_QUESTIONS.md` Q-A, which carries it in full. | Trim §23.6 to the rule + the three consequences once round 1 has read it; keep the pointer. |
 
-### Round 1 hostile review — PARTIAL. CONTRACTS lens REFUSED (3 blocking, all applied).
+### ROUND 1 — CLOSED. Three lenses, all REFUSED. EIGHT blocking findings, all applied.
 
-Round 1 was re-run against the POST-FLIP §23 (the original workflow `wf_8ee9e1df-f24` died
-with its session). Three lenses were launched; **a session usage limit killed two of them
-mid-read.** The CONTRACTS lens completed and REFUSED with three blocking findings. Every one
-was verified against the file before it was acted on, and every one was real.
+Re-run against the POST-FLIP §23 (the original workflow `wf_8ee9e1df-f24` died with its
+session; two later attempts were killed mid-read by usage limits and were relaunched).
 
-| # | Rule | Finding | Disposition |
-|---|---|---|---|
-| C-B1 | (a)(d) | **§14.9 clause 9 was never amended.** The bridge identity has TWO homes that each restate it IN FULL — §12's walk-down enumeration and §14's clause 9 — and the B1 fix landed only in §12. Clause 9 carries domain "always", so as committed it was FALSE by exactly `selldown Δ` (≈$62.90m on G11-SELL) on every selldown run, and §23.8 asserted it had been amended "there, its single home". This is the §22 ≈$28.73m G9-SWEET residual repeated, and clause 9's own text records that precedent. | FIXED. Clause 9 amended; §23.8's "single home" claim corrected to name both homes. |
-| C-B2 | (a) | **§19's LP interim leg was un-amended in BOTH directions**, while §23.7 asserted the conservation extends. (i) `selldown_proceeds` is absent from §19.3's closed inflow enumeration and from §19.6(a)'s RHS — so §19.6(a) was false by ≈$198.11m on a `selldown ∧ fund` run, which §23.3 permits. (ii) §14.24(c)'s `(1 − f)` partition never reached the fund layer at all: §19.3 reads `sponsorShareOfDistributions`, which returns 100% at rollover 0 — and §23.3(i) FORCES rollover 0 wherever a selldown exists — over-crediting the LP by ≈$4.5m. This is §22's round-1 three-call-site finding verbatim, which §22.8 closed with an explicit rule §23 lacked. | FIXED. §19.3's inflow line takes both amendments; §19.6(a)'s RHS widened. The reference derivation's `fund_overlay` now implements both (inert on committed goldens — no fixture moved). |
-| C-B3 | (e)(a) | **A negative `implied_event_equity` reaches §19.4's waterfall, which has no arm for it.** §23.2 makes `D < 0` reachable on an interim leg for the first time; every §19.4 step presupposes `D ≥ 0`, so `lp_distributions[year]`, `gp_carry[year]` and all four `fund_lp_net` outputs were undefined on a reachable input. §14.20(d) (`lp_distributions` monotone, no exception) was violated on the same run — §14.24(h) had carved out §14.18 for exactly this cause and missed its fund-layer sibling. | FIXED. §19.4 pins the negative-D arm (no pref, no carry, re-seeds `unreturned` by `\|D\|` — the only reading that keeps §19.6(a) exact) with both alternatives rejected in place; §14.20(d) takes the matching one-year carve-out. |
+**The pattern is the finding.** All three lenses independently re-derived §23's own
+arithmetic and found it CLEAN. Every one of the eight blocking defects sat in a **companion
+home** that §23 amended by reference but did not actually amend, or that §23 over-claimed
+about: §14.9 clause 9, §19.3, §19.4, §19.6(a), §14.20(d), §23.7, §23.13(vii)/(xi). Two were
+verbatim repeats of §22 findings (the G9-SWEET bridge residual; the §22.7 three-call-site
+rule). One corrected a fix made earlier in this same round.
 
-Two ledger items were PROMOTED and fixed in the same pass, because step 2a had just made
-them false rather than merely untidy: **C-L1** — §23.13(i)'s unqualified "EVERY output
-byte-identical" contradicts §14.24(d) and is false against the `exit.selldown_buyer_share`
-zero column now committed (the §14.23(f) shorthand this document has paid for once already);
-**C-L2** — §14.24(d) and §16 cited "§23.12's fixture-SHAPE zero key", but §23.12 is G11-SELL,
-whose event is non-null; the zero column lands on the PRE-EXISTING goldens.
+| # | Lens | Rule | Finding | Disposition |
+|---|---|---|---|---|
+| C-B1 | contracts | (a)(d) | §14.9 clause 9 — the bridge identity's OTHER full-restatement home — was never amended. Domain "always", so false by `selldown Δ` (≈$62.90m) on every selldown run, while §23.8 asserted it HAD been amended. The §22 ≈$28.73m G9-SWEET residual repeated. | FIXED — clause 9 amended, §23.8's "single home" claim corrected to name both. |
+| C-B2 | contracts | (a) | §19's LP interim leg un-amended in BOTH directions: proceeds absent from §19.3's closed enumeration and §19.6(a)'s RHS (≈$198.11m on a `selldown ∧ fund` run, which §23.3 permits); and §14.24(c)'s (1−f) partition never reached the fund layer at all (≈$4.5m), because §23.3(i) forces rollover 0 — exactly the case where the pari-passu share is 100%. §22's three-call-site finding verbatim. | FIXED — both amended; `spec_calc.py`'s `fund_overlay` implements both (inert on committed goldens). |
+| C-B3 | contracts | (e)(a) | A negative `implied_event_equity` reaches §19.4's waterfall, which had no `D < 0` arm — four `fund_lp_net` outputs undefined on a reachable input; §14.20(d) violated. | FIXED — §19.4's arm pinned (no pref, no carry, re-seeds `unreturned` by \|D\| — the only reading keeping §19.6(a) exact, later verified by the arithmetic lens); §14.20(d) carved. **Bound corrected by A-B3 below.** |
+| CO-B1 | coherence | (d)(c) | §23.7 and both §15-SELL homes claimed the layers "differ ONLY by fees, carry and denominator". FALSE against committed G7-FUND by 20× at year N: the fund `dpi[]` counts the final exit, the deal `dpi[]` never does (`fund dpi[N] ≡ fund moic` proves it). §23.13(xi) was commissioned off that sentence and had NO version that both passed and discriminated. **My error** — the Q-A flip turned the layer note to "agreement" without checking the one axis where the layers were never in agreement. | FIXED — agreement SCOPED to the proceeds, the exit restored as a stated basis difference in all three homes, §23.13(xi) restated to assert the step-up on both layers. |
+| CO-B2 | coherence | (c) | §23.13(vii)'s TWO-TERM mutant could not RED on the detector §23.8 prescribed — it leaves `selldown_buyer_delta` and `sponsor_net_delta` untouched. And the detector §23.8 explicitly disclaimed is the one that catches it (`residualB = residualA + proceeds` = 198.11). My v1.1.2 citation was over-generalized. | FIXED — disclaimer narrowed to the symmetric case, (vii) now requires BOTH asserts and names which mutant each catches. |
+| A-B1/A-B2 | arithmetic | — | Independently re-found CO-B1 and CO-B2 (a 3.6× year-N gap on the selldown+fund run, and the residual reading exactly 198.1089). Corroboration, applied above. | — |
+| A-B3 | arithmetic | (d)(a) | **Corrected a fix made earlier in this round.** §19.4's new arm justified itself with "an exit share reaching the LP leg is non-negative" — FALSE about committed `exit.ts`, which never clamps the ordinary split (§22 verified the v1 identity at `E = −25`). So a year-N `D < 0` was ALREADY reachable pre-v1.8.0, and C-B3's §14.20(d) carve-out — scoped to "a selldown year, that ONE year, no other" — was false in BOTH directions. Counterexample with NO selldown: G2-DIST + G7 overlay at `exit.multiple = 1.0` (legal) ⇒ cumulative `lp_distributions` [0, 12.09, 27.43, 37.43, **14.72**], falling at year 5. Re-run and confirmed. | FIXED — §19.4's arm restated as GENERIC in D with both causes named; §14.20(d) widened to any year whose `D < 0`. §14.18's deal-layer carve-out correctly stays scoped: the deal numerator excludes the exit, so a negative exit share cannot move it. |
 
-The lens also independently re-derived the whole G11-SELL chain from §23 text and the host
-fixture and reproduced it to the cent, including B2's corrected IRR direction (13.1316% on
-2dp seeds vs the reference's full-precision 13.1313%) and the sold slice's ≈15.85% implied
-return. That is corroboration, **not** an adjudication pass — it was not blind.
+### Step 2b — BOTH BLIND ADJUDICATION PASSES SIGNED (2026-08-27). AGREE, zero mismatches.
 
-### LEDGER, round 1 (non-blocking; fix in ONE pass before conformance)
+Recorded in `tests/goldens/DERIVATION.md`; pass 2 agreed to **delta 0.0 exactly**. Neither
+seeded from §23.12's display values — both rebuilt the entire G2-DIST run at full precision
+from §17's deck and verified it reproduces every committed host leaf first. The arithmetic
+lens independently reproduced the same chain a third time. Four results folded into the spec:
+
+- **The display-seed chain moves FIVE leaves**, one (`selldown_buyer_delta`, Δ 0.005237)
+  OUTSIDE §15's own flow tolerance — and §12's worked proof had been written from those
+  seeds, landing on 62.90 where the fixture carries 62.91. Fixed at source. `event_multiple`
+  is the amplifier (0.0028 at EBITDA → 0.0238 at the EV). `selldown_proceeds` survives by
+  $0.00016m; at `fraction = 0.5` it would not.
+- **§14.18's carve-out is EXACTLY TIGHT, provably** — a legal violating input exists
+  (`{year: 2, fraction: 0.25, event_multiple: 2.0}` ⇒ proceeds −22.96, `dpi[2]` −0.0185), and
+  no other year CAN fall. §23.13(v) now carries both arms as CONSTRUCTED inputs.
+- **The pre-vs-post-promote swap is EXACTLY VACUOUS on G11-SELL** (`mip: null` ⇒ both give
+  261.02). §23.13(iii) now carries its closed-form tell: the mirror over-closes by exactly
+  `f × mip_payout`.
+- **G11-SELL is the first fixture where "sponsor share" ≠ "paid"**, so `dpi[4]`/`dpi[5]`
+  discriminate the §23.5 partition too. §14.24(h) now says which share.
+
+### STATUS
+
+Round 1 is CLOSED. Under the bounded rule a round 2 is available and, given that round 1
+produced eight number-moving findings, **it should be run before the GRANT** — pointed at the
+COMPANION homes (§9, §12, §14.9/.16/.18/.20/.24, §16, §17, §19) at least as hard as at §23,
+since that is where every defect has been. If round 2 also moves numbers, §4 of the runbook
+says STOP and escalate rather than run a third.
+
+Not yet done: the ledger pass below, the GRANT + fingerprint stamp + SPEC header bump to
+v1.8.0, then step 3 (engine + §23.13 fixtures + documented mutants RED and reverted).
+
+### OPEN LEDGER — fix in ONE pass before conformance
 
 | # | Class | Item |
 |---|---|---|
-| C-L3 | contract gap | §23.10 says `selldown_buyer_share` is unconditional `0.0` but is silent on `selldown_buyer_delta`'s null-arm value (only §12 states it), while §16 closes with a blanket "All Class C, all REQUIRED-with-null" that would type both `number \| null`. Every committed sibling is non-nullable `number`. State "unconditional `0.0`" for both and exempt them from the blanket. |
-| C-L4 | omission | §23.10 declares itself the outputs home but omits `walkdown.sponsor_net_delta`, which §23.8 and §16 both amend. |
-| C-L5 | two-home restatement | §23.10 restates the below-cost condition in a different algebraic form from §14.24(f)'s. Identical algebraically, but §23.9's charter says §23 states no rule of its own, and two forms of one quantity is the §14.23(d) shape that produced a 4.1% float disagreement in round 9. Cite, don't restate. |
-| C-L6 | stale narration | The changelog says "§14.24 (a)–(g) AMENDED"; §14.24 now runs (a)–(h). |
+| L1 | wording | §23.9's clause map needs an `(h)` row for §14.24(h). |
+| L2 | consistency | §17's golden-uncovered list has no entry for the realized-basis DPI on a negative-proceeds run (§23.13(v) arm 2 covers it; only the index entry is missing). |
+| L3 | wording | §23.6 is the longest subsection in §23; its Q-A rationale lives in full in `OWNER_QUESTIONS.md`. Trim to the rule + its three consequences. |
+| C-L3 | contract gap | §23.10 is silent on `selldown_buyer_delta`'s null-arm value while §16's blanket "REQUIRED-with-null" would type it `number \| null`; every committed sibling is non-nullable. |
+| C-L4 | omission | §23.10 omits `walkdown.sponsor_net_delta`, which §23.8 and §16 both amend. |
+| C-L5 | two-home restatement | §23.10 restates §14.24(f)'s below-cost condition in a different algebraic form. Cite, don't restate (§23.9's charter; the §14.23(d) shape that cost round 9 a 4.1% float disagreement). |
+| CO-L2 | un-amended companion home | §19.7's closed enumeration of what the overlay reads is one home short — §19.3 now scales the interim leg by `(1 − fraction)` OUTSIDE the share rule and adds `selldown_proceeds`. §19.10's directed-fixture list has no §23 entry. The C-B2 shape, one subsection over; under-specifies scope rather than restating a false identity, hence ledger. |
+| CO-L5 | stale index | §17's golden-uncovered item (v) still says payback needs cumulative DISTRIBUTIONS (stale under the realized basis); item (x) needs the selldown walk-down term. |
 
-### STILL OWED
-
-1. **Round 1's ARITHMETIC and COHERENCE lenses** — both died mid-read at a session usage
-   limit. Re-run them against the current §23. Under the round cap this still counts as
-   round 1; a round 2 is available after it.
-2. **Step 2b — the TWO blind adjudication passes on G11-SELL.** Both died at the same limit.
-   Until they sign, §23.12's actuals are the reference derivation's word alone and
-   `tests/goldens/DERIVATION.md` carries no §23 record. **Do not treat G11-SELL as GOSPEL
-   and do not start step 3's mutants against it until they have run.**
+Applied in-round rather than deferred, because each had been made FALSE rather than merely
+untidy: C-L1, C-L2 (step 2a's zero column), CO-L1, CO-L3, CO-L4, CO-L6, A-L1, A-L2, A-L3, A-L4.

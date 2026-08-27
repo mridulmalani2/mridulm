@@ -139,33 +139,31 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   NOTE §23.12's DISPLAY seeds are 2dp reconstructions and differ in the cents from the
   full-precision fixture (1082.305 vs 1082.28) — restate them from the adjudicated chain.
 
-  **Round 1 (post-flip text) — PARTIAL.** Three lenses launched; a session usage limit killed
-  two mid-read. The CONTRACTS lens REFUSED with **3 blocking, all verified against the file
-  and all applied**: (C-B1) §14.9 clause 9 — the bridge identity's OTHER full-restatement
-  home — was never amended, leaving it false by ≈$62.90m on every selldown run (the §22
-  G9-SWEET residual repeated); (C-B2) §19's LP interim leg was un-amended in BOTH directions
-  — the proceeds missing from §19.3/§19.6(a) (≈$198.11m on a `selldown ∧ fund` run, which
-  §23.3 permits) and §14.24(c)'s (1−f) partition never reaching the fund layer at all (≈$4.5m)
-  — the §22.7 three-call-site lesson repeated; (C-B3) a negative `implied_event_equity`
-  reaches §19.4's waterfall, which has no `D < 0` arm, leaving four `fund_lp_net` outputs
-  undefined on a reachable input and violating §14.20(d). Two ledger items were PROMOTED and
-  fixed because step 2a had just made them FALSE. Full record: `rebuild/G11_LEDGER.md`.
+  **ROUND 1 — CLOSED. Three lenses, all REFUSED, EIGHT blocking findings, all applied.**
+  The pattern IS the finding: all three lenses independently re-derived §23's own arithmetic
+  and found it CLEAN, and every one of the eight defects sat in a COMPANION home that §23
+  amended by reference but did not actually amend, or over-claimed about — §14.9 clause 9,
+  §19.3/§19.4/§19.6(a), §14.20(d), §23.7, §23.13(vii)/(xi). Two were verbatim repeats of §22
+  findings; one (A-B3) corrected a fix made earlier in the same round. Full table:
+  `rebuild/G11_LEDGER.md`. **Whoever runs round 2 should point it at the companion homes at
+  least as hard as at §23 — that is where every single defect has been.**
+
+  **STEP 2b — BOTH BLIND ADJUDICATION PASSES SIGNED. AGREE, zero mismatches** (pass 2 to
+  delta 0.0 exactly); recorded in `tests/goldens/DERIVATION.md`. Neither seeded from §23.12's
+  display values: both rebuilt the whole G2-DIST run at full precision from §17's deck and
+  verified it reproduces every committed host leaf first. **G11-SELL is now GOSPEL.**
 
   **RESUME POINT — gates green: tsc clean, vitest 762 passed + 3 live-skipped (54 files),
-  build green.** TWO things are OWED before this feature may be granted, both killed by the
-  same usage limit, and NEITHER may be skipped:
-  1. **Round 1's ARITHMETIC and COHERENCE lenses.** Re-run against the CURRENT §23 (not the
-     `13d450c` draft, and not the pre-C-B fixes text). Under the round cap this still counts
-     as round 1. Given that the one lens that DID finish found three real blocking defects —
-     two of them exact repeats of §22 findings in un-amended companion homes — do not assume
-     the other two lenses will come back clean.
-  2. **Step 2b: the TWO blind adjudication passes on G11-SELL** (each derives from SPEC text
-     alone and WRITES its numbers to scratch BEFORE opening the fixture), recorded in
-     `tests/goldens/DERIVATION.md`, which currently carries NO §23 record.
-     **G11-SELL is NOT gospel until they sign. Do not start step 3's mutants against it.**
-  Then: apply blocking findings only (bounded rule), fix the four open ledger items
-  (C-L3..C-L6 + L1..L3) in ONE pass, GRANT + stamp the fingerprint + bump the SPEC header to
-  v1.8.0, then step 3 (engine + §23.13 fixtures + documented mutants RED and reverted).
+  build green.** Next, in order:
+  1. **Round 2** (optional under the cap, but round 1 moved eight numbers, so run it). If
+     round 2 ALSO moves a number, §4 says STOP and escalate rather than run a third.
+  2. **The ledger pass** — eight open items in `rebuild/G11_LEDGER.md`, ONE commit.
+  3. **GRANT + stamp the fingerprint + bump the SPEC header to v1.8.0.**
+  4. **Step 3** — engine in `lib/engine2/**` (the §23.10 fields; `ExitBlock.selldown_buyer_share`
+     already exists as a committed zero from step 2a), §23.13's (i)–(xii) directed fixtures,
+     `check.ts` invariants, then documented mutants run RED and reverted by string-replace
+     with `count == 1` asserted — never `git checkout/stash/reset`.
+     Note §23.13(iii) and (v) now carry CONSTRUCTED inputs, so they can be written directly.
 
 ### Backlog — 12 items, 6 merged
 
