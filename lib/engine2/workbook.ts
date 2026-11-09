@@ -58,18 +58,9 @@ export interface FormulaWorkbook {
 export function formulaCoverageBlockers(o: Engine2ModelOutput): string[] {
   const a = o.assumptions;
   const out: string[] = [];
-  if (a.fees.monitoring) out.push('monitoring fee');
-  if (a.structure.distributions && a.structure.distributions.some((d) => d !== 0)) out.push('interim distributions');
-  if (a.covenants.rp_trap) out.push('restricted-payment cash trap');
   if (a.structure.refinancing && a.structure.refinancing.length > 0) out.push('refinancing events');
-  if (a.structure.sweep.grid) out.push('leverage-based sweep grid');
-  if (a.structure.tranches.some((t) => t.type === 'pik_note' && t.elections !== null)) out.push('PIK toggle elections');
-  if (a.mip?.ratchet && a.mip.ratchet.length > 0) out.push('MIP ratchet tiers');
   if (a.sweet_equity) out.push('sweet equity strip');
-  if (a.warrant) out.push('warrant');
   if (a.fund) out.push('fund/LP overlay');
-  const c = a.covenants;
-  if (c.leverage_max !== null || c.dscr_min !== null || c.fccr_min !== null || c.springing !== null) out.push('covenant tests');
   return out;
 }
 
@@ -281,8 +272,30 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   I.line('txn_pct', 'Transaction costs (% of EV)', { 0: { input: a.fees.transaction_pct_of_ev, fmt: FMT_PCT } });
   I.line('fin_pct', 'Financing fees (% of total commitments incl. the undrawn revolver)', { 0: { input: a.fees.financing_pct_of_commitments, fmt: FMT_PCT } });
   I.line('min_cash', 'Minimum cash (funded at close)', { 0: { input: a.structure.min_cash } });
+  const mon = a.fees.monitoring;
+  if (mon) {
+    I.line('mon_annual', 'Sponsor monitoring fee, a year (charged years 1…N−1)', { 0: { input: mon.annual } });
+    I.line('mon_T', 'Monitoring fee: years accelerated at exit (termination)', { 0: { input: mon.termination_years, fmt: FMT_YEAR } });
+    I.line('mon_r', 'Monitoring fee: termination discount rate', { 0: { input: mon.discount_rate, fmt: FMT_PCT } });
+  }
   I.line('rollover', 'Rollover equity', { 0: { input: a.rollover_equity } });
-  I.line('sweep_pct', 'Cash sweep (% of cash above the minimum)', { 0: { input: a.structure.sweep.base_pct, fmt: FMT_PCT } });
+  const grid = a.structure.sweep.grid;
+  const gridTiers = grid ? [...grid.tiers].sort((x, y) => y.above_net_leverage - x.above_net_leverage) : [];
+  if (!grid) I.line('sweep_pct', 'Cash sweep (% of cash above the minimum)', { 0: { input: a.structure.sweep.base_pct, fmt: FMT_PCT } });
+  else {
+    I.note('Cash sweep by opening net leverage — tiers in DESCENDING threshold order (the first threshold exceeded wins):');
+    gridTiers.forEach((tier, j) => {
+      I.line(`sg${j}_lev`, `   sweep tier ${j + 1}: when opening net leverage is above`, { 0: { input: tier.above_net_leverage, fmt: FMT_MULT } });
+      I.line(`sg${j}_pct`, `   sweep tier ${j + 1}: sweep %`, { 0: { input: tier.pct, fmt: FMT_PCT } });
+    });
+    I.line('sg_else', '   sweep % below every threshold', { 0: { input: grid.else_pct, fmt: FMT_PCT } });
+  }
+  const dists = a.structure.distributions;
+  const trap = a.covenants.rp_trap;
+  if (trap) I.line('rp_level', 'Restricted-payment trap: distributions only while pro-forma net leverage ≤', { 0: { input: trap.level, fmt: FMT_MULT } });
+  const covs = a.covenants;
+  // a per-year schedule is shown year by year exactly as the engine resolves it (credit.ts covenantLevel)
+  const lvl = (x: number | number[] | null, t: number) => (x === null ? null : Array.isArray(x) ? x[t - 1] ?? x[x.length - 1] : x);
 
   I.section('3. Debt');
   terms.forEach((t, i) => {
@@ -358,6 +371,20 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
   if (lines && lines.year_n_plus_1_growth !== null) I.line('gN1', 'Growth of every line into year N+1 (NTM exit and terminal value)', { 0: { input: lines.year_n_plus_1_growth, fmt: FMT_PCT } });
 
+  if (covs.leverage_max !== null) I.line('cov_lev', 'Covenant: maximum net leverage', per(1, N, (t) => ({ input: lvl(covs.leverage_max, t)!, fmt: FMT_MULT })));
+  if (covs.dscr_min !== null) I.line('cov_dscr', 'Covenant: minimum DSCR', per(1, N, (t) => ({ input: lvl(covs.dscr_min, t)!, fmt: FMT_MULT })));
+  if (covs.fccr_min !== null) I.line('cov_fccr', 'Covenant: minimum FCCR', per(1, N, (t) => ({ input: lvl(covs.fccr_min, t)!, fmt: FMT_MULT })));
+  if (covs.springing) {
+    I.line('spr_max', 'Springing leverage test: maximum net leverage', per(1, N, (t) => ({ input: lvl(covs.springing!.max, t)!, fmt: FMT_MULT })));
+    I.line('spr_trig', 'Springing test applies when revolver drawn ÷ commitment exceeds', { 0: { input: covs.springing.revolver_draw_trigger_pct, fmt: FMT_PCT } });
+  }
+  terms.forEach((t, i) => {
+    if (t.type === 'pik_note' && t.elections) {
+      const el = t.elections;
+      I.line(`${tk[i]}_el`, `${t.name}: coupon election (cash / pik)`, per(1, N, (y) => ({ input: el[y - 1], fmt: '@' })));
+    }
+  });
+  if (dists) I.line('dist_req', 'Requested distribution to equity (paid only from cash above the minimum)', per(1, N, (t) => ({ input: dists[t - 1] })));
   I.section('5. Tax');
   I.line('tax_rate', 'Tax rate', { 0: { input: a.tax.rate, fmt: FMT_PCT } });
   I.line('int_ded', 'Interest is tax-deductible (TRUE/FALSE)', { 0: { input: a.tax.interest_deductible } });
@@ -378,6 +405,14 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   if (a.mip) {
     I.line('mip_pool', 'Management promote: pool (% of total proceeds above the hurdle)', { 0: { input: a.mip.pool_pct, fmt: FMT_PCT } });
     I.line('mip_hurdle', 'Management promote: hurdle (× total invested equity)', { 0: { input: a.mip.hurdle_moic, fmt: FMT_MULT } });
+    (a.mip.ratchet ?? []).forEach((r, j) => {
+      I.line(`mip_r${j}_h`, `Promote ratchet tier ${j + 1}: hurdle (× invested)`, { 0: { input: r.hurdle_moic, fmt: FMT_MULT } });
+      I.line(`mip_r${j}_s`, `Promote ratchet tier ${j + 1}: share of proceeds above it`, { 0: { input: r.share_pct, fmt: FMT_PCT } });
+    });
+  }
+  if (a.warrant) {
+    I.line('w_pct', `Warrant (${a.warrant.holder_label}): % of ordinary, fully diluted`, { 0: { input: a.warrant.pct_of_ordinary, fmt: FMT_PCT } });
+    I.line('w_strike', 'Warrant: total strike (paid in on exercise)', { 0: { input: a.warrant.strike_total } });
   }
   const v = a.valuation;
   const val = o.valuation;
@@ -440,7 +475,14 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     M.line('ebitda', 'EBITDA', per(1, N, (t) => ({ f: lineF('ebx', lines.ebitda!, t, 'ebitda'), v: op[t - 1].ebitda })), { bold: true });
   }
   if (revModelled && lines?.ebitda) M.line('margin', 'EBITDA margin', per(1, N, (t) => ({ f: `IF(${m('rev', t)}=0,"N/A",${m('ebitda', t)}/${m('rev', t)})`, v: op[t - 1].margin, fmt: FMT_PCT })));
-  M.line('ebit', 'EBIT  =  EBITDA − D&A', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('da', t)}`, v: op[t - 1].ebit })));
+  // §7/§9 monitoring fee: off EBITDA in years 1…N−1, dropped in the exit year (the accelerated
+  // termination replaces it at exit — no double count). EBITDA_adj drives tax, FCF and credit.
+  const ea = (t: number) => (mon ? m('ebitda_adj', t) : m('ebitda', t));
+  if (mon) {
+    M.line('mon_fee', 'Sponsor monitoring fee (none in the exit year)', per(1, N, (t) => ({ f: t === N ? '0' : iv('mon_annual'), v: op[t - 1].ebitda - op[t - 1].ebitda_adj })));
+    M.line('ebitda_adj', 'EBITDA after the monitoring fee', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('mon_fee', t)}`, v: op[t - 1].ebitda_adj })), { bold: true });
+  }
+  M.line('ebit', `EBIT  =  EBITDA${mon ? ' after fee' : ''} − D&A`, per(1, N, (t) => ({ f: `${ea(t)}-${m('da', t)}`, v: op[t - 1].ebit })));
   if (!lines?.capex) {
     M.line('capex', 'Capex  =  maintenance % × revenue + growth capex', per(1, N, (t) => ({ f: `${iv('capex_pct')}*${m('rev', t)}+${iy('gcapex', t)}`, v: op[t - 1].maint_capex + op[t - 1].growth_capex })));
   } else if (lines.capex.mode === 'pct_of_da') {
@@ -562,8 +604,13 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     M.note(t.name);
     M.line(`${k}_open`, `${t.name}: opening balance`, per(1, N, (tt) => ({ f: tt === 1 ? m(`${k}_par`, 0) : m(`${k}_close`, tt - 1), v: rows[tt - 1].beginning_balance })));
     const rate = t.type === 'pik_note' ? iv(`${k}_cash`) : t.pricing.kind === 'fixed' ? iv(`${k}_rate`) : `(MAX(${iv(`${k}_base`)},${iv(`${k}_floor`)})+${iv(`${k}_spread`)})`;
-    M.line(`${k}_int`, `${t.name}: cash interest  =  rate × opening balance`, per(1, N, (tt) => ({ f: `${m(`${k}_open`, tt)}*${rate}`, v: rows[tt - 1].cash_interest })));
-    M.line(`${k}_pik`, `${t.name}: PIK accrual  =  PIK coupon × opening balance`, per(1, N, (tt) => ({ f: t.type === 'pik_note' ? `${m(`${k}_open`, tt)}*${iv(`${k}_pik`)}` : '0', v: rows[tt - 1].pik_accrual })));
+    // §20 PIK toggle: a WHOLE-coupon election each year — 'cash' pays the cash coupon with no
+    // accrual; 'pik' accrues the PIK coupon with no cash. No election ⇒ the fixed note pays both.
+    const toggled = t.type === 'pik_note' && t.elections !== null;
+    const cashF = (tt: number) => (toggled ? `IF(${iy(`${k}_el`, tt)}="cash",${m(`${k}_open`, tt)}*${rate},0)` : `${m(`${k}_open`, tt)}*${rate}`);
+    const pikF = (tt: number) => (t.type !== 'pik_note' ? '0' : toggled ? `IF(${iy(`${k}_el`, tt)}="pik",${m(`${k}_open`, tt)}*${iv(`${k}_pik`)},0)` : `${m(`${k}_open`, tt)}*${iv(`${k}_pik`)}`);
+    M.line(`${k}_int`, `${t.name}: cash interest  =  rate × opening balance${toggled ? ' (cash years)' : ''}`, per(1, N, (tt) => ({ f: cashF(tt), v: rows[tt - 1].cash_interest })));
+    M.line(`${k}_pik`, `${t.name}: PIK accrual  =  PIK coupon × opening balance${toggled ? ' (PIK years)' : ''}`, per(1, N, (tt) => ({ f: pikF(tt), v: rows[tt - 1].pik_accrual })));
     M.line(`${k}_out`, `${t.name}: outstanding before repayment  =  opening + PIK`, per(1, N, (tt) => ({ f: `${m(`${k}_open`, tt)}+${m(`${k}_pik`, tt)}`, v: null })), { italic: true, noParity: true });
     M.line(`${k}_mand`, `${t.name}: mandatory amortization  =  MIN(% × original face, outstanding)`, per(1, N, (tt) => ({ f: `MIN(${iv(`${k}_amort`)}*${m(`${k}_par`, 0, true)},MAX(0,${m(`${k}_out`, tt)}))`, v: rows[tt - 1].mandatory_amort })));
     M.line(`${k}_cap`, `${t.name}: room for the sweep  =  outstanding − mandatory`, per(1, N, (tt) => ({ f: t.sweep.participates ? `MAX(0,${m(`${k}_out`, tt)}-${m(`${k}_mand`, tt)})` : '0', v: null })), { italic: true, noParity: true });
@@ -579,7 +626,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const wf = o.waterfall;
   M.note('Cash waterfall');
   M.line('cash_open', 'Opening cash', per(1, N, (t) => ({ f: t === 1 ? m('cash_bs', 0) : m('cash_close', t - 1), v: wf[t - 1].opening_cash })));
-  M.line('fcf', 'Free cash flow before debt service  =  EBITDA − cash tax − capex − ΔNWC', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('cash_tax', t)}-${m('capex', t)}-${m('dnwc', t)}`, v: op[t - 1].fcf_pre_debt })), { bold: true });
+  M.line('fcf', 'Free cash flow before debt service  =  EBITDA − cash tax − capex − ΔNWC', per(1, N, (t) => ({ f: `${ea(t)}-${m('cash_tax', t)}-${m('capex', t)}-${m('dnwc', t)}`, v: op[t - 1].fcf_pre_debt })), { bold: true });
   const intKeys = [...tk.map((k) => `${k}_int`), ...(revolver ? ['rcf_int'] : [])];
   M.line('int_total', 'Cash interest (total)', per(1, N, (t) => ({ f: sumOf(intKeys, t), v: wf[t - 1].cash_interest_total })));
   M.line('cfee_total', 'Commitment fees', per(1, N, (t) => ({ f: revolver ? m('rcf_cfee', t) : '0', v: wf[t - 1].commitment_fees })));
@@ -587,7 +634,15 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('cash_a', '   cash after interest, fees and mandatory amortization', per(1, N, (t) => ({ f: `${m('cash_open', t)}+${m('fcf', t)}-${m('int_total', t)}-${m('cfee_total', t)}-${m('mand_total', t)}`, v: null })), { italic: true, noParity: true });
   M.line('rcf_repay', 'Revolver repayment  =  MIN(drawn, cash above the minimum)', per(1, N, (t) => ({ f: revolver ? `MIN(${m('rcf_open', t)},MAX(0,${m('cash_a', t)}-${iv('min_cash')}))` : '0', v: wf[t - 1].revolver_repayment })));
   M.line('pool', 'Sweep pool  =  MAX(0, cash − minimum)', per(1, N, (t) => ({ f: `MAX(0,${m('cash_a', t)}-${m('rcf_repay', t)}-${iv('min_cash')})`, v: wf[t - 1].sweep_pool })));
-  M.line('sweepable', 'Available to sweep  =  sweep % × pool', per(1, N, (t) => ({ f: `${iv('sweep_pct')}*${m('pool', t)}`, v: wf[t - 1].sweep_pct_applied * wf[t - 1].sweep_pool })));
+  if (grid) {
+    const termOpen = (t: number) => [...tk.map((k) => m(`${k}_open`, t)), ...(revolver ? [m('rcf_open', t)] : [])].join('+') || '0';
+    M.line('sw_lev', '   opening net leverage for the sweep  =  (opening debt − opening cash) ÷ EBITDA', per(1, N, (t) => ({
+      f: `IF(${ea(t)}>0,(${termOpen(t)}-${m('cash_open', t)})/${ea(t)},1E+300)`, v: null, fmt: FMT_MULT,
+    })), { italic: true, noParity: true });
+    const pick = (t: number) => gridTiers.reduceRight((inner, _tier, j) => `IF(${m('sw_lev', t)}>${iv(`sg${j}_lev`)},${iv(`sg${j}_pct`)},${inner})`, iv('sg_else'));
+    M.line('sw_pct', 'Sweep % applied (first tier whose threshold is exceeded)', per(1, N, (t) => ({ f: pick(t), v: wf[t - 1].sweep_pct_applied, fmt: FMT_PCT })));
+  }
+  M.line('sweepable', 'Available to sweep  =  sweep % × pool', per(1, N, (t) => ({ f: `${grid ? m('sw_pct', t) : iv('sweep_pct')}*${m('pool', t)}`, v: wf[t - 1].sweep_pct_applied * wf[t - 1].sweep_pool })));
   priorities.forEach((p, pi) => {
     const members = terms.map((t, i) => ({ t, i })).filter(({ t }) => t.sweep.participates && t.sweep.priority === p);
     const before = (t: number) => (pi === 0 ? m('sweepable', t) : m(`tier${pi - 1}_rem`, t));
@@ -623,9 +678,23 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       ...per(1, N, (t) => ({ f: `${m('rcf_open', t)}-${m('rcf_repay', t)}+${m('rcf_draw', t)}`, v: rr[t - 1].ending_drawn })),
     }, { bold: true });
   }
+  // §3 step 7 / §3.7: the distribution — after the draw; capped by cash above the minimum and,
+  // when a trap is set, by the pro-forma net-leverage capacity. Blocked capacity never carries.
+  const paid = (t: number) => (dists ? m('dist_paid', t) : '0');
+  if (dists) {
+    M.line('cash_c', '   cash before the distribution', per(1, N, (t) => ({ f: `${m('cash_b', t)}+${m('rcf_draw', t)}`, v: null })), { italic: true, noParity: true });
+    if (trap) {
+      M.line('rp_max', 'Trap capacity  =  MAX(0, cash − (debt − trap level × EBITDA))', per(1, N, (t) => ({
+        f: `MAX(0,${m('cash_c', t)}-(${m('debt_close', t)}-${iv('rp_level')}*${ea(t)}))`, v: wf[t - 1].rp_max,
+      })));
+    }
+    M.line('dist_paid', 'Distribution paid  =  MAX(0, MIN(request, cash − minimum' + (trap ? ', trap capacity))' : '))'), per(1, N, (t) => ({
+      f: `MAX(0,MIN(${iy('dist_req', t)},${m('cash_c', t)}-${iv('min_cash')}${trap ? `,${m('rp_max', t)}` : ''}))`, v: wf[t - 1].distribution_paid,
+    })), { bold: true });
+  }
   M.line('cash_close', 'Closing cash', {
     0: { f: m('cash_bs', 0), v: su.cash_to_balance_sheet },
-    ...per(1, N, (t) => ({ f: `${m('cash_b', t)}+${m('rcf_draw', t)}`, v: wf[t - 1].closing_cash })),
+    ...per(1, N, (t) => ({ f: dists ? `${m('cash_c', t)}-${m('dist_paid', t)}` : `${m('cash_b', t)}+${m('rcf_draw', t)}`, v: wf[t - 1].closing_cash })),
   }, { bold: true });
   const debtKeys = [...tk.map((k) => `${k}_close`), ...(revolver ? ['rcf_close'] : [])];
   M.line('debt_close', 'Total debt at par (incl. accrued PIK and the drawn revolver)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: sumOf(debtKeys, t), v: o.balance_sheet[t].debt_at_par }])), { bold: true });
@@ -635,7 +704,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.header(years(1, N));
   const tx = o.tax;
   const pikSum = (t: number) => sumOf(tk.map((k) => `${k}_pik`), t);
-  M.line('ati', 'Adjusted taxable income (ATI)', per(1, N, (t) => ({ f: `IF(${iv('ati_basis')}="EBITDA",${m('ebitda', t)},${m('ebit', t)})`, v: tx[t - 1].ati })));
+  M.line('ati', 'Adjusted taxable income (ATI)', per(1, N, (t) => ({ f: `IF(${iv('ati_basis')}="EBITDA",${ea(t)},${m('ebit', t)})`, v: tx[t - 1].ati })));
   M.line('capped', 'Capped interest pool  =  cash interest + PIK + OID amortization', per(1, N, (t) => ({ f: `${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}`, v: tx[t - 1].capped_interest_pool })));
   M.line('uncapped', 'Uncapped deductions  =  fee amortization + commitment fees + write-offs', per(1, N, (t) => ({ f: `${m('fee_am', t)}+${m('cfee_total', t)}+${m('tax_wo', t)}`, v: tx[t - 1].uncapped_deductions })));
   const cfOpen = (t: number) => (t === 1 ? '0' : m('cf_end', t - 1));
@@ -682,29 +751,60 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('ni', 'Net income  =  EBIT − interest − PIK − fee/OID amortization − commitment fees − write-offs − tax', per(1, N, (t) => ({
     f: `${m('ebit', t)}-(${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}+${m('fee_am', t)}+${m('cfee_total', t)}+${m('book_wo', t)})-${m('cash_tax', t)}`, v: null,
   })), { noParity: true });
-  M.line('equity', 'Shareholders’ equity  =  prior + net income', { 0: { f: m('equity_total', 0), v: bs[0].equity }, ...per(1, N, (t) => ({ f: `${m('equity', t - 1)}+${m('ni', t)}`, v: bs[t].equity })) });
+  M.line('equity', `Shareholders’ equity  =  prior + net income${dists ? ' − distributions' : ''}`, { 0: { f: m('equity_total', 0), v: bs[0].equity }, ...per(1, N, (t) => ({ f: `${m('equity', t - 1)}+${m('ni', t)}-${paid(t)}`, v: bs[t].equity })) });
   M.line('bs_check', 'Check: assets − debt − equity (must be 0; rounded to 6 dp)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `ROUND(${m('assets', t)}-${m('debt_close', t)}-${m('equity', t)},6)`, v: bs[t].check }])), { italic: true });
 
   // ── Exit & returns ──
   M.section('7. Exit and returns');
   const ex = o.exit;
   const gN1Ref = lines ? (lines.year_n_plus_1_growth !== null ? iv('gN1') : 'NA()') : iy('g', N);
-  M.line('exit_basis_ebitda', 'EBITDA the exit multiple applies to (exit year, or year N+1 under NTM)', { 0: { f: `IF(${iv('exit_basis')}="FY",${m('ebitda', N)},${m('ebitda', N)}*(1+${gN1Ref}))`, v: ex.exit_ebitda_basis_value } });
+  M.line('exit_basis_ebitda', 'EBITDA the exit multiple applies to (exit year, or year N+1 under NTM)', { 0: { f: `IF(${iv('exit_basis')}="FY",${ea(N)},${ea(N)}*(1+${gN1Ref}))`, v: ex.exit_ebitda_basis_value } });
   M.line('exit_ev', 'Exit enterprise value  =  multiple × basis EBITDA', { 0: { f: `${iv('exit_mult')}*${m('exit_basis_ebitda', 0)}`, v: ex.exit_ev } }, { bold: true });
   M.line('exit_fees', 'Exit fees', { 0: { f: `${iv('exit_fee')}*${m('exit_ev', 0)}`, v: ex.exit_fees } });
   M.line('payoff', 'Debt repaid at exit (par + accrued PIK + drawn revolver)', { 0: { f: m('debt_close', N), v: ex.debt_payoff_at_par_plus_pik } });
   M.line('exit_cash', 'Cash at exit', { 0: { f: m('cash_close', N), v: ex.cash_at_exit } });
-  M.line('exit_eq', 'Exit equity, all holders  =  EV − debt + cash − fees', { 0: { f: `${m('exit_ev', 0)}-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('exit_fees', 0)}`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
-  M.line('mip', 'Management promote  =  MIN(pool × MAX(0, proceeds − hurdle × invested), exit equity)', {
-    0: { f: a.mip ? `MIN(${iv('mip_pool')}*MAX(0,${m('exit_eq', 0)}-${iv('mip_hurdle')}*${m('equity_total', 0)}),MAX(0,${m('exit_eq', 0)}))` : '0', v: ex.mip_payout },
+  M.line('mon_term', 'Monitoring-fee termination  =  annual × annuity(years, rate)', {
+    0: { f: mon ? `IF(${iv('mon_T')}<=0,0,IF(${iv('mon_r')}=0,${iv('mon_annual')}*${iv('mon_T')},${iv('mon_annual')}*(1-(1+${iv('mon_r')})^(-${iv('mon_T')}))/${iv('mon_r')}))` : '0', v: ex.monitoring_termination },
   });
-  M.line('roll_share', 'Rollover holders’ share (pari passu)', { 0: { f: `IF(${m('equity_total', 0)}>0,(${m('exit_eq', 0)}-${m('mip', 0)})*${m('rollover', 0)}/${m('equity_total', 0)},0)`, v: ex.rollover_share } });
-  M.line('sponsor_exit', 'Sponsor exit proceeds', { 0: { f: `${m('exit_eq', 0)}-${m('mip', 0)}-${m('roll_share', 0)}`, v: ex.sponsor_share } }, { bold: true });
+  if (mon && o.gp_fee_income) {
+    const gp = o.gp_fee_income;
+    M.line('gp_total', 'Memo: monitoring fees received by the sponsor (annual + termination)', { 0: { f: `SUM(${m('mon_fee', 1)}:${m('mon_fee', N)})+${m('mon_term', 0)}`, v: gp.total } }, { italic: true });
+  }
+  M.line('exit_eq', 'Exit equity, all holders  =  EV − debt + cash − fees − termination', { 0: { f: `${m('exit_ev', 0)}-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('exit_fees', 0)}-${m('mon_term', 0)}`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
+  // §10/§22.4 promote: MARGINAL tiers on total proceeds (exit equity + distributions paid)
+  // against total invested equity; capped at the positive exit equity.
+  const tiers = a.mip ? [{ h: iv('mip_hurdle'), s: iv('mip_pool') }, ...(a.mip.ratchet ?? []).map((_, j) => ({ h: iv(`mip_r${j}_h`), s: iv(`mip_r${j}_s`) }))] : [];
+  if (a.mip) M.line('proceeds', '   total proceeds for the promote  =  exit equity + distributions paid', { 0: { f: `${m('exit_eq', 0)}${dists ? `+SUM(${m('dist_paid', 1)}:${m('dist_paid', N)})` : ''}`, v: null } }, { italic: true, noParity: true });
+  const promote = tiers.map((tr, j) => {
+    const lo = `${tr.h}*${m('equity_total', 0)}`;
+    const hiArg = j + 1 < tiers.length ? `MIN(${m('proceeds', 0)},${tiers[j + 1].h}*${m('equity_total', 0)})` : m('proceeds', 0);
+    return `${tr.s}*MAX(0,${hiArg}-${lo})`;
+  }).join('+');
+  M.line('mip', `Management promote  =  ${tiers.length > 1 ? 'Σ tier share × proceeds in the tier' : 'pool × MAX(0, proceeds − hurdle × invested)'}, capped at exit equity`, {
+    0: { f: a.mip ? `MIN(${promote},MAX(0,${m('exit_eq', 0)}))` : '0', v: ex.mip_payout },
+  });
+  // §22.6 warrant: exercised iff w × (pot + K) > K; settles on full dilution with the strike paid in
+  if (a.warrant) {
+    M.line('w_pot', '   ordinary pot before the warrant  =  exit equity − promote', { 0: { f: `${m('exit_eq', 0)}-${m('mip', 0)}`, v: null } }, { italic: true, noParity: true });
+    M.line('w_net', 'Warrant payout, net of strike (0 if not exercised)', { 0: { f: `IF(${iv('w_pct')}*(${m('w_pot', 0)}+${iv('w_strike')})>${iv('w_strike')},${iv('w_pct')}*(${m('w_pot', 0)}+${iv('w_strike')})-${iv('w_strike')},0)`, v: ex.warrant_payout_net } });
+  }
+  const pot = a.warrant ? `(${m('w_pot', 0)}-${m('w_net', 0)})` : `(${m('exit_eq', 0)}-${m('mip', 0)})`;
+  M.line('roll_share', 'Rollover holders’ share (pari passu)', { 0: { f: `IF(${m('equity_total', 0)}>0,${pot}*${m('rollover', 0)}/${m('equity_total', 0)},0)`, v: ex.rollover_share } });
+  M.line('sponsor_exit', 'Sponsor exit proceeds', { 0: { f: `${pot}-${m('roll_share', 0)}`, v: ex.sponsor_share } }, { bold: true });
   M.header({ 0: 'Year 0', ...years(1, N) });
-  const cfRow = (key: string, label: string, t0: string, last: string, values: number[]) =>
-    M.line(key, label, Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? t0 : t === N ? last : '0', v: values[t] }])));
-  cfRow('cf_sponsor', 'Sponsor cash flows', `-${m('sponsor', 0)}`, m('sponsor_exit', 0), o.returns.sponsor_net.cashflows);
-  cfRow('cf_equity', 'Total equity cash flows (before the promote)', `-${m('equity_total', 0)}`, m('exit_eq', 0), o.returns.pre_promote.cashflows);
+  // interim flows = the distributions PAID; the sponsor takes its pro-rata share (pari passu with rollover)
+  if (dists) M.line('sp_frac', '   sponsor share of distributions  =  sponsor ÷ (sponsor + rollover)', { 0: { f: `IF(${m('equity_total', 0)}>0,${m('sponsor', 0)}/${m('equity_total', 0)},0)`, v: null, fmt: FMT_NUM } }, { italic: true, noParity: true });
+  const spPaid = (t: number) => (dists ? `${paid(t)}*${m('sp_frac', 0, true)}` : '0');
+  const cfRow = (key: string, label: string, t0: string, interim: (t: number) => string, last: string, values: number[]) =>
+    M.line(key, label, Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? t0 : t === N ? `${last}+${interim(t)}` : interim(t), v: values[t] }])));
+  cfRow('cf_sponsor', 'Sponsor cash flows', `-${m('sponsor', 0)}`, spPaid, m('sponsor_exit', 0), o.returns.sponsor_net.cashflows);
+  cfRow('cf_equity', 'Total equity cash flows (before the promote)', `-${m('equity_total', 0)}`, paid, m('exit_eq', 0), o.returns.pre_promote.cashflows);
+  if (dists) {
+    M.line('dpi', 'DPI  =  cumulative sponsor distributions ÷ sponsor equity (exit proceeds excluded)', per(1, N, (t) => ({
+      f: `IF(${m('sponsor', 0, true)}>0,(SUM(${m('cf_sponsor', 1, true)}:${m('cf_sponsor', t)})${t === N ? `-${m('sponsor_exit', 0)}` : ''})/${m('sponsor', 0, true)},0)`,
+      v: o.returns.dpi[t - 1], fmt: FMT_NUM,
+    })));
+  }
   M.line('u_taxable', '   unlevered: taxable income  =  EBITDA − D&A (no interest)', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('da', t)}`, v: null })), { italic: true, noParity: true });
   nolBlock('u_', 'u_taxable', '   unlevered: ', () => ({ acq: null, pc: null, acqEnd: null, pcEnd: null }));
   M.line('u_tax', '   unlevered: cash tax', per(1, N, (t) => ({ f: `IF(${m('u_taxable', t)}<=0,0,MAX(${iv('tax_rate')}*(${m('u_taxable', t)}-${m('u_acq_used', t)}-${m('u_pc_used', t)}),${iv('min_tax')}*${m('u_taxable', t)}))`, v: null })), { italic: true, noParity: true });
@@ -727,10 +827,22 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.header(years(1, N));
   const cr = o.credit;
   const na = (cond: string, value: string) => `IF(${cond},${value},"N/A")`;
-  M.line('net_lev', 'Net leverage  =  (debt − cash) ÷ EBITDA', per(1, N, (t) => ({ f: na(`${m('ebitda', t)}>0`, `(${m('debt_close', t)}-${m('cash_close', t)})/${m('ebitda', t)}`), v: cr[t - 1].net_leverage, fmt: FMT_MULT })));
-  M.line('icr', 'Interest cover  =  EBITDA ÷ cash interest', per(1, N, (t) => ({ f: na(`${m('int_total', t)}>0`, `${m('ebitda', t)}/${m('int_total', t)}`), v: cr[t - 1].icr, fmt: FMT_MULT })));
+  M.line('net_lev', 'Net leverage  =  (debt − cash) ÷ EBITDA', per(1, N, (t) => ({ f: na(`${ea(t)}>0`, `(${m('debt_close', t)}-${m('cash_close', t)})/${ea(t)}`), v: cr[t - 1].net_leverage, fmt: FMT_MULT })));
+  M.line('icr', 'Interest cover  =  EBITDA ÷ cash interest', per(1, N, (t) => ({ f: na(`${m('int_total', t)}>0`, `${ea(t)}/${m('int_total', t)}`), v: cr[t - 1].icr, fmt: FMT_MULT })));
   M.line('svc', '   debt service  =  cash interest + commitment fees + mandatory amortization', per(1, N, (t) => ({ f: `${m('int_total', t)}+${m('cfee_total', t)}+${m('mand_total', t)}`, v: null })), { italic: true, noParity: true });
   M.line('dscr', 'DSCR  =  FCF before debt service ÷ debt service', per(1, N, (t) => ({ f: na(`${m('svc', t)}>0`, `${m('fcf', t)}/${m('svc', t)}`), v: cr[t - 1].dscr, fmt: FMT_MULT })));
+  const seniorKeys = [...terms.map((t, i) => (t.type === 'senior' || t.type === 'unitranche' ? `${tk[i]}_close` : null)).filter((x): x is string => x !== null), ...(revolver ? ['rcf_close'] : [])];
+  M.line('sr_lev', 'Senior net leverage  =  MAX(0, senior debt − cash) ÷ EBITDA', per(1, N, (t) => ({ f: na(`${ea(t)}>0`, `MAX(0,${sumOf(seniorKeys, t)}-${m('cash_close', t)})/${ea(t)}`), v: cr[t - 1].senior_net_leverage, fmt: FMT_MULT })));
+  const maint = (t: number) => (lines?.capex ? m('capex', t) : `${iv('capex_pct')}*${m('rev', t)}`);
+  M.line('fccr', 'FCCR  =  (EBITDA − maintenance capex − cash tax) ÷ debt service', per(1, N, (t) => ({ f: na(`${m('svc', t)}>0`, `(${ea(t)}-${maint(t)}-${m('cash_tax', t)})/${m('svc', t)}`), v: cr[t - 1].fccr, fmt: FMT_MULT })));
+  M.line('fcf_conv', 'FCF conversion  =  FCF before debt service ÷ EBITDA', per(1, N, (t) => ({ f: na(`${ea(t)}>0`, `${m('fcf', t)}/${ea(t)}`), v: cr[t - 1].fcf_conversion, fmt: FMT_PCT })));
+  if (covs.leverage_max !== null) M.line('hr_lev', 'Leverage covenant headroom  =  maximum − net leverage (negative = breach)', per(1, N, (t) => ({ f: `IF(ISNUMBER(${m('net_lev', t)}),${iy('cov_lev', t)}-${m('net_lev', t)},"N/A")`, v: cr[t - 1].leverage_headroom, fmt: FMT_MULT })));
+  if (covs.dscr_min !== null) M.line('hr_dscr', 'DSCR covenant headroom  =  DSCR − minimum', per(1, N, (t) => ({ f: `IF(ISNUMBER(${m('dscr', t)}),${m('dscr', t)}-${iy('cov_dscr', t)},"N/A")`, v: cr[t - 1].dscr_headroom, fmt: FMT_MULT })));
+  if (covs.fccr_min !== null) M.line('hr_fccr', 'FCCR covenant headroom  =  FCCR − minimum', per(1, N, (t) => ({ f: `IF(ISNUMBER(${m('fccr', t)}),${m('fccr', t)}-${iy('cov_fccr', t)},"N/A")`, v: cr[t - 1].fccr_headroom, fmt: FMT_MULT })));
+  if (covs.springing && revolver) {
+    M.line('spr_on', 'Springing leverage test active (revolver drawn ÷ commitment above the trigger)', per(1, N, (t) => ({ f: `AND(${m('rcf_commit', 0, true)}>0,${m('rcf_close', t)}/${m('rcf_commit', 0, true)}>${iv('spr_trig')})`, v: null, fmt: 'General' })), { noParity: true });
+    M.line('spr_hr', 'Springing test headroom when active  =  maximum − net leverage', per(1, N, (t) => ({ f: `IF(AND(${m('spr_on', t)},ISNUMBER(${m('net_lev', t)})),${iy('spr_max', t)}-${m('net_lev', t)},"not tested")`, v: null, fmt: FMT_MULT })), { noParity: true });
+  }
   M.line('paydown', 'Cumulative paydown (% of entry debt)', per(1, N, (t) => ({ f: na(`${m('total_par', 0, true)}>0`, `(${m('total_par', 0, true)}-${m('debt_close', t)})/${m('total_par', 0, true)}`), v: cr[t - 1].cumulative_paydown_pct_of_entry_debt, fmt: FMT_PCT })));
 
   // ── Valuation ──
@@ -751,8 +863,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       if (c === null) { M.note(`${title}: not defined — ${val.gordon_null_reason ?? ''}`); continue; }
       M.note(title);
       M.header({ 0: 'Year 0', ...years(1, N) });
-      M.line(`${k}_exit_eq`, 'Exit equity  =  EV − debt + cash − exit fees', { 0: { f: `${ev}-${m('payoff', 0)}+${m('exit_cash', 0)}-${iv('exit_fee')}*${ev}`, v: c.exit_equity_total } });
-      M.line(`${k}_ecf`, 'Cash flow to equity during the year', per(1, N, () => ({ f: '0', v: 0 })), { noParity: true });
+      M.line(`${k}_exit_eq`, 'Exit equity  =  EV − debt + cash − exit fees − termination', { 0: { f: `${ev}-${m('payoff', 0)}+${m('exit_cash', 0)}-${iv('exit_fee')}*${ev}-${m('mon_term', 0)}`, v: c.exit_equity_total } });
+      M.line(`${k}_ecf`, 'Cash flow to equity during the year (distributions paid)', per(1, N, (t) => ({ f: paid(t), v: null })), { noParity: true });
       const eFormula = (t: number) => {
         if (t === N) return m(`${k}_exit_eq`, 0);
         if (!sooy) return `(${m(`${k}_E`, t + 1)}+${m(`${k}_ecf`, t + 1)})/(1+${m(`${k}_re`, t + 1)})`;
@@ -792,8 +904,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       M.header({ 0: 'Year 0', ...years(1, N) });
       M.line('be_E', '   equity value at the break-even exit multiple (live recursion)', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
         f: t === N
-          ? `${m('be_mult_m', 0)}*${m('exit_basis_ebitda', 0)}*(1-${iv('exit_fee')})-${m('payoff', 0)}+${m('exit_cash', 0)}`
-          : `${m('be_E', t + 1)}/(1+${iv('rf')}+(${iv('beta_a')}+(${iv('beta_a')}*(${m('debt_close', t + 1)}-${m('cash_close', t + 1)})-${iv('beta_d')}*${m('debt_close', t + 1)})/${m('be_E', t + 1)})*${iv('mrp')})`,
+          ? `${m('be_mult_m', 0)}*${m('exit_basis_ebitda', 0)}*(1-${iv('exit_fee')})-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('mon_term', 0)}`
+          : `(${m('be_E', t + 1)}+${paid(t + 1)})/(1+${iv('rf')}+(${iv('beta_a')}+(${iv('beta_a')}*(${m('debt_close', t + 1)}-${m('cash_close', t + 1)})-${iv('beta_d')}*${m('debt_close', t + 1)})/${m('be_E', t + 1)})*${iv('mrp')})`,
         v: null,
       }])), { italic: true, noParity: true });
       M.line('be_npv', 'NPV at the break-even exit multiple (reads 0 until an input changes)', { 0: { f: `${m('be_E', 0)}-${m('equity_total', 0)}`, v: 0 } }, { bold: true });
@@ -807,7 +919,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const checks: [string, string, string][] = [
     ['ck_su', 'Sources = uses', `${mx('sources', 0)}-${mx('uses', 0)}`],
     ['ck_bs', 'Balance sheet balances in every year (sum of |assets − debt − equity|)', range(N + 1, 0).map((t) => `ABS(${mx('bs_check', t)})`).join('+')],
-    ['ck_exit', 'Exit split: sponsor + rollover + promote = exit equity', `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}-${mx('exit_eq', 0)}`],
+    ['ck_exit', 'Exit split: sponsor + rollover + promote + warrant = exit equity', `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}${a.warrant ? `+${mx('w_net', 0)}` : ''}-${mx('exit_eq', 0)}`],
     ['ck_debt', 'Debt roll: par − repayments + PIK = closing debt (terms)', terms.length
       ? `${mx('total_par', 0)}${range(N, 1).map((t) => terms.map((_, i) => `-${mx(`${tk[i]}_mand`, t)}-${mx(`${tk[i]}_sweep`, t)}+${mx(`${tk[i]}_pik`, t)}`).join('')).join('')}-(${terms.map((_, i) => mx(`${tk[i]}_close`, N)).join('+')})`
       : '0'],

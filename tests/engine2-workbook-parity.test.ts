@@ -53,6 +53,36 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
       rollover_equity: 40,
     },
   },
+  // structure features together: monitoring fee, distributions + a binding RP trap, a
+  // leverage-based sweep grid, covenants incl. a springing test, a MIP with a ratchet tier,
+  // a warrant beside it, and rollover equity
+  FEATURES: {
+    facts: GOLDEN_DEALS.G2.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G2.assumptions,
+      rollover_equity: 30,
+      fees: { ...GOLDEN_DEALS.G2.assumptions.fees, monitoring: { annual: 3, termination_years: 3, discount_rate: 0.08 } },
+      structure: {
+        ...GOLDEN_DEALS.G2.assumptions.structure,
+        distributions: [15, 15, 25, 25, 25],
+        sweep: { base_pct: 0.75, grid: { tiers: [{ above_net_leverage: 2.0, pct: 0.5 }, { above_net_leverage: 3.5, pct: 0.75 }], else_pct: 0.25 } },
+      },
+      covenants: { leverage_max: [5, 4.5, 4, 3.5, 3.5], dscr_min: 1.2, fccr_min: 1.0, springing: { metric: 'leverage', max: 5, revolver_draw_trigger_pct: 0.3 }, rp_trap: { metric: 'net_leverage', level: 3.2 } },
+      mip: { pool_pct: 0.1, hurdle_moic: 1.3, ratchet: [{ hurdle_moic: 1.8, share_pct: 0.2 }] },
+      warrant: { holder_label: 'Mezz lender', pct_of_ordinary: 0.04, strike_total: 10 },
+    },
+  },
+  // §20 PIK toggle: a whole-coupon cash/PIK election each year
+  PIK_TOGGLE: {
+    facts: GOLDEN_DEALS.G3.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G3.assumptions,
+      structure: {
+        ...GOLDEN_DEALS.G3.assumptions.structure,
+        tranches: GOLDEN_DEALS.G3.assumptions.structure.tranches.map((t) => (t.type === 'pik_note' ? { ...t, cash_coupon: 0.08, pik_coupon: 0.12, elections: ['pik', 'pik', 'cash', 'cash', 'pik'] as ('cash' | 'pik')[] } : t)),
+      },
+    },
+  },
   // tax coverage: early LOSSES banked into the post-close pool and used later (80% limit),
   // acquired NOLs that arose pre-2018 (100% cap) under a §382 limit, back-loaded margin
   TAX_NOL: {
@@ -203,10 +233,10 @@ describeIfLo('§26 formula workbook — LibreOffice recalculation equals the eng
 });
 
 describe('§26 coverage rule — unsupported features BLOCK export by name (never pasted values)', () => {
-  it('a deal with interim distributions is blocked, and says why', () => {
-    const o = runModel(GOLDEN_DEALS.G2DIST.facts, GOLDEN_DEALS.G2DIST.assumptions);
-    expect(formulaCoverageBlockers(o)).toContain('interim distributions');
-    expect(() => buildFormulaWorkbook(o, { cachedResults: true })).toThrow(/interim distributions/);
+  it('a deal with a feature not yet in the formula model is blocked, and says which', () => {
+    const o = runModel(GOLDEN_DEALS.G7FUND.facts, GOLDEN_DEALS.G7FUND.assumptions);
+    expect(formulaCoverageBlockers(o)).toContain('fund/LP overlay');
+    expect(() => buildFormulaWorkbook(o, { cachedResults: true })).toThrow(/fund\/LP overlay/);
   });
 });
 
@@ -228,6 +258,24 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     const o = runModel(CASES.TAX_PRE18.facts, CASES.TAX_PRE18.assumptions);
     for (const y of o.tax) if (y.taxable_before_nol > 0) expect(y.acquired_nol_used).toBeCloseTo(y.taxable_before_nol, 9);
     expect(o.tax.some((y) => y.taxable_before_nol > 0)).toBe(true);
+  });
+  it('FEATURES exercises every switch: fee, distributions paid AND trap-blocked, more than one sweep %, promote above the ratchet, an exercised warrant', () => {
+    const o = runModel(CASES.FEATURES.facts, CASES.FEATURES.assumptions);
+    expect(o.operating.slice(0, -1).every((y) => y.ebitda - y.ebitda_adj === 3)).toBe(true);
+    expect(o.exit.monitoring_termination).toBeGreaterThan(0);
+    expect(o.waterfall.some((w) => w.distribution_paid > 0)).toBe(true);
+    expect(o.waterfall.some((w) => w.distribution_blocked)).toBe(true);
+    expect(new Set(o.waterfall.map((w) => w.sweep_pct_applied)).size).toBeGreaterThan(1);
+    const proceeds = o.exit.exit_equity_pre_mip_total + o.waterfall.reduce((x, w) => x + w.distribution_paid, 0);
+    expect(proceeds).toBeGreaterThan(1.8 * (o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity)); // the ratchet tier is reached
+    expect(o.exit.warrant_payout_net).toBeGreaterThan(0);
+    expect(o.credit.some((c) => c.leverage_headroom !== null)).toBe(true);
+  });
+  it('PIK_TOGGLE pays cash in the cash years and accrues in the PIK years', () => {
+    const o = runModel(CASES.PIK_TOGGLE.facts, CASES.PIK_TOGGLE.assumptions);
+    const rows = o.tranches[1];
+    expect(rows[0].cash_interest).toBe(0); expect(rows[0].pik_accrual).toBeGreaterThan(0);
+    expect(rows[2].cash_interest).toBeGreaterThan(0); expect(rows[2].pik_accrual).toBe(0);
   });
   it('G5_TIERS splits a sweep pro rata inside priority 1 and reaches priority 2; the revolver draws', () => {
     const o = runModel(CASES.G5_TIERS.facts, CASES.G5_TIERS.assumptions);
