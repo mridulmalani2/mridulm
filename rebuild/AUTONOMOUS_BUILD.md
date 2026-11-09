@@ -81,112 +81,29 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 
 ## 2. STATE (update this section as you go — it is the resume point)
 
-- **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
-  any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
-  `.claude/worktrees/`; in a cloud session it is a fresh clone.
-- **main** @ `c1c87a2`, SPEC **v1.7.0** (§22 shipped). A PARALLEL session owns the SITE
-  surface and has merged PRs #123–#125 (cookieless analytics, research-section archiving,
-  a STATE doc commit). It has touched **zero** engine files — the split is clean:
-  **this line of work owns `lib/engine2/**`, `tests/engine2-*`, `tests/goldens/**`,
-  `scripts/goldens/**`, `rebuild/**`; the other owns the site.** Both edit
-  `rebuild/AUTONOMOUS_BUILD.md` and `package.json`, so expect merges there only.
-- **#8 MERGED 2026-08-14 — PR #121, main @ `353e52a`, SPEC v1.7.0, vitest 731 passed +
-  3 live-skipped (53 files).** The full bounded Tier-A ritual ran end-to-end in one day:
-  spec SIGNED r11 (3 lenses, 0 blocking; fingerprint 0398fb3) → goldens G9-SWEET/G10-RATCHET
-  with TWO blind adjudication passes (zero mismatches; DERIVATION.md §22) → engine (both
-  goldens reproduced; §22.13 fixtures; 19 mutants RED/reverted; accuracy audit's 2 blocking
-  fixed in-step) → UI (both §15 surfaces; M10 Excel; 8 display mutants) → conformance
-  (TIER_A_CORRECT; 1 blocking closed: the M10 row on the S&U WORKSHEET, footing asserted)
-  + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
-  ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
-  `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
-- **IN FLIGHT: #7 partial exits / IPO selldown — step 2b (blind adjudication).**
-  Branch `claude/deal-engine-partial-exits-586f25`, which fast-forwarded the earlier
-  `claude/partial-exits-spec` work (that branch is still checked out in a DEAD worktree —
-  do not try to check it out; this branch contains its full history).
-
-  **Step 1 (spec §23) — DONE except the round-1 grant.** Constraints dossier + ten design
-  decisions in `rebuild/G11_PARTIAL_EXITS_BRIEF.md`; §23 drafted @ `13d450c`.
-
-  **OWNER QUESTION Q-A: RESOLVED 2026-08-27 @ `25a53e1` — DPI/payback moved to the
-  REALIZED-PROCEEDS basis (selldown proceeds COUNT).** The owner delegated the call with an
-  instruction to research market practice and adopt it; practice is not split (fund-layer DPI
-  counts a secondary the quarter it closes; deal-layer modelling splits inflows into
-  realized/unrealized). The draft's distributions-only default was L-10 OVER-APPLIED: L-10's
-  degeneracy comes from counting the ratio's OWN EXIT, which an interim realization does not
-  do. Full rationale + sources in `rebuild/OWNER_QUESTIONS.md`. It landed BEFORE adjudication,
-  so there was NO fixture re-pin, and it is a net simplification (no memo field — the
-  distributions-only series stays derivable; the deal-vs-fund layer note became one of
-  AGREEMENT). **Q-A is CLOSED. Do not reopen it.** Q-B stays rejected-by-design.
-
-  **TWO BLOCKING defects were found while re-deriving the golden under the flip** (not by
-  review — by doing the arithmetic), both fixed in `25a53e1` and recorded in
-  `rebuild/G11_LEDGER.md`: (B1) §23.8/§14.9(b)'s walk-down had TWO terms and double-counted
-  the proceeds — the whole correction is `proceeds − buyer_share`, ONE term, and residual (b)
-  could never have caught it (v1.1.2); (B2) §23.12 asserted the WRONG IRR direction — it
-  FALLS, because the sold slice's own implied return (≈15.9%) is ABOVE the deal's.
-
-  **Step 2a — DONE @ `3e40cbe`.** `scripts/goldens/spec_calc.py` gained the §23 arithmetic
-  (spec-literal, engine-import-free) and **G11-SELL** = G2-DIST + `{year 3, fraction 0.25,
-  event_multiple 8.5}`. Fixture SHAPE change landed with **ZERO value movement**: 14
-  insertions, 0 deletions across the whole fixture tree (one `exit.selldown_buyer_share: 0.0`
-  key each), with the matching unconditional carrier in `types.ts`/`exit.ts` — the §22.10
-  precedent verbatim, which is what keeps the gate green before step 3.
-  Reference output: proceeds 198.11, sponsor exit 783.05, buyer 261.02, buyer Δ 62.91,
-  IRR 13.1313% (host 13.3906%), MOIC 1.7405 (host 1.8553), payback null,
-  dpi [0.0, 0.0206, 0.3841, 0.3968, 0.4071] — the year-3 leaf is an **8.2× discriminator**
-  of the Q-A basis, so no distributions-only engine can pass it.
-  NOTE §23.12's DISPLAY seeds are 2dp reconstructions and differ in the cents from the
-  full-precision fixture (1082.305 vs 1082.28) — restate them from the adjudicated chain.
-
-  **ROUND 1 — CLOSED. Three lenses, all REFUSED, EIGHT blocking findings, all applied.**
-  The pattern IS the finding: all three lenses independently re-derived §23's own arithmetic
-  and found it CLEAN, and every one of the eight defects sat in a COMPANION home that §23
-  amended by reference but did not actually amend, or over-claimed about — §14.9 clause 9,
-  §19.3/§19.4/§19.6(a), §14.20(d), §23.7, §23.13(vii)/(xi). Two were verbatim repeats of §22
-  findings; one (A-B3) corrected a fix made earlier in the same round. Full table:
-  `rebuild/G11_LEDGER.md`. **Whoever runs round 2 should point it at the companion homes at
-  least as hard as at §23 — that is where every single defect has been.**
-
-  **STEP 2b — BOTH BLIND ADJUDICATION PASSES SIGNED. AGREE, zero mismatches** (pass 2 to
-  delta 0.0 exactly); recorded in `tests/goldens/DERIVATION.md`. Neither seeded from §23.12's
-  display values: both rebuilt the whole G2-DIST run at full precision from §17's deck and
-  verified it reproduces every committed host leaf first. **G11-SELL is now GOSPEL.**
-
-  **RESUME POINT — gates green: tsc clean, vitest 762 passed + 3 live-skipped (54 files),
-  build green.** Next, in order:
-  1. **Round 2** (optional under the cap, but round 1 moved eight numbers, so run it). If
-     round 2 ALSO moves a number, §4 says STOP and escalate rather than run a third.
-  2. **The ledger pass** — eight open items in `rebuild/G11_LEDGER.md`, ONE commit.
-  3. **GRANT + stamp the fingerprint + bump the SPEC header to v1.8.0.**
-  4. **Step 3** — engine in `lib/engine2/**` (the §23.10 fields; `ExitBlock.selldown_buyer_share`
-     already exists as a committed zero from step 2a), §23.13's (i)–(xii) directed fixtures,
-     `check.ts` invariants, then documented mutants run RED and reverted by string-replace
-     with `count == 1` asserted — never `git checkout/stash/reset`.
-     Note §23.13(iii) and (v) now carry CONSTRUCTED inputs, so they can be written directly.
-
-### Backlog — 12 items, 6 merged
-
-| # | Tier | Feature | State |
-|---|---|---|---|
-| 1 | A | Interim distributions + cash trap | ✅ merged |
-| 3 | A | Fund/LP overlay §19 | ✅ merged |
-| 4 | B | Sector comps §21 | ✅ merged (PR #120) |
-| 5 | A | Refinancing §18 | ✅ merged |
-| 6 | A | PIK toggle §20 | ✅ merged |
-| 8 | A | Sweet equity + ratchets + warrants §22 | ✅ merged (PR #121) |
-| **7** | **A** | **Partial exits / IPO selldown** | 🔄 **step 1 (spec)** |
-| **9** | **A** | **Add-on acquisitions** | then |
-| 2 | B | Quarter-stitched LTM | then |
-| 10 | B/A | Market-data suggestions | then |
-| 11 | B | Covenant step-downs | then |
-| 12 | C | Trace mode v2 | last |
-
-**Order (owner decision 2026-08-12): finish #8, then #7, #9 — the hard Tier-A arithmetic while
-budget lasts — then #2, #10, #11, #12.** #9 is called "the old engine's deepest wound"; do not
-leave it for a session with no budget.
-
----
+- **Repo** `mridulmalani2/mridulm`. The engine line of work owns `lib/engine2/**`,
+  `tests/engine2-*`, `tests/goldens/**`, `scripts/goldens/**`, `rebuild/**`; a parallel
+  session owns the site surface.
+- **2026-11-09: PR #126 (`claude/engine-hardening-formula-excel`) carries SPEC v2.0.0 →
+  v2.3.0**, awaiting the owner's merge:
+  - v2.0.0 case-driven forecasts, §25 flow-to-equity valuation, §26 formula workbook,
+    blank-until-entered inputs;
+  - every engine feature formula-covered in the workbook (`formulaCoverageBlockers` empty),
+    Summary / Sensitivity / Methodology sheets, seeded IRRs;
+  - v2.1.0 §3.8 surplus-cash distribution policy;
+  - v2.2.0 §23 partial exits — the #7 branch merged and implemented (ledger
+    `rebuild/G11_LEDGER.md` EMPTY);
+  - v2.3.0 §9.1 limited liability — exit equity and selldown proceeds floored at zero, the
+    lenders' shortfall reported.
+- **Backlog:** `rebuild/V2_BACKLOG.md` is the live tracker. Items 1–4 DONE. **NEXT: item 5,
+  the 10-K reconciliation bridges** (EBITDA bridge + net-debt bridge, formula-linked on the
+  workbook's Inputs sheet) — the owner scheduled it last, after #126 merges.
+- **Owner decisions in force:** the professor's worked example is ONE check, not the design —
+  every policy is an analyst control; finish features at the "signed golden + directed
+  fixtures + mutants + LibreOffice parity" bar rather than further blind prose rounds; ask via
+  AskUserQuestion when a call is genuinely the owner's, then build.
+- **Gates at last commit:** tsc clean, vitest 878 passed + 3 live-skipped (60 files),
+  `npm run build` green, LibreOffice parity across 37 deals.
 
 ## 3. PER-FEATURE LOOP
 

@@ -3630,11 +3630,11 @@ a valuation]:
 implied_event_ev     = event_multiple × EBITDA_adj[t]           (§7's year-t figure, full precision)
 implied_event_equity = implied_event_ev − (debt at par+PIK end of t + drawn revolver end of t
                         − closing cash end of t)                 (§11's debt and cash definitions)
-selldown_proceeds    = fraction × implied_event_equity           (the sponsor's year-t inflow)
+selldown_proceeds    = fraction × max(0, implied_event_equity)   (the sponsor's year-t inflow; §9.1)
 ```
 
 `implied_event_equity` is SIGNED and may be ≤ 0 (an underwater year-t sale is legal and
-warns — §14.24(f)); the proceeds carry its sign. REJECTED: a user-stated event EQUITY VALUE —
+warns — §14.24(f)); the proceeds are floored at zero by §9.1 [v2.3.0] (a seller never pays a buyer to take a stake). REJECTED: a user-stated event EQUITY VALUE —
 under a §13 scenario re-run a stated value would not move with the scenario's EBITDA, so a
 downside would sell at the base-case price; the multiple form re-binds per scenario exactly
 as the §3.7 trap's level does (§23.8). SETTLEMENT: the event lands at the END of year t, in
@@ -3722,7 +3722,7 @@ surface (§16's v1.1.1 precedent).
 conservation extends to them, and they enter the LP assembly through the YEAR-t INTERIM leg
 (the only year-t leg), riding the §19.4 waterfall like any distribution
 — EXCEPT at a negative D, which by §19.4's own arm bypasses the pref and carry steps
-entirely [round-1 arithmetic A-L3]. LAYER NOTE — **the agreement Q-A
+entirely. LAYER NOTE — **the agreement Q-A
 creates is SCOPED TO THE PROCEEDS, and the scope matters.** On the selldown the layers now
 agree: the FUND-layer `fund_lp_net.dpi/payback` include the proceeds mechanically (LP cash is
 LP cash) and after Q-A the DEAL-layer `returns.dpi/payback_year` include them too (§23.6).
@@ -3735,9 +3735,7 @@ golden that one axis is `dpi[5]` **0.0774 (deal) vs 1.549326 (fund) — a 20× g
 fees**, while years 1–4 differ only in the low single digits. Beyond the exit axis the two
 figures differ by §19 management fees, GP carry, and a cumulative-LP-contributions
 denominator rather than the single t=0 check. Stating the agreement WITHOUT the exit carve-out
-would have been false against a committed golden by that 20× [round-1 coherence CO-B1 — the
-flip's "agreement" was applied to this note without checking the one axis on which the layers
-were never in agreement].
+would have been false against a committed golden by that 20×.
 
 **§23.8 Composition.** **§1:** the sentence "interim sponsor flows exist exactly when
 interim distributions are on" is AMENDED (a selldown is a second source of interim sponsor
@@ -3753,9 +3751,7 @@ term in §12's own enumeration — `− selldown Δ (`selldown_buyer_share` − 
 the rollover-Δ template verbatim. The bridge identity has TWO homes that each RESTATE it in
 full — §12's walk-down enumeration and §14's clause 9 — exactly as the v1.7.0 terms did, so
 **BOTH are amended** and §12 carries the proof that ONE term is the whole correction and that
-a second `+ proceeds` line would double-count by exactly the proceeds. (An earlier draft of
-this sentence called §14.9 "the single home" and amended only §12; clause 9 carries domain
-"always" and would have been false by ≈$62.90m on every selldown run — round-1 contracts C-B1.) `walkdown.sponsor_net_delta` is likewise widened
+a second `+ proceeds` line would double-count by exactly the proceeds. `walkdown.sponsor_net_delta` is likewise widened
 to carry `+ selldown_proceeds` on the RHS. Residual (b) is blind to a SYMMETRIC error only:
 a wrong `selldown_proceeds` VALUE cancels between the walk-down's `− (selldown_buyer_share −
 selldown_proceeds)` and `sponsor_net_delta`'s `+ selldown_proceeds`, and residual (b) then
@@ -3765,7 +3761,7 @@ blind to the ASYMMETRIC two-term form**, which adds `+ proceeds` to the walk and
 `bridge.reconciliation_residual` reads exactly the proceeds. §23.13(vii) therefore pins the
 term by DIRECT recomputation against §14.9's stated form **AND asserts residual (b) at zero**
 — the recomputation alone cannot catch the two-term mutant, because that mutant leaves
-`selldown_buyer_delta` and `sponsor_net_delta` untouched [round-1 coherence CO-B2]. **§13:** the event is STRUCTURE — terms FROZEN across
+`selldown_buyer_delta` and `sponsor_net_delta` untouched. **§13:** the event is STRUCTURE — terms FROZEN across
 scenarios mechanically (`ScenarioDeltas` cannot reach it, a closed interface), while the
 PROCEEDS re-bind per scenario through EBITDA_adj[t] — the trap's policy-frozen /
 binding-varies split; a downside sells at the downside price (§23.13(viii)). **§18/§20/§21:**
@@ -3891,7 +3887,7 @@ when the money is released at or below the deal's own rate. Exact figures are st
 fixture leaf byte-unchanged — §14.24(d)'s exact words, the ONE carve-out being the fixture
 SHAPE (the `exit.selldown_buyer_share` zero column §23.10 emits unconditionally). The
 unqualified "every output byte-identical" is FALSE and is the §14.23(f) shorthand this
-document has already paid for once [round-1 contracts C-L1]; (ii) the FIVE §23.3 rejections, one case each; (iii) the §23.4 X-exclusion AND the partition
+document has already paid for once; (ii) the FIVE §23.3 rejections, one case each; (iii) the §23.4 X-exclusion AND the partition
 POINT — one fixture, two mutants, both golden-invisible: selldown + `mip {0.15, 1.5}` ⇒
 (α) X and `mip_payout` IDENTICAL to the no-selldown run, so the count-the-base mutant
 (`X += proceeds`) REDs here and CANNOT red on G11-SELL (`mip: null`); (β)
@@ -3909,13 +3905,11 @@ fraction: 0.9, event_multiple: 8.5}` ⇒ proceeds ≈ 713.2, year-3 numerator �
 587.225 check ⇒ `payback_year = 3`; the exclude-the-proceeds mutant (the distributions-only
 engine) tops out at ≈ 29.2 and returns null — RED. G11-SELL cannot supply this (its 239.04
 never reaches the check), which is precisely why it is directed. **Arm 2:** `selldown
-{year: 2, fraction: 0.25, event_multiple: 2.0}` ⇒ `implied_event_equity` −91.82, proceeds
-−22.96, `dpi[2]` = −0.0185 < `dpi[1]` = 0.0 — a LEGAL §23.3 input that the UN-carved §14.18
-would have failed; a floor-the-numerator mutant REDs. The carve-out is provably EXACTLY
-TIGHT, which is what makes "no other year may fall" a theorem rather than a hope: for every
-`t ≠ year`, `dpi[t] − dpi[t−1] = (1 − f) × paid[t] ÷ sponsor_equity`, and §3 step 7 floors
-`paid` at zero while `(1 − f) ∈ (0,1)` by §23.3, so no other year CAN fall
-[adjudication pass B; re-run and confirmed against the reference]; (vi) §11
+{year: 2, fraction: 0.25, event_multiple: 2.0}` ⇒ `implied_event_equity` −91.82 and, under
+§9.1 [v2.3.0], proceeds 0 (not −22.96), `selldown_below_cost` firing and `dpi[]` monotone — the
+unfloored-proceeds mutant REDs. With proceeds ≥ 0 and §3 step 7 flooring `paid` at zero, NO
+year's DPI can fall: §14.18's selldown carve-out is unreachable by construction and stays in
+the text only so a future signed input fails loudly; (vi) §11
 non-contamination: with/without pair, credit/tranches/waterfall/tax byte-identical;
 (vii) the ONE §12 walk-down term: `selldown_buyer_delta` by DIRECT recomputation against
 §14.9's stated form, **AND `bridge.reconciliation_residual ≤ $0.005m`** — BOTH asserts are
@@ -3923,7 +3917,7 @@ required and they catch different mutants. The TWO-TERM mutant (a `+ selldown_pr
 line restored beside it) leaves `selldown_buyer_delta` at 62.91 and `sponsor_net_delta` at
 434.86 UNCHANGED, so the recomputation passes it GREEN; it moves ONLY residual (b), to exactly
 the proceeds (198.11 on G11-SELL). A wrong proceeds VALUE is the mirror case — symmetric, so
-it cancels out of residual (b) and only the recomputation catches it [round-1 coherence CO-B2]; (viii) the §13 pair: same event terms under G2-DIST-D's downside ⇒ LOWER
+it cancels out of residual (b) and only the recomputation catches it; (viii) the §13 pair: same event terms under G2-DIST-D's downside ⇒ LOWER
 proceeds (the re-binding pin); (ix) `selldown_below_cost` firing and non-firing within
 $0.005m of the boundary; (x) the warrant composition: selldown + warrant ⇒ the partition
 applies post-warrant and §22.6's conservation closes; (xi) the §19 leg: LP conservation
@@ -3933,7 +3927,7 @@ landing in `lp_distributions[year]` through §19.4), with the exclude-the-procee
 on BOTH layers, plus the §14.24(c) partition mutant (the un-partitioned interim share) RED on
 the fund leg alone. The prior "the layers differ ONLY by fees/carry/denominator" relation is
 NOT asserted: it is false at year N by 20× on G7-FUND, so no version of it both passes and
-discriminates [round-1 coherence CO-B1]; (xii) the
+discriminates; (xii) the
 mid-year shift: the year-t proceeds move to t − 0.5 under the display option and the
 period-end IRR is unchanged.
 

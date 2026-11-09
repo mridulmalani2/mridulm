@@ -101,3 +101,13 @@ v1.8.0, then step 3 (engine + §23.13 fixtures + documented mutants RED and reve
 | # | Class | Item |
 |---|---|---|
 | L4 | prose length | §23 is **332 lines** against PHASE_G's ~250 guideline. Two drivers: §23.13's constructed fixture inputs (genuinely normative — step 3 needs them) and inline round-1 attributions, which rule 4 says belong in the changelog row, not in normative text. Strip the attributions at conformance; keep the "un-amended, this is false by X" protective notes, which follow the committed §22 style. |
+
+### CLOSED 2026-11-09 (v2.2.0 → v2.3.0)
+
+| # | Disposition |
+|---|---|
+| L4 | Applied: every inline round/adjudication attribution stripped from §23's normative text (they live in the changelog and this ledger); the protective "false by X" notes kept; §23 is ~330 lines because §23.13's constructed fixture inputs are normative and stay. |
+| — | Engine step 3, UI, Excel coverage and conformance done at the owner-chosen bar (signed golden + every §23.13 fixture + 18 mutants red + LibreOffice parity) — commits c1888ce, a7a995e. |
+| — | §9.1 limited liability (v2.3.0) supersedes the negative-proceeds arm: a sale at a negative implied equity now fetches 0, so §14.18's "may fall" carve-out is unreachable by construction (kept in text so a future signed input fails loudly). |
+
+The ledger is EMPTY.
