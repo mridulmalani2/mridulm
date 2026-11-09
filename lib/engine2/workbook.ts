@@ -58,7 +58,6 @@ export interface FormulaWorkbook {
 export function formulaCoverageBlockers(o: Engine2ModelOutput): string[] {
   const a = o.assumptions;
   const out: string[] = [];
-  if (a.sweet_equity) out.push('sweet equity strip');
   if (a.fund) out.push('fund/LP overlay');
   return out;
 }
@@ -430,6 +429,18 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     I.line('w_pct', `Warrant (${a.warrant.holder_label}): % of ordinary, fully diluted`, { 0: { input: a.warrant.pct_of_ordinary, fmt: FMT_PCT } });
     I.line('w_strike', 'Warrant: total strike (paid in on exercise)', { 0: { input: a.warrant.strike_total } });
   }
+  const sweet = a.sweet_equity;
+  if (sweet) {
+    I.note('Sweet-equity strip — the institution subscribes loan notes + ordinaries; management buys ordinaries (sweet equity)');
+    I.line('se_p', 'Institutional strip: ordinaries as % of the institution’s equity (loan notes take the rest)', { 0: { input: sweet.sponsor_ordinary_pct, fmt: FMT_PCT } });
+    I.line('se_r', 'Loan-note coupon (rolled up annually; no accretion in year 0)', { 0: { input: sweet.loan_note_rate, fmt: FMT_PCT } });
+    I.line('se_sub', 'Management subscription for ordinaries (a source of funds at close)', { 0: { input: sweet.management_subscription } });
+    I.line('se_s0', 'Management share of the ordinaries (base, before any ratchet)', { 0: { input: sweet.management_ordinary_pct, fmt: FMT_PCT } });
+    (sweet.ratchet ?? []).forEach((r, j) => {
+      I.line(`se_r${j}_h`, `Sweet ratchet tier ${j + 1}: institution MOIC above which it applies`, { 0: { input: r.hurdle_moic, fmt: FMT_MULT } });
+      I.line(`se_r${j}_s`, `Sweet ratchet tier ${j + 1}: management share of ordinaries above it`, { 0: { input: r.share_pct, fmt: FMT_PCT } });
+    });
+  }
   const v = a.valuation;
   const val = o.valuation;
   if (v && val) {
@@ -556,9 +567,16 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('cash_bs', 'Cash to the balance sheet (the minimum cash)', { 0: { f: iv('min_cash'), v: su.cash_to_balance_sheet } });
   M.line('uses', 'Total uses', { 0: { f: `${m('ev', 0)}+${m('txn', 0)}+${m('fin_fees', 0)}+${m('oid', 0)}+${m('cash_bs', 0)}`, v: su.total_uses } }, { bold: true });
   M.line('rollover', 'Rollover equity', { 0: { f: iv('rollover'), v: su.rollover_equity } });
-  M.line('sponsor', 'Sponsor equity  =  uses − debt − rollover (the plug)', { 0: { f: `${m('uses', 0)}-${m('total_par', 0)}-${m('rollover', 0)}`, v: su.sponsor_equity } }, { answer: true });
-  M.line('sources', 'Total sources', { 0: { f: `${m('total_par', 0)}+${m('rollover', 0)}+${m('sponsor', 0)}`, v: su.total_sources } }, { bold: true });
-  M.line('equity_total', 'Total equity invested  =  sponsor + rollover', { 0: { f: `${m('sponsor', 0)}+${m('rollover', 0)}`, v: su.sponsor_equity + su.rollover_equity } });
+  // §22.8: the management subscription is its own source; the sponsor plug is the residual after it
+  if (sweet) M.line('mgmt_sub', 'Management subscription (sweet equity)', { 0: { f: iv('se_sub'), v: su.management_subscription } });
+  const subTerm = sweet ? `-${m('mgmt_sub', 0)}` : '';
+  M.line('sponsor', `Sponsor equity  =  uses − debt − rollover${sweet ? ' − management subscription' : ''} (the plug)`, { 0: { f: `${m('uses', 0)}-${m('total_par', 0)}-${m('rollover', 0)}${subTerm}`, v: su.sponsor_equity } }, { answer: true });
+  M.line('sources', 'Total sources', { 0: { f: `${m('total_par', 0)}+${m('rollover', 0)}+${m('sponsor', 0)}${sweet ? `+${m('mgmt_sub', 0)}` : ''}`, v: su.total_sources } }, { bold: true });
+  M.line('equity_total', `Total equity invested  =  sponsor + rollover${sweet ? ' + management' : ''}`, { 0: { f: `${m('sponsor', 0)}+${m('rollover', 0)}${sweet ? `+${m('mgmt_sub', 0)}` : ''}`, v: su.sponsor_equity + su.rollover_equity + su.management_subscription } });
+  if (sweet) {
+    M.line('ln0', 'Loan notes subscribed by the institution  =  (1 − ordinary %) × sponsor equity', { 0: { f: `(1-${iv('se_p')})*${m('sponsor', 0)}`, v: o.equity_strip!.loan_notes_subscribed } });
+    M.line('inst_ord_sub', '   institutional ordinaries subscribed  =  sponsor equity − loan notes', { 0: { f: `${m('sponsor', 0)}-${m('ln0', 0)}`, v: null } }, { italic: true, noParity: true });
+  }
 
   // ── Fee & OID amortization ──
   M.section('3. Financing fees and OID — straight-line over each maturity; written off when a tranche is fully repaid, and at exit');
@@ -847,18 +865,74 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('mip', `Management promote  =  ${tiers.length > 1 ? 'Σ tier share × proceeds in the tier' : 'pool × MAX(0, proceeds − hurdle × invested)'}, capped at exit equity`, {
     0: { f: a.mip ? `MIN(${promote},MAX(0,${m('exit_eq', 0)}))` : '0', v: ex.mip_payout },
   });
+  const strip = o.equity_strip;
+  // §22.2/§22.7 the loan-note walk: accretes from year 1; an interim distribution redeems the
+  // accreted notes first, and only the remainder reaches the ordinaries, split at the BASE share.
+  if (sweet) {
+    M.header({ 0: 'Close', ...years(1, N) });
+    M.line('ln_open', 'Loan notes: opening balance', per(1, N, (t) => ({ f: t === 1 ? m('ln0', 0, true) : m('ln_bal', t - 1), v: null })), { italic: true, noParity: true });
+    M.line('ln_grown', 'Loan notes: balance after the year’s coupon rolls up  =  opening × (1 + coupon)', per(1, N, (t) => ({ f: `${m('ln_open', t)}*(1+${iv('se_r')})`, v: null })), { noParity: true });
+    M.line('ln_red', 'Loan notes redeemed from the year’s distribution  =  MIN(balance, distribution)', per(1, N, (t) => ({ f: `MIN(${m('ln_grown', t)},${paid(t)})`, v: null })), { noParity: true });
+    M.line('ln_bal', 'Loan notes: closing balance', per(1, N, (t) => ({ f: `${m('ln_grown', t)}-${m('ln_red', t)}`, v: t === N ? strip!.loan_notes_accrued_balance : null })));
+    for (let t = 1; t < N; t++) {
+      const idx = parity.findIndex((p) => p.sheet === 'Model' && p.addr === `${Y(t)}${M.rows.get('ln_bal')}`);
+      if (idx >= 0) parity.splice(idx, 1); // only the exit-year balance has a ModelOutput counterpart
+    }
+    M.line('ord_int', '   distribution reaching the ordinaries  =  distribution − loan notes redeemed', per(1, N, (t) => ({ f: `${paid(t)}-${m('ln_red', t)}`, v: null })), { italic: true, noParity: true });
+    M.line('inst_int', 'Institution’s interim receipts  =  loan notes redeemed + (1 − base share) × ordinary distribution', per(1, N, (t) => ({ f: `${m('ln_red', t)}+(1-${iv('se_s0')})*${m('ord_int', t)}`, v: null })), { noParity: true });
+    M.line('mgmt_int', 'Management’s interim receipts  =  base share × ordinary distribution', per(1, N, (t) => ({ f: `${iv('se_s0')}*${m('ord_int', t)}`, v: null })), { noParity: true });
+    M.line('ln_exit_red', 'Loan notes redeemed at exit  =  MIN(accrued balance, MAX(0, exit equity))', { 0: { f: `MIN(${m('ln_bal', N)},MAX(0,${m('exit_eq', 0)}))`, v: strip!.loan_notes_redeemed } }, { bold: true });
+  }
+  const lnRed = sweet ? `-${m('ln_exit_red', 0)}` : '';
   // §22.6 warrant: exercised iff w × (pot + K) > K; settles on full dilution with the strike paid in
+  if (a.warrant || sweet) {
+    M.line('w_pot', `Ordinary pot before the warrant  =  exit equity${sweet ? ' − loan notes' : ''} − promote`, { 0: { f: `${m('exit_eq', 0)}${lnRed}-${m('mip', 0)}`, v: strip ? strip.ordinary_pot_pre_warrant : null } }, strip ? {} : { italic: true, noParity: true });
+  }
   if (a.warrant) {
-    M.line('w_pot', '   ordinary pot before the warrant  =  exit equity − promote', { 0: { f: `${m('exit_eq', 0)}-${m('mip', 0)}`, v: null } }, { italic: true, noParity: true });
     M.line('w_net', 'Warrant payout, net of strike (0 if not exercised)', { 0: { f: `IF(${iv('w_pct')}*(${m('w_pot', 0)}+${iv('w_strike')})>${iv('w_strike')},${iv('w_pct')}*(${m('w_pot', 0)}+${iv('w_strike')})-${iv('w_strike')},0)`, v: ex.warrant_payout_net } });
   }
-  const pot = a.warrant ? `(${m('w_pot', 0)}-${m('w_net', 0)})` : `(${m('exit_eq', 0)}-${m('mip', 0)})`;
-  M.line('roll_share', 'Rollover holders’ share (pari passu)', { 0: { f: `IF(${m('equity_total', 0)}>0,${pot}*${m('rollover', 0)}/${m('equity_total', 0)},0)`, v: ex.rollover_share } });
-  M.line('sponsor_exit', 'Sponsor exit proceeds', { 0: { f: `${pot}-${m('roll_share', 0)}`, v: ex.sponsor_share } }, { bold: true });
+  const pot = a.warrant ? `(${m('w_pot', 0)}-${m('w_net', 0)})` : sweet ? m('w_pot', 0) : `(${m('exit_eq', 0)}-${m('mip', 0)})`;
+  if (sweet) {
+    // §22.5 the sweet ratchet: a MARGINAL walk on the institution's OWN realized value — every
+    // $1 of ordinary pot adds (1 − s) to the institution's value at the share s in force; the
+    // share steps up as each institution-MOIC threshold is crossed. Struck once, at exit.
+    const tiersS = sweet.ratchet ?? [];
+    M.line('pot', 'Ordinary pot after the warrant (signed)', { 0: { f: pot, v: strip!.ordinary_pot } }, { bold: true });
+    M.line('se_I', '   institution’s investment (the ratchet base)  =  sponsor equity', { 0: { f: m('sponsor', 0), v: null } }, { italic: true, noParity: true });
+    M.line('se_V0', '   institution value already realized  =  interim receipts + loan notes redeemed at exit', { 0: { f: `SUM(${m('inst_int', 1)}:${m('inst_int', N)})+${m('ln_exit_red', 0)}`, v: null } }, { italic: true, noParity: true });
+    M.line('se_rem0', '   pot to allocate (0 when the pot is not positive)', { 0: { f: `MAX(0,${m('pot', 0)})`, v: null } }, { italic: true, noParity: true });
+    let prevV = m('se_V0', 0);
+    let prevRem = m('se_rem0', 0);
+    let prevShare = iv('se_s0');
+    const mTerms: string[] = [];
+    tiersS.forEach((_, j) => {
+      const T = `${iv(`se_r${j}_h`)}*${m('se_I', 0)}`;
+      M.line(`se_t${j}_take`, `   pot taken at ${j === 0 ? 'the base' : `tier-${j}`} share until institution MOIC reaches tier ${j + 1}`, {
+        0: { f: `IF(${prevV}<${T},MIN((${T}-${prevV})/(1-${prevShare}),${prevRem}),0)`, v: null },
+      }, { italic: true, noParity: true });
+      M.line(`se_t${j}_V`, `   institution value after that slice`, { 0: { f: `${prevV}+(1-${prevShare})*${m(`se_t${j}_take`, 0)}`, v: null } }, { italic: true, noParity: true });
+      M.line(`se_t${j}_rem`, `   pot left`, { 0: { f: `${prevRem}-${m(`se_t${j}_take`, 0)}`, v: null } }, { italic: true, noParity: true });
+      mTerms.push(`${prevShare}*${m(`se_t${j}_take`, 0)}`);
+      prevV = m(`se_t${j}_V`, 0);
+      prevRem = m(`se_t${j}_rem`, 0);
+      prevShare = iv(`se_r${j}_s`);
+    });
+    mTerms.push(`${prevShare}*${prevRem}`);
+    M.line('mgmt_ord', 'Management’s ordinary share (sweet equity, after the ratchet)', { 0: { f: `IF(${m('pot', 0)}<=0,0,${mTerms.join('+')})`, v: strip!.management_ordinary_share } }, { bold: true });
+    M.line('inst_ord', 'Institution’s ordinary share  =  pot − management', { 0: { f: `${m('pot', 0)}-${m('mgmt_ord', 0)}`, v: strip!.institution_ordinary_share } });
+    M.line('se_moic', 'Institution MOIC at the ratchet  =  value realized ÷ investment', { 0: { f: `IF(${m('pot', 0)}<=0,${m('se_V0', 0)}+${m('pot', 0)},${prevV}+(1-${prevShare})*${prevRem})/${m('se_I', 0)}`, v: strip!.institution_moic_at_ratchet, fmt: FMT_NUM } });
+    M.line('se_tiers', 'Sweet ratchet tiers reached (MOIC strictly above the threshold)', { 0: { f: tiersS.length ? tiersS.map((_, j) => `IF(${m('se_moic', 0)}>${iv(`se_r${j}_h`)},1,0)`).join('+') : '0', v: strip!.ratchet_tiers_reached, fmt: FMT_YEAR } });
+    M.line('se_eff', 'Management’s effective share of the ordinary pot', { 0: { f: `IF(${m('pot', 0)}>0,${m('mgmt_ord', 0)}/${m('pot', 0)},"N/A")`, v: strip!.management_effective_ordinary_pct, fmt: FMT_PCT } });
+  }
+  M.line('roll_share', 'Rollover holders’ share (pari passu)', { 0: { f: sweet ? '0' : `IF(${m('equity_total', 0)}>0,${pot}*${m('rollover', 0)}/${m('equity_total', 0)},0)`, v: ex.rollover_share } });
+  M.line('sponsor_exit', sweet ? 'Sponsor (institution) exit proceeds  =  loan notes redeemed + ordinary share' : 'Sponsor exit proceeds', {
+    0: { f: sweet ? `${m('ln_exit_red', 0)}+${m('inst_ord', 0)}` : `${pot}-${m('roll_share', 0)}`, v: ex.sponsor_share },
+  }, { bold: true });
   M.header({ 0: 'Year 0', ...years(1, N) });
-  // interim flows = the distributions PAID; the sponsor takes its pro-rata share (pari passu with rollover)
-  if (dists) M.line('sp_frac', '   sponsor share of distributions  =  sponsor ÷ (sponsor + rollover)', { 0: { f: `IF(${m('equity_total', 0)}>0,${m('sponsor', 0)}/${m('equity_total', 0)},0)`, v: null, fmt: FMT_NUM } }, { italic: true, noParity: true });
-  const spPaid = (t: number) => (dists ? `${paid(t)}*${m('sp_frac', 0, true)}` : '0');
+  // interim flows = the distributions PAID; the sponsor takes its pro-rata share (pari passu
+  // with rollover) — or, under a strip, the institution's §22.7 receipts
+  if (dists && !sweet) M.line('sp_frac', '   sponsor share of distributions  =  sponsor ÷ (sponsor + rollover)', { 0: { f: `IF(${m('equity_total', 0)}>0,${m('sponsor', 0)}/${m('equity_total', 0)},0)`, v: null, fmt: FMT_NUM } }, { italic: true, noParity: true });
+  const spPaid = (t: number) => (sweet ? m('inst_int', t) : dists ? `${paid(t)}*${m('sp_frac', 0, true)}` : '0');
   const cfRow = (key: string, label: string, t0: string, interim: (t: number) => string, last: string, values: number[]) =>
     M.line(key, label, Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? t0 : t === N ? `${last}+${interim(t)}` : interim(t), v: values[t] }])));
   cfRow('cf_sponsor', 'Sponsor cash flows', `-${m('sponsor', 0)}`, spPaid, m('sponsor_exit', 0), o.returns.sponsor_net.cashflows);
@@ -983,11 +1057,17 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const checks: [string, string, string][] = [
     ['ck_su', 'Sources = uses', `${mx('sources', 0)}-${mx('uses', 0)}`],
     ['ck_bs', 'Balance sheet balances in every year (sum of |assets − debt − equity|)', range(N + 1, 0).map((t) => `ABS(${mx('bs_check', t)})`).join('+')],
-    ['ck_exit', 'Exit split: sponsor + rollover + promote + warrant = exit equity', `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}${a.warrant ? `+${mx('w_net', 0)}` : ''}-${mx('exit_eq', 0)}`],
+    ['ck_exit', `Exit split: sponsor + rollover + promote + warrant${sweet ? ' + management sweet equity' : ''} = exit equity`, `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}${a.warrant ? `+${mx('w_net', 0)}` : ''}${sweet ? `+${mx('mgmt_ord', 0)}` : ''}-${mx('exit_eq', 0)}`],
     ['ck_debt', 'Debt roll: par − repayments + PIK = closing debt (terms)', terms.length
       ? `${mx('total_par', 0)}${range(N, 1).map((t) => terms.map((_, i) => `-${mx(`${tk[i]}_mand`, t)}-${mx(`${tk[i]}_sweep`, t)}+${mx(`${tk[i]}_pik`, t)}`).join('')).join('')}-(${terms.map((_, i) => mx(`${tk[i]}_close`, N)).join('+')})`
       : '0'],
   ];
+  if (sweet) {
+    // §22.3(vi): a strip needs a positive institutional plug — otherwise the loan-note /
+    // ordinary split is meaningless (the deal engine refuses to build such a deal)
+    checks.push(['ck_plug', 'Strip: the sponsor plug after the management subscription is positive (1 = not)', `IF(${mx('sponsor', 0)}>0,0,1)`]);
+    checks.push(['ck_interim', 'Strip: interim distributions = institution + management receipts', range(N, 1).map((t) => `${mx('inst_int', t)}+${mx('mgmt_int', t)}-${dists ? mx('dist_paid', t) : '0'}`).join('+')]);
+  }
   if (v && val) {
     checks.push(['ck_sign_a', 'Flow to equity (a): the NPV and the excess return have the same sign', `IF(SIGN(ROUND(${mx('a_npv', 0)},9))=SIGN(ROUND(${mx('a_excess', 0)},12)),0,1)`]);
     if (val.fundamentals) checks.push(['ck_sign_b', 'Flow to equity (b): the NPV and the excess return have the same sign', `IF(SIGN(ROUND(${mx('b_npv', 0)},9))=SIGN(ROUND(${mx('b_excess', 0)},12)),0,1)`]);
@@ -1001,6 +1081,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const breach = o.waterfall.some((w) => w.cash_floor_breach);
   C.line('wn_cash', 'Cash below the minimum, summed over the hold (0 = never breached)', { 0: { f: range(N, 1).map((t) => `MAX(0,${iv('min_cash')}-${mx('cash_close', t)}-1E-9)`).join('+'), v: null } },
     { noParity: true, note: breach ? 'The engine flags a cash-floor breach — add a revolver, lower the debt, or revisit the forecast.' : undefined });
+  if (sweet) {
+    C.line('wn_ln', 'Loan notes NOT covered by exit equity (0 = fully redeemed)', { 0: { f: `${mx('ln_bal', N)}-${mx('ln_exit_red', 0)}`, v: null } },
+      { noParity: true, note: 'When positive, the ordinary pot is wiped out and management’s sweet equity is worthless on this case.' });
+  }
 
   // ═══════════════════ resolve symbolic references, write formulas ═══════════════════
   for (const p of pending) {

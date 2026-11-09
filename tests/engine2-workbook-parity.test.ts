@@ -130,6 +130,40 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
       tax: { rate: 0.21, interest_deductible: true, s163j: { applies: false, ati_basis: 'ebitda', ati_pct: 0.3 }, nol: { acquired_opening: 500, acquired_usable: true, arose_pre_2018: true, s382_annual_limit: null }, minimum_rate: 0 },
     },
   },
+  // §22 sweet-equity strip (the adjudicated golden): loan notes accrued to exit and redeemed in
+  // full, an exercised warrant, one sweet ratchet tier reached
+  G9SWEET: GOLDEN_DEALS.G9SWEET,
+  // strip + interim distributions: the distributions first redeem the (small) loan notes, then
+  // reach the ordinaries at the base share; three ratchet tiers, the walk stops inside the third
+  SWEET_DIST: {
+    facts: GOLDEN_DEALS.G3.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G3DIST.assumptions,
+      mip: null,
+      sweet_equity: {
+        sponsor_ordinary_pct: 0.9, loan_note_rate: 0.1, management_subscription: 5, management_ordinary_pct: 0.1,
+        ratchet: [{ hurdle_moic: 1.3, share_pct: 0.15 }, { hurdle_moic: 1.6, share_pct: 0.25 }, { hurdle_moic: 2.5, share_pct: 0.3 }],
+      },
+    },
+  },
+  // strip underwater: exit equity does not cover the accreted loan notes — the ordinary pot is
+  // zero, management's sweet equity is worthless, the warrant stays out of the money
+  SWEET_UNDER: {
+    facts: GOLDEN_DEALS.G9SWEET.facts,
+    assumptions: { ...GOLDEN_DEALS.G9SWEET.assumptions, exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 6 } },
+  },
+  // strip wiped out: exit equity itself is NEGATIVE — no loan note is redeemed, the signed pot
+  // is negative and the institution's realized MOIC carries that loss (V0 + P, not V0)
+  SWEET_WIPEOUT: {
+    facts: GOLDEN_DEALS.G9SWEET.facts,
+    assumptions: { ...GOLDEN_DEALS.G9SWEET.assumptions, exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 1.5 } },
+  },
+  // strip home run: the institution clears EVERY ratchet threshold, so the walk finishes at the
+  // top tier's share with pot still to allocate
+  SWEET_TOP: {
+    facts: GOLDEN_DEALS.G9SWEET.facts,
+    assumptions: { ...GOLDEN_DEALS.G9SWEET.assumptions, exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 11 } },
+  },
   // two tranches sharing a sweep priority (pro rata) + a junior at priority 2, front-loaded margin
   G5_TIERS: {
     facts: GOLDEN_DEALS.G5.facts,
@@ -283,6 +317,39 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     const rows = o.tranches[1];
     expect(rows[0].cash_interest).toBe(0); expect(rows[0].pik_accrual).toBeGreaterThan(0);
     expect(rows[2].cash_interest).toBeGreaterThan(0); expect(rows[2].pik_accrual).toBe(0);
+  });
+  it('G9SWEET redeems the loan notes in full, exercises the warrant and reaches a sweet ratchet tier', () => {
+    const s = runModel(CASES.G9SWEET.facts, CASES.G9SWEET.assumptions).equity_strip!;
+    expect(s.loan_notes_redeemed).toBeCloseTo(s.loan_notes_accrued_balance, 9);
+    expect(s.warrant_exercised).toBe(true);
+    expect(s.ratchet_tiers_reached).toBeGreaterThanOrEqual(1);
+  });
+  it('SWEET_DIST: distributions retire the loan notes, then reach the ordinaries; the walk ends inside a later tier', () => {
+    const o = runModel(CASES.SWEET_DIST.facts, CASES.SWEET_DIST.assumptions);
+    const s = o.equity_strip!;
+    expect(s.loan_notes_accrued_balance).toBe(0); // fully redeemed by interim distributions
+    const paid = o.waterfall.reduce((x, w) => x + w.distribution_paid, 0);
+    expect(paid).toBeGreaterThan(s.loan_notes_subscribed * 1.1); // so ordinaries received interim cash
+    expect(s.ratchet_tiers_reached).toBe(2);
+    expect(s.management_effective_ordinary_pct!).toBeGreaterThan(0.1);
+  });
+  it('SWEET_UNDER: exit equity falls short of the accreted loan notes — pot zero, effective share N/A', () => {
+    const s = runModel(CASES.SWEET_UNDER.facts, CASES.SWEET_UNDER.assumptions).equity_strip!;
+    expect(s.loan_notes_redeemed).toBeLessThan(s.loan_notes_accrued_balance - 1);
+    expect(s.ordinary_pot).toBe(0);
+    expect(s.management_effective_ordinary_pct).toBeNull();
+    expect(s.warrant_exercised).toBe(false);
+  });
+  it('SWEET_WIPEOUT: exit equity is negative — nothing redeemed, a negative pot, a negative institution MOIC', () => {
+    const o = runModel(CASES.SWEET_WIPEOUT.facts, CASES.SWEET_WIPEOUT.assumptions);
+    expect(o.exit.exit_equity_pre_mip_total).toBeLessThan(0);
+    expect(o.equity_strip!.loan_notes_redeemed).toBe(0);
+    expect(o.equity_strip!.ordinary_pot).toBeLessThan(0);
+    expect(o.equity_strip!.institution_moic_at_ratchet!).toBeLessThan(0);
+  });
+  it('SWEET_TOP clears every sweet ratchet tier (the walk ends at the top share)', () => {
+    const a = CASES.SWEET_TOP.assumptions;
+    expect(runModel(CASES.SWEET_TOP.facts, a).equity_strip!.ratchet_tiers_reached).toBe(a.sweet_equity!.ratchet!.length);
   });
   it('G5_TIERS splits a sweep pro rata inside priority 1 and reaches priority 2; the revolver draws', () => {
     const o = runModel(CASES.G5_TIERS.facts, CASES.G5_TIERS.assumptions);
