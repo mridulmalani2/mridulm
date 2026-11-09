@@ -39,6 +39,7 @@ import {
   type DebtState,
 } from './debt';
 import { validateSweetEquity } from './exit';
+import { validateForecastLines } from './valuation';
 import { openingTaxState, runTaxYear, runUnleveredTaxYear } from './tax';
 import { buildSourcesUses, deriveEntry, sizeStructure, stripPlugRejection, type SizedStructure } from './sourcesUses';
 import type {
@@ -83,16 +84,15 @@ export interface EngineCore {
 
 export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineCore {
   const N = assumptions.entry.hold_years;
-  const entry = deriveEntry(facts, assumptions);
-  const sized = sizeStructure(assumptions.structure, entry.entry_ebitda_for_sizing);
+  // §24.4 [v2.0.0] order: debt sizing (LTM or amounts — never NTM) → operating build →
+  // entry derivation (the NTM basis reads forecast year-1 EBITDA). No operating line
+  // depends on EV, so there is no circularity.
+  const sized = sizeStructure(assumptions.structure, facts.fy_ebitda);
   validateStructureForHold(sized, N);
   validateRefinancing(sized, assumptions.structure.refinancing, N); // §16/§18 input-gate rejections
   validatePikElections(sized, N); // §16/§20.2 input-gate rejections [v1.5.0]
   validateSweetEquity(assumptions); // §16/§22.3 input-gate rejections [v1.7.0]
-  const su = buildSourcesUses(entry, sized, assumptions);
-  // §22.3(vi) [v1.7.0]: the Build enforcement point (the grid pre-tests the same condition).
-  const stripRejection = stripPlugRejection(su, assumptions);
-  if (stripRejection !== null) throw new RangeError(stripRejection);
+  validateForecastLines(assumptions); // §24.3 R7 [v2.0.0]
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
   const costInputs: AmortizingCostInput[] = [
@@ -114,6 +114,12 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       : []),
   ];
   const build = buildOperating(facts, assumptions, costInputs);
+
+  const entry = deriveEntry(facts, assumptions, build.years[0].ebitda);
+  const su = buildSourcesUses(entry, sized, assumptions);
+  // §22.3(vi) [v1.7.0]: the Build enforcement point (the grid pre-tests the same condition).
+  const stripRejection = stripPlugRejection(su, assumptions);
+  if (stripRejection !== null) throw new RangeError(stripRejection);
 
   const opening = buildOpeningBalance(su, build.nwc0, facts, sized.revolver?.assumption.drawn_at_close ?? 0);
 
@@ -367,7 +373,10 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       // is new money" — a FALSE premise: §2 does put min_cash on the t=0 balance sheet, so
       // the §11 net figure would be (par − min_cash) ÷ EBITDA. The value is right; that
       // argument for it was not, and the field was misnamed `entry_net_leverage_fy`.)
-      entry_gross_leverage_fy: entry.entry_ebitda_for_sizing > 0 ? sized.total_par / entry.entry_ebitda_for_sizing : 0,
+      // §24.2 [v2.0.0]: null ⇔ no historical EBITDA (previously a silent `0` sentinel here,
+      // which §11/§15 forbid — N/A, never a made-up number).
+      entry_gross_leverage_fy: entry.entry_ebitda_for_sizing !== null ? sized.total_par / entry.entry_ebitda_for_sizing : null,
+      entry_ebitda_for_valuation: entry.entry_ebitda_for_valuation,
     },
     sources_uses: su,
     operating,

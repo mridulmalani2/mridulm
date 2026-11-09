@@ -121,7 +121,7 @@ describe('E3 — engine2 Excel export (G2 with exhibits)', () => {
     sum.eachRow((row) => rows.push([String(row.getCell(1).value ?? ''), row.getCell(2).value]));
     const byLabel = (l: string) => rows.find((r) => r[0] === l)?.[1];
     expect(byLabel('Entry multiple (NTM)')).toBe(out.derived.entry_multiple);
-    expect(byLabel('Entry multiple (FY/LTM, canonical)')).toBeCloseTo(out.derived.enterprise_value / out.derived.entry_ebitda_for_sizing, 9);
+    expect(byLabel('Entry multiple (FY/LTM, canonical)')).toBeCloseTo(out.derived.enterprise_value / out.derived.entry_ebitda_for_sizing!, 9);
     // the whole point: the false '(FY)' label must NOT appear on an NTM entry
     expect(rows.some((r) => r[0] === 'Entry multiple (FY)')).toBe(false);
   });

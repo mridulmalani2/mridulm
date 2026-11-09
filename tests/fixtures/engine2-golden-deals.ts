@@ -48,7 +48,7 @@ function makeAssumptions(p: {
     operations: {
       growth: p.growth, target_margin: p.target_margin, margin_path: 'linear',
       da_pct_revenue: p.da_pct, maint_capex_pct_revenue: p.maint_pct,
-      growth_capex: p.growth_capex, nwc: p.nwc,
+      growth_capex: p.growth_capex, nwc: p.nwc, lines: null,
     },
     tax: p.tax ?? GOLDEN_BASE_TAX,
     fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null },
@@ -60,6 +60,7 @@ function makeAssumptions(p: {
     covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: p.rp_trap ?? null },
     mid_year_irr: false,
     fund: null,
+    valuation: null,
   };
 }
 

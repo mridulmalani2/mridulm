@@ -48,7 +48,8 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
     // the leverage / FY-canonical figures size on entry_ebitda_for_sizing = the §1.1 sizing basis
     sizing_label: sizingBasisLabel(o.facts.sizing_basis),
     valuation: o.derived.entry_multiple,
-    fy_canonical: ntm ? o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing : null,
+    // §24.2: a forecast-only case has no FY/LTM EBITDA, so no canonical figure — null, never a sentinel.
+    fy_canonical: ntm && o.derived.entry_ebitda_for_sizing !== null ? o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing : null,
   };
 }
 

@@ -24,9 +24,11 @@ import type { DealAssumptions, EquityStripBlock, ExitBlock, RatchetTier } from '
 export function exitBasisValue(
   exitYearEbitdaAdj: number,
   basis: 'fy' | 'ntm',
-  lastGrowth: number,
+  lastGrowth: number | null,
 ): number {
-  return basis === 'fy' ? exitYearEbitdaAdj : exitYearEbitdaAdj * (1 + lastGrowth);
+  if (basis === 'fy') return exitYearEbitdaAdj;
+  if (lastGrowth === null) throw new RangeError('exit: an NTM exit needs the year N+1 growth rate (§24.3 R7)');
+  return exitYearEbitdaAdj * (1 + lastGrowth);
 }
 
 /**
@@ -102,8 +104,8 @@ export function validateSweetEquity(
 export interface ExitInputs {
   /** operating[N−1].ebitda_adj (§9 basis figure before any NTM proxy). */
   exit_year_ebitda_adj: number;
-  /** growth[N−1] — the year-N+1 proxy under NTM basis (§9). */
-  last_growth: number;
+  /** g_{N+1} (§24.5): growth[N−1] under §7 drivers, else the entered year N+1 growth; null ⇔ not stated (legal only under an FY exit). */
+  last_growth: number | null;
   /** Σ final term balances (par + accrued PIK) + drawn revolver (§9/C-8). */
   debt_payoff: number;
   /** waterfall[N−1].closing_cash — same cash definition as credit metrics (§9). */

@@ -171,7 +171,9 @@ export function taxYear(
 
 function validate(policy: KernelTaxPolicy, state: KernelTaxState, year: KernelTaxYearIn): void {
   assertRate(policy.rate, 'policy.rate');
-  assertRate(policy.ati_pct, 'policy.ati_pct');
+  // ati_pct is read ONLY when interest is deductible AND the cap applies (§6.1 branch above);
+  // demanding it otherwise would force the analyst to enter a number the model never uses.
+  if (policy.interest_deductible && policy.s163j_applies) assertRate(policy.ati_pct, 'policy.ati_pct');
   assertRate(policy.minimum_rate, 'policy.minimum_rate');
   if (policy.s382_annual_limit !== null) {
     assertNonNegative(policy.s382_annual_limit, 'policy.s382_annual_limit');

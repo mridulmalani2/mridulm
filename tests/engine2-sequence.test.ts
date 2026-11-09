@@ -96,7 +96,7 @@ describe('runCore — first end-to-end: every golden block at full precision, ze
       // sheet, downloaded IC memo) and it had NO engine-side coverage — every reference was
       // to the FIXTURE. Proved by mutation: swapping sequence.ts to the net definition, and
       // hard-coding the §11-banned sentinel 99.0, BOTH passed 373/373.
-      expect(Math.abs(core.derived.entry_gross_leverage_fy - g.derived.entry_gross_leverage_fy), `${golden} entry_gross_leverage_fy`).toBeLessThan(5e-5);
+      expect(Math.abs(core.derived.entry_gross_leverage_fy! - g.derived.entry_gross_leverage_fy), `${golden} entry_gross_leverage_fy`).toBeLessThan(5e-5);
 
       // per-year blocks — every numeric column in the fixture
       assertBlockMatches(core.operating as unknown as Record<string, unknown>[], g.operating, `${golden} operating`);

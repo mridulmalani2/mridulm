@@ -20,10 +20,12 @@ import { buildBridge, type Engine2ValueBridge } from './bridge';
 import { runCoherence } from './check';
 import { buildFundOverlay, validateFund } from './fund';
 import { buildCreditYear, type CreditYearInputs } from './credit';
-import { buildExitWaterfall, monitoringTermination, type ExitInputs } from './exit';
+import { buildExitWaterfall, exitBasisValue, monitoringTermination, type ExitInputs } from './exit';
 import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './returns';
+import { yearNPlus1Growth } from './operating';
 import { runCore, stripInterimSplit, type EngineCore, type StripInterimSplit } from './sequence';
-import type { CreditYear, DealAssumptions, DealFacts, EquityStripBlock, ExitBlock, ModelOutput, ReturnStreams } from './types';
+import type { CreditYear, DealAssumptions, DealFacts, EquityStripBlock, ExitBlock, FteCase, ModelOutput, ReturnStreams, ValuationAssumption, ValuationBlock } from './types';
+import { fteRecursion, gordonEv, solveRoot, terminalUfcf, unleveredCost, validateValuation } from './valuation';
 
 export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2ValueBridge };
 
@@ -70,7 +72,7 @@ export function exitWaterfallFromCore(
   const { split } = selectInterimShares(core, assumptions);
   const inputs: ExitInputs = {
     exit_year_ebitda_adj: core.operating[N - 1].ebitda_adj,
-    last_growth: assumptions.operations.growth[N - 1],
+    last_growth: yearNPlus1Growth(assumptions.operations, N),
     debt_payoff:
       core.final_debt_state.term_balances.reduce((a, b) => a + b, 0) + core.final_debt_state.revolver_drawn,
     closing_cash: core.waterfall[N - 1].closing_cash,
@@ -130,27 +132,15 @@ export function creditFromCore(core: EngineCore, assumptions: DealAssumptions): 
   });
 }
 
-/**
- * The base-case run. §13 scenario/sensitivity blocks are attached by scenarios.ts
- * (`runModelWithScenarios`) — scenarios call runModel per re-run, so the dependency
- * points one way and the facade stays acyclic.
- */
-export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine2ModelOutput {
-  const core = runCore(facts, assumptions);
-  const { exit, equity_strip } = exitWaterfallFromCore(core, assumptions);
-  const returns = returnsFromCore(core, exit, assumptions);
-  const credit = creditFromCore(core, assumptions);
-  // §22.7 [v1.7.0]: the ONE selected interim share array (see selectInterimShares).
-  const sponsorInterim = selectInterimShares(core, assumptions).shares;
-
-  const monitoringAnnualByYear = core.build.years.map((y) => y.monitoring_fee);
-  const gpFeeIncome = buildGpFeeIncome(
-    assumptions.fees.monitoring,
-    monitoringAnnualByYear,
-    monitoringTermination(assumptions.fees.monitoring),
-  );
-
-  const bridge = buildBridge({
+/** §12 bridge for ONE exit (shared by the base run and the §25 fundamentals case). */
+export function bridgeFromCore(
+  core: EngineCore,
+  assumptions: DealAssumptions,
+  exit: ExitBlock,
+  sponsorInterim: number[],
+  monitoringAnnualByYear: number[],
+): Engine2ValueBridge {
+  return buildBridge({
     entry_multiple: core.derived.entry_multiple,
     entry_ebitda: core.derived.enterprise_value / core.derived.entry_multiple,
     entry_net_debt: core.derived.total_debt_at_par - core.sources_uses.cash_to_balance_sheet,
@@ -182,6 +172,136 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     management_ordinary_share: exit.management_ordinary_share,
     warrant_payout_net: exit.warrant_payout_net,
   });
+}
+
+/** §25.5 closing debt (par + accrued PIK, terms + drawn revolver) and cash, index 0..N. */
+function debtAndCashPaths(core: EngineCore): { debt: number[]; cash: number[] } {
+  const N = core.waterfall.length;
+  const debt = [core.derived.total_debt_at_par + (core.revolver ? core.revolver[0].beginning_drawn : 0)];
+  const cash = [core.sources_uses.cash_to_balance_sheet];
+  for (let t = 0; t < N; t++) {
+    debt.push(
+      core.tranches.reduce((s, rows) => s + rows[t].ending_balance, 0) + (core.revolver ? core.revolver[t].ending_drawn : 0),
+    );
+    cash.push(core.waterfall[t].closing_cash);
+  }
+  return { debt, cash };
+}
+
+/**
+ * §25 the flow-to-equity valuation block. Each exit case is the SAME §9/§10/§12 path on
+ * the SAME frozen core with only `exit.multiple` changed (§25.3); break-evens move one
+ * input and re-run only that exit step + the recursion (§25.7).
+ */
+export function buildValuation(
+  core: EngineCore,
+  assumptions: DealAssumptions,
+  monitoringAnnualByYear: number[],
+): ValuationBlock {
+  const v = assumptions.valuation!;
+  validateValuation(v);
+  const N = assumptions.entry.hold_years;
+  const paths = debtAndCashPaths(core);
+  const lastOp = core.operating[N - 1];
+  const gN1 = yearNPlus1Growth(assumptions.operations, N);
+  if (gN1 === null) throw new RangeError('valuation: year N+1 growth is required (§24.3 R7)');
+  const ufcf = terminalUfcf(
+    { ebitda: lastOp.ebitda, da: lastOp.da, capex: lastOp.maint_capex + lastOp.growth_capex, delta_nwc: lastOp.delta_nwc },
+    assumptions.tax.rate,
+    gN1,
+  );
+
+  const caseAt = (multiple: number, val: ValuationAssumption): FteCase => {
+    const a: DealAssumptions = { ...assumptions, exit: { ...assumptions.exit, multiple }, valuation: val };
+    const { exit } = exitWaterfallFromCore(core, a);
+    const returns = returnsFromCore(core, exit, a);
+    const sponsorInterim = selectInterimShares(core, a).shares;
+    const pp = returns.pre_promote;
+    const rec = fteRecursion(val, {
+      ecf: core.distributions_paid,
+      exit_equity: exit.exit_equity_pre_mip_total,
+      debt: paths.debt,
+      cash: paths.cash,
+      invested: -pp.cashflows[0],
+      equity_irr: pp.irr,
+    });
+    return {
+      exit_multiple: multiple,
+      exit_ev: exit.exit_ev,
+      exit_equity_total: exit.exit_equity_pre_mip_total,
+      equity_cashflows: pp.cashflows,
+      equity_irr: pp.irr,
+      equity_moic: pp.moic,
+      equity_invested: -pp.cashflows[0],
+      debt: paths.debt,
+      cash: paths.cash,
+      ...rec,
+      bridge: bridgeFromCore(core, a, exit, sponsorInterim, monitoringAnnualByYear),
+    };
+  };
+
+  const fundamentalsAt = (val: ValuationAssumption): { c: FteCase | null; ev: number | null; mult: number | null; reason: string | null } => {
+    const g = gordonEv(ufcf, unleveredCost(val), val.long_run_growth);
+    if (g.ev === null) return { c: null, ev: null, mult: null, reason: g.reason };
+    // §25.2: implied multiple on the §9 exit basis — the SAME basis value the multiple applies to.
+    const basisValue = exitBasisValue(lastOp.ebitda_adj, assumptions.exit.basis, gN1);
+    const mult = g.ev / basisValue;
+    return { c: caseAt(mult, val), ev: g.ev, mult, reason: null };
+  };
+
+  const assumed = caseAt(assumptions.exit.multiple, v);
+  const fund = fundamentalsAt(v);
+  const npvOr = (c: FteCase | null): number | null => (c === null ? null : c.npv);
+
+  const beExit = solveRoot((m) => caseAt(m, v).npv, assumptions.exit.multiple, 0.25, 0, 1e4);
+  const beBeta = solveRoot(
+    (b) => npvOr(fundamentalsAt({ ...v, asset_beta: b }).c),
+    v.asset_beta, 0.05, 0, 50,
+  );
+  const rU = unleveredCost(v);
+  const beGrowth = solveRoot(
+    (g) => npvOr(fundamentalsAt({ ...v, long_run_growth: g }).c),
+    v.long_run_growth, 0.0025, -0.99, rU - 1e-9,
+  );
+
+  return {
+    r_unlevered: rU,
+    ufcf_n_plus_1: ufcf,
+    g_n_plus_1: gN1,
+    gordon_ev: fund.ev,
+    gordon_implied_multiple: fund.mult,
+    gordon_null_reason: fund.reason,
+    assumed,
+    fundamentals: fund.c,
+    break_evens: {
+      exit_multiple: { value: beExit.value, base: assumptions.exit.multiple, reason: beExit.reason },
+      asset_beta: { value: fund.c ? beBeta.value : null, base: v.asset_beta, reason: fund.c ? beBeta.reason : fund.reason },
+      long_run_growth: { value: fund.c ? beGrowth.value : null, base: v.long_run_growth, reason: fund.c ? beGrowth.reason : fund.reason },
+    },
+  };
+}
+
+/**
+ * The base-case run. §13 scenario/sensitivity blocks are attached by scenarios.ts
+ * (`runModelWithScenarios`) — scenarios call runModel per re-run, so the dependency
+ * points one way and the facade stays acyclic.
+ */
+export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine2ModelOutput {
+  const core = runCore(facts, assumptions);
+  const { exit, equity_strip } = exitWaterfallFromCore(core, assumptions);
+  const returns = returnsFromCore(core, exit, assumptions);
+  const credit = creditFromCore(core, assumptions);
+  // §22.7 [v1.7.0]: the ONE selected interim share array (see selectInterimShares).
+  const sponsorInterim = selectInterimShares(core, assumptions).shares;
+
+  const monitoringAnnualByYear = core.build.years.map((y) => y.monitoring_fee);
+  const gpFeeIncome = buildGpFeeIncome(
+    assumptions.fees.monitoring,
+    monitoringAnnualByYear,
+    monitoringTermination(assumptions.fees.monitoring),
+  );
+
+  const bridge = bridgeFromCore(core, assumptions, exit, sponsorInterim, monitoringAnnualByYear);
 
   // §19 [v1.4.0] — the fund-of-one overlay: a POST-ENGINE layer on sponsor-side outputs
   // only (the ONE §9 share rule + exit.sponsor_share + gp_fee_income); null ≡ OFF,
@@ -235,6 +355,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     equity_strip, // §22.10 [v1.7.0]
     scenarios: null,
     sensitivity: null,
+    valuation: assumptions.valuation ? buildValuation(core, assumptions, monitoringAnnualByYear) : null,
   };
 
   return output;

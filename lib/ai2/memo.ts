@@ -29,13 +29,16 @@ export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): strin
   // §11: state the entry multiple's ACTUAL basis (NTM under an NTM entry — "FY EBITDA" was a
   // false label there), and add the FY/LTM-canonical figure when NTM ("shows both, LTM canonical").
   const em = entryMultipleDisplay(o);
-  const entryMultipleClause = em.fy_canonical === null
-    ? `${multiple(em.valuation)} ${em.sizing_label} EBITDA (${money(o.facts.fy_ebitda, ccy)})`
+  const fyEbitda = o.facts.fy_ebitda;
+  const entryMultipleClause = em.basis_label === 'NTM' && fyEbitda === null
+    ? `${multiple(em.valuation)} NTM EBITDA (${money(o.derived.entry_ebitda_for_valuation, ccy)}; the case states no historical year)`
+    : em.fy_canonical === null
+    ? `${multiple(em.valuation)} ${em.sizing_label} EBITDA (${money(fyEbitda, ccy)})`
     : `${multiple(em.valuation)} NTM EBITDA — ${multiple(em.fy_canonical)} on ${em.sizing_label} EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
   const totalDebt = o.derived.total_debt_at_par;
   const capTotal = totalDebt + su.rollover_equity + su.sponsor_equity;
   const capRow = (name: string, amt: number) =>
-    `| ${name} | ${money(amt, ccy)} | ${o.facts.fy_ebitda > 0 ? multiple(amt / o.facts.fy_ebitda, 2) : 'N/A'} | ${capTotal > 0 ? pct(amt / capTotal) : 'N/A'} |`;
+    `| ${name} | ${money(amt, ccy)} | ${fyEbitda !== null && fyEbitda > 0 ? multiple(amt / fyEbitda, 2) : 'N/A'} | ${capTotal > 0 ? pct(amt / capTotal) : 'N/A'} |`;
   const lastCredit = o.credit[o.credit.length - 1];
 
   return `# ${o.facts.entity_name} — LBO summary (engine2)

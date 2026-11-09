@@ -44,21 +44,27 @@ export interface DealFacts {
   source: 'edgar' | 'esef' | 'manual' | 'upload';
   sector: string;
   currency: Engine2Currency;
-  fiscal_year: number;
-  period_end: string;
+  /** null ⇔ the case states no historical year (§24.2) or the filing lacked it (gated MISSING). */
+  fiscal_year: number | null;
+  period_end: string | null;
 
-  fy_revenue: number;
-  fy_ebitda: number;
-  /** = fy_ebitda / fy_revenue; carried for display, engine recomputes nothing from it. */
-  fy_ebitda_margin: number;
+  /** §24.2 [v2.0.0]: null ⇔ the case states no historical year (manual route only, by the
+   *  analyst's explicit choice) — never "unknown, assume X". Every engine path that needs it
+   *  is a named §24.3 Build rejection when it is null. */
+  fy_revenue: number | null;
+  fy_ebitda: number | null;
+  /** = fy_ebitda / fy_revenue; the §7 margin-driver base. null ⇔ either side is null. */
+  fy_ebitda_margin: number | null;
 
   /** §1.1 sizing basis: 'LTM' when the quarter-stitch succeeded, else 'FY'. Default 'FY' (manual). */
   sizing_basis?: 'FY' | 'LTM';
   /** As-of date of the sizing figures (LTM anchor `e`, or the FY period end). The UI derives the
    *  staleness tier (fresh/aging/stale) from this vs now — `lib/format.stalenessTier`. */
   sizing_as_of?: string;
-  da_pct_revenue: number;
-  maint_capex_pct_revenue: number;
+  /** §24.2 [v2.0.0]: history-derived ratios; null ⇔ no historical year (forecast-only case). The engine
+   *  never reads these — they seed suggestions only. */
+  da_pct_revenue: number | null;
+  maint_capex_pct_revenue: number | null;
   /** Opening net PP&E seed for the BS roll (SPEC §8); null ⇒ seed 0 + disclosed note. */
   net_ppe: number | null;
 
@@ -75,8 +81,10 @@ export interface DealFacts {
    *  NEVER a fabricated 0 (the no-silent-default invariant, §15). */
   gross_debt: number | null;
   cash: number | null;
-  net_debt: number;
-  effective_tax_rate: number;
+  /** null ⇔ no historical balance sheet (forecast-only case); display/suggestion only. */
+  net_debt: number | null;
+  /** null ⇔ no historical year; suggestion seed only — the model's rate is `tax.rate`. */
+  effective_tax_rate: number | null;
   /** Extracted NOL is a FLOOR (companyfacts is non-dimensional — PHASE_D D6). */
   nol_carryforward_floor: number | null;
 
@@ -213,6 +221,23 @@ export interface SweepAssumption {
   grid: { tiers: { above_net_leverage: number; pct: number }[]; else_pct: number } | null;
 }
 
+/** §24.1 [v2.0.0]: one operating line entered EXACTLY as the case states it. */
+export type LineSpec =
+  | { mode: 'explicit'; values: number[] } // year 1..N, length N
+  | { mode: 'grown'; year1: number; growth: number[] }; // v1 = year1; v[t] = v[t−1]·(1+growth[t−2]); growth length N−1
+
+/** §24.1 [v2.0.0]: per-line override of the §7 drivers. A null line ≡ its §7 driver. */
+export interface ForecastLines {
+  revenue: LineSpec | { mode: 'not_modelled' } | null;
+  /** 'ebit' ⇒ EBITDA[t] ≡ EBIT_given[t] + D&A[t] (an identity, §24.1). */
+  ebitda: (LineSpec & { measure: 'ebitda' | 'ebit' }) | null;
+  da: LineSpec | null;
+  capex: LineSpec | { mode: 'pct_of_da'; pct: number } | null;
+  delta_nwc: LineSpec | null;
+  /** §24.5: growth of every line from year N into year N+1; required per §24.3 R7. */
+  year_n_plus_1_growth: number | null;
+}
+
 export interface OperationsAssumption {
   /** One growth number per year (churn folded in — SPEC §7). Under NTM exit basis, growth[hold_years−1] is the year-N+1 proxy (SPEC §9). */
   growth: number[];
@@ -225,6 +250,20 @@ export interface OperationsAssumption {
   nwc:
     | { method: 'days'; dso: number; dio: number; dpo: number } // formulas in SPEC §7 (365 basis, COGS proxy)
     | { method: 'pct'; pct_revenue: number };
+  /** §24 [v2.0.0] REQUIRED-with-null: null ≡ every line is its §7 driver (v1 numbers). */
+  lines: ForecastLines | null;
+}
+
+/** §25.1 [v2.0.0]: the flow-to-equity valuation inputs (all rates decimals). */
+export interface ValuationAssumption {
+  risk_free: number;
+  mrp: number;
+  asset_beta: number;
+  /** 0 ≡ riskless debt (the reference convention). */
+  debt_beta: number;
+  /** Gordon perpetuity growth after the exit (fundamentals exit, §25.2). */
+  long_run_growth: number;
+  leverage_timing: 'end_of_year' | 'start_of_year';
 }
 
 export interface TaxAssumption {
@@ -367,6 +406,8 @@ export interface DealAssumptions {
    * of `irr` / `irr_mid_year` the UI headlines; both are always computed.
    */
   mid_year_irr: boolean;
+  /** §25 [v2.0.0] REQUIRED-with-null: null ≡ OFF (no valuation block; v1 numbers). */
+  valuation: ValuationAssumption | null;
 }
 
 /** §19.2 [v1.4.0] — the fund-of-one overlay inputs (all rates decimals; §16 gates). */
@@ -399,10 +440,12 @@ export interface FundBlock {
 // ── Output (Class C lives here — derived, never editable) ───────────────────
 
 export interface OperatingYear {
-  revenue: number;
-  ebitda: number; // = revenue × margin (SPEC §7)
+  /** null ⇔ revenue `not_modelled` (§24.1) — never read as zero. */
+  revenue: number | null;
+  ebitda: number; // §7 driver: revenue × margin; §24 line: as given (or EBIT + D&A)
   ebitda_adj: number; // − monitoring fee (annual fee dropped in exit year — SPEC §9)
-  margin: number;
+  /** = ebitda / revenue; null ⇔ revenue null. */
+  margin: number | null;
   da: number;
   ebit: number;
   maint_capex: number;
@@ -746,7 +789,7 @@ export interface ModelOutput {
   derived: {
     enterprise_value: number;
     entry_multiple: number;
-    entry_ebitda_for_sizing: number; // the §1.1 FY(LTM) sizing basis — FY, or the LTM stitch when interim filings allow (§11; read facts.sizing_basis, never the "fy_" name) [G-2/M2]
+    entry_ebitda_for_sizing: number | null; // §24.2: null ⇔ no historical year. The §1.1 FY(LTM) sizing basis — FY, or the LTM stitch when interim filings allow (§11; read facts.sizing_basis, never the "fy_" name) [G-2/M2]
     total_debt_at_par: number;
     sponsor_equity: number;
     /**
@@ -758,7 +801,9 @@ export interface ModelOutput {
      * `credit[].net_leverage` is net from year 1 onward, so any surface showing both must
      * label the bases explicitly or it overstates deleveraging.
      */
-    entry_gross_leverage_fy: number;
+    entry_gross_leverage_fy: number | null; // §24.2 [v2.0.0]: null ⇔ facts.fy_ebitda null
+    /** §24.4 [v2.0.0]: the EBITDA the entry multiple applies to (FY/LTM, or forecast year 1 under NTM). */
+    entry_ebitda_for_valuation: number;
   };
   sources_uses: SourcesUses;
   operating: OperatingYear[];
@@ -780,4 +825,52 @@ export interface ModelOutput {
   equity_strip: EquityStripBlock | null;
   scenarios: ScenarioResult[] | null;
   sensitivity: SensitivityGrid[] | null;
+  /** §25 [v2.0.0] — null ⇔ assumptions.valuation null. */
+  valuation: ValuationBlock | null;
+}
+
+/** §25.5 one exit case of the flow-to-equity valuation. null-with-reason, never a sentinel. */
+export interface FteCase {
+  exit_multiple: number;
+  exit_ev: number;
+  exit_equity_total: number;
+  /** §9 pre_promote stream for this exit (t0-anchored, length N+1). */
+  equity_cashflows: number[];
+  equity_irr: number | null;
+  equity_moic: number | null;
+  equity_invested: number;
+  /** null with `recursion_null_reason` when the path hits E ≤ 0 (§25.5). */
+  equity_value: number[] | null; // index 0..N
+  debt: number[]; // closing debt at par + PIK, index 0..N
+  cash: number[]; // closing cash, index 0..N
+  equity_weight: number[] | null;
+  beta_equity: number[] | null;
+  /** index t = the rate discounting year t to t−1; index 0 = display under end_of_year, null under start_of_year. */
+  cost_of_equity: (number | null)[] | null;
+  equity_value_at_entry: number | null;
+  npv: number | null;
+  value_per_dollar: number | null;
+  required_return: number | null;
+  excess_return: number | null;
+  recursion_null_reason: string | null;
+  bridge: ValueBridge;
+}
+
+export interface BreakEven {
+  value: number | null;
+  base: number;
+  reason: string | null;
+}
+
+export interface ValuationBlock {
+  r_unlevered: number;
+  /** §25.2 */
+  ufcf_n_plus_1: number;
+  g_n_plus_1: number;
+  gordon_ev: number | null;
+  gordon_implied_multiple: number | null;
+  gordon_null_reason: string | null;
+  assumed: FteCase;
+  fundamentals: FteCase | null;
+  break_evens: { exit_multiple: BreakEven; asset_beta: BreakEven; long_run_growth: BreakEven };
 }

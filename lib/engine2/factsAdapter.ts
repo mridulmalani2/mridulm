@@ -33,10 +33,12 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
   const missing: string[] = [];
   const notes: string[] = [...raw.days_notes];
   const templateBases: Record<string, string> = {};
-  const req = (v: number | null | undefined, path: string, fallback: number): number => {
+  // v2.0.0: a gap stays NULL in the object itself (the types allow it since §24.2) — no
+  // stand-in number is ever written, even a "never shown" one. `missing` gates Build.
+  const req = (v: number | null | undefined, path: string): number | null => {
     if (v == null || !Number.isFinite(v)) {
       missing.push(path);
-      return fallback; // neutral placeholder — NEVER shown; the 'missing' badge governs
+      return null;
     }
     return v;
   };
@@ -76,8 +78,10 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     }
   }
 
-  const revenue = req(raw.fy_revenue?.value, 'fy_revenue', 100);
-  const ebitda = req(raw.fy_ebitda?.value, 'fy_ebitda', 20);
+  const revenue = req(raw.fy_revenue?.value, 'fy_revenue');
+  const ebitda = req(raw.fy_ebitda?.value, 'fy_ebitda');
+  if (raw.fiscalYear == null) missing.push('fiscal_year');
+  if (!raw.periodEnd) missing.push('period_end');
 
   const facts: DealFacts = {
     entity_name: raw.entityName,
@@ -94,16 +98,16 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
       bucketOverride: raw.sectorBucket ?? null,
     }),
     currency: (MODELLED.has(raw.currency) ? raw.currency : 'USD') as Engine2Currency & DealFacts['currency'],
-    fiscal_year: raw.fiscalYear ?? 0,
-    period_end: raw.periodEnd ?? '',
+    fiscal_year: raw.fiscalYear ?? null, // gated via `missing` above when absent
+    period_end: raw.periodEnd ?? null,
     fy_revenue: revenue,
     fy_ebitda: ebitda,
-    fy_ebitda_margin: revenue > 0 ? ebitda / revenue : 0,
+    fy_ebitda_margin: revenue !== null && ebitda !== null && revenue > 0 ? ebitda / revenue : null,
     // §1.1 sizing basis + as-of (Class-A provenance; the UI derives the staleness tier) [G-2]
     sizing_basis: raw.basis,
     sizing_as_of: raw.as_of ?? raw.periodEnd,
-    da_pct_revenue: req(raw.da_pct_revenue?.value, 'da_pct_revenue', 0.03),
-    maint_capex_pct_revenue: req(raw.capex_pct_revenue?.value, 'maint_capex_pct_revenue', 0.03),
+    da_pct_revenue: req(raw.da_pct_revenue?.value, 'da_pct_revenue'),
+    maint_capex_pct_revenue: req(raw.capex_pct_revenue?.value, 'maint_capex_pct_revenue'),
     net_ppe: raw.net_ppe?.value ?? null, // absent in the filing ⇒ §8 seeds 0 with its disclosed WARN
     operating_nwc: raw.nwc?.value ?? null,
     nwc_pct_revenue: raw.nwc_pct_revenue?.value ?? null,
@@ -112,8 +116,13 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
     dpo: raw.dpo?.value ?? null,
     gross_debt: raw.gross_debt?.value ?? null, // display-only; honest null, never a fabricated 0 (§15)
     cash: raw.cash?.value ?? null,
-    net_debt: req(raw.net_debt?.value, 'net_debt', 0), // the sizing figure — Build-gated when absent
-    effective_tax_rate: raw.effective_tax_rate?.value ?? 0.21,
+    net_debt: req(raw.net_debt?.value, 'net_debt'), // Build-gated when absent
+    // A rate the filing does not give is NULL — no statutory stand-in. A mapper's own
+    // 'default'-provenance rate is likewise not a filing fact, so it is dropped too.
+    effective_tax_rate:
+      raw.effective_tax_rate == null || raw.effective_tax_rate.provenance.source === 'default'
+        ? null
+        : raw.effective_tax_rate.value,
     nol_carryforward_floor: raw.nol_carryforward?.value ?? null,
     implied_cost_of_debt: raw.implied_cost_of_debt?.value ?? null,
     implied_trading_ev_ebitda: null, // async D5 anchor (Finnhub) is injected at the store (engine2Model), not here — this synchronous adapter sees null; the coherence gate fires once the anchor resolves

@@ -42,7 +42,7 @@ const HistoryTable: React.FC<{
       <div className="flex items-baseline justify-between mb-1">
         <span className="text-[10px] tracking-wider uppercase" style={label}>{sourceNoun === 'entered' ? 'Entered history' : 'Filing history'}</span>
         <span className="flex flex-col items-end gap-0.5">
-          <span className="text-[10px]" style={label}>{staleness(facts.fiscal_year, facts.period_end, today)}</span>
+          <span className="text-[10px]" style={label}>{staleness(facts.fiscal_year ?? undefined, facts.period_end ?? undefined, today)}</span>
           {/* §1.1: the SIZING basis (leverage + entry EBITDA) — the LTM quarter-stitch when interim
               filings allow, else FY — with its staleness tier. Distinct from the FY-anchored filing
               history above (an LTM deal's sizing as-of runs past the latest FY end). */}

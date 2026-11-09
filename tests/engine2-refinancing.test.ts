@@ -322,7 +322,7 @@ describe('§18.11(viii) — the retired-balance no-op raises the §18.8 refi_noo
     // Amortization leaves exactly ~0.002 outstanding entering year 4 (3 years × amort_pct
     // chosen so par·(1 − 3·pct) = 0.002); no sweep. The tranche crossed the §7 retired
     // threshold in year 3 (write-off taken, dust persists) — §18.8: its refi is the no-op class.
-    const par = GOLDEN_DEALS.G2.facts.fy_ebitda; // x_ebitda 1 ⇒ par = FY-basis sizing EBITDA
+    const par = GOLDEN_DEALS.G2.facts.fy_ebitda!; // x_ebitda 1 ⇒ par = FY-basis sizing EBITDA
     const deal = withRefi('G2', [{
       tranche_name: 'TLB', year: 4,
       new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.02, floor: 0 },

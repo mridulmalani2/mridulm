@@ -1,8 +1,9 @@
 /**
  * lib/ai2/suggest.ts — E4 AI-suggest against the NEW schema. The model proposes Class-B
- * refinements ONLY, over a whitelist of true-input paths, and every accepted value is
- * (a) clamped to the SAME plausibility rails as the deterministic suggestions and
- * (b) badged {kind:'ai'} with the model's stated one-line basis. MISSING facts are
+ * refinements ONLY, over a whitelist of true-input paths. v2.0.0: every value is a PROPOSAL
+ * (the store puts it in the suggestion catalogue; nothing is applied until the analyst
+ * accepts it), an out-of-rail value is DROPPED with a note (never clamped), and each carries
+ * {kind:'ai'} with the model's stated one-line basis. MISSING facts are
  * NEVER sent (the taint rule); out-of-bounds or non-whitelisted proposals are DROPPED
  * with a note, never silently applied.
  */
@@ -65,9 +66,9 @@ export function buildSuggestPrompt(facts: DealFacts, assumptions: DealAssumption
   };
 }
 
-function clamp(path: AiPath, v: number): number {
+function inRail(path: AiPath, v: number): boolean {
   const [lo, hi] = RAILS[path];
-  return Math.min(hi, Math.max(lo, v));
+  return v >= lo && v <= hi;
 }
 
 export function applyAiSuggestions(assumptions: DealAssumptions, rawText: string): AiSuggestResult {
@@ -98,19 +99,28 @@ export function applyAiSuggestions(assumptions: DealAssumptions, rawText: string
         dropped.push('operations.growth: needs a full per-year numeric array');
         continue;
       }
-      const clamped = arr.map((x) => clamp(path, x));
-      next = { ...next, operations: { ...next.operations, growth: clamped } };
-      applied.push({ path, value: clamped, basis });
+      // v2.0.0: an out-of-rail value is DROPPED with a note, never clamped — clamping turned
+      // a rejected AI number into a different number nobody proposed.
+      if (arr.some((x) => !inRail(path, x))) {
+        dropped.push(`operations.growth: a year outside the ${RAILS[path].join('…')} plausibility rail — dropped, not clamped`);
+        continue;
+      }
+      next = { ...next, operations: { ...next.operations, growth: arr } };
+      applied.push({ path, value: arr, basis });
     } else {
       const v = Number(s.value);
       if (!Number.isFinite(v)) { dropped.push(`${path}: non-numeric`); continue; }
-      const c = clamp(path, v);
+      if (!inRail(path, v)) {
+        dropped.push(`${path}: ${v} is outside the ${RAILS[path].join('…')} plausibility rail — dropped, not clamped`);
+        continue;
+      }
+      const c = v;
       if (path === 'operations.target_margin') next = { ...next, operations: { ...next.operations, target_margin: c } };
       else if (path === 'operations.maint_capex_pct_revenue') next = { ...next, operations: { ...next.operations, maint_capex_pct_revenue: c } };
       else if (path === 'entry.entry_multiple') next = { ...next, entry: { ...next.entry, driver: 'multiple', entry_multiple: c, enterprise_value: null } };
       else if (path === 'exit.multiple') next = { ...next, exit: { ...next.exit, multiple: c } };
       else next = { ...next, structure: { ...next.structure, sweep: { ...next.structure.sweep, base_pct: c } } };
-      applied.push({ path, value: c, basis: c === v ? basis : `${basis} (clamped from ${v} to the plausibility rail)` });
+      applied.push({ path, value: c, basis });
     }
     aiBasis[path] = { kind: 'ai', detail: applied[applied.length - 1].basis };
   }
