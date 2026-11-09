@@ -72,6 +72,9 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
       warrant: { holder_label: 'Mezz lender', pct_of_ordinary: 0.04, strike_total: 10 },
     },
   },
+  // §18 refinancing (the adjudicated golden): re-termed par for par, call premium, new OID/fees,
+  // the old OID/fees written off with the tax deduction deferred a year
+  G6REFI: GOLDEN_DEALS.G6REFI,
   // §20 PIK toggle: a whole-coupon cash/PIK election each year
   PIK_TOGGLE: {
     facts: GOLDEN_DEALS.G3.facts,
@@ -270,6 +273,10 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(proceeds).toBeGreaterThan(1.8 * (o.sources_uses.sponsor_equity + o.sources_uses.rollover_equity)); // the ratchet tier is reached
     expect(o.exit.warrant_payout_net).toBeGreaterThan(0);
     expect(o.credit.some((c) => c.leverage_headroom !== null)).toBe(true);
+  });
+  it('G6REFI really refinances: a cash cost, a write-off, and the new rate from the refinancing year', () => {
+    const o = runModel(CASES.G6REFI.facts, CASES.G6REFI.assumptions);
+    expect(o.tranches.some((rows) => rows.some((r) => r.refinanced && r.refinancing_cash_cost > 0 && r.unamortized_writeoff > 0))).toBe(true);
   });
   it('PIK_TOGGLE pays cash in the cash years and accrues in the PIK years', () => {
     const o = runModel(CASES.PIK_TOGGLE.facts, CASES.PIK_TOGGLE.assumptions);

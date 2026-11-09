@@ -25,7 +25,7 @@ goes red. Order = smallest blast radius first.
 | 1.6 | MIP ratchet tiers (marginal, §22.4) | exit.ts `promoteUncapped` | ☑ |
 | 1.7 | PIK toggle elections (§20) | debt.ts `financeLines` | ☑ |
 | 1.8 | Warrant (§22.6, full dilution, strike paid in) | exit.ts | ☑ |
-| 1.9 | Refinancing events (§18: par-for-par, call premium, new OID/fees, write-off timing) | sequence.ts | ☐ |
+| 1.9 | Refinancing events (§18: par-for-par, call premium, new OID/fees, write-off timing) | sequence.ts | ☑ |
 | 1.10 | Sweet-equity strip (§22: loan notes, ordinaries, sweet ratchet walk) | sequence.ts / exit.ts | ☐ |
 | 1.11 | Fund/LP overlay (§19: fees, pref, catch-up, carry, European/American) | fund.ts | ☐ |
 

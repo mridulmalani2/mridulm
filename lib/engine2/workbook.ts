@@ -58,7 +58,6 @@ export interface FormulaWorkbook {
 export function formulaCoverageBlockers(o: Engine2ModelOutput): string[] {
   const a = o.assumptions;
   const out: string[] = [];
-  if (a.structure.refinancing && a.structure.refinancing.length > 0) out.push('refinancing events');
   if (a.sweet_equity) out.push('sweet equity strip');
   if (a.fund) out.push('fund/LP overlay');
   return out;
@@ -248,6 +247,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const rcfA = a.structure.tranches.find((t) => t.type === 'revolver');
   const revolver = rcfA && rcfA.type === 'revolver' ? rcfA : null;
   const tk = terms.map((_, i) => `t${i}`);
+  const refiOf = (name: string) => (a.structure.refinancing ?? []).find((r) => r.tranche_name === name) ?? null;
   const all = (t: number) => range(N + 1, 0).map((x) => x === t);
   void all;
 
@@ -316,6 +316,22 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     I.line(`${k}_amort`, `${t.name}: mandatory amortization (% of original face a year)`, { 0: { input: t.amort_pct_of_face, fmt: FMT_PCT } });
     I.line(`${k}_oid`, `${t.name}: OID (% of par)`, { 0: { input: t.oid_pct, fmt: FMT_PCT } });
     I.line(`${k}_mat`, `${t.name}: maturity, years (the fee/OID amortization horizon)`, { 0: { input: t.maturity_years, fmt: FMT_YEAR } });
+    const ev = refiOf(t.name);
+    if (ev) {
+      I.note(`${t.name} — refinanced at the START of the year below, par for par on its opening balance`);
+      I.line(`${k}_rf_y`, `${t.name}: refinancing year`, { 0: { input: ev.year, fmt: FMT_YEAR } });
+      if (ev.new_pricing.kind === 'fixed') I.line(`${k}_rf_rate`, `${t.name}: new fixed rate`, { 0: { input: ev.new_pricing.rate, fmt: FMT_PCT } });
+      else {
+        I.line(`${k}_rf_base`, `${t.name}: new base rate`, { 0: { input: ev.new_pricing.base_rate, fmt: FMT_PCT } });
+        I.line(`${k}_rf_floor`, `${t.name}: new base-rate floor`, { 0: { input: ev.new_pricing.floor, fmt: FMT_PCT } });
+        I.line(`${k}_rf_spread`, `${t.name}: new spread`, { 0: { input: ev.new_pricing.spread, fmt: FMT_PCT } });
+      }
+      I.line(`${k}_rf_prem`, `${t.name}: call premium (% of the refinanced balance)`, { 0: { input: ev.call_premium_pct, fmt: FMT_PCT } });
+      I.line(`${k}_rf_mat`, `${t.name}: new maturity (years from the refinancing year)`, { 0: { input: ev.new_maturity_years, fmt: FMT_YEAR } });
+      I.line(`${k}_rf_oid`, `${t.name}: new OID (% of the refinanced balance)`, { 0: { input: ev.new_oid_pct, fmt: FMT_PCT } });
+      I.line(`${k}_rf_fee`, `${t.name}: new financing fee (% of the refinanced balance)`, { 0: { input: ev.new_financing_fee_pct, fmt: FMT_PCT } });
+      I.line(`${k}_rf_amort`, `${t.name}: new mandatory amortization (% of the new face a year)`, { 0: { input: ev.new_amort_pct_of_face, fmt: FMT_PCT } });
+    }
   });
   if (revolver) {
     I.note(`${revolver.name} — revolver (undrawn at close)`);
@@ -564,9 +580,28 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       const remKey = `${am.key}_${kind}_rem`;
       const amKey = `${am.key}_${kind}_am`;
       const afterKey = `${am.key}_${kind}_after`;
-      const prevRem = (t: number) => (t === 1 ? amount : m(remKey, t - 1));
-      const mat = iv(`${am.key}_mat`);
-      M.line(amKey, `${am.name}: ${word} amortization`, per(1, N, (t) => ({ f: `IF(${amount}>0,MIN(${prevRem(t)},${amount}/${mat}),0)`, v: null })), { italic: true, noParity: true });
+      const refi = am.isRevolver ? null : refiOf(am.name);
+      const isR = (t: number) => `${yr(t)}=${iv(`${am.key}_rf_y`)}`;
+      const post = (t: number) => `${yr(t)}>=${iv(`${am.key}_rf_y`)}`;
+      // §18.3: from the refinancing year the schedule is the NEW incarnation's — amount = new % ×
+      // the refinanced balance, horizon = the new maturity, restarting at the full new amount.
+      const amtKey = `${am.key}_${kind}_amt_y`;
+      if (refi) {
+        M.line(amtKey, `${am.name}: ${word} being amortized (new ${word} from the refinancing year)`, per(1, N, (t) => ({
+          // year 1 has no prior column: there "after the refinancing" can only mean "is the refinancing year"
+          f: t === 1
+            ? `IF(${isR(t)},${iv(`${am.key}_rf_${kind}`)}*${m(`${am.key}_open`, t)},${amount})`
+            : `IF(${isR(t)},${iv(`${am.key}_rf_${kind}`)}*${m(`${am.key}_open`, t)},IF(${post(t)},${m(amtKey, t - 1)},${amount}))`,
+          v: null,
+        })), { italic: true, noParity: true });
+      }
+      const amt = (t: number) => (refi ? m(amtKey, t) : amount);
+      const prevRem = (t: number) => {
+        const carried = t === 1 ? amount : m(remKey, t - 1);
+        return refi ? `IF(${isR(t)},${m(amtKey, t)},${carried})` : carried;
+      };
+      const mat = (t: number) => (refi ? `IF(${post(t)},${iv(`${am.key}_rf_mat`)},${iv(`${am.key}_mat`)})` : iv(`${am.key}_mat`));
+      M.line(amKey, `${am.name}: ${word} amortization`, per(1, N, (t) => ({ f: `IF(${amt(t)}>0,MIN(${prevRem(t)},${amt(t)}/${mat(t)}),0)`, v: null })), { italic: true, noParity: true });
       M.line(afterKey, `${am.name}: ${word} remaining after amortization`, per(1, N, (t) => ({ f: `${prevRem(t)}-${m(amKey, t)}`, v: null })), { italic: true, noParity: true });
       M.line(remKey, `${am.name}: ${word} remaining at year end (0 once written off)`, per(1, N, (t) => ({
         f: t === N ? '0' : am.isRevolver ? m(afterKey, t) : `IF(${m(`${am.key}_retired`, t)},0,${m(afterKey, t)})`, v: null,
@@ -575,7 +610,22 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       afterKeys.push(afterKey);
     }
     afterKeysByAmortee.set(am.key, afterKeys);
+    const refi = am.isRevolver ? null : refiOf(am.name);
+    if (refi) {
+      const i = terms.findIndex((t) => t.name === am.name);
+      const rows = o.tranches[i];
+      const isR = (t: number) => `${yr(t)}=${iv(`${am.key}_rf_y`)}`;
+      const remPrev = (t: number, kind: 'oid' | 'fee') => (t === 1 ? (kind === 'oid' ? m(`${am.key}_oid_amt`, 0, true) : m(`${am.key}_fee_alloc`, 0, true)) : m(`${am.key}_${kind}_rem`, t - 1));
+      M.line(`${am.key}_rf_wo`, `${am.name}: old OID + fees written off at refinancing (book)`, per(1, N, (t) => ({ f: `IF(${isR(t)},${remPrev(t, 'oid')}+${remPrev(t, 'fee')},0)`, v: rows[t - 1].unamortized_writeoff })));
+      M.line(`${am.key}_rf_premium`, `${am.name}: call premium`, per(1, N, (t) => ({ f: `IF(${isR(t)},${iv(`${am.key}_rf_prem`)}*${m(`${am.key}_open`, t)},0)`, v: null })), { noParity: true });
+      M.line(`${am.key}_rf_cost`, `${am.name}: refinancing cash cost  =  premium + new OID + new fees`, per(1, N, (t) => ({
+        f: `IF(${isR(t)},(${iv(`${am.key}_rf_prem`)}+${iv(`${am.key}_rf_oid`)}+${iv(`${am.key}_rf_fee`)})*${m(`${am.key}_open`, t)},0)`, v: rows[t - 1].refinancing_cash_cost,
+      })));
+      M.line(`${am.key}_rf_newcap`, `${am.name}: new OID + fees capitalized`, per(1, N, (t) => ({ f: `IF(${isR(t)},(${iv(`${am.key}_rf_oid`)}+${iv(`${am.key}_rf_fee`)})*${m(`${am.key}_open`, t)},0)`, v: null })), { noParity: true });
+    }
   }
+  const refis = amortees.filter((am) => !am.isRevolver && refiOf(am.name));
+  const refiSum = (suffix: string, t: number) => sumOf(refis.map((am) => `${am.key}_${suffix}`), t);
   M.line('oid_am', 'OID amortization (total) — capped interest for tax', per(1, N, (t) => ({ f: sumOf(oidAmKeys, t), v: op[t - 1].oid_amortization })));
   M.line('fee_am', 'Financing-fee amortization (total) — an uncapped deduction', per(1, N, (t) => ({ f: sumOf(feeAmKeys, t), v: op[t - 1].financing_fee_amortization })));
   const allAfter = [...afterKeysByAmortee.values()].flat();
@@ -591,7 +641,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     if (idx >= 0) parity.splice(idx, 1);
   }
   M.line('tax_wo', 'Write-off deductible this year  =  prior-year retirements (+ the exit write-off in the exit year)', per(1, N, (t) => ({
-    f: `${t > 1 ? m('book_wo', t - 1) : '0'}${t === N ? `+${m('book_wo', t)}` : ''}`, v: null,
+    f: `${t > 1 ? m('book_wo', t - 1) : '0'}${t === N ? `+${m('book_wo', t)}` : ''}${t > 1 && refis.length ? `+${refiSum('rf_wo', t - 1)}+${refiSum('rf_premium', t - 1)}` : ''}`, v: null,
   })), { noParity: true });
 
   // ── Debt & waterfall ──
@@ -603,16 +653,30 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     const rows = o.tranches[i];
     M.note(t.name);
     M.line(`${k}_open`, `${t.name}: opening balance`, per(1, N, (tt) => ({ f: tt === 1 ? m(`${k}_par`, 0) : m(`${k}_close`, tt - 1), v: rows[tt - 1].beginning_balance })));
-    const rate = t.type === 'pik_note' ? iv(`${k}_cash`) : t.pricing.kind === 'fixed' ? iv(`${k}_rate`) : `(MAX(${iv(`${k}_base`)},${iv(`${k}_floor`)})+${iv(`${k}_spread`)})`;
+    const oldRate = t.type === 'pik_note' ? iv(`${k}_cash`) : t.pricing.kind === 'fixed' ? iv(`${k}_rate`) : `(MAX(${iv(`${k}_base`)},${iv(`${k}_floor`)})+${iv(`${k}_spread`)})`;
+    const ev = refiOf(t.name);
+    const newRate = ev ? (ev.new_pricing.kind === 'fixed' ? iv(`${k}_rf_rate`) : `(MAX(${iv(`${k}_rf_base`)},${iv(`${k}_rf_floor`)})+${iv(`${k}_rf_spread`)})`) : '';
+    // §18.3: the new pricing applies for the WHOLE refinancing year onward
+    const rateAt = (tt: number) => (ev ? `IF(${yr(tt)}>=${iv(`${k}_rf_y`)},${newRate},${oldRate})` : oldRate);
+    if (ev) {
+      M.line(`${k}_rf_face`, `${t.name}: refinanced face (the opening balance in the refinancing year)`, per(1, N, (tt) => ({
+        f: `IF(${yr(tt)}=${iv(`${k}_rf_y`)},${m(`${k}_open`, tt)},${tt === 1 ? '0' : m(`${k}_rf_face`, tt - 1)})`, v: null,
+      })), { italic: true, noParity: true });
+    }
     // §20 PIK toggle: a WHOLE-coupon election each year — 'cash' pays the cash coupon with no
     // accrual; 'pik' accrues the PIK coupon with no cash. No election ⇒ the fixed note pays both.
     const toggled = t.type === 'pik_note' && t.elections !== null;
-    const cashF = (tt: number) => (toggled ? `IF(${iy(`${k}_el`, tt)}="cash",${m(`${k}_open`, tt)}*${rate},0)` : `${m(`${k}_open`, tt)}*${rate}`);
+    const cashF = (tt: number) => (toggled ? `IF(${iy(`${k}_el`, tt)}="cash",${m(`${k}_open`, tt)}*${oldRate},0)` : `${m(`${k}_open`, tt)}*${rateAt(tt)}`);
     const pikF = (tt: number) => (t.type !== 'pik_note' ? '0' : toggled ? `IF(${iy(`${k}_el`, tt)}="pik",${m(`${k}_open`, tt)}*${iv(`${k}_pik`)},0)` : `${m(`${k}_open`, tt)}*${iv(`${k}_pik`)}`);
     M.line(`${k}_int`, `${t.name}: cash interest  =  rate × opening balance${toggled ? ' (cash years)' : ''}`, per(1, N, (tt) => ({ f: cashF(tt), v: rows[tt - 1].cash_interest })));
     M.line(`${k}_pik`, `${t.name}: PIK accrual  =  PIK coupon × opening balance${toggled ? ' (PIK years)' : ''}`, per(1, N, (tt) => ({ f: pikF(tt), v: rows[tt - 1].pik_accrual })));
     M.line(`${k}_out`, `${t.name}: outstanding before repayment  =  opening + PIK`, per(1, N, (tt) => ({ f: `${m(`${k}_open`, tt)}+${m(`${k}_pik`, tt)}`, v: null })), { italic: true, noParity: true });
-    M.line(`${k}_mand`, `${t.name}: mandatory amortization  =  MIN(% × original face, outstanding)`, per(1, N, (tt) => ({ f: `MIN(${iv(`${k}_amort`)}*${m(`${k}_par`, 0, true)},MAX(0,${m(`${k}_out`, tt)}))`, v: rows[tt - 1].mandatory_amort })));
+    M.line(`${k}_mand`, `${t.name}: mandatory amortization  =  MIN(% × original face, outstanding)`, per(1, N, (tt) => ({
+      f: ev
+        ? `MIN(IF(${yr(tt)}>=${iv(`${k}_rf_y`)},${iv(`${k}_rf_amort`)}*${m(`${k}_rf_face`, tt)},${iv(`${k}_amort`)}*${m(`${k}_par`, 0, true)}),MAX(0,${m(`${k}_out`, tt)}))`
+        : `MIN(${iv(`${k}_amort`)}*${m(`${k}_par`, 0, true)},MAX(0,${m(`${k}_out`, tt)}))`,
+      v: rows[tt - 1].mandatory_amort,
+    })));
     M.line(`${k}_cap`, `${t.name}: room for the sweep  =  outstanding − mandatory`, per(1, N, (tt) => ({ f: t.sweep.participates ? `MAX(0,${m(`${k}_out`, tt)}-${m(`${k}_mand`, tt)})` : '0', v: null })), { italic: true, noParity: true });
   });
   if (revolver && o.revolver) {
@@ -631,7 +695,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('int_total', 'Cash interest (total)', per(1, N, (t) => ({ f: sumOf(intKeys, t), v: wf[t - 1].cash_interest_total })));
   M.line('cfee_total', 'Commitment fees', per(1, N, (t) => ({ f: revolver ? m('rcf_cfee', t) : '0', v: wf[t - 1].commitment_fees })));
   M.line('mand_total', 'Mandatory amortization (total)', per(1, N, (t) => ({ f: sumOf(tk.map((k) => `${k}_mand`), t), v: wf[t - 1].mandatory_amort_total })));
-  M.line('cash_a', '   cash after interest, fees and mandatory amortization', per(1, N, (t) => ({ f: `${m('cash_open', t)}+${m('fcf', t)}-${m('int_total', t)}-${m('cfee_total', t)}-${m('mand_total', t)}`, v: null })), { italic: true, noParity: true });
+  M.line('cash_a', '   cash after interest, fees and mandatory amortization', per(1, N, (t) => ({ f: `${m('cash_open', t)}+${m('fcf', t)}-${m('int_total', t)}-${m('cfee_total', t)}${refis.length ? `-${refiSum('rf_cost', t)}` : ''}-${m('mand_total', t)}`, v: null })), { italic: true, noParity: true });
   M.line('rcf_repay', 'Revolver repayment  =  MIN(drawn, cash above the minimum)', per(1, N, (t) => ({ f: revolver ? `MIN(${m('rcf_open', t)},MAX(0,${m('cash_a', t)}-${iv('min_cash')}))` : '0', v: wf[t - 1].revolver_repayment })));
   M.line('pool', 'Sweep pool  =  MAX(0, cash − minimum)', per(1, N, (t) => ({ f: `MAX(0,${m('cash_a', t)}-${m('rcf_repay', t)}-${iv('min_cash')})`, v: wf[t - 1].sweep_pool })));
   if (grid) {
@@ -741,7 +805,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('ppe', 'Net PP&E  =  prior + capex − D&A', { 0: { f: iv('net_ppe'), v: bs[0].ppe }, ...per(1, N, (t) => ({ f: `${m('ppe', t - 1)}+${m('capex', t)}-${m('da', t)}`, v: bs[t].ppe })) });
   M.line('dfc', 'Deferred financing costs  =  prior − amortization − write-offs', {
     0: { f: `${m('fin_fees', 0)}+${m('oid', 0)}`, v: bs[0].deferred_financing_costs },
-    ...per(1, N, (t) => ({ f: `${m('dfc', t - 1)}-${m('oid_am', t)}-${m('fee_am', t)}-${m('book_wo', t)}`, v: bs[t].deferred_financing_costs })),
+    ...per(1, N, (t) => ({ f: `${m('dfc', t - 1)}-${m('oid_am', t)}-${m('fee_am', t)}-${m('book_wo', t)}${refis.length ? `+${refiSum('rf_newcap', t)}-${refiSum('rf_wo', t)}` : ''}`, v: bs[t].deferred_financing_costs })),
   });
   M.line('goodwill', 'Goodwill (the plug at close, then constant)', {
     0: { f: `${m('debt_close', 0)}+${m('equity_total', 0)}-(${m('cash_close', 0)}+${m('nwc', 0)}+${m('ppe', 0)}+${m('dfc', 0)})`, v: bs[0].goodwill },
@@ -749,7 +813,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   });
   M.line('assets', 'Total assets', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${m('cash_close', t)}+${m('nwc', t)}+${m('ppe', t)}+${m('dfc', t)}+${m('goodwill', t)}`, v: bs[t].total_assets }])), { bold: true });
   M.line('ni', 'Net income  =  EBIT − interest − PIK − fee/OID amortization − commitment fees − write-offs − tax', per(1, N, (t) => ({
-    f: `${m('ebit', t)}-(${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}+${m('fee_am', t)}+${m('cfee_total', t)}+${m('book_wo', t)})-${m('cash_tax', t)}`, v: null,
+    f: `${m('ebit', t)}-(${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}+${m('fee_am', t)}+${m('cfee_total', t)}+${m('book_wo', t)}${refis.length ? `+${refiSum('rf_wo', t)}+${refiSum('rf_premium', t)}` : ''})-${m('cash_tax', t)}`, v: null,
   })), { noParity: true });
   M.line('equity', `Shareholders’ equity  =  prior + net income${dists ? ' − distributions' : ''}`, { 0: { f: m('equity_total', 0), v: bs[0].equity }, ...per(1, N, (t) => ({ f: `${m('equity', t - 1)}+${m('ni', t)}-${paid(t)}`, v: bs[t].equity })) });
   M.line('bs_check', 'Check: assets − debt − equity (must be 0; rounded to 6 dp)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `ROUND(${m('assets', t)}-${m('debt_close', t)}-${m('equity', t)},6)`, v: bs[t].check }])), { italic: true });
