@@ -102,11 +102,11 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
     {/* §9 [v1.1.0]: DPI and payback are headline-eligible ONLY when a distribution was
         actually paid. With none, DPI is identically zero and payback is N/A by
         construction — showing them would be the degenerate headline §9 removed (L-10). */}
-    {o.waterfall.some((w) => w.distribution_paid > 0) && (
+    {(o.waterfall.some((w) => w.distribution_paid > 0) || o.selldown !== null) && (
       <div className="flex gap-8 mb-4">
-        <div><p className="text-[10px] uppercase tracking-widest" style={label}>DPI (distributions ÷ check)</p>
+        <div><p className="text-[10px] uppercase tracking-widest" style={label}>{o.selldown ? 'DPI (distributions + selldown ÷ check)' : 'DPI (distributions ÷ check)'}</p>
           <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.dpi[o.returns.dpi.length - 1] ?? null)}</p></div>
-        <div><p className="text-[10px] uppercase tracking-widest" style={label}>Payback (distributions alone)</p>
+        <div><p className="text-[10px] uppercase tracking-widest" style={label}>{o.selldown ? 'Payback (cash realized before the exit)' : 'Payback (distributions alone)'}</p>
           <p className="text-2xl" style={{ fontFamily: mono }}>{o.returns.payback_year === null ? 'N/A' : `Y${o.returns.payback_year}`}</p></div>
       </div>
     )}
@@ -161,6 +161,45 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         </p>
       )}
       <EquityStrip o={o} ccy={ccy} />
+      <Selldown o={o} ccy={ccy} />
+    </div>
+  );
+};
+
+/** §23 [v2.2.0] the partial-exit block. Rendered ONLY when `selldown` is non-null (§23.10 —
+ *  ABSENT when off, never a zero table). Every cell READS a named field: the SelldownBlock and
+ *  ExitBlock.selldown_buyer_share; the one presentational difference is the event net debt
+ *  (= implied EV − implied equity, exact by §23.2's definition). */
+export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  const s = o.selldown;
+  if (!s) return null;
+  const rows: [string, string][] = [
+    ['Sale at the end of year', `Y${s.year}`],
+    ['Share of the sponsor’s stake sold', pct(s.fraction)],
+    ['Implied enterprise value (sale multiple × that year’s EBITDA)', money(s.implied_event_ev, ccy)],
+    ['Net debt at that year end', money(s.implied_event_ev - s.implied_event_equity, ccy)],
+    ['Implied equity value', money(s.implied_event_equity, ccy)],
+    ['Proceeds to the sponsor', money(s.selldown_proceeds, ccy)],
+    ['Buyer’s share of the exit proceeds', money(o.exit.selldown_buyer_share, ccy)],
+    ['Sponsor’s retained exit proceeds', money(o.exit.sponsor_share, ccy)],
+  ];
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Partial exit — secondary selldown (SPEC §23)</p>
+      <Table head={['', '']}>
+        {rows.map(([l, v]) => (
+          <tr key={l} style={rowB}>
+            <td className="px-2 py-1">{l}</td>
+            <td className={td}>{v}</td>
+          </tr>
+        ))}
+      </Table>
+      <p className="text-[10px] mt-1" style={label}>
+        A secondary sale of the sponsor’s own stake: the company’s cash, debt and balance sheet are
+        unchanged. The proceeds are in the sponsor’s cash flows and count toward DPI and payback; the
+        promote hurdle and the value bridge bars do not include them. From the year after the sale the
+        sponsor keeps {pct(1 - s.fraction)} of each distribution and of the exit.
+      </p>
     </div>
   );
 };
@@ -530,6 +569,10 @@ const DISCLOSURES: [string, string][] = [
   ['Sector comps band (§21)', "public-market TRADING multiples, NOT buyout-entry multiples — control premia, synergies, leverage and illiquidity all sit between the two, and NO ordering against your entry multiple is asserted; each figure is an INDUSTRY AGGREGATE (aggregate EV ÷ aggregate EBITDA), not a median firm, on data trailing through the prior year's Q3; annual vintage, stated per band, from a COMMITTED dataset refreshed manually (no live feed); positive-EBITDA block only, with NA and non-positive values excluded; the displayed firm count is the industry POPULATION, which includes firms outside the ratio's own aggregate; the sector map is a stated convention keyed on the numeric SIC — a 1987 taxonomy recording PRIMARY activity, so a conglomerate can sit in a bucket its business has outgrown; financials are NOT uniformly unavailable (the US bank/broker rows are NA and drop out, leaving a band set by asset managers, while Europe and India enter through BROKER multiples only — their bank rows are NA too — and only Japan publishes an actual bank multiple); a band may collapse to a point under a dominant constituent; region is inferred from reporting currency, a proxy for listing market"],
   // §20.8 [v1.5.0]: the PIK-toggle simplifications — the SPEC §15 sentence mirrored here
   ['PIK toggle (§20)', 'per-year WHOLE-coupon election only (no partial/50-50 elections — v2); elections are frozen across scenarios; PIK is deducted as ACCRUED, with AHYDO (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the disqualified-portion disallowance are NOT modelled; qualifying notes carry the structural ahydo_shape warning (maturity > 5y + an accruing year), whose yield leg is untested (it needs the monthly AFR) and whose significant-OID leg is proxied, so the flag deliberately over-fires; PIK notes remain non-refinanceable and sweep-exempt by default'],
+  // §3.8 [v2.1.0]: the surplus-cash distribution policy
+  ['Surplus-cash distributions (§3.8)', 'one distribution policy per deal (none, a fixed schedule, or surplus cash); the surplus is a stated share of cash above the minimum AFTER interest, amortization, the revolver and the sweep, paid every year or only once all debt is repaid; still subject to the restricted-payment trap; never revolver-funded; the analyst sets the payout and the start (pre-filled 100% / every year when the policy is chosen)'],
+  // §23.11 [v2.2.0]: the partial-exit simplifications — the SPEC §15-SELL block mirrored verbatim
+  ['Partial exits (§23)', "Partial exits [v1.8.0 — §23] are SECONDARY selldowns only — the sponsor sells a stated fraction of its position at the end of a stated year at `event_multiple × that year's EBITDA_adj` less §11 net debt, and the company's operating, debt, tax and balance-sheet paths are BYTE-IDENTICAL with and without the event (no primary raise, no de-leveraging — an IPO primary is v2); the proceeds are the SPONSOR'S money, not company cash — they never enter the waterfall, the sweep, the RP trap or the §10 hurdle base (the promote at exit is computed on total exit proceeds exactly as before, borne pro-rata by the buyer), and the four §12 bridge bars are untouched (a selldown, unlike a distribution, does not shrink the paydown bar); the deal-level DPI and payback are on the REALIZED-PROCEEDS basis — the selldown proceeds COUNT, because a secondary sale is realized cash exactly as a distribution is, and it is only the FINAL exit that must stay out (counting a ratio's own exit is what would collapse DPI into MOIC for every deal) — so DPI steps up at the selldown year and payback can be reached there; the FUND-layer LP figures share that basis FOR THE PROCEEDS but NOT for the final exit, which the fund ratio counts and the deal ratio never does (on the committed G7-FUND golden that alone is a 20× gap at year N), and they differ further by §19 fees, GP carry and their cumulative-contributions denominator; a sale at a NEGATIVE implied equity value is legal and is the one case where DPI falls in a year; the event's terms are FROZEN across scenarios while its proceeds re-price with each scenario's EBITDA (a downside sells at the downside price); the year-t distribution belongs to the SELLER (the sale settles after the year's flows); selling below the pro-rata entry cost warns (`selldown_below_cost`), never blocks; a selldown may not coexist with a rollover or with the §22 management structure in v1 (both allocations are negotiated with no defensible default), and exactly ONE event is modelled (a schedule of selldowns is v2)"],
   // §22.11 [v1.7.0]: the sweet-equity/ratchet/warrant simplifications — the SPEC §15 sentence mirrored here
   ['Sweet equity / ratchets / warrants (§22)', "the institutional loan notes are EQUITY — outside §11 leverage/ICR/FCCR/DSCR, outside the §3 waterfall and the §9 debt payoff, with NO interest deduction (jurisdiction-specific, so v1 claims none — NEVER anti-conservative: neutral only where §163(j) binds every year, lower-return elsewhere), accruing only, never cash-pay, no year-0 accretion; ratchets are MARGINAL top-slice step functions on MOIC struck at EXIT ONLY, never cliffs (a cliff on a realized-return hurdle has NO SOLUTION over an interval of exit values), a value exactly ON a tier threshold takes the LOWER tier (strict >), and IRR-based ratchets are deferred to v2; the promote ratchet and the sweet-equity ratchet are struck on DELIBERATELY DIFFERENT bases (total pre-promote proceeds vs the institution's own realized value); the strip, the ratchet and the warrant are FROZEN across scenarios; MANAGEMENT'S SUBSCRIPTION REDUCES THE SPONSOR'S OWN CHEQUE (a §2 source line); a promote and a strip may NOT coexist (the DR-2 double-count — an input-gate rejection) and a strip may not coexist with a rollover in v1; when exit equity does not cover the accreted notes the ordinary pot is zero, management's sweet equity is worthless and the loan_notes_unredeemed warning fires — and when the FINAL SPONSOR FLOW is negative the HEADLINE sponsor MOIC exceeds the realized one (returns sums positive inflows only — a pre-existing convention §22 surfaces; the ratchet is struck on the REALIZED figure); AT MOST ONE warrant, rationally exercised on full dilution with the strike paid in, NOT exercised exactly at-the-money, not participating in interim distributions, its tranche association a LABEL only; the subscription price and the ordinary % are INDEPENDENT inputs — the model never checks that the terms are actually sweet"],
 ];

@@ -312,3 +312,26 @@ describe('every engine feature is enterable in the panel (sweep grid, covenant s
     expect(html).not.toContain('NaN');
   });
 });
+
+describe('§23 partial exit — the panel input', () => {
+  it('offers the selldown, brings its three fields in BLANK, and Build is gated until they are entered', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    const st = useEngine2Model.getState();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, rollover_equity: 0, structure: { ...a.structure, selldown: { year: Number.NaN, fraction: Number.NaN, event_multiple: Number.NaN } } }, ['rollover_equity', 'structure.selldown']);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Partial exit before the final exit (secondary selldown)');
+    expect(html).toContain('Partial exit: sale multiple');
+    const missing = useEngine2Model.getState().missing().map((m) => m.path);
+    expect(missing).toEqual(expect.arrayContaining(['structure.selldown.year', 'structure.selldown.fraction', 'structure.selldown.event_multiple']));
+  });
+  it('says why it is unavailable beside rollover equity instead of failing the Build', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    const st = useEngine2Model.getState();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, rollover_equity: 25 }, ['rollover_equity']);
+    expect(renderToStaticMarkup(<Workbench />)).toContain('Unavailable while the deal has rollover equity.');
+  });
+});

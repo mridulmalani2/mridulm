@@ -448,6 +448,13 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       I.line(`se_r${j}_s`, `Sweet ratchet tier ${j + 1}: management share of ordinaries above it`, { 0: { input: r.share_pct, fmt: FMT_PCT } });
     });
   }
+  const sell = a.structure.selldown;
+  if (sell) {
+    I.note('Partial exit — a secondary sale of part of the sponsor’s stake (the company is untouched)');
+    I.line('sd_year', 'Partial exit: the sale settles at the end of year', { 0: { input: sell.year, fmt: FMT_YEAR } });
+    I.line('sd_frac', 'Partial exit: share of the sponsor’s stake sold', { 0: { input: sell.fraction, fmt: FMT_PCT } });
+    I.line('sd_mult', 'Partial exit: sale multiple (× that year’s EBITDA after the monitoring fee)', { 0: { input: sell.event_multiple, fmt: FMT_MULT } });
+  }
   const fund = a.fund;
   if (fund) {
     I.section('Fund overlay — the sponsor’s equity held by a fund-of-one (net returns to the LP)');
@@ -952,23 +959,45 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     M.line('se_eff', 'Management’s effective share of the ordinary pot', { 0: { f: `IF(${m('pot', 0)}>0,${m('mgmt_ord', 0)}/${m('pot', 0)},"N/A")`, v: strip!.management_effective_ordinary_pct, fmt: FMT_PCT } });
   }
   M.line('roll_share', 'Rollover holders’ share (pari passu)', { 0: { f: sweet ? '0' : `IF(${m('equity_total', 0)}>0,${pot}*${m('rollover', 0)}/${m('equity_total', 0)},0)`, v: ex.rollover_share } });
-  M.line('sponsor_exit', sweet ? 'Sponsor (institution) exit proceeds  =  loan notes redeemed + ordinary share' : 'Sponsor exit proceeds', {
-    0: { f: sweet ? `${m('ln_exit_red', 0)}+${m('inst_ord', 0)}` : `${pot}-${m('roll_share', 0)}`, v: ex.sponsor_share },
+  const sdb = o.selldown;
+  if (sell && sdb) {
+    // §23.2: the sale valued at the END of its year — the §9 form on that year's figures (the
+    // year is an input, so INDEX keeps the timing live); §23.5: the buyer takes the fraction of
+    // the post-promote, post-warrant sponsor split
+    const yrRange = (key: string) => `${m(key, 1, true)}:${m(key, N, true)}`;
+    M.line('sd_ev', 'Partial exit: implied EV  =  sale multiple × that year’s EBITDA', { 0: { f: `${iv('sd_mult')}*INDEX(${yrRange(mon ? 'ebitda_adj' : 'ebitda')},${iv('sd_year')})`, v: sdb.implied_event_ev } });
+    M.line('sd_nd', '   net debt at that year end  =  debt (par + PIK + revolver) − cash', { 0: { f: `INDEX(${yrRange('debt_close')},${iv('sd_year')})-INDEX(${yrRange('cash_close')},${iv('sd_year')})`, v: null } }, { italic: true, noParity: true });
+    M.line('sd_eq', 'Partial exit: implied equity value  =  EV − net debt', { 0: { f: `${m('sd_ev', 0)}-${m('sd_nd', 0)}`, v: sdb.implied_event_equity } });
+    M.line('sd_proc', 'Partial exit: proceeds to the sponsor  =  share sold × equity value', { 0: { f: `${iv('sd_frac')}*${m('sd_eq', 0)}`, v: sdb.selldown_proceeds } }, { bold: true });
+    M.line('sd_pre', '   sponsor split before the partition  =  pot − rollover share', { 0: { f: `${pot}-${m('roll_share', 0)}`, v: null } }, { italic: true, noParity: true });
+    M.line('sd_buyer', 'Buyer’s share of the exit proceeds  =  share sold × sponsor split', { 0: { f: `${iv('sd_frac')}*${m('sd_pre', 0)}`, v: ex.selldown_buyer_share } });
+  }
+  M.line('sponsor_exit', sweet ? 'Sponsor (institution) exit proceeds  =  loan notes redeemed + ordinary share' : sell ? 'Sponsor exit proceeds (the retained stake)' : 'Sponsor exit proceeds', {
+    0: { f: sweet ? `${m('ln_exit_red', 0)}+${m('inst_ord', 0)}` : sell ? `${m('sd_pre', 0)}-${m('sd_buyer', 0)}` : `${pot}-${m('roll_share', 0)}`, v: ex.sponsor_share },
   }, { bold: true });
   M.header({ 0: 'Year 0', ...years(1, N) });
   // interim flows = the distributions PAID; the sponsor takes its pro-rata share (pari passu
   // with rollover) — or, under a strip, the institution's §22.7 receipts
   if (dists && !sweet) M.line('sp_frac', '   sponsor share of distributions  =  sponsor ÷ (sponsor + rollover)', { 0: { f: `IF(${m('equity_total', 0)}>0,${m('sponsor', 0)}/${m('equity_total', 0)},0)`, v: null, fmt: FMT_NUM } }, { italic: true, noParity: true });
-  const spPaid = (t: number) => (sweet ? m('inst_int', t) : dists ? `${paid(t)}*${m('sp_frac', 0, true)}` : '0');
+  // §23.5: after the sale year the sponsor keeps (1 − share sold) of each distribution; the
+  // sale-year distribution is the seller's whole, and the proceeds land in that year's flow
+  const partition = (t: number) => (sell ? `*IF(${yr(t)}>${iv('sd_year')},1-${iv('sd_frac')},1)` : '');
+  const proceedsAt = (t: number) => (sell && t < N ? `+IF(${yr(t)}=${iv('sd_year')},${m('sd_proc', 0, true)},0)` : '');
+  const spPaid = (t: number) => (sweet ? m('inst_int', t) : `${dists ? `${paid(t)}*${m('sp_frac', 0, true)}${partition(t)}` : '0'}${proceedsAt(t)}`);
   const cfRow = (key: string, label: string, t0: string, interim: (t: number) => string, last: string, values: number[]) =>
     M.line(key, label, Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? t0 : t === N ? `${last}+${interim(t)}` : interim(t), v: values[t] }])));
   cfRow('cf_sponsor', 'Sponsor cash flows', `-${m('sponsor', 0)}`, spPaid, m('sponsor_exit', 0), o.returns.sponsor_net.cashflows);
   cfRow('cf_equity', 'Total equity cash flows (before the promote)', `-${m('equity_total', 0)}`, paid, m('exit_eq', 0), o.returns.pre_promote.cashflows);
-  if (dists) {
-    M.line('dpi', 'DPI  =  cumulative sponsor distributions ÷ sponsor equity (exit proceeds excluded)', per(1, N, (t) => ({
+  if (dists || sell) {
+    M.line('dpi', `DPI  =  cash realized before the exit (distributions${sell ? ' + selldown' : ''}) ÷ sponsor equity`, per(1, N, (t) => ({
       f: `IF(${m('sponsor', 0, true)}>0,(SUM(${m('cf_sponsor', 1, true)}:${m('cf_sponsor', t)})${t === N ? `-${m('sponsor_exit', 0)}` : ''})/${m('sponsor', 0, true)},0)`,
       v: o.returns.dpi[t - 1], fmt: FMT_NUM,
     })));
+    // payback: the FIRST year realized cash reaches the cheque (a later dip never clears it)
+    M.line('pbk', '   payback test (year if reached, else blank)', per(1, N, (t) => ({
+      f: `IF(AND(${m('sponsor', 0, true)}>0,${m('dpi', t)}>=1),${t},"")`, v: null,
+    })), { italic: true, noParity: true });
+    M.line('payback', 'Payback year (cash realized before the exit reaches the cheque)', { 0: { f: `IF(COUNT(${m('pbk', 1)}:${m('pbk', N)})=0,"N/A",MIN(${m('pbk', 1)}:${m('pbk', N)}))`, v: o.returns.payback_year, fmt: FMT_YEAR } });
   }
   M.line('u_taxable', '   unlevered: taxable income  =  EBITDA − D&A (no interest)', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('da', t)}`, v: null })), { italic: true, noParity: true });
   nolBlock('u_', 'u_taxable', '   unlevered: ', () => ({ acq: null, pc: null, acqEnd: null, pcEnd: null }));
@@ -1141,7 +1170,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const checks: [string, string, string][] = [
     ['ck_su', 'Sources = uses', `${mx('sources', 0)}-${mx('uses', 0)}`],
     ['ck_bs', 'Balance sheet balances in every year (sum of |assets − debt − equity|)', range(N + 1, 0).map((t) => `ABS(${mx('bs_check', t)})`).join('+')],
-    ['ck_exit', `Exit split: sponsor + rollover + promote + warrant${sweet ? ' + management sweet equity' : ''} = exit equity`, `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}${a.warrant ? `+${mx('w_net', 0)}` : ''}${sweet ? `+${mx('mgmt_ord', 0)}` : ''}-${mx('exit_eq', 0)}`],
+    ['ck_exit', `Exit split: sponsor + rollover + promote + warrant${sweet ? ' + management sweet equity' : ''} = exit equity`, `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}${a.warrant ? `+${mx('w_net', 0)}` : ''}${sweet ? `+${mx('mgmt_ord', 0)}` : ''}${sell ? `+${mx('sd_buyer', 0)}` : ''}-${mx('exit_eq', 0)}`],
     ['ck_debt', 'Debt roll: par − repayments + PIK = closing debt (terms)', terms.length
       ? `${mx('total_par', 0)}${range(N, 1).map((t) => terms.map((_, i) => `-${mx(`${tk[i]}_mand`, t)}-${mx(`${tk[i]}_sweep`, t)}+${mx(`${tk[i]}_pik`, t)}`).join('')).join('')}-(${terms.map((_, i) => mx(`${tk[i]}_close`, N)).join('+')})`
       : '0'],
@@ -1169,6 +1198,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const breach = o.waterfall.some((w) => w.cash_floor_breach);
   C.line('wn_cash', 'Cash below the minimum, summed over the hold (0 = never breached)', { 0: { f: range(N, 1).map((t) => `MAX(0,${iv('min_cash')}-${mx('cash_close', t)}-1E-9)`).join('+'), v: null } },
     { noParity: true, note: breach ? 'The engine flags a cash-floor breach — add a revolver, lower the debt, or revisit the forecast.' : undefined });
+  if (sell) {
+    C.line('wn_sd', 'Partial exit below the pro-rata entry cost (0 = not below; else the shortfall)', { 0: { f: `MAX(0,${iv('sd_frac')}*${mx('sponsor', 0)}-0.005-${mx('sd_proc', 0)})`, v: null } },
+      { noParity: true, note: 'Positive when the sold slice fetches less than its share of the sponsor’s entry cheque — a warning, not an error.' });
+  }
   if (sweet) {
     C.line('wn_ln', 'Loan notes NOT covered by exit equity (0 = fully redeemed)', { 0: { f: `${mx('ln_bal', N)}-${mx('ln_exit_red', 0)}`, v: null } },
       { noParity: true, note: 'When positive, the ordinary pot is wiped out and management’s sweet equity is worthless on this case.' });

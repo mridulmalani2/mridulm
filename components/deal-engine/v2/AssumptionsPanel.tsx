@@ -481,6 +481,31 @@ const AssumptionsPanel: React.FC = () => {
             <NumField path="warrant.strike_total" label="Total strike" unit="money" value={a.warrant.strike_total} />
           </>
         )}
+        {/* §23: a SECONDARY selldown — the sponsor sells part of its stake before the exit; the
+            company is untouched. Rejected beside a rollover or a strip (§23.3), so the toggle says
+            why it is unavailable instead of letting the Build fail. */}
+        {(() => {
+          const blockedBy = a.rollover_equity > 0 ? 'rollover equity' : a.sweet_equity ? 'a sweet-equity strip' : null;
+          const sd = a.structure.selldown;
+          return (
+            <>
+              <Toggle on={sd !== null} label="Partial exit before the final exit (secondary selldown)"
+                hint={blockedBy ? `Not available beside ${blockedBy} (SPEC §23.3) — how the buyer ranks is negotiated.` : 'The sponsor sells part of its stake at the end of a year before the exit, at a multiple of that year’s EBITDA less net debt. The company itself is unaffected.'}
+                onOn={() => { if (!blockedBy) set(at('structure.selldown', { year: U, fraction: U, event_multiple: U }), ['structure.selldown']); }}
+                onOff={() => set(at('structure.selldown', null), ['structure.selldown'])} />
+              {blockedBy && sd === null && (
+                <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>Unavailable while the deal has {blockedBy}.</p>
+              )}
+              {sd && (
+                <>
+                  <NumField path="structure.selldown.year" label={`Partial exit: year of the sale (1–${N - 1})`} unit="years" value={sd.year} />
+                  <NumField path="structure.selldown.fraction" label="Partial exit: share of the sponsor’s stake sold" unit="pct" value={sd.fraction} />
+                  <NumField path="structure.selldown.event_multiple" label="Partial exit: sale multiple (× that year’s EBITDA)" unit="mult" value={sd.event_multiple} />
+                </>
+              )}
+            </>
+          );
+        })()}
       </Section>
 
       {/* ═══ 7. Cash policy, covenants, fees ═══ */}

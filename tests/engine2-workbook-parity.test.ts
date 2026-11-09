@@ -221,6 +221,26 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
       structure: { ...G12_ASSUMPTIONS.structure, tranches: G12_ASSUMPTIONS.structure.tranches.map((t) => ({ ...t, size: { amount: 300 } })) as typeof G12_ASSUMPTIONS.structure.tranches, surplus_distribution: { payout_pct: 1, start: 'after_debt_repaid' } },
     },
   },
+  // §23 partial exits: the adjudicated golden (G2-DIST + a year-3 sale of 25% at 8.5×)
+  G11SELL: GOLDEN_DEALS.G11SELL,
+  // a sale beside a promote (taken AFTER it), a warrant and a monitoring fee — and the fund
+  SELL_MIP_WARRANT_FUND: {
+    facts: GOLDEN_DEALS.G2DIST.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G2DIST.assumptions,
+      mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: [{ hurdle_moic: 2.0, share_pct: 0.25 }] },
+      warrant: { holder_label: 'Mezz', pct_of_ordinary: 0.05, strike_total: 5 },
+      fees: { ...GOLDEN_DEALS.G2DIST.assumptions.fees, monitoring: { annual: 2, termination_years: 3, discount_rate: 0.08 } },
+      structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 2, fraction: 0.3, event_multiple: 9.5 } },
+      fund: { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested', carry_pct: 0.2, pref_rate: 0.08, catchup_pct: 1, waterfall: 'european', fee_offset_pct: 1 },
+    },
+  },
+  // a sale large enough that the proceeds alone repay the cheque — payback reached in year 3
+  SELL_PAYBACK: { facts: GOLDEN_DEALS.G2DIST.facts, assumptions: { ...GOLDEN_DEALS.G2DIST.assumptions, structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 3, fraction: 0.9, event_multiple: 8.5 } } } },
+  // an underwater sale (negative implied equity): DPI falls in the sale year, the warning shows
+  SELL_UNDERWATER: { facts: GOLDEN_DEALS.G2DIST.facts, assumptions: { ...GOLDEN_DEALS.G2DIST.assumptions, structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 2, fraction: 0.25, event_multiple: 2.0 } } } },
+  // a sale with no distribution policy at all (the only interim sponsor flow is the sale)
+  SELL_NODIST: { facts: GOLDEN_DEALS.G2.facts, assumptions: { ...GOLDEN_DEALS.G2.assumptions, structure: { ...GOLDEN_DEALS.G2.assumptions.structure, selldown: { year: 4, fraction: 0.4, event_multiple: 10 } } } },
   // two tranches sharing a sweep priority (pro rata) + a junior at priority 2, front-loaded margin
   G5_TIERS: {
     facts: GOLDEN_DEALS.G5.facts,
@@ -432,6 +452,19 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(firstPaid).toBeGreaterThan(0);
     expect(g.tranches[0][firstPaid].ending_balance).toBeLessThanOrEqual(0.005);
     expect(g.tranches[0][firstPaid - 1].ending_balance).toBeGreaterThan(0.005);
+  });
+  it('selldown deals take the paths they claim: promote + warrant live, payback reached, an underwater sale, a sale with no distributions', () => {
+    const mw = runModel(CASES.SELL_MIP_WARRANT_FUND.facts, CASES.SELL_MIP_WARRANT_FUND.assumptions);
+    expect(mw.exit.mip_payout).toBeGreaterThan(0);
+    expect(mw.exit.warrant_payout_net).toBeGreaterThan(0);
+    expect(mw.fund!.gp_carry.some((x) => x > 0)).toBe(true);
+    expect(runModel(CASES.SELL_PAYBACK.facts, CASES.SELL_PAYBACK.assumptions).returns.payback_year).toBe(3);
+    const uw = runModel(CASES.SELL_UNDERWATER.facts, CASES.SELL_UNDERWATER.assumptions);
+    expect(uw.selldown!.selldown_proceeds).toBeLessThan(0);
+    expect(uw.returns.dpi[1]).toBeLessThan(uw.returns.dpi[0]);
+    const nd = runModel(CASES.SELL_NODIST.facts, CASES.SELL_NODIST.assumptions);
+    expect(nd.waterfall.every((w) => w.distribution_paid === 0)).toBe(true);
+    expect(nd.returns.dpi[3]).toBeGreaterThan(0);
   });
   it('SWEET_TOP clears every sweet ratchet tier (the walk ends at the top share)', () => {
     const a = CASES.SWEET_TOP.assumptions;
