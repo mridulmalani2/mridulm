@@ -31,6 +31,9 @@ export interface FundOverlayInputs {
   sources_uses: Pick<SourcesUses, 'sponsor_equity' | 'rollover_equity'>;
   /** §5 monitoring-fee income (null ⇒ offset 0 — §19.2). */
   gp_fee_income: { annual: number[]; termination: number } | null;
+  /** §19.3/§23.7 [v2.2.0] the selldown proceeds enter the LP leg at `year` (the interim
+   *  shares above are ALREADY partitioned by (1 − f)); null with no event. */
+  selldown: { year: number; proceeds: number } | null;
 }
 
 /** §16 input-gate rejections for the fund overlay — STRUCTURAL gates (domains +
@@ -70,6 +73,7 @@ export function buildFundOverlay(fund: FundOverlayAssumption, x: FundOverlayInpu
   // institutional split governs, selected upstream by facade.ts's single predicate.
   const inflow = [...x.sponsor_interim_shares];
   inflow[N - 1] += x.exit_sponsor_share;
+  if (x.selldown) inflow[x.selldown.year - 1] += x.selldown.proceeds; // §23.7: the year-t interim leg
 
   const basis = fund.fee_basis === 'invested' ? se : (fund.committed_capital as number);
   const c = fund.carry_pct;

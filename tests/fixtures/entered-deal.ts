@@ -18,7 +18,7 @@ export function enteredAssumptions(N = 5, over: Partial<DealAssumptions> = {}): 
         { name: 'TLB', type: 'senior', size: { x_ebitda: 4 }, pricing: { kind: 'floating', base_rate: 0.04, spread: 0.0375, floor: 0.005 }, amort_pct_of_face: 0.01, maturity_years: N + 2, oid_pct: 0.005, sweep: { participates: true, priority: 1 } },
         { name: 'RCF', type: 'revolver', commitment: { x_ebitda: 0.5 }, pricing: { kind: 'floating', base_rate: 0.04, spread: 0.03, floor: 0 }, commitment_fee: 0.005, maturity_years: N + 1, drawn_at_close: 0 },
       ],
-      min_cash: 20, sweep: { base_pct: 0.5, grid: null }, distributions: null, surplus_distribution: null, refinancing: null,
+      min_cash: 20, sweep: { base_pct: 0.5, grid: null }, distributions: null, surplus_distribution: null, refinancing: null, selldown: null,
     },
     operations: {
       growth: Array.from({ length: N }, () => 0.05), target_margin: 0.22, margin_path: 'linear',

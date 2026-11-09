@@ -27,7 +27,7 @@ const syntheticInputs = (over: Partial<ExitInputs>): ExitInputs => ({
   exit_year_ebitda_adj: 0, last_growth: 0, debt_payoff: 0, closing_cash: 0,
   unamortized_writeoff: 0, invested_equity_total: 100, rollover_equity: 0,
   cumulative_distributions: 0,
-  loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
+  loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0, selldown_fraction: 0,
   ...over,
 });
 const syntheticAssumptions = (
@@ -409,6 +409,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
       covenants: GOLDEN_DEALS.G9SWEET.assumptions.covenants,
       ppe_seeded_at_zero: false,
       tranches: under.tranches,
+      selldown: null,
       equity_strip: {
         ...under.equity_strip!,
         loan_notes_accrued_balance: 100,

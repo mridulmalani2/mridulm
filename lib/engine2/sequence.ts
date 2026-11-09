@@ -94,6 +94,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   validateSweetEquity(assumptions); // §16/§22.3 input-gate rejections [v1.7.0]
   validateForecastLines(assumptions); // §24.3 R7 [v2.0.0]
   const surplusPolicy = validateSurplusDistribution(assumptions.structure); // §3.8 [v2.1.0]
+  validateSelldown(assumptions); // §23.3 [v2.2.0]
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
   const costInputs: AmortizingCostInput[] = [
@@ -467,4 +468,19 @@ export function validateSurplusDistribution(
   if (!(sd.payout_pct >= 0 && sd.payout_pct <= 1)) throw new RangeError('distributions: the surplus payout must be between 0% and 100% (SPEC §3.8)');
   if (sd.start !== 'immediately' && sd.start !== 'after_debt_repaid') throw new RangeError("distributions: the surplus policy starts 'immediately' or 'after_debt_repaid' (SPEC §3.8)");
   return { payout_pct: sd.payout_pct, after_debt_repaid: sd.start === 'after_debt_repaid' };
+}
+
+/**
+ * §23.3 [v2.2.0] Build rejections for the selldown (input gates, the §22.3 style).
+ */
+export function validateSelldown(a: Pick<DealAssumptions, 'structure' | 'rollover_equity' | 'sweet_equity' | 'entry'>): void {
+  const sd = a.structure.selldown;
+  if (!sd) return;
+  const bad = (msg: string): never => { throw new RangeError(`selldown: ${msg} (SPEC §23.3)`); };
+  if (a.rollover_equity > 0) bad('a selldown cannot sit beside rollover equity in v1 — how the buyer and the rollover holder rank is negotiated, with no defensible default');
+  if (a.sweet_equity) bad('a selldown cannot sit beside a sweet-equity strip in v1 — selling a strip position splits loan notes and ordinaries by negotiation');
+  if (!(sd.fraction > 0 && sd.fraction < 1)) bad('the fraction sold must be strictly between 0% and 100% (0 is no event; 100% before the exit year contradicts the holding period)');
+  const N = a.entry.hold_years;
+  if (!(Number.isInteger(sd.year) && sd.year >= 1 && sd.year <= N - 1)) bad(`the selldown year must be a whole year from 1 to ${N - 1} (year ${N} is the exit itself)`);
+  if (!(sd.event_multiple > 0)) bad('the selldown multiple must be greater than 0');
 }

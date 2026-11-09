@@ -386,6 +386,13 @@ export interface DealAssumptions {
      * proposes NONE (a refi is a sponsor decision with no history/convention basis).
      */
     refinancing: RefinancingEvent[] | null;
+    /**
+     * SPEC §23 [v2.2.0] a SECONDARY selldown: at the END of `year` the sponsor sells `fraction`
+     * of its position at `event_multiple × EBITDA_adj[year]` less §11 net debt; the rest rides
+     * to the §9 exit. null ≡ OFF (numeric identity). Build rejections (§23.3): with a rollover
+     * or a sweet-equity strip; fraction ∉ (0,1); year ∉ {1..N−1}; event_multiple ≤ 0.
+     */
+    selldown: SelldownAssumption | null;
   };
   operations: OperationsAssumption;
   tax: TaxAssumption;
@@ -415,6 +422,27 @@ export interface DealAssumptions {
   mid_year_irr: boolean;
   /** §25 [v2.0.0] REQUIRED-with-null: null ≡ OFF (no valuation block; v1 numbers). */
   valuation: ValuationAssumption | null;
+}
+
+/** SPEC §23.2 [v2.2.0] the selldown event — user-stated structure, frozen across scenarios. */
+export interface SelldownAssumption {
+  /** 1..hold_years−1 — the sale settles at the END of this year, after the year's flows. */
+  year: number;
+  /** (0, 1) OPEN — the share of the sponsor's position sold. */
+  fraction: number;
+  /** > 0 — applied to that year's EBITDA_adj (the §9 valuation form at year t). */
+  event_multiple: number;
+}
+
+/** SPEC §23.10 [v2.2.0] ModelOutput.selldown — named fields the display reads, never recomputes. */
+export interface SelldownBlock {
+  year: number;
+  fraction: number;
+  implied_event_ev: number;
+  /** SIGNED — an underwater sale is legal and warns (§14.24(f)). */
+  implied_event_equity: number;
+  /** fraction × implied_event_equity — the sponsor's year-t inflow (SIGNED). */
+  selldown_proceeds: number;
 }
 
 /** SPEC §3.8 [v2.1.0] the surplus-cash distribution policy (analyst-set; the UI pre-fills
@@ -602,7 +630,7 @@ export interface ExitBlock {
   /** = exit_ev − payoff + cash_at_exit − exit_fees − monitoring_termination (SPEC §9). */
   exit_equity_pre_mip_total: number;
   mip_payout: number;
-  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net ≡ exit_equity_pre_mip_total (§14.16 five-term [v1.7.0]); sponsor_share ≡ final sponsor_net cashflow. */
+  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net + selldown_buyer_share ≡ exit_equity_pre_mip_total (§14.16 SIX-term [v1.8.0]); sponsor_share ≡ final sponsor_net cashflow, net of any §23 selldown. */
   sponsor_share: number;
   rollover_share: number;
   /** §22.10 [v1.7.0]: unconditional carriers, `0.0` when the instruments are off — the
@@ -612,6 +640,13 @@ export interface ExitBlock {
    *  their instruments are null, so the three-term form is the degenerate case). */
   management_ordinary_share: number;
   warrant_payout_net: number;
+  /** §23.10 [v1.8.0]: the §14.16 mirror's SIXTH term — the selldown buyer's exit claim.
+   *  Unconditional carrier, `0.0` when no `structure.selldown` is configured (the same
+   *  committed-zero-column precedent as the two fields above), so the five-term form is
+   *  the degenerate case and every pre-v1.8.0 golden still closes. When an event IS
+   *  configured, `sponsor_share` carries the RETAINED (1 − fraction) only and this field
+   *  carries `fraction ×` the same post-§10/post-§22.6 split (§23.5). */
+  selldown_buyer_share: number;
 }
 
 /**
@@ -711,9 +746,12 @@ export interface ValueBridge {
     sweet_equity_delta: number;
     /** §12 [v1.7.0] the warrant's net take at exit; 0 when `warrant` is null. */
     warrant_payout_net: number;
+    /** §12/§14.9 [v2.2.0 — §23.8] the ONE selldown walk-down term: the buyer's exit share −
+     *  the proceeds the sponsor received for it (the rollover-Δ template); 0 with no event. */
+    selldown_buyer_delta: number;
     /**
      * §12 [v1.1.0] the sponsor-net TOTAL delta: sponsor_share + cumulative sponsor-share
-     * distributions − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
+     * distributions (+ selldown proceeds [v2.2.0]) − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
      * no distribution is paid.
      */
     sponsor_net_delta: number;
@@ -733,6 +771,8 @@ export interface CoherenceFlag {
     | 'negative_goodwill'
     | 'negative_sponsor_equity'
     | 'loan_notes_unredeemed'
+    /** §23 [v2.2.0] §14.24(f): the sold slice fetched less than its pro-rata share of the entry check. */
+    | 'selldown_below_cost'
     /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
     | 'distribution_blocked'
     /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
@@ -838,6 +878,8 @@ export interface ModelOutput {
   coherence: CoherenceFlag[];
   /** §19 [v1.4.0] — null when the overlay is OFF (never a zero row). */
   fund: FundBlock | null;
+  /** §23.10 [v2.2.0]: null ⇔ `structure.selldown` null. */
+  selldown: SelldownBlock | null;
   /** §22.10 [v1.7.0]: null ⇔ `sweet_equity` null ∧ `warrant` null (the `fund` precedent). */
   equity_strip: EquityStripBlock | null;
   scenarios: ScenarioResult[] | null;

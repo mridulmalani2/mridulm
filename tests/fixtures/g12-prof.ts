@@ -27,7 +27,7 @@ export const G12_ASSUMPTIONS: DealAssumptions = {
       name: 'Debt', type: 'senior', size: { amount: 900 }, pricing: { kind: 'fixed', rate: 0.07 },
       amort_pct_of_face: 0, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 },
     }],
-    min_cash: 0, sweep: { base_pct: 1, grid: null }, distributions: null, surplus_distribution: null, refinancing: null,
+    min_cash: 0, sweep: { base_pct: 1, grid: null }, distributions: null, surplus_distribution: null, refinancing: null, selldown: null,
   },
   operations: {
     growth: [U, U, U, U, U], target_margin: U, margin_path: 'linear',

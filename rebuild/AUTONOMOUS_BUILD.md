@@ -84,8 +84,12 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 - **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
   any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
   `.claude/worktrees/`; in a cloud session it is a fresh clone.
-- **main** @ `881b38b` (= 64625fe + PR #122, the bounded criterion + this runbook), SPEC
-  v1.6.0 on main, vitest **686/686**.
+- **main** @ `c1c87a2`, SPEC **v1.7.0** (§22 shipped). A PARALLEL session owns the SITE
+  surface and has merged PRs #123–#125 (cookieless analytics, research-section archiving,
+  a STATE doc commit). It has touched **zero** engine files — the split is clean:
+  **this line of work owns `lib/engine2/**`, `tests/engine2-*`, `tests/goldens/**`,
+  `scripts/goldens/**`, `rebuild/**`; the other owns the site.** Both edit
+  `rebuild/AUTONOMOUS_BUILD.md` and `package.json`, so expect merges there only.
 - **#8 MERGED 2026-08-14 — PR #121, main @ `353e52a`, SPEC v1.7.0, vitest 731 passed +
   3 live-skipped (53 files).** The full bounded Tier-A ritual ran end-to-end in one day:
   spec SIGNED r11 (3 lenses, 0 blocking; fingerprint 0398fb3) → goldens G9-SWEET/G10-RATCHET
@@ -96,12 +100,70 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
   ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
   `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
-- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23), CLAIMED by the local
-  session 2026-08-14 ~16:40 IST on branch `claude/partial-exits-spec`.** A concurrently
-  running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
-  stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
-  Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
-  continue it; do not restart #7 from scratch.
+- **IN FLIGHT: #7 partial exits / IPO selldown — step 2b (blind adjudication).**
+  Branch `claude/deal-engine-partial-exits-586f25`, which fast-forwarded the earlier
+  `claude/partial-exits-spec` work (that branch is still checked out in a DEAD worktree —
+  do not try to check it out; this branch contains its full history).
+
+  **Step 1 (spec §23) — DONE except the round-1 grant.** Constraints dossier + ten design
+  decisions in `rebuild/G11_PARTIAL_EXITS_BRIEF.md`; §23 drafted @ `13d450c`.
+
+  **OWNER QUESTION Q-A: RESOLVED 2026-08-27 @ `25a53e1` — DPI/payback moved to the
+  REALIZED-PROCEEDS basis (selldown proceeds COUNT).** The owner delegated the call with an
+  instruction to research market practice and adopt it; practice is not split (fund-layer DPI
+  counts a secondary the quarter it closes; deal-layer modelling splits inflows into
+  realized/unrealized). The draft's distributions-only default was L-10 OVER-APPLIED: L-10's
+  degeneracy comes from counting the ratio's OWN EXIT, which an interim realization does not
+  do. Full rationale + sources in `rebuild/OWNER_QUESTIONS.md`. It landed BEFORE adjudication,
+  so there was NO fixture re-pin, and it is a net simplification (no memo field — the
+  distributions-only series stays derivable; the deal-vs-fund layer note became one of
+  AGREEMENT). **Q-A is CLOSED. Do not reopen it.** Q-B stays rejected-by-design.
+
+  **TWO BLOCKING defects were found while re-deriving the golden under the flip** (not by
+  review — by doing the arithmetic), both fixed in `25a53e1` and recorded in
+  `rebuild/G11_LEDGER.md`: (B1) §23.8/§14.9(b)'s walk-down had TWO terms and double-counted
+  the proceeds — the whole correction is `proceeds − buyer_share`, ONE term, and residual (b)
+  could never have caught it (v1.1.2); (B2) §23.12 asserted the WRONG IRR direction — it
+  FALLS, because the sold slice's own implied return (≈15.9%) is ABOVE the deal's.
+
+  **Step 2a — DONE @ `3e40cbe`.** `scripts/goldens/spec_calc.py` gained the §23 arithmetic
+  (spec-literal, engine-import-free) and **G11-SELL** = G2-DIST + `{year 3, fraction 0.25,
+  event_multiple 8.5}`. Fixture SHAPE change landed with **ZERO value movement**: 14
+  insertions, 0 deletions across the whole fixture tree (one `exit.selldown_buyer_share: 0.0`
+  key each), with the matching unconditional carrier in `types.ts`/`exit.ts` — the §22.10
+  precedent verbatim, which is what keeps the gate green before step 3.
+  Reference output: proceeds 198.11, sponsor exit 783.05, buyer 261.02, buyer Δ 62.91,
+  IRR 13.1313% (host 13.3906%), MOIC 1.7405 (host 1.8553), payback null,
+  dpi [0.0, 0.0206, 0.3841, 0.3968, 0.4071] — the year-3 leaf is an **8.2× discriminator**
+  of the Q-A basis, so no distributions-only engine can pass it.
+  NOTE §23.12's DISPLAY seeds are 2dp reconstructions and differ in the cents from the
+  full-precision fixture (1082.305 vs 1082.28) — restate them from the adjudicated chain.
+
+  **ROUND 1 — CLOSED. Three lenses, all REFUSED, EIGHT blocking findings, all applied.**
+  The pattern IS the finding: all three lenses independently re-derived §23's own arithmetic
+  and found it CLEAN, and every one of the eight defects sat in a COMPANION home that §23
+  amended by reference but did not actually amend, or over-claimed about — §14.9 clause 9,
+  §19.3/§19.4/§19.6(a), §14.20(d), §23.7, §23.13(vii)/(xi). Two were verbatim repeats of §22
+  findings; one (A-B3) corrected a fix made earlier in the same round. Full table:
+  `rebuild/G11_LEDGER.md`. **Whoever runs round 2 should point it at the companion homes at
+  least as hard as at §23 — that is where every single defect has been.**
+
+  **STEP 2b — BOTH BLIND ADJUDICATION PASSES SIGNED. AGREE, zero mismatches** (pass 2 to
+  delta 0.0 exactly); recorded in `tests/goldens/DERIVATION.md`. Neither seeded from §23.12's
+  display values: both rebuilt the whole G2-DIST run at full precision from §17's deck and
+  verified it reproduces every committed host leaf first. **G11-SELL is now GOSPEL.**
+
+  **RESUME POINT — gates green: tsc clean, vitest 762 passed + 3 live-skipped (54 files),
+  build green.** Next, in order:
+  1. **Round 2** (optional under the cap, but round 1 moved eight numbers, so run it). If
+     round 2 ALSO moves a number, §4 says STOP and escalate rather than run a third.
+  2. **The ledger pass** — eight open items in `rebuild/G11_LEDGER.md`, ONE commit.
+  3. **GRANT + stamp the fingerprint + bump the SPEC header to v1.8.0.**
+  4. **Step 3** — engine in `lib/engine2/**` (the §23.10 fields; `ExitBlock.selldown_buyer_share`
+     already exists as a committed zero from step 2a), §23.13's (i)–(xii) directed fixtures,
+     `check.ts` invariants, then documented mutants run RED and reverted by string-replace
+     with `count == 1` asserted — never `git checkout/stash/reset`.
+     Note §23.13(iii) and (v) now carry CONSTRUCTED inputs, so they can be written directly.
 
 ### Backlog — 12 items, 6 merged
 

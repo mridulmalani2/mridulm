@@ -24,7 +24,7 @@ import { buildExitWaterfall, exitBasisValue, monitoringTermination, type ExitInp
 import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './returns';
 import { yearNPlus1Growth } from './operating';
 import { runCore, stripInterimSplit, type EngineCore, type StripInterimSplit } from './sequence';
-import type { CreditYear, DealAssumptions, DealFacts, EquityStripBlock, ExitBlock, FteCase, ModelOutput, ReturnStreams, ValuationAssumption, ValuationBlock } from './types';
+import type { CreditYear, DealAssumptions, DealFacts, EquityStripBlock, ExitBlock, FteCase, ModelOutput, ReturnStreams, SelldownBlock, ValuationAssumption, ValuationBlock } from './types';
 import { fteRecursion, gordonEv, solveRoot, terminalUfcf, unleveredCost, validateValuation } from './valuation';
 
 export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2ValueBridge };
@@ -41,10 +41,35 @@ export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2
  * the §12 bridge term) read THIS selection, so the engine never ships two competing
  * definitions of one number.
  */
+/**
+ * §23.2 [v2.2.0] the selldown valued at the END of its year — the §9 form at year t on the
+ * core's own year-t figures (EBITDA_adj; §11 debt = par + accrued PIK + drawn revolver, less
+ * closing cash), full precision, every quantity SIGNED. null ⇔ no event. The company path is
+ * untouched by construction: nothing here feeds back into the core.
+ */
+export function selldownFromCore(core: EngineCore, assumptions: DealAssumptions): SelldownBlock | null {
+  const sd = assumptions.structure.selldown;
+  if (!sd) return null;
+  const t = sd.year; // 1-indexed; validated 1..N−1 in runCore
+  const ev = sd.event_multiple * core.operating[t - 1].ebitda_adj;
+  const netDebt = core.balance_sheet[t].debt_at_par - core.waterfall[t - 1].closing_cash;
+  const equity = ev - netDebt;
+  return { year: t, fraction: sd.fraction, implied_event_ev: ev, implied_event_equity: equity, selldown_proceeds: sd.fraction * equity };
+}
+
 export function selectInterimShares(
   core: EngineCore,
   assumptions: DealAssumptions,
 ): { shares: number[]; split: StripInterimSplit | null } {
+  const sd = assumptions.structure.selldown;
+  if (sd) {
+    // §23.5 the partition's interim leg: every share STRICTLY AFTER the event year scales by
+    // (1 − f); the year-t distribution is the SELLER's whole (the sale settles after the year's
+    // flows — §23.2). A strip is rejected beside a selldown (§23.3), so the base rule here is
+    // always §9's pari-passu share.
+    const base = sponsorShareOfDistributions(core.distributions_paid, core.sources_uses.sponsor_equity, core.sources_uses.rollover_equity);
+    return { shares: base.map((s, i) => (i + 1 > sd.year ? (1 - sd.fraction) * s : s)), split: null };
+  }
   if (assumptions.sweet_equity) {
     const split = stripInterimSplit(
       assumptions.sweet_equity,
@@ -87,6 +112,7 @@ export function exitWaterfallFromCore(
     loan_notes_subscribed: split?.loan_notes_subscribed ?? 0,
     loan_note_balance_at_exit: split?.loan_note_balance_at_exit ?? 0,
     institutional_interim_value: split ? split.institution_share.reduce((a, b) => a + b, 0) : 0,
+    selldown_fraction: assumptions.structure.selldown?.fraction ?? 0,
   };
   return { ...buildExitWaterfall(assumptions, inputs), split };
 }
@@ -113,7 +139,14 @@ export function returnsFromCore(
     exit,
     hold_years: assumptions.entry.hold_years,
     sponsor_interim_shares: selectInterimShares(core, assumptions).shares,
+    selldown: selldownArg(core, assumptions),
   });
+}
+
+/** The selldown as the returns and fund layers consume it — the ONE §23.2 valuation. */
+function selldownArg(core: EngineCore, assumptions: DealAssumptions): { year: number; proceeds: number } | null {
+  const b = selldownFromCore(core, assumptions);
+  return b ? { year: b.year, proceeds: b.selldown_proceeds } : null;
 }
 
 /** Assemble §11 credit per year from the core (shared by facade and scenarios.ts). */
@@ -171,6 +204,8 @@ export function bridgeFromCore(
     management_subscription: core.sources_uses.management_subscription,
     management_ordinary_share: exit.management_ordinary_share,
     warrant_payout_net: exit.warrant_payout_net,
+    selldown_buyer_share: exit.selldown_buyer_share,
+    selldown_proceeds: selldownFromCore(core, assumptions)?.selldown_proceeds ?? 0,
   });
 }
 
@@ -315,6 +350,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
       exit_sponsor_share: exit.sponsor_share,
       sources_uses: core.sources_uses,
       gp_fee_income: gpFeeIncome,
+      selldown: selldownArg(core, assumptions),
     };
     validateFund(assumptions.fund); // structural gates; the committed-floor throws in the walk
     fund = buildFundOverlay(assumptions.fund, fi);
@@ -332,6 +368,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     ppe_seeded_at_zero: core.ppe_seeded_at_zero,
     tranches: core.tranches, // §18.8 [v1.3.1] refi no-op flag reads named TrancheYear fields
     equity_strip, // §14.23(g) [v1.7.0] loan_notes_unredeemed WARN
+    selldown: selldownFromCore(core, assumptions), // §14.24(f) [v2.2.0] selldown_below_cost WARN
   });
 
   const output: Engine2ModelOutput = {
@@ -353,6 +390,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     coherence,
     fund,
     equity_strip, // §22.10 [v1.7.0]
+    selldown: selldownFromCore(core, assumptions), // §23.10 [v2.2.0]
     scenarios: null,
     sensitivity: null,
     valuation: assumptions.valuation ? buildValuation(core, assumptions, monitoringAnnualByYear) : null,

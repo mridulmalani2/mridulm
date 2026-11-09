@@ -41,7 +41,7 @@ export function blankAssumptions(dealName: string, holdYears: number): DealAssum
   return {
     deal_name: dealName,
     entry: { driver: 'multiple', entry_multiple: U, enterprise_value: null, basis: 'fy', hold_years: N },
-    structure: { tranches: [], min_cash: U, sweep: { base_pct: U, grid: null }, distributions: null, surplus_distribution: null, refinancing: null },
+    structure: { tranches: [], min_cash: U, sweep: { base_pct: U, grid: null }, distributions: null, surplus_distribution: null, refinancing: null, selldown: null },
     operations: {
       growth: unsetArray(N), target_margin: U, margin_path: 'linear',
       da_pct_revenue: U, maint_capex_pct_revenue: U, growth_capex: unsetArray(N),
@@ -127,6 +127,9 @@ const LABELS: Record<string, string> = {
   'fund': 'Fund overlay',
   'valuation': 'Valuation',
   'fees.monitoring': 'Monitoring fee',
+  'structure.selldown.year': 'Partial exit: year of the sale',
+  'structure.selldown.fraction': 'Partial exit: share of the sponsor’s stake sold',
+  'structure.selldown.event_multiple': 'Partial exit: sale multiple (× that year’s EBITDA)',
 };
 
 /** A human label for any assumption path (exact entry, else the nearest labelled parent). */
@@ -220,7 +223,7 @@ export function missingInputs(
     const skip = t.type !== 'revolver' && !t.sweep.participates ? `structure.tranches.${i}.sweep.priority` : null;
     miss.push(...tm.filter((p) => p !== skip));
   });
-  for (const opt of ['distributions', 'refinancing'] as const) {
+  for (const opt of ['distributions', 'refinancing', 'surplus_distribution', 'selldown'] as const) {
     if (a.structure[opt] !== null) nanPaths(a.structure[opt], `structure.${opt}`, miss);
   }
 

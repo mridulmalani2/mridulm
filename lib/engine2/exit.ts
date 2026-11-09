@@ -12,8 +12,8 @@
  *   MIP = min(pool_pct × max(0, pre-MIP total proceeds − hurdle_moic × invested equity),
  *             exit equity available); rollover shares the post-MIP pot pari-passu
  *   (sponsor_share + rollover_share + mip_payout + management_ordinary_share +
- *   warrant_payout_net ≡ pre-MIP total — the §14.16 FIVE-term mirror [v1.7.0]; the two
- *   new terms are 0 whenever their instruments are null).
+ *   warrant_payout_net + selldown_buyer_share ≡ pre-MIP total — the §14.16 SIX-term
+ *   mirror [v2.2.0 — §23.5]; each added term is 0 whenever its instrument is null).
  *
  * No imports from lib/engine (boundary test).
  */
@@ -130,6 +130,9 @@ export interface ExitInputs {
   /** §22.5 [v1.7.0] institutional value already banked before the ordinary split:
    *  Σ institution shares of paid[t] (§22.7's interim block); 0 with no distributions. */
   institutional_interim_value: number;
+  /** §23.5 [v2.2.0] the selldown fraction f (0 with no event): the buyer takes f of the
+   *  post-§10 / post-§22.6 sponsor split and the sponsor keeps (1 − f). */
+  selldown_fraction: number;
 }
 
 /** §22.4 [v1.7.0]: the MARGINAL bracket walk over the promote tiers on §10's own base.
@@ -266,6 +269,12 @@ export function buildExitWaterfall(
     institutionOrdinary = sponsorShare; // warrant-only arm: ≡ sponsor_share (§22.7)
   }
 
+  // §23.5 the partition's EXIT leg: the buyer takes f of exactly the number the sponsor would
+  // otherwise have kept — AFTER the promote and the warrant (taking it before the promote
+  // would hand the buyer a share of the MIP — §23.4/§23.13(iii)). f = 0 ⇒ identity.
+  const buyerShare = inputs.selldown_fraction * sponsorShare;
+  sponsorShare -= buyerShare;
+
   const exit: ExitBlock = {
     exit_ebitda_basis_value: basisValue,
     exit_ev: exitEv,
@@ -278,9 +287,11 @@ export function buildExitWaterfall(
     mip_payout: mip,
     sponsor_share: sponsorShare,
     rollover_share: rolloverShare,
-    // §22.10 [v1.7.0]: unconditional carriers (§14.16's FIVE-term mirror).
+    // §22.10 [v1.7.0]: unconditional carriers (§14.16's mirror).
     management_ordinary_share: managementShare,
     warrant_payout_net: warrantNet,
+    // §23.10: the §14.16 mirror's SIXTH term (0.0 with no event — unconditional carrier).
+    selldown_buyer_share: buyerShare,
   };
 
   // §22.10: null ⇔ both instruments null (the `fund` precedent).
