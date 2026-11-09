@@ -106,6 +106,7 @@
  "exit": {
   "cash_at_exit": 18.89,
   "debt_payoff_at_par_plus_pik": 192.93,
+  "debt_shortfall_at_exit": 0.0,
   "exit_ebitda_basis_value": 123.82,
   "exit_equity_pre_mip_total": 862.64,
   "exit_ev": 1052.46,

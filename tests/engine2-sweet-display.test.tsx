@@ -113,7 +113,7 @@ describe('§22 methodology surface (React) — the §15 row', () => {
       'DELIBERATELY DIFFERENT bases',    // the two ratchets
       'REDUCES THE SPONSOR',             // the §2 source line
       'may NOT coexist',                 // DR-2 double-count rejection
-      'HEADLINE sponsor MOIC exceeds the realized one', // the §9 divergence disclosure
+      'exit equity is never negative (limited liability', // §9.1 [v2.3.0] — no equity holder pays in
       'AT MOST ONE warrant',
       'at-the-money',
       'actually sweet',                  // independence of price and %

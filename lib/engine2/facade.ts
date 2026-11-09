@@ -54,7 +54,10 @@ export function selldownFromCore(core: EngineCore, assumptions: DealAssumptions)
   const ev = sd.event_multiple * core.operating[t - 1].ebitda_adj;
   const netDebt = core.balance_sheet[t].debt_at_par - core.waterfall[t - 1].closing_cash;
   const equity = ev - netDebt;
-  return { year: t, fraction: sd.fraction, implied_event_ev: ev, implied_event_equity: equity, selldown_proceeds: sd.fraction * equity };
+  // §9.1 [v2.3.0] limited liability applies to a stake as to the whole: a sale at a negative
+  // implied equity fetches ZERO — the seller never pays a buyer to take the stake. The signed
+  // implied equity stays on display (and fires selldown_below_cost).
+  return { year: t, fraction: sd.fraction, implied_event_ev: ev, implied_event_equity: equity, selldown_proceeds: sd.fraction * Math.max(0, equity) };
 }
 
 export function selectInterimShares(
@@ -205,6 +208,7 @@ export function bridgeFromCore(
     management_ordinary_share: exit.management_ordinary_share,
     warrant_payout_net: exit.warrant_payout_net,
     selldown_buyer_share: exit.selldown_buyer_share,
+    debt_shortfall_at_exit: exit.debt_shortfall_at_exit,
     selldown_proceeds: selldownFromCore(core, assumptions)?.selldown_proceeds ?? 0,
   });
 }
@@ -369,6 +373,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     tranches: core.tranches, // §18.8 [v1.3.1] refi no-op flag reads named TrancheYear fields
     equity_strip, // §14.23(g) [v1.7.0] loan_notes_unredeemed WARN
     selldown: selldownFromCore(core, assumptions), // §14.24(f) [v2.2.0] selldown_below_cost WARN
+    exit, // §9.1 [v2.3.0] exit_debt_shortfall WARN
   });
 
   const output: Engine2ModelOutput = {

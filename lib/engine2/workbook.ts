@@ -924,7 +924,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     const gp = o.gp_fee_income;
     M.line('gp_total', 'Memo: monitoring fees received by the sponsor (annual + termination)', { 0: { f: `SUM(${m('mon_fee', 1)}:${m('mon_fee', N)})+${m('mon_term', 0)}`, v: gp.total } }, { italic: true });
   }
-  M.line('exit_eq', 'Exit equity, all holders  =  EV − debt + cash − fees − termination', { 0: { f: `${m('exit_ev', 0)}-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('exit_fees', 0)}-${m('mon_term', 0)}`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
+  // §9.1 limited liability: equity is worth zero at worst; the lenders take any shortfall
+  M.line('exit_resid', '   residual value  =  EV − debt + cash − fees − termination', { 0: { f: `${m('exit_ev', 0)}-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('exit_fees', 0)}-${m('mon_term', 0)}`, v: null } }, { italic: true, noParity: true });
+  M.line('shortfall', 'Debt the exit does not cover (the lenders’ loss)  =  MAX(0, −residual)', { 0: { f: `MAX(0,-${m('exit_resid', 0)})`, v: ex.debt_shortfall_at_exit } });
+  M.line('exit_eq', 'Exit equity, all holders  =  MAX(0, residual) — limited liability', { 0: { f: `MAX(0,${m('exit_resid', 0)})`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
   // §10/§22.4 promote: MARGINAL tiers on total proceeds (exit equity + distributions paid)
   // against total invested equity; capped at the positive exit equity.
   const tiers = a.mip ? [{ h: iv('mip_hurdle'), s: iv('mip_pool') }, ...(a.mip.ratchet ?? []).map((_, j) => ({ h: iv(`mip_r${j}_h`), s: iv(`mip_r${j}_s`) }))] : [];
@@ -1006,7 +1009,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     M.line('sd_ev', 'Partial exit: implied EV  =  sale multiple × that year’s EBITDA', { 0: { f: `${iv('sd_mult')}*INDEX(${yrRange(mon ? 'ebitda_adj' : 'ebitda')},${iv('sd_year')})`, v: sdb.implied_event_ev } });
     M.line('sd_nd', '   net debt at that year end  =  debt (par + PIK + revolver) − cash', { 0: { f: `INDEX(${yrRange('debt_close')},${iv('sd_year')})-INDEX(${yrRange('cash_close')},${iv('sd_year')})`, v: null } }, { italic: true, noParity: true });
     M.line('sd_eq', 'Partial exit: implied equity value  =  EV − net debt', { 0: { f: `${m('sd_ev', 0)}-${m('sd_nd', 0)}`, v: sdb.implied_event_equity } });
-    M.line('sd_proc', 'Partial exit: proceeds to the sponsor  =  share sold × equity value', { 0: { f: `${iv('sd_frac')}*${m('sd_eq', 0)}`, v: sdb.selldown_proceeds } }, { bold: true });
+    M.line('sd_proc', 'Partial exit: proceeds to the sponsor  =  share sold × MAX(0, equity value)', { 0: { f: `${iv('sd_frac')}*MAX(0,${m('sd_eq', 0)})`, v: sdb.selldown_proceeds } }, { bold: true });
     M.line('sd_pre', '   sponsor split before the partition  =  pot − rollover share', { 0: { f: `${pot}-${m('roll_share', 0)}`, v: null } }, { italic: true, noParity: true });
     M.line('sd_buyer', 'Buyer’s share of the exit proceeds  =  share sold × sponsor split', { 0: { f: `${iv('sd_frac')}*${m('sd_pre', 0)}`, v: ex.selldown_buyer_share } });
   }
@@ -1152,7 +1155,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       if (c === null) { M.note(`${title}: not defined — ${val.gordon_null_reason ?? ''}`); continue; }
       M.note(title);
       M.header({ 0: 'Year 0', ...years(1, N) });
-      M.line(`${k}_exit_eq`, 'Exit equity  =  EV − debt + cash − exit fees − termination', { 0: { f: `${ev}-${m('payoff', 0)}+${m('exit_cash', 0)}-${iv('exit_fee')}*${ev}-${m('mon_term', 0)}`, v: c.exit_equity_total } });
+      M.line(`${k}_exit_eq`, 'Exit equity  =  MAX(0, EV − debt + cash − exit fees − termination)', { 0: { f: `MAX(0,${ev}-${m('payoff', 0)}+${m('exit_cash', 0)}-${iv('exit_fee')}*${ev}-${m('mon_term', 0)})`, v: c.exit_equity_total } });
       M.line(`${k}_ecf`, 'Cash flow to equity during the year (distributions paid)', per(1, N, (t) => ({ f: paid(t), v: null })), { noParity: true });
       const eFormula = (t: number) => {
         if (t === N) return m(`${k}_exit_eq`, 0);
@@ -1193,7 +1196,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       M.header({ 0: 'Year 0', ...years(1, N) });
       M.line('be_E', '   equity value at the break-even exit multiple (live recursion)', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
         f: t === N
-          ? `${m('be_mult_m', 0)}*${m('exit_basis_ebitda', 0)}*(1-${iv('exit_fee')})-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('mon_term', 0)}`
+          ? `MAX(0,${m('be_mult_m', 0)}*${m('exit_basis_ebitda', 0)}*(1-${iv('exit_fee')})-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('mon_term', 0)})`
           : `(${m('be_E', t + 1)}+${paid(t + 1)})/(1+${iv('rf')}+(${iv('beta_a')}+(${iv('beta_a')}*(${m('debt_close', t + 1)}-${m('cash_close', t + 1)})-${iv('beta_d')}*${m('debt_close', t + 1)})/${m('be_E', t + 1)})*${iv('mrp')})`,
         v: null,
       }])), { italic: true, noParity: true });
@@ -1222,8 +1225,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     const x = (key: string, j: number) => X.at(key, j);
     X.line('x_m', 'Exit multiple', pts((j) => ({ f: I.ext('sens_m', j), v: sensMults[j], fmt: FMT_MULT })), { bold: true });
     X.line('x_ev', 'Exit enterprise value  =  multiple × basis EBITDA', pts((j) => ({ f: `${x('x_m', j)}*${mm('exit_basis_ebitda')}`, v: runs[j].exit.exit_ev })));
-    X.line('x_eq', 'Exit equity, all holders  =  EV − debt + cash − exit fees − termination', pts((j) => ({
-      f: `${x('x_ev', j)}-${mm('payoff')}+${mm('exit_cash')}-${iv('exit_fee')}*${x('x_ev', j)}-${mm('mon_term')}`, v: runs[j].exit.exit_equity_pre_mip_total,
+    X.line('x_eq', 'Exit equity, all holders  =  MAX(0, EV − debt + cash − exit fees − termination)', pts((j) => ({
+      f: `MAX(0,${x('x_ev', j)}-${mm('payoff')}+${mm('exit_cash')}-${iv('exit_fee')}*${x('x_ev', j)}-${mm('mon_term')})`, v: runs[j].exit.exit_equity_pre_mip_total,
     })), { bold: true });
     const lnRedX = (j: number) => (sweet ? `-${x('x_lnred', j)}` : '');
     if (sweet) X.line('x_lnred', 'Loan notes redeemed  =  MIN(accrued, MAX(0, exit equity))', pts((j) => ({ f: `MIN(${mm('ln_bal', N)},MAX(0,${x('x_eq', j)}))`, v: runs[j].equity_strip!.loan_notes_redeemed })));
@@ -1349,6 +1352,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const breach = o.waterfall.some((w) => w.cash_floor_breach);
   C.line('wn_cash', 'Cash below the minimum, summed over the hold (0 = never breached)', { 0: { f: range(N, 1).map((t) => `MAX(0,${iv('min_cash')}-${mx('cash_close', t)}-1E-9)`).join('+'), v: null } },
     { noParity: true, note: breach ? 'The engine flags a cash-floor breach — add a revolver, lower the debt, or revisit the forecast.' : undefined });
+  C.line('wn_short', 'Debt the exit does not cover (0 = covered; else the lenders’ loss)', { 0: { f: mx('shortfall', 0), v: null } },
+    { noParity: true, note: 'Positive when exit value is below the debt: equity is worth zero (limited liability) and the lenders take this loss.' });
   if (sell) {
     C.line('wn_sd', 'Partial exit below the pro-rata entry cost (0 = not below; else the shortfall)', { 0: { f: `MAX(0,${iv('sd_frac')}*${mx('sponsor', 0)}-0.005-${mx('sd_proc', 0)})`, v: null } },
       { noParity: true, note: 'Positive when the sold slice fetches less than its share of the sponsor’s entry cheque — a warning, not an error.' });

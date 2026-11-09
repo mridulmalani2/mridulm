@@ -494,7 +494,11 @@ def run(golden):
     exit_ev = a["exit"]["multiple"] * exit_ebitda
     payoff = sum(bal.values()) + drawn
     exit_fees = a["exit"]["fees_pct"] * exit_ev
-    exit_eq = exit_ev - payoff + cash - exit_fees
+    # §9.1 [v2.3.0] LIMITED LIABILITY: equity is worth zero at worst; the lenders take any
+    # shortfall. Reference-side restatement, independent of the engine's.
+    exit_residual = exit_ev - payoff + cash - exit_fees
+    exit_eq = exit_residual if exit_residual > 0.0 else 0.0
+    debt_shortfall = -exit_residual if exit_residual < 0.0 else 0.0
     cum_dist = sum(paid_by_year)                       # total equity distributions over the hold
 
     # ── §23 [v1.8.0] the SECONDARY selldown — the event, then the partition ─────
@@ -514,7 +518,8 @@ def run(golden):
         # §23.2: the §9 valuation FORM evaluated at t — never an engine-invented mark.
         implied_ev = sd["event_multiple"] * ev_ebitda
         implied_eq = implied_ev - ev_net_debt          # SIGNED; may be ≤ 0 (§23.2)
-        sell_proceeds = sell_f * implied_eq            # the sponsor's year-t inflow, SIGNED
+        # §9.1 [v2.3.0]: a stake fetches zero at worst — never a payment by the seller
+        sell_proceeds = sell_f * (implied_eq if implied_eq > 0.0 else 0.0)
     # §23.5 the seller/buyer partition, interim leg: flows STRICTLY AFTER the event year
     # scale by (1 − f). The year-t distribution is the SELLER's WHOLE share (§23.2's
     # boundary), so the comparison is `>`, not `>=` — the off-by-one that would move
@@ -679,7 +684,9 @@ def run(golden):
                    "warrant_payout_net": r2(w_net),
                    # §23.10 [v1.8.0]: the §14.16 mirror's SIXTH term, likewise unconditional
                    # (0.0 when no selldown is configured — the committed-zero-column precedent)
-                   "selldown_buyer_share": r2(sell_buyer_share)}
+                   "selldown_buyer_share": r2(sell_buyer_share),
+                   # §9.1 [v2.3.0]: the lenders' unrecovered debt (0.0 when covered)
+                   "debt_shortfall_at_exit": r2(debt_shortfall)}
     # §22.10 [v1.7.0]: equity_strip is emitted iff sweet_equity or warrant is configured
     # (null ⇔ both null — omitted from the fixture per the ModelOutput.fund precedent).
     if sweet or warr:

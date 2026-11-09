@@ -152,8 +152,8 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
     facts: GOLDEN_DEALS.G9SWEET.facts,
     assumptions: { ...GOLDEN_DEALS.G9SWEET.assumptions, exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 6 } },
   },
-  // strip wiped out: exit equity itself is NEGATIVE — no loan note is redeemed, the signed pot
-  // is negative and the institution's realized MOIC carries that loss (V0 + P, not V0)
+  // strip wiped out: the exit does not cover the debt — limited liability floors equity at zero,
+  // the lenders take the shortfall, no loan note is redeemed and the institution realizes nothing
   SWEET_WIPEOUT: {
     facts: GOLDEN_DEALS.G9SWEET.facts,
     assumptions: { ...GOLDEN_DEALS.G9SWEET.assumptions, exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 1.5 } },
@@ -197,8 +197,8 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
       fund: { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested', carry_pct: 0.2, pref_rate: 0.10, catchup_pct: 0, waterfall: 'european', fee_offset_pct: 1 },
     },
   },
-  // the fund on a loss-making deal: the sponsor's exit-year flow is NEGATIVE (exit equity below
-  // zero) and the walk carries it signed, exactly as the engine does
+  // the fund on a loss-making deal: the exit does not cover the debt, so the sponsor receives
+  // nothing at exit (limited liability) and the LP gets back nothing beyond the interim flows
   FUND_LOSS: {
     facts: GOLDEN_DEALS.G9SWEET.facts,
     assumptions: {
@@ -237,7 +237,7 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
   },
   // a sale large enough that the proceeds alone repay the cheque — payback reached in year 3
   SELL_PAYBACK: { facts: GOLDEN_DEALS.G2DIST.facts, assumptions: { ...GOLDEN_DEALS.G2DIST.assumptions, structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 3, fraction: 0.9, event_multiple: 8.5 } } } },
-  // an underwater sale (negative implied equity): DPI falls in the sale year, the warning shows
+  // an underwater sale (negative implied equity): the stake fetches zero, the warning shows
   SELL_UNDERWATER: { facts: GOLDEN_DEALS.G2DIST.facts, assumptions: { ...GOLDEN_DEALS.G2DIST.assumptions, structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 2, fraction: 0.25, event_multiple: 2.0 } } } },
   // a sale with no distribution policy at all (the only interim sponsor flow is the sale)
   SELL_NODIST: { facts: GOLDEN_DEALS.G2.facts, assumptions: { ...GOLDEN_DEALS.G2.assumptions, structure: { ...GOLDEN_DEALS.G2.assumptions.structure, selldown: { year: 4, fraction: 0.4, event_multiple: 10 } } } },
@@ -442,12 +442,14 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(s.management_effective_ordinary_pct).toBeNull();
     expect(s.warrant_exercised).toBe(false);
   });
-  it('SWEET_WIPEOUT: exit equity is negative — nothing redeemed, a negative pot, a negative institution MOIC', () => {
+  it('SWEET_WIPEOUT: the exit does not cover the debt — equity floored at zero, lenders take the shortfall, nothing redeemed', () => {
     const o = runModel(CASES.SWEET_WIPEOUT.facts, CASES.SWEET_WIPEOUT.assumptions);
-    expect(o.exit.exit_equity_pre_mip_total).toBeLessThan(0);
+    expect(o.exit.exit_equity_pre_mip_total).toBe(0);
+    expect(o.exit.debt_shortfall_at_exit).toBeGreaterThan(1);
     expect(o.equity_strip!.loan_notes_redeemed).toBe(0);
-    expect(o.equity_strip!.ordinary_pot).toBeLessThan(0);
-    expect(o.equity_strip!.institution_moic_at_ratchet!).toBeLessThan(0);
+    expect(o.equity_strip!.ordinary_pot).toBe(0);
+    expect(o.exit.sponsor_share).toBe(0);
+    expect(o.coherence.map((f) => f.code)).toContain('exit_debt_shortfall');
   });
   it('fund deals reach carry; FUND_AMER offsets monitoring fees on committed capital; FUND_STRIP credits only the institution', () => {
     for (const k of ['G7FUND', 'FUND_AMER', 'FUND_STRIP', 'FUND_HARD'] as const) {
@@ -463,10 +465,12 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(strip.returns.sponsor_net.cashflows.slice(1).reduce((x, y) => x + y, 0)).toBeCloseTo(
       strip.fund!.lp_distributions.reduce((x, y) => x + y, 0) + strip.fund!.gp_carry.reduce((x, y) => x + y, 0), 6);
   });
-  it('FUND_LOSS feeds the fund a negative exit-year flow', () => {
+  it('FUND_LOSS: the sponsor receives nothing at exit — no flow after close is ever negative', () => {
     const o = runModel(CASES.FUND_LOSS.facts, CASES.FUND_LOSS.assumptions);
-    expect(o.returns.sponsor_net.cashflows[o.assumptions.entry.hold_years]).toBeLessThan(0);
-    expect(o.fund!.lp_distributions[o.assumptions.entry.hold_years - 1]).toBeLessThan(0);
+    expect(o.exit.debt_shortfall_at_exit).toBeGreaterThan(1);
+    expect(o.returns.sponsor_net.cashflows[o.assumptions.entry.hold_years]).toBe(0);
+    expect(o.returns.sponsor_net.cashflows.slice(1).every((c) => c >= 0)).toBe(true);
+    expect(o.fund!.lp_distributions.every((d) => d >= 0)).toBe(true);
   });
   it('surplus deals: G13SURPLUS is trap-blocked then clipped; the gated deal pays nothing until the senior retires', () => {
     const a = runModel(CASES.G13SURPLUS.facts, CASES.G13SURPLUS.assumptions).waterfall;
@@ -485,8 +489,10 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(mw.fund!.gp_carry.some((x) => x > 0)).toBe(true);
     expect(runModel(CASES.SELL_PAYBACK.facts, CASES.SELL_PAYBACK.assumptions).returns.payback_year).toBe(3);
     const uw = runModel(CASES.SELL_UNDERWATER.facts, CASES.SELL_UNDERWATER.assumptions);
-    expect(uw.selldown!.selldown_proceeds).toBeLessThan(0);
-    expect(uw.returns.dpi[1]).toBeLessThan(uw.returns.dpi[0]);
+    expect(uw.selldown!.implied_event_equity).toBeLessThan(0);
+    expect(uw.selldown!.selldown_proceeds).toBe(0); // a stake fetches zero, never a payment by the seller
+    expect(uw.returns.dpi[1]).toBeGreaterThanOrEqual(uw.returns.dpi[0]);
+    expect(uw.coherence.map((f) => f.code)).toContain('selldown_below_cost');
     const nd = runModel(CASES.SELL_NODIST.facts, CASES.SELL_NODIST.assumptions);
     expect(nd.waterfall.every((w) => w.distribution_paid === 0)).toBe(true);
     expect(nd.returns.dpi[3]).toBeGreaterThan(0);

@@ -100,13 +100,13 @@ describe('§23.13 directed fixtures', () => {
     expect(o.returns.sponsor_net.cashflows[4]).toBeCloseTo(0.75 * paid[3], 9);
   });
 
-  it('(v) payback REACHABILITY: a large selldown alone repays the cheque (arm 1); a negative-proceeds sale lowers DPI in that year only (arm 2)', () => {
+  it('(v) payback REACHABILITY: a large selldown alone repays the cheque (arm 1); a sale at a negative implied equity fetches ZERO (limited liability), so DPI never falls (arm 2)', () => {
     const arm1 = runModel(host.facts, withSell(host.assumptions, { year: 3, fraction: 0.9, event_multiple: 8.5 }));
     expect(arm1.returns.payback_year).toBe(3);
     const arm2 = runModel(host.facts, withSell(host.assumptions, { year: 2, fraction: 0.25, event_multiple: 2.0 }));
     expect(arm2.selldown!.implied_event_equity).toBeLessThan(0);
-    expect(arm2.returns.dpi[1]).toBeLessThan(arm2.returns.dpi[0]);
-    for (let t = 2; t < 5; t++) expect(arm2.returns.dpi[t]).toBeGreaterThanOrEqual(arm2.returns.dpi[t - 1] - 1e-12);
+    expect(arm2.selldown!.selldown_proceeds).toBe(0); // the seller never pays a buyer to take the stake
+    for (let t = 1; t < 5; t++) expect(arm2.returns.dpi[t]).toBeGreaterThanOrEqual(arm2.returns.dpi[t - 1] - 1e-12);
     expect(arm2.coherence.map((f) => f.code)).toContain('selldown_below_cost');
   });
 

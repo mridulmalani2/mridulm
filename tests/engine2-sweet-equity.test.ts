@@ -180,7 +180,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     expect(near.equity_strip!.loan_notes_accrued_balance - near.equity_strip!.loan_notes_redeemed).toBeLessThanOrEqual(0.005);
   });
 
-  it('(v)(α) NEGATIVE E under a strip, V₀ = 0: sponsor ≡ E and institution_moic = E/I < 0', () => {
+  it('(v)(α) [v2.3.0 limited liability] exit below the debt under a strip: equity 0, the lenders take 25, the institution realizes nothing', () => {
     const { exit, equity_strip } = buildExitWaterfall(
       syntheticAssumptions({
         sweet_equity: {
@@ -190,24 +190,26 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
       }),
       syntheticInputs({ exit_year_ebitda_adj: -25, invested_equity_total: 100 }),
     );
-    expect(exit.sponsor_share).toBeCloseTo(-25, 12); // ≡ E
+    expect(exit.exit_equity_pre_mip_total).toBe(0); // §9.1: floored, never negative
+    expect(exit.debt_shortfall_at_exit).toBeCloseTo(25, 12); // the lenders' loss, reported
+    expect(exit.sponsor_share).toBe(0);
     expect(exit.management_ordinary_share).toBe(0);
-    // THE discriminating assert: V_final = V₀ + P = −25, NOT V₀ = 0 — the V_final ← V₀ mutant reads 0.00.
-    expect(equity_strip!.institution_moic_at_ratchet).toBeCloseTo(-0.25, 12);
+    expect(equity_strip!.institution_moic_at_ratchet).toBe(0); // nothing realized — not −0.25
     expect(equity_strip!.ratchet_tiers_reached).toBe(0);
     expect(equity_strip!.management_effective_ordinary_pct).toBeNull(); // P ≤ 0 (§14.23(e))
-    // five-term mirror closes on the negative pot
+    // the mirror closes on the floored exit equity
     expect(exit.sponsor_share + exit.rollover_share + exit.mip_payout + exit.management_ordinary_share + exit.warrant_payout_net)
       .toBeCloseTo(exit.exit_equity_pre_mip_total, 12);
   });
 
-  it('(v)(β) NEGATIVE E, sweet NULL, rollover > 0: the §9 pari-passu split, byte-identical to v1', () => {
+  it('(v)(β) [v2.3.0] exit below the debt, sweet NULL, rollover > 0: neither the sponsor nor the rollover holder pays in', () => {
     const { exit, equity_strip } = buildExitWaterfall(
       syntheticAssumptions({}),
       syntheticInputs({ exit_year_ebitda_adj: -25, invested_equity_total: 100, rollover_equity: 25 }),
     );
-    expect(exit.sponsor_share).toBeCloseTo(-18.75, 12);
-    expect(exit.rollover_share).toBeCloseTo(-6.25, 12); // the direct assert that catches the r1 clamp
+    expect(exit.sponsor_share).toBe(0);
+    expect(exit.rollover_share).toBe(0);
+    expect(exit.debt_shortfall_at_exit).toBeCloseTo(25, 12);
     expect(equity_strip).toBeNull();
     expect(exit.sponsor_share + exit.rollover_share + exit.mip_payout + exit.management_ordinary_share + exit.warrant_payout_net)
       .toBeCloseTo(exit.exit_equity_pre_mip_total, 12);
@@ -410,6 +412,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
       ppe_seeded_at_zero: false,
       tranches: under.tranches,
       selldown: null,
+      exit: { debt_shortfall_at_exit: 0 },
       equity_strip: {
         ...under.equity_strip!,
         loan_notes_accrued_balance: 100,

@@ -77,6 +77,8 @@ export interface BridgeInputs {
    *  with no event). The company never sees the money, so the four bars are untouched. */
   selldown_buyer_share: number;
   selldown_proceeds: number;
+  /** §9.1 [v2.3.0] the lenders' unrecovered debt at exit (0 when the exit covers the debt). */
+  debt_shortfall_at_exit: number;
 }
 
 export function buildBridge(i: BridgeInputs): ValueBridge {
@@ -102,7 +104,7 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
   // the paydown bar and exit equity by the same amount and the identity is preserved.
   const residualA =
     barSum -
-    (i.exit_equity_pre_mip_total - i.entry_equity_pre_promote_total + i.entry_costs + i.exit_costs);
+    (i.exit_equity_pre_mip_total - i.debt_shortfall_at_exit - i.entry_equity_pre_promote_total + i.entry_costs + i.exit_costs);
   // §14.9(b) [v1.7.0]: the walk-down lands exactly on the sponsor. Adding the sponsor slice
   // back is EXACT by the same §9 algebra — barSum − costs ≡ exit equity total − entry equity
   // total, and exit equity total = sponsor_share + rollover_share + mip_payout +
@@ -119,6 +121,7 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
     sweetEquityDelta -
     i.warrant_payout_net -
     selldownBuyerDelta +
+    i.debt_shortfall_at_exit +
     i.interim_distributions_sponsor -
     sponsorNetDelta;
 
@@ -139,6 +142,7 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
       sweet_equity_delta: sweetEquityDelta,
       warrant_payout_net: i.warrant_payout_net,
       selldown_buyer_delta: selldownBuyerDelta,
+      debt_shortfall_at_exit: i.debt_shortfall_at_exit,
       sponsor_net_delta: sponsorNetDelta,
     },
     reconciliation_residual: Math.max(Math.abs(residualA), Math.abs(residualB)),

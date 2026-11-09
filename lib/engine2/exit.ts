@@ -163,8 +163,13 @@ export function buildExitWaterfall(
   const exitEv = assumptions.exit.multiple * basisValue;
   const exitFees = assumptions.exit.fees_pct * exitEv; // §9: base = exit EV
   const termination = monitoringTermination(assumptions.fees.monitoring);
-  const exitEquityPreMip =
+  // §9.1 [v2.3.0] LIMITED LIABILITY: equity is a residual claim that can be worth zero but
+  // never less — when the exit does not cover the debt the lenders take the shortfall and no
+  // equity holder pays in. The signed residual survives only as the shortfall it implies.
+  const exitEquityResidual =
     exitEv - inputs.debt_payoff + inputs.closing_cash - exitFees - termination;
+  const exitEquityPreMip = Math.max(0, exitEquityResidual);
+  const debtShortfall = Math.max(0, -exitEquityResidual);
 
   // ── §22.7 [v1.7.0]: the exit waterfall, ONE pipeline with null stages. `E` stays
   // SIGNED throughout — the clamp appears in exactly one place (a redemption cannot be
@@ -292,6 +297,7 @@ export function buildExitWaterfall(
     warrant_payout_net: warrantNet,
     // §23.10: the §14.16 mirror's SIXTH term (0.0 with no event — unconditional carrier).
     selldown_buyer_share: buyerShare,
+    debt_shortfall_at_exit: debtShortfall,
   };
 
   // §22.10: null ⇔ both instruments null (the `fund` precedent).

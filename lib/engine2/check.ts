@@ -16,7 +16,7 @@
 
 import { covenantBreachYear } from './credit';
 import { RETIRED_TOL } from './debt';
-import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, EquityStripBlock, SourcesUses, TrancheYear, WaterfallYear, SelldownBlock } from './types';
+import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, EquityStripBlock, SourcesUses, TrancheYear, WaterfallYear, SelldownBlock, ExitBlock } from './types';
 
 export interface CoherenceInputs {
   facts: Pick<DealFacts, 'implied_trading_ev_ebitda'>;
@@ -35,6 +35,8 @@ export interface CoherenceInputs {
   equity_strip: EquityStripBlock | null;
   /** §14.24(f) [v2.2.0]: read for the selldown_below_cost WARN; null with no event. */
   selldown: SelldownBlock | null;
+  /** §9.1 [v2.3.0]: read for the exit_debt_shortfall WARN. */
+  exit: Pick<ExitBlock, 'debt_shortfall_at_exit'>;
 }
 
 /** Entry multiple further above the trading anchor than this ⇒ warn (DR-4 Cat.7 discipline). */
@@ -74,6 +76,16 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
       code: 'selldown_below_cost',
       severity: 'warn',
       message: `The year-${s.year} selldown of ${(s.fraction * 100).toFixed(1)}% fetches $${s.selldown_proceeds.toFixed(2)}m — below that slice's share of the sponsor's entry cheque ($${(s.fraction * x.sources_uses.sponsor_equity).toFixed(2)}m) (SPEC §23/§14.24(f)).`,
+    });
+  }
+
+  // §9.1 [v2.3.0]: the exit does not cover the debt — limited liability floors equity at zero
+  // and the lenders take the loss. WARN: the run is coherent, the deal is not.
+  if (x.exit.debt_shortfall_at_exit > 0.005) {
+    flags.push({
+      code: 'exit_debt_shortfall',
+      severity: 'warn',
+      message: `The exit does not cover the debt: lenders recover $${x.exit.debt_shortfall_at_exit.toFixed(2)}m less than they are owed. Equity is worth zero at exit (limited liability — no equity holder pays in) (SPEC §9.1).`,
     });
   }
 

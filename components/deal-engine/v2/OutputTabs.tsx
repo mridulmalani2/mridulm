@@ -262,7 +262,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       </Table>
       <p className="text-[10px] mt-1" style={label}>
         Loan notes are EQUITY (§22.2) — outside §11 leverage/ICR/FCCR/DSCR and the §3 waterfall, accruing
-        only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC — when the final sponsor flow is negative the headline MOIC exceeds the realized one (§9), and the ratchet reads the realized figure. ' : ''}
+        only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC. ' : ''}
         {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value (§22.6). ' : ''}
         Management&apos;s subscription reduces the sponsor&apos;s own cheque (§2).
       </p>

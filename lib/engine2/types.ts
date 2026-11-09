@@ -647,6 +647,10 @@ export interface ExitBlock {
    *  configured, `sponsor_share` carries the RETAINED (1 − fraction) only and this field
    *  carries `fraction ×` the same post-§10/post-§22.6 split (§23.5). */
   selldown_buyer_share: number;
+  /** §9.1 [v2.3.0] LIMITED LIABILITY: the debt the exit does not cover — max(0, −(EV − payoff
+   *  + cash − fees − termination)). The lenders' loss; equity receives zero, never pays in.
+   *  Unconditional `0.0` when the exit covers the debt. */
+  debt_shortfall_at_exit: number;
 }
 
 /**
@@ -749,6 +753,9 @@ export interface ValueBridge {
     /** §12/§14.9 [v2.2.0 — §23.8] the ONE selldown walk-down term: the buyer's exit share −
      *  the proceeds the sponsor received for it (the rollover-Δ template); 0 with no event. */
     selldown_buyer_delta: number;
+    /** §9.1/§14.9 [v2.3.0] the lenders' unrecovered debt at exit: the bars measure the exit at
+     *  full net debt, equity's loss stops at zero, so this term closes the walk; 0 when covered. */
+    debt_shortfall_at_exit: number;
     /**
      * §12 [v1.1.0] the sponsor-net TOTAL delta: sponsor_share + cumulative sponsor-share
      * distributions (+ selldown proceeds [v2.2.0]) − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
@@ -773,6 +780,8 @@ export interface CoherenceFlag {
     | 'loan_notes_unredeemed'
     /** §23 [v2.2.0] §14.24(f): the sold slice fetched less than its pro-rata share of the entry check. */
     | 'selldown_below_cost'
+    /** §9.1 [v2.3.0]: exit value does not cover the debt — equity is worth zero, lenders take the loss. */
+    | 'exit_debt_shortfall'
     /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
     | 'distribution_blocked'
     /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
