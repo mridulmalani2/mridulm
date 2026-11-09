@@ -58,7 +58,7 @@ export interface FormulaWorkbook {
 export function formulaCoverageBlockers(o: Engine2ModelOutput): string[] {
   const a = o.assumptions;
   const out: string[] = [];
-  if (a.fund) out.push('fund/LP overlay');
+  void a; // every engine feature is formula-covered today; a new feature registers here until it is
   return out;
 }
 
@@ -440,6 +440,18 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       I.line(`se_r${j}_h`, `Sweet ratchet tier ${j + 1}: institution MOIC above which it applies`, { 0: { input: r.hurdle_moic, fmt: FMT_MULT } });
       I.line(`se_r${j}_s`, `Sweet ratchet tier ${j + 1}: management share of ordinaries above it`, { 0: { input: r.share_pct, fmt: FMT_PCT } });
     });
+  }
+  const fund = a.fund;
+  if (fund) {
+    I.section('Fund overlay — the sponsor’s equity held by a fund-of-one (net returns to the LP)');
+    I.line('f_fee', 'Management fee (% of the fee basis a year)', { 0: { input: fund.mgmt_fee_pct, fmt: FMT_PCT } });
+    I.line('f_basis', 'Fee basis: invested or committed', { 0: { input: fund.fee_basis, fmt: '@' } });
+    I.line('f_commit', 'Committed capital (blank = the LP commits exactly what it pays in)', { 0: { input: fund.committed_capital ?? '' } });
+    I.line('f_pref', 'Preferred return (compounded annually)', { 0: { input: fund.pref_rate, fmt: FMT_PCT } });
+    I.line('f_carry', 'Carried interest', { 0: { input: fund.carry_pct, fmt: FMT_PCT } });
+    I.line('f_cu', 'GP catch-up share (0 = hard hurdle; 100% = full catch-up)', { 0: { input: fund.catchup_pct, fmt: FMT_PCT } });
+    I.line('f_wf', 'Waterfall: european (whole-fund; fees returned first) or american (deal-by-deal)', { 0: { input: fund.waterfall, fmt: '@' } });
+    I.line('f_off', 'Monitoring-fee offset against the management fee', { 0: { input: fund.fee_offset_pct, fmt: FMT_PCT } });
   }
   const v = a.valuation;
   const val = o.valuation;
@@ -960,6 +972,63 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   moicRow('moic_equity', 'Total equity money multiple (before the promote)', 'cf_equity', m('equity_total', 0), o.returns.pre_promote.moic);
   irrRow('irr_unlev', 'Unlevered IRR', 'cf_unlev', o.returns.unlevered.irr);
 
+  // ── §19 Fund overlay ──
+  const fo = o.fund;
+  if (fund && fo) {
+    M.section('Fund overlay — the LP’s net return (event order each year-end: accrue the pref, draw the fee, distribute)');
+    M.header({ 0: 'Year 0', ...years(1, N) });
+    const c = iv('f_carry');
+    const q = iv('f_cu');
+    const eu = `${iv('f_wf')}="european"`;
+    const prev = (key: string, t: number, first: string) => (t === 1 ? first : m(key, t - 1));
+    M.line('f_in', 'Sponsor proceeds reaching the fund  =  sponsor cash flows (interim + exit)', per(1, N, (t) => ({ f: m('cf_sponsor', t), v: null })), { noParity: true });
+    M.line('f_basis_amt', '   fee basis  =  sponsor equity (invested) or committed capital', { 0: { f: `IF(${iv('f_basis')}="invested",${m('sponsor', 0)},${iv('f_commit')})`, v: null } }, { italic: true, noParity: true });
+    M.line('f_prefacc', 'Pref outstanding after this year’s accrual  =  prior + rate × (unreturned + prior pref)', per(1, N, (t) => ({
+      f: `${prev('f_prefend', t, '0')}+${iv('f_pref')}*(${prev('f_unret', t, m('sponsor', 0, true))}+${prev('f_prefend', t, '0')})`, v: null,
+    })), { italic: true, noParity: true });
+    M.line('f_offset', '   monitoring fees offset', per(1, N, (t) => ({
+      f: mon ? `${iv('f_off')}*(${m('mon_fee', t)}${t === N ? `+${m('mon_term', 0)}` : ''})` : '0', v: null,
+    })), { italic: true, noParity: true });
+    M.line('f_fees', 'Management fee drawn from the LP  =  MAX(0, fee % × basis − offset)', per(1, N, (t) => ({ f: `MAX(0,${iv('f_fee')}*${m('f_basis_amt', 0, true)}-${m('f_offset', t)})`, v: fo.mgmt_fees_net[t - 1] })));
+    M.line('f_contrib', 'LP contributions  =  sponsor equity at close, then the fees', {
+      0: { f: m('sponsor', 0), v: fo.lp_contributions[0] },
+      ...per(1, N, (t) => ({ f: m('f_fees', t), v: fo.lp_contributions[t] })),
+    });
+    M.line('f_unret_pre', '   unreturned capital before distributing (european: fees join it)', per(1, N, (t) => ({ f: `${prev('f_unret', t, m('sponsor', 0, true))}+IF(${eu},${m('f_fees', t)},0)`, v: null })), { italic: true, noParity: true });
+    M.line('f_d1', 'Step 1 — return of capital to the LP', per(1, N, (t) => ({ f: `MIN(${m('f_in', t)},${m('f_unret_pre', t)})`, v: null })), { noParity: true });
+    M.line('f_d2', 'Step 2 — preferred return to the LP', per(1, N, (t) => ({ f: `MIN(${m('f_in', t)}-${m('f_d1', t)},${m('f_prefacc', t)})`, v: null })), { noParity: true });
+    M.line('f_r2', '   left after return of capital and pref', per(1, N, (t) => ({ f: `${m('f_in', t)}-${m('f_d1', t)}-${m('f_d2', t)}`, v: null })), { italic: true, noParity: true });
+    M.line('f_prefpaid', '   pref paid to date', per(1, N, (t) => ({ f: `${prev('f_prefpaid', t, '0')}+${m('f_d2', t)}`, v: null })), { italic: true, noParity: true });
+    // the catch-up runs until the GP holds carry% of everything distributed above capital:
+    // x = (c × (pref + catch-up + LP carry split to date) − GP to date) ÷ (q − c); q = c ⇒ unbounded
+    M.line('f_x', 'Step 3 — catch-up slice (the GP takes the catch-up share of it)', per(1, N, (t) => ({
+      f: `IF(AND(${m('f_r2', t)}>0,${q}>0),MIN(${m('f_r2', t)},IF(${q}-${c}<=0,${m('f_r2', t)},MAX(0,(${c}*(${m('f_prefpaid', t)}+${prev('f_s3', t, '0')}+${prev('f_s4lp', t, '0')})-${prev('f_gpcum', t, '0')})/(${q}-${c})))),0)`,
+      v: null,
+    })), { noParity: true });
+    M.line('f_r3', 'Step 4 — residual split carry% / (1 − carry%)', per(1, N, (t) => ({ f: `${m('f_r2', t)}-${m('f_x', t)}`, v: null })), { noParity: true });
+    M.line('f_gp', 'GP carried interest', per(1, N, (t) => ({ f: `${q}*${m('f_x', t)}+IF(${m('f_r3', t)}>0,${c}*${m('f_r3', t)},0)`, v: fo.gp_carry[t - 1] })), { bold: true });
+    M.line('f_lp', 'LP distributions', per(1, N, (t) => ({ f: `${m('f_d1', t)}+${m('f_d2', t)}+(1-${q})*${m('f_x', t)}+IF(${m('f_r3', t)}>0,(1-${c})*${m('f_r3', t)},0)`, v: fo.lp_distributions[t - 1] })), { bold: true });
+    M.line('f_s3', '   catch-up slices to date', per(1, N, (t) => ({ f: `${prev('f_s3', t, '0')}+${m('f_x', t)}`, v: null })), { italic: true, noParity: true });
+    M.line('f_s4lp', '   LP share of step-4 splits to date', per(1, N, (t) => ({ f: `${prev('f_s4lp', t, '0')}+IF(${m('f_r3', t)}>0,(1-${c})*${m('f_r3', t)},0)`, v: null })), { italic: true, noParity: true });
+    M.line('f_gpcum', '   GP carry to date', per(1, N, (t) => ({ f: `${prev('f_gpcum', t, '0')}+${m('f_gp', t)}`, v: null })), { italic: true, noParity: true });
+    M.line('f_unret', '   unreturned capital at year end', per(1, N, (t) => ({ f: `${m('f_unret_pre', t)}-${m('f_d1', t)}`, v: null })), { italic: true, noParity: true });
+    M.line('f_prefend', '   pref outstanding at year end', per(1, N, (t) => ({ f: `${m('f_prefacc', t)}-${m('f_d2', t)}`, v: null })), { italic: true, noParity: true });
+    M.line('f_dpi', 'LP DPI  =  distributions to date ÷ contributions to date', per(1, N, (t) => ({
+      f: `IF(SUM(${m('f_contrib', 0, true)}:${m('f_contrib', t)})>0,SUM(${m('f_lp', 1, true)}:${m('f_lp', t)})/SUM(${m('f_contrib', 0, true)}:${m('f_contrib', t)}),0)`, v: fo.fund_lp_net.dpi[t - 1], fmt: FMT_NUM,
+    })));
+    // payback: the first INTERIM year (never year N — interim and exit merge there) in which
+    // distributions to date reach contributions to date
+    M.line('f_pbk', '   payback test (year if reached, else blank)', per(1, N, (t) => ({
+      f: t < N ? `IF(SUM(${m('f_lp', 1, true)}:${m('f_lp', t)})>=SUM(${m('f_contrib', 0, true)}:${m('f_contrib', t)})-1E-12,${t},"")` : '""', v: null,
+    })), { italic: true, noParity: true });
+    M.line('f_payback', 'LP payback year (interim distributions alone)', { 0: { f: `IF(COUNT(${m('f_pbk', 1)}:${m('f_pbk', N)})=0,"N/A",MIN(${m('f_pbk', 1)}:${m('f_pbk', N)}))`, v: fo.fund_lp_net.payback_year, fmt: FMT_YEAR } });
+    M.line('f_paidin', 'LP paid-in capital', { 0: { f: `SUM(${m('f_contrib', 0)}:${m('f_contrib', N)})`, v: fo.paid_in_total } });
+    M.line('f_committed', 'Committed capital (reported)', { 0: { f: `IF(ISNUMBER(${iv('f_commit')}),${iv('f_commit')},${m('f_paidin', 0)})`, v: fo.committed_capital } });
+    M.line('f_cf', 'LP net cash flows  =  distributions − contributions', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? `-${m('f_contrib', 0)}` : `${m('f_lp', t)}-${m('f_contrib', t)}`, v: null }])), { noParity: true });
+    M.line('f_irr', 'LP net IRR', { 0: { f: `IRR(${m('f_cf', 0)}:${m('f_cf', N)})`, v: fo.fund_lp_net.irr, fmt: FMT_PCT } }, { answer: true });
+    M.line('f_moic', 'LP net money multiple  =  distributions ÷ paid-in', { 0: { f: `IF(${m('f_paidin', 0)}>0,SUM(${m('f_lp', 1)}:${m('f_lp', N)})/${m('f_paidin', 0)},0)`, v: fo.fund_lp_net.moic, fmt: FMT_MULT } }, { answer: true });
+  }
+
   // ── Credit ──
   M.section('8. Credit statistics (closing balances; N/A where the denominator is not positive)');
   M.header(years(1, N));
@@ -1067,6 +1136,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     // ordinary split is meaningless (the deal engine refuses to build such a deal)
     checks.push(['ck_plug', 'Strip: the sponsor plug after the management subscription is positive (1 = not)', `IF(${mx('sponsor', 0)}>0,0,1)`]);
     checks.push(['ck_interim', 'Strip: interim distributions = institution + management receipts', range(N, 1).map((t) => `${mx('inst_int', t)}+${mx('mgmt_int', t)}-${dists ? mx('dist_paid', t) : '0'}`).join('+')]);
+  }
+  if (fund && o.fund) {
+    checks.push(['ck_fund_split', 'Fund: every dollar reaching the fund goes to the LP or the GP', range(N, 1).map((t) => `${mx('f_in', t)}-${mx('f_lp', t)}-${mx('f_gp', t)}`).join('+')]);
+    checks.push(['ck_fund_commit', 'Fund: committed capital covers paid-in (1 = not; the deal engine refuses such a fund)', `IF(${mx('f_committed', 0)}>=${mx('f_paidin', 0)}-0.005,0,1)`]);
   }
   if (v && val) {
     checks.push(['ck_sign_a', 'Flow to equity (a): the NPV and the excess return have the same sign', `IF(SIGN(ROUND(${mx('a_npv', 0)},9))=SIGN(ROUND(${mx('a_excess', 0)},12)),0,1)`]);

@@ -164,6 +164,49 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
     facts: GOLDEN_DEALS.G9SWEET.facts,
     assumptions: { ...GOLDEN_DEALS.G9SWEET.assumptions, exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 11 } },
   },
+  // §19 fund overlay (the adjudicated golden): european, fees on invested, 8% pref, full catch-up
+  G7FUND: GOLDEN_DEALS.G7FUND,
+  // american (deal-by-deal) waterfall on COMMITTED capital, a partial 50% catch-up, and the
+  // monitoring-fee offset against the management fee (FEATURES carries a monitoring fee)
+  FUND_AMER: {
+    facts: GOLDEN_DEALS.G2.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G2.assumptions,
+      rollover_equity: 30,
+      fees: { ...GOLDEN_DEALS.G2.assumptions.fees, monitoring: { annual: 3, termination_years: 3, discount_rate: 0.08 } },
+      structure: { ...GOLDEN_DEALS.G2.assumptions.structure, distributions: [15, 15, 25, 25, 25] },
+      fund: { committed_capital: 600, mgmt_fee_pct: 0.015, fee_basis: 'committed', carry_pct: 0.2, pref_rate: 0.08, catchup_pct: 0.5, waterfall: 'american', fee_offset_pct: 0.8 },
+    },
+  },
+  // the fund holding a sweet-equity strip: it is credited only with the INSTITUTION'S receipts;
+  // catch-up share = carry (the unbounded catch-up branch); hard 6% pref
+  FUND_STRIP: {
+    facts: GOLDEN_DEALS.G3.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G3DIST.assumptions,
+      mip: null,
+      sweet_equity: { sponsor_ordinary_pct: 0.9, loan_note_rate: 0.1, management_subscription: 5, management_ordinary_pct: 0.1, ratchet: [{ hurdle_moic: 1.3, share_pct: 0.15 }] },
+      fund: { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested', carry_pct: 0.2, pref_rate: 0.06, catchup_pct: 0.2, waterfall: 'european', fee_offset_pct: 1 },
+    },
+  },
+  // a hard hurdle (no catch-up) with a 10% pref that the deal clears
+  FUND_HARD: {
+    facts: GOLDEN_DEALS.G2.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G2DIST.assumptions,
+      fund: { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested', carry_pct: 0.2, pref_rate: 0.10, catchup_pct: 0, waterfall: 'european', fee_offset_pct: 1 },
+    },
+  },
+  // the fund on a loss-making deal: the sponsor's exit-year flow is NEGATIVE (exit equity below
+  // zero) and the walk carries it signed, exactly as the engine does
+  FUND_LOSS: {
+    facts: GOLDEN_DEALS.G9SWEET.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G9SWEET.assumptions,
+      exit: { ...GOLDEN_DEALS.G9SWEET.assumptions.exit, multiple: 1.5 },
+      fund: { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested', carry_pct: 0.2, pref_rate: 0.08, catchup_pct: 1, waterfall: 'european', fee_offset_pct: 1 },
+    },
+  },
   // two tranches sharing a sweep priority (pro rata) + a junior at priority 2, front-loaded margin
   G5_TIERS: {
     facts: GOLDEN_DEALS.G5.facts,
@@ -269,11 +312,11 @@ describeIfLo('§26 formula workbook — LibreOffice recalculation equals the eng
   });
 });
 
-describe('§26 coverage rule — unsupported features BLOCK export by name (never pasted values)', () => {
-  it('a deal with a feature not yet in the formula model is blocked, and says which', () => {
-    const o = runModel(GOLDEN_DEALS.G7FUND.facts, GOLDEN_DEALS.G7FUND.assumptions);
-    expect(formulaCoverageBlockers(o)).toContain('fund/LP overlay');
-    expect(() => buildFormulaWorkbook(o, { cachedResults: true })).toThrow(/fund\/LP overlay/);
+describe('§26 coverage rule — every engine feature exports as live formulas', () => {
+  it('no golden deal is blocked from export', () => {
+    for (const [name, d] of Object.entries(GOLDEN_DEALS)) {
+      expect(formulaCoverageBlockers(runModel(d.facts, d.assumptions)), name).toEqual([]);
+    }
   });
 });
 
@@ -346,6 +389,25 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(o.equity_strip!.loan_notes_redeemed).toBe(0);
     expect(o.equity_strip!.ordinary_pot).toBeLessThan(0);
     expect(o.equity_strip!.institution_moic_at_ratchet!).toBeLessThan(0);
+  });
+  it('fund deals reach carry; FUND_AMER offsets monitoring fees on committed capital; FUND_STRIP credits only the institution', () => {
+    for (const k of ['G7FUND', 'FUND_AMER', 'FUND_STRIP', 'FUND_HARD'] as const) {
+      const o = runModel(CASES[k].facts, CASES[k].assumptions);
+      expect(o.fund!.gp_carry.reduce((x, y) => x + y, 0), `${k} carry`).toBeGreaterThan(0);
+    }
+    const amer = runModel(CASES.FUND_AMER.facts, CASES.FUND_AMER.assumptions);
+    expect(amer.fund!.mgmt_fees_net[0]).toBeLessThan(0.015 * 600 - 1e-9); // the offset bites
+    expect(amer.fund!.committed_capital).toBe(600);
+    const strip = runModel(CASES.FUND_STRIP.facts, CASES.FUND_STRIP.assumptions);
+    const paid = strip.waterfall.map((w) => w.distribution_paid);
+    expect(strip.fund!.lp_distributions[0] + strip.fund!.gp_carry[0]).toBeLessThanOrEqual(paid[0] + 1e-9);
+    expect(strip.returns.sponsor_net.cashflows.slice(1).reduce((x, y) => x + y, 0)).toBeCloseTo(
+      strip.fund!.lp_distributions.reduce((x, y) => x + y, 0) + strip.fund!.gp_carry.reduce((x, y) => x + y, 0), 6);
+  });
+  it('FUND_LOSS feeds the fund a negative exit-year flow', () => {
+    const o = runModel(CASES.FUND_LOSS.facts, CASES.FUND_LOSS.assumptions);
+    expect(o.returns.sponsor_net.cashflows[o.assumptions.entry.hold_years]).toBeLessThan(0);
+    expect(o.fund!.lp_distributions[o.assumptions.entry.hold_years - 1]).toBeLessThan(0);
   });
   it('SWEET_TOP clears every sweet ratchet tier (the walk ends at the top share)', () => {
     const a = CASES.SWEET_TOP.assumptions;
