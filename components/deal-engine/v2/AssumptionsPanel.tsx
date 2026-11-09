@@ -240,7 +240,38 @@ const AssumptionsPanel: React.FC = () => {
             commitment_fee: U, maturity_years: U, drawn_at_close: 0,
           } as RevolverAssumption)}>+ revolver</SmallButton>}
         </div>
-        {termCount > 0 && <NumField path="structure.sweep.base_pct" label="Cash sweep (% of cash above the minimum)" unit="pct" value={a.structure.sweep.base_pct} />}
+        {termCount > 0 && (() => {
+          const grid = a.structure.sweep.grid;
+          return (
+            <>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <Label hint="Excess-cash sweeps commonly step down as leverage falls (e.g. 75% above 4.5×, 50% above 3.5×, 0% below).">Cash sweep</Label>
+                <select aria-label="Cash sweep basis" className="px-1 py-1 text-[11px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+                  value={grid ? 'grid' : 'flat'}
+                  onChange={(e) => set(at('structure.sweep.grid', e.target.value === 'grid' ? { tiers: [{ above_net_leverage: U, pct: U }], else_pct: U } : null), ['structure.sweep.grid'])}>
+                  <option value="flat">one % every year</option>
+                  <option value="grid">steps down with opening net leverage</option>
+                </select>
+              </div>
+              {!grid && <NumField path="structure.sweep.base_pct" label="Cash sweep (% of cash above the minimum)" unit="pct" value={a.structure.sweep.base_pct} />}
+              {grid && (
+                <>
+                  {grid.tiers.map((tier, j) => (
+                    <div key={j}>
+                      <NumField path={`structure.sweep.grid.tiers.${j}.above_net_leverage`} label={`Sweep step ${j + 1}: when opening net leverage is above`} unit="mult" value={tier.above_net_leverage} />
+                      <NumField path={`structure.sweep.grid.tiers.${j}.pct`} label={`Sweep step ${j + 1}: sweep %`} unit="pct" value={tier.pct} />
+                    </div>
+                  ))}
+                  <NumField path="structure.sweep.grid.else_pct" label="Sweep % below every threshold" unit="pct" value={grid.else_pct} />
+                  <div className="flex justify-end gap-1 mb-2">
+                    <SmallButton onClick={() => set(at('structure.sweep.grid.tiers', [...grid.tiers, { above_net_leverage: U, pct: U }]), ['structure.sweep.grid.tiers'])}>+ step</SmallButton>
+                    {grid.tiers.length > 1 && <SmallButton danger onClick={() => set(at('structure.sweep.grid.tiers', grid.tiers.slice(0, -1)), ['structure.sweep.grid.tiers'])}>− step</SmallButton>}
+                  </div>
+                </>
+              )}
+            </>
+          );
+        })()}
         {(() => {
           // §11 previews through the SAME pure helpers the engine uses (never re-derived here):
           // GROSS total leverage across ALL term tranches, and each floating tranche's all-in rate.
@@ -429,6 +460,16 @@ const AssumptionsPanel: React.FC = () => {
             <NumField path="sweet_equity.loan_note_rate" label="Loan-note rate (accruing)" unit="pct" value={a.sweet_equity.loan_note_rate} />
             <NumField path="sweet_equity.management_subscription" label="Management subscription" unit="money" value={a.sweet_equity.management_subscription} />
             <NumField path="sweet_equity.management_ordinary_pct" label="Management share of ordinaries" unit="pct" value={a.sweet_equity.management_ordinary_pct} />
+            {(a.sweet_equity.ratchet ?? []).map((r, j) => (
+              <div key={j}>
+                <NumField path={`sweet_equity.ratchet.${j}.hurdle_moic`} label={`Sweet ratchet tier ${j + 1}: institution MOIC above`} unit="mult" value={r.hurdle_moic} />
+                <NumField path={`sweet_equity.ratchet.${j}.share_pct`} label={`Sweet ratchet tier ${j + 1}: management share of ordinaries`} unit="pct" value={r.share_pct} />
+              </div>
+            ))}
+            <div className="flex justify-end gap-1 mb-2">
+              <SmallButton onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: [...(a.sweet_equity!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['sweet_equity.ratchet'])}>+ ratchet tier</SmallButton>
+              {(a.sweet_equity.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: (a.sweet_equity!.ratchet ?? []).slice(0, -1).length ? (a.sweet_equity!.ratchet ?? []).slice(0, -1) : null } }, ['sweet_equity.ratchet'])}>− tier</SmallButton>}
+            </div>
           </>
         )}
         <Toggle on={a.warrant !== null} label="Warrant / equity kicker"
@@ -488,10 +529,39 @@ const AssumptionsPanel: React.FC = () => {
           return (
             <div key={k}>
               <Toggle on={val !== null} label={label} onOn={() => set(at(`covenants.${k}`, U), [`covenants.${k}`])} onOff={() => set(at(`covenants.${k}`, null), [`covenants.${k}`])} />
+              {val !== null && (
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <Label hint="Leverage covenants usually step down over the life of the loan.">{label}: level</Label>
+                  <select aria-label={`${label} schedule`} className="px-1 py-1 text-[11px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+                    value={Array.isArray(val) ? 'year' : 'flat'}
+                    onChange={(e) => set(at(`covenants.${k}`, e.target.value === 'year' ? blanks(N) : U), [`covenants.${k}`])}>
+                    <option value="flat">same every year</option>
+                    <option value="year">set by year</option>
+                  </select>
+                </div>
+              )}
               {val !== null && !Array.isArray(val) && <NumField path={`covenants.${k}`} label={`${label} level`} unit="mult" value={val} />}
+              {val !== null && Array.isArray(val) && <YearGrid path={`covenants.${k}`} label={`${label} by year`} unit="mult" values={val} />}
             </div>
           );
         })}
+        {hasRevolver && (
+          <>
+            <Toggle on={a.covenants.springing !== null} label="Springing leverage test (revolver)"
+              hint="Tested only in years when the revolver is drawn above the trigger — the usual covenant-lite revolver protection."
+              onOn={() => set(at('covenants.springing', { metric: 'leverage', max: U, revolver_draw_trigger_pct: U }), ['covenants.springing'])}
+              onOff={() => set(at('covenants.springing', null), ['covenants.springing'])} />
+            {a.covenants.springing && !Array.isArray(a.covenants.springing.max) && (
+              <NumField path="covenants.springing.max" label="Springing test: maximum net leverage" unit="mult" value={a.covenants.springing.max} />
+            )}
+            {a.covenants.springing && Array.isArray(a.covenants.springing.max) && (
+              <YearGrid path="covenants.springing.max" label="Springing test: maximum net leverage by year" unit="mult" values={a.covenants.springing.max} />
+            )}
+            {a.covenants.springing && (
+              <NumField path="covenants.springing.revolver_draw_trigger_pct" label="Springing test applies when drawn ÷ commitment exceeds" unit="pct" value={a.covenants.springing.revolver_draw_trigger_pct} />
+            )}
+          </>
+        )}
         <Toggle on={a.fees.monitoring !== null} label="Sponsor monitoring fee"
           onOn={() => set(at('fees.monitoring', { annual: U, termination_years: U, discount_rate: U }), ['fees.monitoring'])}
           onOff={() => set(at('fees.monitoring', null), ['fees.monitoring'])} />

@@ -108,6 +108,25 @@ const LABELS: Record<string, string> = {
   'fees.transaction_pct_of_ev': 'Transaction fees (% of EV)',
   'fees.financing_pct_of_commitments': 'Financing fees (% of commitments)',
   'rollover_equity': 'Rollover equity (0 if none)',
+  'structure.sweep.grid': 'Cash sweep step-down grid',
+  'structure.sweep.grid.else_pct': 'Cash sweep % below every threshold',
+  'structure.sweep.grid.tiers': 'Cash sweep step',
+  'structure.distributions': 'Requested distribution',
+  'structure.surplus_distribution.payout_pct': 'Share of surplus cash paid out',
+  'covenants.leverage_max': 'Maximum net leverage covenant',
+  'covenants.dscr_min': 'Minimum DSCR covenant',
+  'covenants.fccr_min': 'Minimum FCCR covenant',
+  'covenants.springing.max': 'Springing test: maximum net leverage',
+  'covenants.springing.revolver_draw_trigger_pct': 'Springing test: revolver draw trigger',
+  'covenants.rp_trap.level': 'Restricted-payment trap level',
+  'mip': 'Management promote',
+  'mip.ratchet': 'Promote ratchet tier',
+  'sweet_equity': 'Sweet-equity strip',
+  'sweet_equity.ratchet': 'Sweet ratchet tier',
+  'warrant': 'Warrant',
+  'fund': 'Fund overlay',
+  'valuation': 'Valuation',
+  'fees.monitoring': 'Monitoring fee',
 };
 
 /** A human label for any assumption path (exact entry, else the nearest labelled parent). */
@@ -121,7 +140,12 @@ export function labelFor(path: string): string {
   const parts = path.split('.');
   for (let k = parts.length - 1; k > 0; k--) {
     const p = parts.slice(0, k).join('.');
-    if (LABELS[p]) return `${LABELS[p]} — ${parts.slice(k).join(' ')}`;
+    if (LABELS[p]) {
+      // a list item reads as "<label> 2 — share pct", 1-based, never "<label> — 1 share_pct"
+      const rest = parts.slice(k);
+      const idx = /^\d+$/.test(rest[0]) ? ` ${Number(rest.shift()) + 1}` : '';
+      return `${LABELS[p]}${idx}${rest.length ? ` — ${rest.join(' ').replace(/_/g, ' ')}` : ''}`;
+    }
   }
   return path;
 }
@@ -183,7 +207,12 @@ export function missingInputs(
   // ── structure ──
   nanPaths(a.structure.min_cash, 'structure.min_cash', miss);
   const hasTerm = a.structure.tranches.some((t) => t.type !== 'revolver');
-  if (hasTerm) nanPaths(a.structure.sweep, 'structure.sweep', miss);
+  // a leverage grid REPLACES the flat % (§3.5: base_pct is ignored under a grid), so only the
+  // basis actually in force is demanded
+  if (hasTerm) {
+    if (a.structure.sweep.grid) nanPaths(a.structure.sweep.grid, 'structure.sweep.grid', miss);
+    else nanPaths(a.structure.sweep.base_pct, 'structure.sweep.base_pct', miss);
+  }
   a.structure.tranches.forEach((t, i) => {
     const tm: string[] = [];
     nanPaths(t, `structure.tranches.${i}`, tm);

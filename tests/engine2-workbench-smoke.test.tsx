@@ -260,3 +260,55 @@ describe('interim distributions — the v1.1.0 UI surfaces', () => {
     expect(html).toMatch(/does not carry forward/i);
   });
 });
+
+describe('every engine feature is enterable in the panel (sweep grid, covenant schedules, springing test, sweet ratchet, surplus policy)', () => {
+  const draft = () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    return useEngine2Model.getState();
+  };
+
+  it('a sweep step-down grid replaces the flat % — the flat % is no longer demanded, every grid cell is', () => {
+    const st = draft();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, structure: { ...a.structure, sweep: { base_pct: Number.NaN, grid: { tiers: [{ above_net_leverage: 4.5, pct: 0.75 }, { above_net_leverage: Number.NaN, pct: 0.5 }], else_pct: 0 } } } }, ['structure.sweep.grid']);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Sweep step 2: when opening net leverage is above');
+    expect(html).not.toContain('Cash sweep (% of cash above the minimum)');
+    const missing = useEngine2Model.getState().missing().map((m) => m.path);
+    expect(missing).toContain('structure.sweep.grid.tiers.1.above_net_leverage');
+    expect(missing).not.toContain('structure.sweep.base_pct');
+  });
+
+  it('covenant levels by year, the springing test (with a revolver) and sweet ratchet tiers render as inputs', () => {
+    const st = draft();
+    const a = st.assumptions!;
+    st.editAssumptions({
+      ...a,
+      mip: null,
+      rollover_equity: 0,
+      sweet_equity: { sponsor_ordinary_pct: 0.1, loan_note_rate: 0.08, management_subscription: 2, management_ordinary_pct: 0.1, ratchet: [{ hurdle_moic: 1.5, share_pct: 0.15 }] },
+      covenants: { ...a.covenants, leverage_max: [5, 4.5, 4, 3.5, 3.5], springing: { metric: 'leverage', max: 5, revolver_draw_trigger_pct: 0.35 } },
+    }, ['sweet_equity', 'covenants.leverage_max', 'covenants.springing']);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Max net leverage covenant by year');
+    expect(html).toContain('Sweet ratchet tier 1: institution MOIC above');
+    expect(a.structure.tranches.some((t) => t.type === 'revolver')).toBe(true); // the fixture carries an RCF
+    expect(html).toContain('Springing test applies when drawn ÷ commitment exceeds');
+  });
+
+  it('the surplus policy shows its pre-filled, editable settings and the model builds on them', () => {
+    const st = draft();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, structure: { ...a.structure, distributions: null, surplus_distribution: { payout_pct: 1, start: 'immediately' } } }, ['structure.surplus_distribution']);
+    let html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Pre-filled with the common case');
+    expect(html).toContain('Share of surplus cash paid out');
+    useEngine2Model.getState().build();
+    const out = useEngine2Model.getState().output!;
+    expect(out).toBeTruthy();
+    expect(out.waterfall.every((w) => w.distribution_requested >= 0)).toBe(true);
+    html = renderToStaticMarkup(<Workbench />);
+    expect(html).not.toContain('NaN');
+  });
+});
