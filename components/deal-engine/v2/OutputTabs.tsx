@@ -22,10 +22,11 @@ const th = 'text-right font-normal px-2 py-1';
 const td = 'text-right px-2 py-1';
 const rowB = { borderTop: '1px solid rgba(17,17,17,0.08)' } as const;
 
-type Tab = 'summary' | 'returns' | 'operating' | 'su' | 'debt' | 'bs' | 'credit' | 'sensitivity' | 'scenarios' | 'methodology';
+type Tab = 'summary' | 'returns' | 'valuation' | 'operating' | 'su' | 'debt' | 'bs' | 'credit' | 'sensitivity' | 'scenarios' | 'methodology';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'summary', label: 'Summary' },
   { id: 'returns', label: 'Returns' },
+  { id: 'valuation', label: 'Valuation' },
   { id: 'operating', label: 'Operating' },
   { id: 'su', label: 'S&U' },
   { id: 'debt', label: 'Debt' },
@@ -544,6 +545,73 @@ export const Methodology: React.FC = () => (
   </div>
 );
 
+/**
+ * §25 [v2.0.0] — flow to equity: what the equity is worth, at both exits, and the one
+ * statement made twice (IRR vs required return ⇔ NPV sign). Reads ModelOutput.valuation only.
+ */
+export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  const v = o.valuation;
+  if (!v) {
+    return <p className="text-[11px]" style={label}>Valuation is off — switch on "Value the equity (flow to equity)" in section 5 of the inputs.</p>;
+  }
+  const N = o.assumptions.entry.hold_years;
+  const cases = [
+    { name: '(a) assumed exit multiple', c: v.assumed },
+    { name: '(b) exit from fundamentals', c: v.fundamentals },
+  ];
+  const be = v.break_evens;
+  return (
+    <div className="text-[11px]" style={{ fontFamily: mono }}>
+      <p className="mb-2" style={label}>
+        rU = {pct(v.r_unlevered)} · year N+1 unlevered FCF {money(v.ufcf_n_plus_1, ccy)} ·
+        fundamentals exit EV {v.gordon_ev === null ? `N/A (${v.gordon_null_reason})` : `${money(v.gordon_ev, ccy)} = ${multiple(v.gordon_implied_multiple)}`}
+      </p>
+      <Table head={['', ...cases.map((x) => x.name)]}>
+        {([
+          ['Exit multiple', (c: NonNullable<typeof v.fundamentals>) => multiple(c.exit_multiple)],
+          ['Exit equity (all holders)', (c: NonNullable<typeof v.fundamentals>) => money(c.exit_equity_total, ccy)],
+          ['Equity IRR — the LBO model', (c: NonNullable<typeof v.fundamentals>) => pct(c.equity_irr)],
+          ['Return the equity requires', (c: NonNullable<typeof v.fundamentals>) => pct(c.required_return)],
+          ['Excess return a year', (c: NonNullable<typeof v.fundamentals>) => pct(c.excess_return)],
+          ['Equity value at entry', (c: NonNullable<typeof v.fundamentals>) => money(c.equity_value_at_entry, ccy)],
+          ['Equity invested', (c: NonNullable<typeof v.fundamentals>) => money(c.equity_invested, ccy)],
+          ['NPV — flow to equity', (c: NonNullable<typeof v.fundamentals>) => money(c.npv, ccy)],
+          ['Value per dollar invested', (c: NonNullable<typeof v.fundamentals>) => num(c.value_per_dollar, 3)],
+        ] as const).map(([lab, f]) => (
+          <tr key={lab} style={rowB}>
+            <td className="px-2 py-1 text-left">{lab}</td>
+            {cases.map((x) => <td key={x.name} className={td}>{x.c ? f(x.c) : 'N/A'}</td>)}
+          </tr>
+        ))}
+      </Table>
+      <p className="mt-1 mb-3" style={label}>The IRR beats the required return exactly when the NPV is positive — one statement, made twice.</p>
+      {cases.map((x) => x.c && x.c.equity_value && (
+        <div key={x.name} className="mb-3">
+          <p className="mb-1" style={label}>{x.name} — worked backwards from the exit</p>
+          <Table head={['', ...Array.from({ length: N + 1 }, (_, t) => `Y${t}`)]}>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Equity value</td>{x.c.equity_value.map((e, t) => <td key={t} className={td}>{num(e, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Debt</td>{x.c.debt.map((d, t) => <td key={t} className={td}>{num(d, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">E ÷ (D + E)</td>{x.c.equity_weight!.map((w, t) => <td key={t} className={td}>{num(w, 4)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Equity beta</td>{x.c.beta_equity!.map((b, t) => <td key={t} className={td}>{num(b, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Cost of equity</td>{x.c.cost_of_equity!.map((r, t) => <td key={t} className={td}>{r === null ? '–' : pct(r)}</td>)}</tr>
+          </Table>
+        </div>
+      ))}
+      {cases.map((x) => x.c && x.c.recursion_null_reason && <p key={x.name} style={label}>{x.name}: {x.c.recursion_null_reason}</p>)}
+      <p className="mt-2 mb-1" style={label}>What would have to be true — NPV = 0 by changing one input</p>
+      <Table head={['Input', 'Break-even', 'Base case']}>
+        <tr style={rowB}><td className="px-2 py-1 text-left">Exit multiple, exit (a)</td><td className={td}>{be.exit_multiple.value === null ? `N/A — ${be.exit_multiple.reason}` : multiple(be.exit_multiple.value)}</td><td className={td}>{multiple(be.exit_multiple.base)}</td></tr>
+        <tr style={rowB}><td className="px-2 py-1 text-left">Asset beta, exit (b)</td><td className={td}>{be.asset_beta.value === null ? `N/A — ${be.asset_beta.reason}` : num(be.asset_beta.value, 3)}</td><td className={td}>{num(be.asset_beta.base, 3)}</td></tr>
+        <tr style={rowB}><td className="px-2 py-1 text-left">Long-run growth, exit (b)</td><td className={td}>{be.long_run_growth.value === null ? `N/A — ${be.long_run_growth.reason}` : pct(be.long_run_growth.value)}</td><td className={td}>{pct(be.long_run_growth.base)}</td></tr>
+      </Table>
+      <p className="mt-2" style={label}>
+        Assumptions stated: debt beta {num(o.assumptions.valuation!.debt_beta, 2)} ({o.assumptions.valuation!.debt_beta === 0 ? 'riskless debt' : 'risky debt'}); the debt schedule is the base case, not an expectation;
+        tax shields are as risky as the business; cost of equity on leverage at the {o.assumptions.valuation!.leverage_timing === 'end_of_year' ? 'end' : 'start'} of each year.
+      </p>
+    </div>
+  );
+};
+
 const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Currency }> = ({ output, currency }) => {
   const [tab, setTab] = useState<Tab>('summary');
   return (
@@ -559,6 +627,7 @@ const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Curren
       </div>
       {tab === 'summary' && <Summary o={output} ccy={currency} />}
       {tab === 'returns' && <Returns o={output} ccy={currency} />}
+      {tab === 'valuation' && <Valuation o={output} ccy={currency} />}
       {tab === 'operating' && <Operating o={output} ccy={currency} />}
       {tab === 'su' && <SU o={output} ccy={currency} />}
       {tab === 'debt' && <Debt o={output} ccy={currency} />}

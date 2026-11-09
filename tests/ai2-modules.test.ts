@@ -1,6 +1,6 @@
 /**
  * E4 — the AI modules against the new schema, LLM mocked (deterministic):
- * suggest (whitelist + clamps + AI badges + drop notes), redline parse + fallback,
+ * suggest (whitelist + rails that DROP, never clamp + AI bases + drop notes), redline parse + fallback,
  * memo skeleton (R&P order, engine numbers only), goal-seek (pure bisection over
  * TRUE inputs; N/A outside reach).
  */
@@ -10,13 +10,13 @@ import { parseRedline } from '../lib/ai2/redline';
 import { memoSkeleton } from '../lib/ai2/memo';
 import { solveForIrr } from '../lib/ai2/goalseek';
 import { runModel } from '../lib/engine2/facade';
-import { suggestAssumptions } from '../lib/engine2/suggest';
+import { analystDeal } from './fixtures/entered-deal';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 
 const { facts: g2facts, assumptions: g2a } = GOLDEN_DEALS.G2;
 
 describe('E4 — AI-suggest guardrails', () => {
-  it('applies whitelisted proposals with AI badges; clamps out-of-rail values WITH a note', () => {
+  it('accepts whitelisted proposals with AI bases; an out-of-rail value is DROPPED with a note, never clamped (v2.0.0)', () => {
     const raw = JSON.stringify({ suggestions: [
       { path: 'exit.multiple', value: 8.0, basis: 'trading anchor sits below entry' },
       { path: 'operations.target_margin', value: 0.95, basis: 'margin expansion story' }, // > rail 0.6
@@ -24,8 +24,9 @@ describe('E4 — AI-suggest guardrails', () => {
     const r = applyAiSuggestions(g2a, raw);
     expect(r.assumptions.exit.multiple).toBe(8.0);
     expect(r.aiBasis['exit.multiple'].kind).toBe('ai');
-    expect(r.assumptions.operations.target_margin).toBe(0.6); // clamped to the rail
-    expect(r.applied.find((a) => a.path === 'operations.target_margin')!.basis).toContain('clamped');
+    expect(r.assumptions.operations.target_margin).toBe(g2a.operations.target_margin); // untouched — never a clamped number nobody proposed
+    expect(r.applied.find((a) => a.path === 'operations.target_margin')).toBeUndefined();
+    expect(r.dropped.some((d) => d.includes('operations.target_margin') && d.includes('dropped, not clamped'))).toBe(true);
   });
 
   it('drops non-whitelisted paths (a derived/output lever can never be applied) and basis-less items', () => {
@@ -40,11 +41,16 @@ describe('E4 — AI-suggest guardrails', () => {
     expect(r.assumptions).toEqual(g2a); // untouched
   });
 
-  it('a full-hold growth array applies clamped per year; wrong length is dropped', () => {
+  it('a full-hold growth array is accepted only if EVERY year is on-rail; one off-rail year drops it; wrong length is dropped', () => {
     const ok = applyAiSuggestions(g2a, JSON.stringify({ suggestions: [
-      { path: 'operations.growth', value: [0.5, 0.04, 0.04, 0.03, 0.03], basis: 'decelerating history' },
+      { path: 'operations.growth', value: [0.06, 0.04, 0.04, 0.03, 0.03], basis: 'decelerating history' },
     ] }));
-    expect(ok.assumptions.operations.growth[0]).toBe(0.35); // clamped from 0.5
+    expect(ok.assumptions.operations.growth).toEqual([0.06, 0.04, 0.04, 0.03, 0.03]);
+    const offRail = applyAiSuggestions(g2a, JSON.stringify({ suggestions: [
+      { path: 'operations.growth', value: [0.5, 0.04, 0.04, 0.03, 0.03], basis: 'hockey stick' },
+    ] }));
+    expect(offRail.applied).toHaveLength(0);
+    expect(offRail.assumptions.operations.growth).toEqual(g2a.operations.growth);
     const bad = applyAiSuggestions(g2a, JSON.stringify({ suggestions: [
       { path: 'operations.growth', value: [0.04, 0.04], basis: 'short array' },
     ] }));
@@ -149,9 +155,9 @@ describe('E4 — goal-seek (pure, true inputs only)', () => {
     expect(solveForIrr(g2facts, g2a, 'exit_multiple', 5.0)).toBeNull(); // 500% IRR
   });
 
-  it('the suggestion pipeline composes: D7 suggest → goal-seek on the suggested deal', () => {
+  it('the pipeline composes: accepted proposals + the analyst’s entries → goal-seek on that deal', () => {
     const LARGE: typeof g2facts = { ...g2facts, history: [] };
-    const { assumptions } = suggestAssumptions(LARGE);
+    const assumptions = analystDeal(LARGE);
     const out = runModel(LARGE, assumptions);
     const r = solveForIrr(LARGE, assumptions, 'entry_multiple', out.returns.sponsor_net.irr! + 0.01);
     expect(r).not.toBeNull();

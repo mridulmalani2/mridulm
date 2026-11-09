@@ -17,14 +17,14 @@ const raw = () => mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescri
 beforeEach(() => useEngine2Model.getState().reset());
 
 describe('import routes feed the engine2 store (the single modeling path)', () => {
-  it('an EDGAR-shaped extraction lands as engine2 facts with suggestions ready', () => {
+  it('an EDGAR-shaped extraction lands as engine2 FACTS only — no assumption is pre-filled', () => {
     useDealEngineStore.getState().loadFromHistoricals(raw());
     const s = useEngine2Model.getState();
     expect(s.facts?.entity_name).toBe('Northwind Industries Inc.');
     expect(s.facts?.fy_revenue).toBeCloseTo(1250, 6);
     expect(s.facts?.net_ppe).toBeCloseTo(480, 6);
     expect(s.missingFacts).toEqual([]);
-    expect(s.assumptions).not.toBeNull(); // auto-suggested on import
+    expect(s.assumptions).toBeNull();     // v2.0.0: nothing pre-filled — the hold comes first, then a blank draft
     expect(s.output).toBeNull();          // never builds uninvited
   });
 

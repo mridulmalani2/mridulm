@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { anchorComputable, computeTradingAnchor, fetchTradingAnchor, sharesOutstanding } from '../lib/edgar/quote';
+import { enterDeal, enteredAssumptions } from './fixtures/entered-deal';
 import { useEngine2Model } from '../store/engine2Model';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
@@ -112,14 +113,14 @@ describe('D5 — store wiring: the anchor reaches DealFacts and the coherence ga
     },
   } as unknown as CompanyFacts;
 
-  it('anchor lands on facts; a rich suggestion (>15% above it) trips the warn end-to-end', () => {
+  it('anchor lands on facts; an entered multiple >15% above it trips the warn end-to-end', () => {
     useEngine2Model.getState().reset();
     const raw = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
     useEngine2Model.getState().importFromRaw(raw, { trading_anchor: 6.0 });
-    const s = useEngine2Model.getState();
-    expect(s.facts!.implied_trading_ev_ebitda).toBe(6.0);
-    s.build();
-    // large-cap suggestion is 12.0x vs a 6.0x anchor ⇒ entry_multiple_vs_trading warn
+    expect(useEngine2Model.getState().facts!.implied_trading_ev_ebitda).toBe(6.0);
+    enterDeal(enteredAssumptions(5, { entry: { driver: 'multiple', entry_multiple: 12, enterprise_value: null, basis: 'fy', hold_years: 5 } }));
+    useEngine2Model.getState().build();
+    // an entered 12.0x vs a 6.0x anchor ⇒ entry_multiple_vs_trading warn
     expect(useEngine2Model.getState().output!.coherence.some((f) => f.code === 'entry_multiple_vs_trading')).toBe(true);
   });
 
@@ -127,6 +128,7 @@ describe('D5 — store wiring: the anchor reaches DealFacts and the coherence ga
     useEngine2Model.getState().reset();
     const raw = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
     useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });
+    enterDeal(enteredAssumptions(5, { entry: { driver: 'multiple', entry_multiple: 12, enterprise_value: null, basis: 'fy', hold_years: 5 } }));
     useEngine2Model.getState().build();
     expect(useEngine2Model.getState().output!.coherence.some((f) => f.code === 'entry_multiple_vs_trading')).toBe(false);
   });

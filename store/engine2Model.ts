@@ -64,6 +64,9 @@ export interface Engine2ModelStore {
   setHoldYears: (n: number) => void;
   /** The inputs still blank — Build is disabled while this is non-empty. */
   missing: () => MissingInput[];
+  /** Apply a whole-object edit AND register choices it brings into scope (e.g. a new tranche's
+   *  sweep election) — each stays pending, gating Build, until the analyst makes it. */
+  editWithChoices: (next: DealAssumptions, editedPaths: string[], newChoices: string[], clearedPrefixes?: string[]) => void;
   /** Confirm a MISSING fact with a user-entered value (flips it out of the Build gate). */
   confirmFact: (path: string, value: number) => void;
   /** True while the CURRENT import for `entityName` sits untouched — no build, no user
@@ -215,6 +218,14 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       output: null,
       error: null,
     });
+  },
+
+  editWithChoices: (next, editedPaths, newChoices, clearedPrefixes = []) => {
+    const keep = get().pending.filter((p) => !clearedPrefixes.some((c) => p === c || p.startsWith(`${c}.`)));
+    set({ pending: [...new Set([...keep, ...newChoices])] });
+    get().editAssumptions(next, editedPaths);
+    // editAssumptions removed edited paths from pending; re-add the brand-new choices
+    set({ pending: [...new Set([...get().pending, ...newChoices.filter((c) => !editedPaths.includes(c))])] });
   },
 
   editAssumptions: (next, editedPaths) => {

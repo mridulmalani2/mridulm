@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { bps, fromPctInput, headroom, money, moneyIso, multiple, num, pct, staleness, toPctInput } from '../lib/format';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { useEngine2Model } from '../store/engine2Model';
-import { suggestAssumptions } from '../lib/engine2/suggest';
+import { analystDeal } from './fixtures/entered-deal';
 import { runModel } from '../lib/engine2/facade';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
@@ -105,7 +105,7 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
   it('END-TO-END: extraction → adapter → suggest → runModel produces a coherent-ish model (no blocks, BS closes)', () => {
     const raw = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
     const { facts } = adaptRawHistoricals(raw);
-    const { assumptions } = suggestAssumptions(facts);
+    const assumptions = analystDeal(facts);
     const out = runModel(facts, assumptions);
     expect(out.coherence.filter((f) => f.severity === 'block')).toEqual([]);
     for (const bs of out.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(0.005);
@@ -145,15 +145,19 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     expect(real.templateBases['tax.rate']).toBeUndefined();
   });
 
-  it('badge honesty: a MISSING capex placeholder never wears a FACTS badge in the store', () => {
+  it('honesty: a MISSING capex fact stays null and yields NO capex proposal (nothing pre-filled, no badge to lie)', () => {
     const noCapex: CompanyFacts = JSON.parse(JSON.stringify(FIXTURE));
     delete (noCapex as any).facts['us-gaap'].PaymentsToAcquirePropertyPlantAndEquipment;
     useEngine2Model.getState().reset();
     useEngine2Model.getState().importFromRaw(mapCompanyFacts(noCapex, { sicCode: '3711' }));
     const s = useEngine2Model.getState();
     expect(s.missingFacts).toContain('maint_capex_pct_revenue');
-    expect(s.basis['operations.maint_capex_pct_revenue'].kind).toBe('template');
-    expect(s.basis['operations.maint_capex_pct_revenue'].detail).toContain('the filing lacked');
+    expect(s.facts!.maint_capex_pct_revenue).toBeNull(); // NULL in the object — no stand-in 3%
+    // v2.0.0: nothing is pre-filled, so no badge can lie — and the catalogue offers NO capex
+    // proposal from a filing that lacks capex
+    s.setHoldYears(5);
+    expect(useEngine2Model.getState().suggestions['operations.maint_capex_pct_revenue']).toBeUndefined();
+    expect(Number.isNaN(useEngine2Model.getState().assumptions!.operations.maint_capex_pct_revenue)).toBe(true);
   });
 
   it('the anchor-enrich guard: user OR ai work blocks the re-import; fresh imports allow it', () => {
@@ -179,7 +183,7 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
       net_ppe: { value: 480, provenance: { source: 'edgar', detail: 'PropertyPlantAndEquipmentNet' } },
     });
     expect(facts.net_ppe).toBe(480);
-    const { assumptions } = suggestAssumptions(facts);
+    const assumptions = analystDeal(facts);
     const out = runModel(facts, assumptions);
     expect(out.coherence.some((f) => f.message.includes('PP&E seeded at 0'))).toBe(false);
   });

@@ -93,6 +93,11 @@ const LABELS: Record<string, string> = {
   'operations.nwc.pct_revenue': 'NWC (% of revenue)',
   'operations.nwc.dso': 'DSO', 'operations.nwc.dio': 'DIO', 'operations.nwc.dpo': 'DPO',
   'operations.lines.year_n_plus_1_growth': 'Growth into year N+1',
+  'operations.lines.revenue': 'Revenue: choose how it is entered (no historical revenue to grow)',
+  'operations.lines.ebitda': 'EBITDA: choose how it is entered (by year, or EBIT + D&A)',
+  'operations.lines.da': 'D&A: choose how it is entered (no revenue line to take a % of)',
+  'operations.lines.capex': 'Capex: choose how it is entered (no revenue line to take a % of)',
+  'operations.lines.delta_nwc': 'Working capital: choose how it is entered (no historical balance to roll)',
   'tax.rate': 'Tax rate',
   'tax.interest_deductible': 'Is interest tax-deductible?',
   'tax.s163j.applies': 'Does an interest-deduction cap (US §163(j)) apply?',
@@ -162,9 +167,10 @@ export function missingInputs(
   if (has('tax.interest_deductible')) miss.push('tax.interest_deductible');
   if (has('tax.s163j.applies') && a.tax.interest_deductible) miss.push('tax.s163j.applies');
   const ebitdaIsDriver = !lines?.ebitda;
-  if (has('operations.margin_path') && ebitdaIsDriver) miss.push('operations.margin_path');
+  const marginDriverUsable = facts.fy_ebitda_margin !== null;
+  if (has('operations.margin_path') && ebitdaIsDriver && marginDriverUsable) miss.push('operations.margin_path');
   const nwcIsDriver = !lines?.delta_nwc;
-  if (has('operations.nwc.method') && nwcIsDriver) miss.push('operations.nwc.method');
+  if (has('operations.nwc.method') && nwcIsDriver && facts.fy_revenue !== null) miss.push('operations.nwc.method');
 
   // ── entry / exit ──
   const e = a.entry;
@@ -178,7 +184,13 @@ export function missingInputs(
   nanPaths(a.structure.min_cash, 'structure.min_cash', miss);
   const hasTerm = a.structure.tranches.some((t) => t.type !== 'revolver');
   if (hasTerm) nanPaths(a.structure.sweep, 'structure.sweep', miss);
-  a.structure.tranches.forEach((t, i) => nanPaths(t, `structure.tranches.${i}`, miss));
+  a.structure.tranches.forEach((t, i) => {
+    const tm: string[] = [];
+    nanPaths(t, `structure.tranches.${i}`, tm);
+    // a tranche that does not take the sweep has no sweep priority to enter
+    const skip = t.type !== 'revolver' && !t.sweep.participates ? `structure.tranches.${i}.sweep.priority` : null;
+    miss.push(...tm.filter((p) => p !== skip));
+  });
   for (const opt of ['distributions', 'refinancing'] as const) {
     if (a.structure[opt] !== null) nanPaths(a.structure[opt], `structure.${opt}`, miss);
   }
@@ -193,14 +205,32 @@ export function missingInputs(
     if (lines.year_n_plus_1_growth !== null) nanPaths(lines.year_n_plus_1_growth, 'operations.lines.year_n_plus_1_growth', miss);
     else if (a.exit.basis === 'ntm' || a.valuation !== null) miss.push('operations.lines.year_n_plus_1_growth');
   }
-  if (!lines?.revenue) nanPaths(ops.growth, 'operations.growth', miss);
-  if (ebitdaIsDriver) nanPaths(ops.target_margin, 'operations.target_margin', miss);
-  if (!lines?.da) nanPaths(ops.da_pct_revenue, 'operations.da_pct_revenue', miss);
-  if (!lines?.capex) {
-    nanPaths(ops.maint_capex_pct_revenue, 'operations.maint_capex_pct_revenue', miss);
-    nanPaths(ops.growth_capex, 'operations.growth_capex', miss);
+  // A §7 driver the FACTS cannot support (§24.3 R1–R3) is not "blank" — its input MODE is
+  // unchosen: the analyst must pick how the line is entered, never fill a driver that cannot run.
+  const revenueAvailable = lines?.revenue ? lines.revenue.mode !== 'not_modelled' : facts.fy_revenue !== null;
+  if (!lines?.revenue) {
+    if (facts.fy_revenue === null) miss.push('operations.lines.revenue');
+    else nanPaths(ops.growth, 'operations.growth', miss);
   }
-  if (nwcIsDriver) nanPaths(ops.nwc, 'operations.nwc', miss);
+  if (ebitdaIsDriver) {
+    if (facts.fy_ebitda_margin === null || !revenueAvailable) miss.push('operations.lines.ebitda');
+    else nanPaths(ops.target_margin, 'operations.target_margin', miss);
+  }
+  if (!lines?.da) {
+    if (!revenueAvailable) miss.push('operations.lines.da');
+    else nanPaths(ops.da_pct_revenue, 'operations.da_pct_revenue', miss);
+  }
+  if (!lines?.capex) {
+    if (!revenueAvailable) miss.push('operations.lines.capex');
+    else {
+      nanPaths(ops.maint_capex_pct_revenue, 'operations.maint_capex_pct_revenue', miss);
+      nanPaths(ops.growth_capex, 'operations.growth_capex', miss);
+    }
+  }
+  if (nwcIsDriver) {
+    if (facts.fy_revenue === null || !revenueAvailable) miss.push('operations.lines.delta_nwc');
+    else nanPaths(ops.nwc, 'operations.nwc', miss);
+  }
 
   // ── tax ──
   nanPaths(a.tax.rate, 'tax.rate', miss);
@@ -221,6 +251,9 @@ export function missingInputs(
     if (a[opt] !== null) nanPaths(a[opt], opt, miss);
   }
   nanPaths(a.covenants, 'covenants', miss);
+
+  // ── choices added on the fly (a new tranche's sweep election, a feature's methods) ──
+  for (const p of pending) if (!(CHOICE_PATHS as readonly string[]).includes(p)) miss.push(p);
 
   // ── facts the chosen drivers need (a §24.3 rejection, surfaced here as a missing input) ──
   if (a.entry.basis === 'fy' && !has('entry.basis') && facts.fy_ebitda === null) miss.push('facts.fy_ebitda');

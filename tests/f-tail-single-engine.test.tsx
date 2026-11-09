@@ -62,7 +62,7 @@ describe('F tail — /deal-engine routing (two surfaces only)', () => {
     expect(useEngine2Model.getState().facts?.entity_name).toBe('Single Engine Co');
     const html = page();
     expect(html).toContain('Single Engine Co');
-    expect(html).toContain('Suggest everything');
+    expect(html).toContain('The holding period sizes every per-year input'); // v2.0.0: the blank draft starts with the hold
     expect(html).toContain('← New import');
   });
 

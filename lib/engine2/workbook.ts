@@ -109,7 +109,9 @@ interface PendingFormula {
   sheet: SheetBuilder;
   addr: string;
   formula: string;
-  result: number | string;
+  /** The engine's value, cached for viewers that do not recalculate; null ⇒ no cache (the
+   *  viewer computes it — never a placeholder like "N/A" or 0 standing in for a number). */
+  result: number | null;
 }
 
 class SheetBuilder {
@@ -124,7 +126,11 @@ class SheetBuilder {
     labelWidth: number,
     yearCols: number,
   ) {
-    this.ws = wb.addWorksheet(name, { views: [{ showGridLines: false, state: 'frozen', xSplit: 3, ySplit: 3 }] });
+    this.ws = wb.addWorksheet(name, {
+      views: [{ showGridLines: false, state: 'frozen', xSplit: 3, ySplit: 3 }],
+      // print the whole year grid on one page width (a model is read across, not down two pages)
+      pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
+    });
     this.ws.getColumn(1).width = 2;
     this.ws.getColumn(2).width = labelWidth;
     this.ws.getColumn(3).width = 2;
@@ -196,7 +202,8 @@ class SheetBuilder {
       if ('input' in cell) {
         c.value = cell.input;
         c.font = { color: { argb: BLUE } };
-        c.numFmt = cell.fmt ?? opts.fmt ?? FMT_MONEY;
+        // a TRUE/FALSE input must read TRUE/FALSE, never a number format's rendering of 1/0
+        c.numFmt = typeof cell.input === 'boolean' ? 'General' : cell.fmt ?? opts.fmt ?? FMT_MONEY;
         continue;
       }
       c.numFmt = cell.fmt ?? opts.fmt ?? FMT_MONEY;
@@ -205,7 +212,7 @@ class SheetBuilder {
         c.font = { bold: true, color: { argb: GREEN } };
         c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_ANSWER } };
       }
-      this.pending.push({ sheet: this, addr, formula: cell.f, result: cell.v === null ? 'N/A' : cell.v });
+      this.pending.push({ sheet: this, addr, formula: cell.f, result: cell.v });
       if (!opts.noParity) this.parity.push({ sheet: this.name, addr, label: `${label.trim()} [${tStr}]`, expected: cell.v });
     }
     if (opts.note) {
@@ -258,11 +265,11 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     `${ccy} millions unless stated. Blue = input. Every other number in this workbook is a formula on these cells.`,
     'Structural choices (holding period, the tranche list, forecast-line modes, the NWC method) are fixed at export — re-export from the deal engine to change them.',
   ]);
-  I.section('1. Historical facts (the §1.1 sizing basis)');
+  I.section('1. Historical facts (the debt-sizing basis)');
   const basisWord = f.sizing_basis === 'LTM' ? 'LTM' : 'FY';
   if (f.fy_revenue !== null) I.line('ltm_revenue', `${basisWord} revenue`, { 0: { input: f.fy_revenue } });
   if (f.fy_ebitda !== null) I.line('ltm_ebitda', `${basisWord} EBITDA`, { 0: { input: f.fy_ebitda } });
-  if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year — every operating line is entered directly (§24.2).');
+  if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year — every operating line is entered directly.');
   I.line('net_ppe', 'Net PP&E at close (0 if the source states none)', { 0: { input: f.net_ppe ?? 0 } },
     { note: f.net_ppe === null ? 'Not stated in the source — seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
 
@@ -546,7 +553,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   })), { noParity: true });
 
   // ── Debt & waterfall ──
-  M.section('4. Debt schedule and cash waterfall — §3 order: interest → mandatory amortization → revolver → sweep → draw');
+  M.section('4. Debt schedule and cash waterfall — order: interest → mandatory amortization → revolver → sweep → draw');
   M.header({ 0: 'Close', ...years(1, N) });
   const priorities = [...new Set(terms.filter((t) => t.sweep.participates).map((t) => t.sweep.priority))].sort((x, y) => x - y);
   terms.forEach((t, i) => {
@@ -624,7 +631,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('debt_close', 'Total debt at par (incl. accrued PIK and the drawn revolver)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: sumOf(debtKeys, t), v: o.balance_sheet[t].debt_at_par }])), { bold: true });
 
   // ── Tax ──
-  M.section('5. Tax — §6: interest cap with an indefinite carryforward; acquired and post-close NOL pools; minimum tax');
+  M.section('5. Tax — interest cap with an indefinite carryforward; acquired and post-close NOL pools; minimum tax');
   M.header(years(1, N));
   const tx = o.tax;
   const pikSum = (t: number) => sumOf(tk.map((k) => `${k}_pik`), t);
@@ -659,7 +666,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('cash_tax', 'Cash tax  =  MAX(regular, minimum)', per(1, N, (t) => ({ f: `MAX(${m('reg_tax', t)},${m('min_tax', t)})`, v: tx[t - 1].cash_tax })), { bold: true });
 
   // ── Balance sheet ──
-  M.section('6. Balance sheet — §8: goodwill is the purchase-accounting plug at close');
+  M.section('6. Balance sheet — goodwill is the purchase-accounting plug at close');
   M.header({ 0: 'Close', ...years(1, N) });
   const bs = o.balance_sheet;
   M.line('ppe', 'Net PP&E  =  prior + capex − D&A', { 0: { f: iv('net_ppe'), v: bs[0].ppe }, ...per(1, N, (t) => ({ f: `${m('ppe', t - 1)}+${m('capex', t)}-${m('da', t)}`, v: bs[t].ppe })) });
@@ -676,7 +683,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     f: `${m('ebit', t)}-(${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}+${m('fee_am', t)}+${m('cfee_total', t)}+${m('book_wo', t)})-${m('cash_tax', t)}`, v: null,
   })), { noParity: true });
   M.line('equity', 'Shareholders’ equity  =  prior + net income', { 0: { f: m('equity_total', 0), v: bs[0].equity }, ...per(1, N, (t) => ({ f: `${m('equity', t - 1)}+${m('ni', t)}`, v: bs[t].equity })) });
-  M.line('bs_check', 'Check: assets − debt − equity (must be 0)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${m('assets', t)}-${m('debt_close', t)}-${m('equity', t)}`, v: bs[t].check }])), { italic: true });
+  M.line('bs_check', 'Check: assets − debt − equity (must be 0; rounded to 6 dp)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `ROUND(${m('assets', t)}-${m('debt_close', t)}-${m('equity', t)},6)`, v: bs[t].check }])), { italic: true });
 
   // ── Exit & returns ──
   M.section('7. Exit and returns');
@@ -829,7 +836,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       if (sheetName === p.sheet.name) return abs === '1' ? `$${col}$${row}` : `${col}${row}`;
       return `'${sheetName}'!$${col}$${row}`;
     });
-    p.sheet.ws.getCell(p.addr).value = opts.cachedResults ? { formula, result: p.result } : { formula };
+    p.sheet.ws.getCell(p.addr).value = opts.cachedResults && p.result !== null ? { formula, result: p.result } : { formula };
   }
   return { wb, parity };
 }

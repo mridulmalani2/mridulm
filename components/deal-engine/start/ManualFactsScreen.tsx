@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDealEngineStore } from '../../../store/dealEngine';
+import { useEngine2Model } from '../../../store/engine2Model';
 import { manualHistoricals, shiftYearEnd, type ManualYearRow } from '../../../lib/edgar/buildModel';
 
 import ApiKeyInline from './ApiKeyInline';
@@ -62,6 +63,8 @@ const Field: React.FC<{ label: string; unit?: string; value: string; onChange: (
 
 const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const loadFromHistoricals = useDealEngineStore((s) => s.loadFromHistoricals);
+  const startForecastOnly = useEngine2Model((s) => s.startForecastOnly);
+  const [forecastHold, setForecastHold] = useState('');
 
   const [dealName, setDealName] = useState('New Deal');
   const [sector, setSector] = useState('Technology');
@@ -289,6 +292,26 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             style={{ background: sizingOk ? '#CC0000' : 'rgba(17,17,17,0.08)', color: sizingOk ? '#fff' : 'rgba(17,17,17,0.35)', fontFamily: mono, border: `1px solid ${sizingOk ? '#CC0000' : 'rgba(17,17,17,0.08)'}`, letterSpacing: '0.12em' }}>
             {sizingOk ? 'Open the workbench →' : `Enter ${basis === 'LTM' ? 'LTM' : 'latest-FY'} revenue & EBITDA to continue`}
           </button>
+
+          {/* §24.2 [v2.0.0] — a case that states NO historical year (a course case, a CIM forecast
+              page, a lender model): every operating line is entered directly on the next screen.
+              No LTM figure is invented to make the form validate. */}
+          <div className="mt-4 p-3" style={{ border: '1px dashed rgba(17,17,17,0.2)' }}>
+            <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)', fontFamily: mono, lineHeight: 1.6 }}>
+              No historical figures? Start a forecast-only case — you enter EBIT/EBITDA, D&amp;A, capex and working capital by year, exactly as the case gives them.
+            </p>
+            <div className="flex items-center gap-2">
+              <input aria-label="Holding period (years)" value={forecastHold} onChange={(e) => setForecastHold(e.target.value)} placeholder="hold, years"
+                className="w-24 px-2 py-1.5 text-[11px]" style={inputStyle} />
+              <button type="button"
+                disabled={!(Number.isInteger(Number(forecastHold)) && Number(forecastHold) >= 1) || dealName.trim() === ''}
+                onClick={() => startForecastOnly({ entity_name: dealName.trim(), currency, hold_years: Number(forecastHold) })}
+                className="px-3 py-1.5 text-[10px] uppercase tracking-widest"
+                style={{ border: '1px solid rgba(17,17,17,0.3)', color: '#111', fontFamily: mono, background: 'transparent' }}>
+                Start forecast-only case →
+              </button>
+            </div>
+          </div>
 
           {/* Optional AI key — reused by AI-suggest on the next screen */}
           <ApiKeyInline />
