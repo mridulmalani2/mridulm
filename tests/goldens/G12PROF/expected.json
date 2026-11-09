@@ -207,5 +207,47 @@
     "asset_beta": 0.91681236307135,
     "long_run_growth": 0.0251604450381383
   },
-  "checks_total": 0
+  "checks_total": 0,
+  "leverage_table": [
+    {
+      "debt": 0,
+      "sponsor_equity": 1100,
+      "irr_a": 0.088278,
+      "irr_b": 0.101388,
+      "required_b": 0.091,
+      "npv_b": 47.541
+    },
+    {
+      "debt": 300,
+      "sponsor_equity": 800,
+      "irr_a": 0.096834,
+      "irr_b": 0.112326,
+      "required_b": 0.096797,
+      "npv_b": 58.2608
+    },
+    {
+      "debt": 600,
+      "sponsor_equity": 500,
+      "irr_a": 0.123865,
+      "irr_b": 0.146098,
+      "required_b": 0.121158,
+      "npv_b": 58.1419
+    },
+    {
+      "debt": 900,
+      "sponsor_equity": 200,
+      "irr_a": 0.211968257836157,
+      "irr_b": 0.251994371903094,
+      "required_b": 0.184056537809197,
+      "npv_b": 64.3502211371498
+    },
+    {
+      "debt": 1000,
+      "sponsor_equity": 100,
+      "irr_a": 0.318505,
+      "irr_b": 0.374579,
+      "required_b": 0.234173,
+      "npv_b": 71.3833
+    }
+  ]
 }

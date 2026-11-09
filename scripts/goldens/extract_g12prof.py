@@ -47,5 +47,13 @@ out = {
               "npv": ws["D93"].value, "value_per_dollar": ws["D94"].value, "required_return": ws["D95"].value},
     "breakeven_reference_typed": {"exit_multiple": ws["D126"].value, "asset_beta": ws["D127"].value, "long_run_growth": ws["D128"].value},
     "checks_total": wb["Checks"]["C13"].value,
+    # §3.8 [v2.1.0]: section 9, "the same deal at five debt levels" — interest held at 7%,
+    # and once the debt is repaid surplus cash is paid to equity. The $900m row is the live
+    # model; the other rows are the reference's own typed values (rounded as typed).
+    "leverage_table": [
+        {"debt": ws[f"B{r}"].value, "sponsor_equity": ws[f"D{r}"].value, "irr_a": ws[f"E{r}"].value,
+         "irr_b": ws[f"F{r}"].value, "required_b": ws[f"G{r}"].value, "npv_b": ws[f"H{r}"].value}
+        for r in range(119, 124)
+    ],
 }
 json.dump(out, sys.stdout, indent=2)

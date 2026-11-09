@@ -82,7 +82,7 @@ describe('runCore — first end-to-end: every golden block at full precision, ze
   // in this comprehensive block-by-block gate, so the fund overlay's and the toggle's
   // balance_sheet / waterfall / operating / senior-tranche rows were compared to their
   // fixtures by no committed test.
-  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT']) {
+  for (const golden of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT', 'G13SURPLUS', 'G13SURPLUSGATED']) {
     it(`${golden}: operating, tax, tranches, revolver, waterfall, balance sheet`, () => {
       const g = load(golden);
       const core = runCore(DEALS[golden].facts, DEALS[golden].assumptions);

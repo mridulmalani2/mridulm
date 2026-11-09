@@ -444,10 +444,40 @@ const AssumptionsPanel: React.FC = () => {
 
       {/* ═══ 7. Cash policy, covenants, fees ═══ */}
       <Section title="7 · Distributions, covenants, monitoring fee">
-        <Toggle on={a.structure.distributions !== null} label="Interim distributions to equity"
-          onOn={() => set(at('structure.distributions', blanks(N)), ['structure.distributions'])}
-          onOff={() => set(at('structure.distributions', null), ['structure.distributions'])} />
+        {/* §3.8: ONE distribution policy per deal — none (cash builds), a requested schedule, or
+            the surplus-cash policy. Every policy pays only from cash above the minimum, after
+            debt service and the sweep, and is still subject to the restricted-payment trap. */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <Label>Distributions to equity during the hold</Label>
+          <select aria-label="Distribution policy" className="px-1 py-1 text-[11px]"
+            style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+            value={a.structure.surplus_distribution ? 'surplus' : a.structure.distributions ? 'scheduled' : 'none'}
+            onChange={(e) => {
+              const p = e.target.value;
+              const structure = {
+                ...a.structure,
+                distributions: p === 'scheduled' ? blanks(N) : null,
+                surplus_distribution: p === 'surplus' ? { payout_pct: 1, start: 'immediately' as const } : null,
+              };
+              set({ ...a, structure }, ['structure.distributions', 'structure.surplus_distribution']);
+            }}>
+            <option value="none">none — cash stays in the business</option>
+            <option value="scheduled">fixed amounts by year</option>
+            <option value="surplus">surplus cash (a % of cash above the minimum)</option>
+          </select>
+        </div>
         {a.structure.distributions && <YearGrid path="structure.distributions" label="Requested distribution" unit="money" values={a.structure.distributions} />}
+        {a.structure.surplus_distribution && (
+          <>
+            <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>
+              Pre-filled with the common case — 100% of the surplus, every year. Change either setting to match your deal’s restricted-payments terms.
+            </p>
+            <NumField path="structure.surplus_distribution.payout_pct" label="Share of surplus cash paid out" unit="pct" value={a.structure.surplus_distribution.payout_pct}
+              hint="Cash above the minimum after interest, amortization, the revolver and the sweep. Below 100%, the rest stays on the balance sheet." />
+            <ChoiceField path="structure.surplus_distribution.start" label="Pay surplus out" value={a.structure.surplus_distribution.start}
+              options={[{ value: 'immediately', label: 'every year (what the sweep leaves)' }, { value: 'after_debt_repaid', label: 'only once all debt is repaid' }]} />
+          </>
+        )}
         <Toggle on={a.covenants.rp_trap !== null} label="Restricted-payment cash trap"
           onOn={() => set(at('covenants.rp_trap', { metric: 'net_leverage', level: U }), ['covenants.rp_trap'])}
           onOff={() => set(at('covenants.rp_trap', null), ['covenants.rp_trap'])} />

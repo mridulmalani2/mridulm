@@ -232,6 +232,8 @@ export function runDebtYear(
     distribution_request: number;
     /** §3.7 trap level; null = OFF. */
     rp_trap_level: number | null;
+    /** §3.8 [v2.1.0] surplus-cash policy (null ≡ OFF). */
+    surplus?: { payout_pct: number; after_debt_repaid: boolean } | null;
     /** §3.7 metric input — may be ≤ 0 (normative). */
     ebitda_adj: number;
     /** §3 step 2R / §18.4 — total refi cash cost this year (absent ≡ 0; sequence.ts always passes it). */
@@ -246,6 +248,7 @@ export function runDebtYear(
     distribution_request: year.distribution_request,
     refinancing_cash_cost: year.refinancing_cash_cost ?? 0,
     rp_trap_level: year.rp_trap_level,
+    surplus: year.surplus ?? null,
     ebitda_adj: year.ebitda_adj,
     tranches: sized.terms.map((t, i) => ({
       name: t.assumption.name,

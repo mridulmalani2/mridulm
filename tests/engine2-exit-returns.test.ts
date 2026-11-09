@@ -54,6 +54,8 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
     ['G2DIST', GOLDEN_DEALS.G2DIST.assumptions],
     ['G3DIST', GOLDEN_DEALS.G3DIST.assumptions],
     ['G2DISTD', GOLDEN_DEALS.G2DISTD.assumptions],
+    ['G13SURPLUS', GOLDEN_DEALS.G13SURPLUS.assumptions], // §3.8 surplus policy, trap-blocked and clipped years
+    ['G13SURPLUSGATED', GOLDEN_DEALS.G13SURPLUSGATED.assumptions], // §3.8 gate opens after the mid-hold retirement
     ['G6REFI', GOLDEN_DEALS.G6REFI.assumptions], // §18: exit/returns value-compared engine-vs-fixture, not only transitively
   ];
 
@@ -123,9 +125,13 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
       // the same annual period. Every golden runs rollover = 0, so the sponsor share is the
       // full amount; the DIST goldens make the second term NON-ZERO and are what turns this
       // from a degenerate restatement into a real assertion.
-      const paidN = g.distributions.paid[g.distributions.paid.length - 1];
+      // The identity is taken on the engine's own full-precision paid[N]; the fixture's paid
+      // row is 2dp-rounded (exact only when the payment is a round requested amount — never
+      // under the §3.8 surplus policy), so it is compared at its own precision separately.
+      const paidN = core.distributions_paid[core.distributions_paid.length - 1];
+      expect(Math.abs(paidN - g.distributions.paid[g.distributions.paid.length - 1]), `${golden} paid[N]`).toBeLessThanOrEqual(0.005 + 1e-9);
       expect(returns.sponsor_net.cashflows[returns.sponsor_net.cashflows.length - 1])
-        .toBeCloseTo(exit.sponsor_share + paidN, 6);
+        .toBeCloseTo(exit.sponsor_share + paidN, 9);
       // and the interim flows ARE the paid distributions, in order
       for (let t = 1; t < returns.sponsor_net.cashflows.length - 1; t++) {
         expect(Math.abs(returns.sponsor_net.cashflows[t] - g.distributions.paid[t - 1]), `${golden} interim cf[${t}]`).toBeLessThan(TOL);

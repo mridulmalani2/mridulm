@@ -237,10 +237,12 @@ describe('interim distributions — the v1.1.0 UI surfaces', () => {
     importFixture();
     useEngine2Model.getState().setHoldYears(5);
     const html = renderToStaticMarkup(<Workbench />);
-    expect(html).toContain('Interim distributions to equity');
+    expect(html).toContain('Distributions to equity during the hold');
+    expect(html).toContain('surplus cash (a % of cash above the minimum)'); // §3.8 policy offered
     expect(html).toContain('Restricted-payment cash trap');
     const a = useEngine2Model.getState().assumptions!;
     expect(a.structure.distributions).toBeNull();
+    expect(a.structure.surplus_distribution).toBeNull();
     expect(a.covenants.rp_trap).toBeNull();
   });
 

@@ -41,7 +41,7 @@ export function blankAssumptions(dealName: string, holdYears: number): DealAssum
   return {
     deal_name: dealName,
     entry: { driver: 'multiple', entry_multiple: U, enterprise_value: null, basis: 'fy', hold_years: N },
-    structure: { tranches: [], min_cash: U, sweep: { base_pct: U, grid: null }, distributions: null, refinancing: null },
+    structure: { tranches: [], min_cash: U, sweep: { base_pct: U, grid: null }, distributions: null, surplus_distribution: null, refinancing: null },
     operations: {
       growth: unsetArray(N), target_margin: U, margin_path: 'linear',
       da_pct_revenue: U, maint_capex_pct_revenue: U, growth_capex: unsetArray(N),

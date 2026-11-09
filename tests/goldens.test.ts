@@ -17,7 +17,7 @@ describe('golden agreement check', () => {
   it('committed fixtures match a fresh run of the reference derivation', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'goldens-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/spec_calc.py'), tmp], { stdio: 'pipe' });
-    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT', 'G9SWEET', 'G10RATCHET']) {
+    for (const g of ['G1', 'G2', 'G3', 'G4', 'G5', 'G2D', 'G2DIST', 'G3DIST', 'G2DISTD', 'G6REFI', 'G7FUND', 'G8PIKT', 'G9SWEET', 'G10RATCHET', 'G13SURPLUS', 'G13SURPLUSGATED']) {
       const fresh = readFileSync(join(tmp, g, 'expected.json'), 'utf8');
       const committed = readFileSync(join(ROOT, 'tests/goldens', g, 'expected.json'), 'utf8');
       expect(committed, `${g} fixture drifted from the reference derivation`).toBe(fresh);

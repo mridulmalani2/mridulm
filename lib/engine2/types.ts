@@ -372,6 +372,13 @@ export interface DealAssumptions {
      */
     distributions: number[] | null;
     /**
+     * SPEC §3.8 [v2.1.0] the SURPLUS-CASH distribution policy — the alternative to a fixed
+     * schedule: each year, after debt service, the revolver and the sweep, pay `payout_pct` of
+     * the cash above the minimum to equity (still subject to the §3.7 trap). null ≡ OFF.
+     * Mutually exclusive with `distributions` (a Build rejection — one policy per deal).
+     */
+    surplus_distribution: SurplusDistributionAssumption | null;
+    /**
      * Scheduled per-tranche refinancings (SPEC §18 [v1.3.0]); null ≡ [] ≡ feature OFF, so every
      * pre-v1.3.0 deal is byte-identical to before. At most one event per tranche, on cash-pay term
      * tranches only; structural gates (existence, cash-pay, one-per-tranche, 1 ≤ year ≤ hold−1,
@@ -408,6 +415,16 @@ export interface DealAssumptions {
   mid_year_irr: boolean;
   /** §25 [v2.0.0] REQUIRED-with-null: null ≡ OFF (no valuation block; v1 numbers). */
   valuation: ValuationAssumption | null;
+}
+
+/** SPEC §3.8 [v2.1.0] the surplus-cash distribution policy (analyst-set; the UI pre-fills
+ *  payout 100% / immediately, visibly, when the analyst picks the policy). */
+export interface SurplusDistributionAssumption {
+  /** [0, 1] — the share of the year's cash above the minimum (after the sweep) paid out. */
+  payout_pct: number;
+  /** 'immediately': every year; 'after_debt_repaid': only once every term tranche and the
+   *  revolver are repaid at the year's step-6 balances (±$0.005m, the §15 retirement tol). */
+  start: 'immediately' | 'after_debt_repaid';
 }
 
 /** §19.2 [v1.4.0] — the fund-of-one overlay inputs (all rates decimals; §16 gates). */

@@ -34,6 +34,9 @@ import { capAtOutstanding } from './amort';
 /** Tolerances mirroring the reference derivation (scripts/goldens/spec_calc.py). */
 const DRAW_EPS = 1e-12; // shortfall below this is float noise, not a draw
 const BREACH_EPS = 1e-9; // shortfall below this is float noise, not a breach
+/** §3.8 'after_debt_repaid' gate: debt is repaid at ≤ ±$0.005m — the §15 retirement
+ *  tolerance (debt.ts RETIRED_TOL; restated here because the kernel imports no engine module). */
+const DEBT_REPAID_TOL = 5e-3;
 
 export interface WaterfallTrancheIn {
   name: string;
@@ -71,6 +74,13 @@ export interface WaterfallYearIn {
   revolver: WaterfallRevolverIn | null;
   /** §3 step 7: the year's REQUESTED distribution ($m, ≥ 0). 0 ≡ feature off. */
   distribution_request: number;
+  /**
+   * §3.8 [v2.1.0] the surplus-cash policy: the request is NOT an input but `payout_pct ×
+   * max(0, cash − min_cash)` at step 7 (post-draw), gated on the post-step-6 debt when
+   * `after_debt_repaid`. Optional; absent/null ≡ OFF (byte-identical). Mutually exclusive
+   * with a non-zero `distribution_request`.
+   */
+  surplus?: { payout_pct: number; after_debt_repaid: boolean } | null;
   /**
    * §3 step 2R / §18.4 — total refinancing cash cost this year (call premium + new OID + new
    * financing fees, summed over every tranche refinanced this year). A MANDATORY financing use,
@@ -213,17 +223,24 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
   // 7. interim distribution (§3 step 7, §3.7 trap). Nothing feeds cash after this point.
   const endingTranches = input.tranches.map((t, i) => t.outstanding - mandatory[i] - sweeps[i]);
   const grossDebtEnd = sum(endingTranches) + drawn;
+  // §3.8: under the surplus policy the request IS the surplus — a share of the cash above the
+  // floor — and, when gated, nothing until the debt is gone. The two caps below still apply
+  // (the cash cap is then never the binding one; the §3.7 trap can still clip it).
+  const surplus = input.surplus ?? null;
+  const request = surplus
+    ? (!surplus.after_debt_repaid || grossDebtEnd <= DEBT_REPAID_TOL ? surplus.payout_pct * Math.max(0, cash - min_cash) : 0)
+    : input.distribution_request;
   const rpMax =
     input.rp_trap_level === null
       ? null
       : Math.max(0, cash - (grossDebtEnd - input.rp_trap_level * input.ebitda_adj));
   const rpCap = rpMax ?? Infinity;
   const cashCap = cash - min_cash; // may be negative — the outer max(0, …) handles it
-  const paid = Math.max(0, Math.min(input.distribution_request, cashCap, rpCap));
+  const paid = Math.max(0, Math.min(request, cashCap, rpCap));
   // §3.7 tie rule: blocked iff the TRAP clipped what cash alone would have allowed. Strict
   // `<`, so rp_max exactly equal to the cash-capped amount is NOT blocked. False whenever
   // the trap is off (rpCap = Infinity) or the request is 0.
-  const blocked = rpCap < Math.min(input.distribution_request, Math.max(0, cashCap));
+  const blocked = rpCap < Math.min(request, Math.max(0, cashCap));
   cash -= paid;
 
   return {
@@ -237,7 +254,7 @@ export function waterfallYear(input: WaterfallYearIn): WaterfallYearOut {
     sweep_applied_total: sweepAppliedTotal,
     revolver_draw: draw,
     revolver_ending_drawn: drawn,
-    distribution_requested: input.distribution_request,
+    distribution_requested: request,
     rp_max: rpMax,
     distribution_paid: paid,
     distribution_blocked: blocked,
@@ -278,6 +295,11 @@ function validate(input: WaterfallYearIn): void {
   // §3 step 7 / §16 gate: requests are ≥ 0 (a "negative distribution" would be a capital
   // call — a different instrument, deliberately not modelled).
   assertNonNegative(input.distribution_request, 'distribution_request');
+  if (input.surplus) {
+    const p = input.surplus.payout_pct;
+    if (!(p >= 0 && p <= 1)) throw new RangeError(`kernel/waterfall: surplus payout_pct must be in [0, 1], got ${p}`);
+    if (input.distribution_request !== 0) throw new RangeError('kernel/waterfall: a surplus policy and a requested distribution are mutually exclusive (§3.8)');
+  }
   // §18.4 the refi cash cost is a use ≥ 0 (a "negative" cost would be a source — not modelled).
   if (input.refinancing_cash_cost !== undefined) assertNonNegative(input.refinancing_cash_cost, 'refinancing_cash_cost');
   // ebitda_adj is NOT range-checked: §3.7 is normative for EBITDA_adj ≤ 0 (the money form

@@ -86,6 +86,13 @@ def run(golden):
     assert len(dist_request) == N, "§16 gate: distributions length must equal hold_years"
     assert all(d >= 0 for d in dist_request), "§16 gate: distribution requests must be ≥ 0"
     rp_trap = a.get("rp_trap")
+    # §3.8 [v2.1.0] the surplus-cash policy (null ≡ OFF). One policy per deal: a request
+    # schedule and a surplus policy together are a Build rejection.
+    surplus = a.get("surplus_distribution")
+    if surplus is not None:
+        assert a.get("distributions") is None, "§3.8: a schedule and a surplus policy are mutually exclusive"
+        assert 0.0 <= surplus["payout_pct"] <= 1.0, "§3.8: payout_pct in [0, 1]"
+        assert surplus["start"] in ("immediately", "after_debt_repaid"), "§3.8: start"
     assert rp_trap is None or rp_trap["metric"] == "net_leverage", "§3.7: v1 metric is net_leverage"
     # §18 refinancing events (list; null/[] ≡ feature OFF). Keyed by tranche_name; applied at
     # the START of year R as a RETIREMENT of the old tranche + ORIGINATION of a new one at the
@@ -344,11 +351,19 @@ def run(golden):
         # distribution can never be revolver-funded, and the `c − min_cash` cap can only
         # spend what sits ABOVE the floor. In a breach year c < min_cash ⇒ paid = 0 by
         # arithmetic. Blocked/clipped capacity is NOT accrued (no catch-up ledger).
-        request = dist_request[t]
         # §3.7 gross_debt_end = post-step-1..6 par outstanding incl. accrued PIK to date,
         # plus the drawn revolver — the same debt definition §11 net leverage uses.
         gross_debt_end = sum(bal[tr["name"]] + pik_acc[tr["name"]] - mand[tr["name"]] - sweep[tr["name"]]
                              for tr in terms) + drawn
+        if surplus is None:
+            request = dist_request[t]
+        else:
+            # §3.8: the request is the surplus itself — payout × the cash above the floor after
+            # step 6 — and, under 'after_debt_repaid', nothing while ANY debt (term or drawn
+            # revolver) is still outstanding at this point of the year (±$0.005m, §15).
+            debt_gone = gross_debt_end <= 0.005
+            open_gate = surplus["start"] == "immediately" or debt_gone
+            request = surplus["payout_pct"] * max(0.0, c - min_cash) if open_gate else 0.0
         if rp_trap is None:
             rp_max = None                                    # trap OFF ⇒ +∞ (cash caps still bind)
             rp_cap = float("inf")
@@ -374,18 +389,21 @@ def run(golden):
                 if bal[tr["name"]] <= TOL and (oid_rem[tr["name"]] > 0 or fee_rem[tr["name"]] > 0):
                     early_wo += oid_rem[tr["name"]] + fee_rem[tr["name"]]
                     oid_rem[tr["name"]] = fee_rem[tr["name"]] = 0.0
-            if early_wo > 0:
-                raise RuntimeError("early retirement write-off occurred pre-exit; golden must model it in tax — extend scope")
+            # §7 [v1.0.3] (scope extended for §3.8 [v2.1.0], whose gated golden retires its senior
+            # mid-hold): the remaining OID + fees leave the BS and hit NI in the retirement year
+            # (book); the TAX deduction lands in year t+1's UNCAPPED pool — the same deferral
+            # bucket §18.5 uses — and merges into the exit deduction when t+1 = N.
+            new_pending += early_wo
 
         # §8 BS roll
         ppe = ppe + (mcap + gcap) - da
         # §18.6: capitalize new OID/fees and write off the old (refi_dfc_delta), then the normal roll
-        dfc = dfc - sum(oid_amort.values()) - sum(fee_amort.values()) - exit_writeoff + refi_dfc_delta
+        dfc = dfc - sum(oid_amort.values()) - sum(fee_amort.values()) - exit_writeoff - early_wo + refi_dfc_delta
         # §18.6: the refi book charge (old write-off + call premium) is a loss on extinguishment
         # in year R — expensed via NI so the equity leg = −(WO + premium); the new OID/fees are
         # capitalized (in DFC), NOT expensed.
         ni = ebit - (sum(cash_int.values()) + rev_int + sum(pik_acc.values()) + sum(oid_amort.values())
-                     + sum(fee_amort.values()) + commit_fee + exit_writeoff + refi_book_charge) - tax
+                     + sum(fee_amort.values()) + commit_fee + exit_writeoff + early_wo + refi_book_charge) - tax
         # A distribution leaves as cash and as book equity in the year paid — §14.2 (the BS
         # closes every year) forces it; §8 [v1.1.1] states it.
         equity_bs += ni - paid
@@ -762,6 +780,26 @@ def dist_variant(base, requests, trap):
 G2_DIST_REQUESTS = [25.0, 25.0, 25.0, 10.0, 8.0]
 G2_DIST_TRAP = {"metric": "net_leverage", "level": 2.75}
 
+# G13-SURPLUS / G13-SURPLUS-GATED — the §3.8 [v2.1.0] surplus-cash policy goldens. G5 with
+# the senior cut to 1.5× so the 50% sweep + 10% amortization retire it INSIDE the hold (the
+# only way the start gate can be seen opening). Facts, entry pricing and the operating case
+# are G5's; the ONLY changed fields are the senior size, the policy and (immediately) the
+# trap — so the two goldens differ from each other ONLY in start/payout/trap.
+#   G13-SURPLUS        : 75% of surplus every year, the §3.7 trap at 0.5× net leverage — the
+#                        un-swept half of the excess cash goes out while debt remains, and
+#                        the trap clips it in the early, levered years.
+#   G13-SURPLUS-GATED  : 100% of surplus, but only once the debt is repaid — nothing while
+#                        the senior or the revolver is outstanding, everything above the
+#                        floor afterwards.
+def g13_surplus(start, payout, trap):
+    import copy
+    g = copy.deepcopy(GOLDENS["G5"])
+    a = g["assumptions"]
+    next(tr for tr in a["tranches"] if tr["name"] == "Senior")["size_x_ebitda"] = 1.5
+    a["surplus_distribution"] = {"payout_pct": payout, "start": start}
+    a["rp_trap"] = trap
+    return g
+
 # G8-PIKT — the §20 [v1.5.0] PIK-toggle golden (§20.9). Facts, entry structure, financing
 # and operating case are IDENTICAL to G3; the ONLY changed fields are the note's two
 # election rates (cash 9%, pik 12%) and the per-year elections [pik,pik,cash,cash,pik] —
@@ -947,6 +985,9 @@ if __name__ == "__main__":
     # §22 [v1.7.0]: the two Phase-5 goldens (§22.12)
     results["G9-SWEET"] = run(g9_sweet())
     results["G10-RATCHET"] = run(g10_ratchet())
+    # §3.8 [v2.1.0]
+    results["G13-SURPLUS"] = run(g13_surplus("immediately", 0.75, {"metric": "net_leverage", "level": 0.5}))
+    results["G13-SURPLUS-GATED"] = run(g13_surplus("after_debt_repaid", 1.0, None))
     _g3, _g9, _g10 = results["G3"], results["G9-SWEET"], results["G10-RATCHET"]
     # a promote is post-close and cannot re-price entry (§13); the strip IS entry-side but
     # re-cuts the pot without changing its size, so E is byte-identical for both (§22.12)

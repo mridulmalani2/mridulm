@@ -207,6 +207,20 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
       fund: { committed_capital: null, mgmt_fee_pct: 0.02, fee_basis: 'invested', carry_pct: 0.2, pref_rate: 0.08, catchup_pct: 1, waterfall: 'european', fee_offset_pct: 1 },
     },
   },
+  // §3.8 surplus-cash policy: 75% of the surplus every year under a binding trap (year 1
+  // blocked, year 2 clipped); and 100% gated until the senior retires mid-hold
+  G13SURPLUS: GOLDEN_DEALS.G13SURPLUS,
+  G13SURPLUSGATED: GOLDEN_DEALS.G13SURPLUSGATED,
+  // the reference leverage table: all-equity (every year's cash goes out) and $300m (repaid in
+  // year 5, the rest paid out), with the flow-to-equity valuation on
+  G12_ALLEQUITY: { facts: G12_FACTS, assumptions: { ...G12_ASSUMPTIONS, structure: { ...G12_ASSUMPTIONS.structure, tranches: [], surplus_distribution: { payout_pct: 1, start: 'immediately' } } } },
+  G12_300: {
+    facts: G12_FACTS,
+    assumptions: {
+      ...G12_ASSUMPTIONS,
+      structure: { ...G12_ASSUMPTIONS.structure, tranches: G12_ASSUMPTIONS.structure.tranches.map((t) => ({ ...t, size: { amount: 300 } })) as typeof G12_ASSUMPTIONS.structure.tranches, surplus_distribution: { payout_pct: 1, start: 'after_debt_repaid' } },
+    },
+  },
   // two tranches sharing a sweep priority (pro rata) + a junior at priority 2, front-loaded margin
   G5_TIERS: {
     facts: GOLDEN_DEALS.G5.facts,
@@ -408,6 +422,16 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     const o = runModel(CASES.FUND_LOSS.facts, CASES.FUND_LOSS.assumptions);
     expect(o.returns.sponsor_net.cashflows[o.assumptions.entry.hold_years]).toBeLessThan(0);
     expect(o.fund!.lp_distributions[o.assumptions.entry.hold_years - 1]).toBeLessThan(0);
+  });
+  it('surplus deals: G13SURPLUS is trap-blocked then clipped; the gated deal pays nothing until the senior retires', () => {
+    const a = runModel(CASES.G13SURPLUS.facts, CASES.G13SURPLUS.assumptions).waterfall;
+    expect(a[0].distribution_blocked && a[0].distribution_paid === 0).toBe(true);
+    expect(a[1].distribution_blocked && a[1].distribution_paid > 0).toBe(true);
+    const g = runModel(CASES.G13SURPLUSGATED.facts, CASES.G13SURPLUSGATED.assumptions);
+    const firstPaid = g.waterfall.findIndex((w) => w.distribution_paid > 0);
+    expect(firstPaid).toBeGreaterThan(0);
+    expect(g.tranches[0][firstPaid].ending_balance).toBeLessThanOrEqual(0.005);
+    expect(g.tranches[0][firstPaid - 1].ending_balance).toBeGreaterThan(0.005);
   });
   it('SWEET_TOP clears every sweet ratchet tier (the walk ends at the top share)', () => {
     const a = CASES.SWEET_TOP.assumptions;

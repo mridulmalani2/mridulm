@@ -93,6 +93,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   validatePikElections(sized, N); // §16/§20.2 input-gate rejections [v1.5.0]
   validateSweetEquity(assumptions); // §16/§22.3 input-gate rejections [v1.7.0]
   validateForecastLines(assumptions); // §24.3 R7 [v2.0.0]
+  const surplusPolicy = validateSurplusDistribution(assumptions.structure); // §3.8 [v2.1.0]
 
   // §7 operating build (fee/OID amortization bases: par for terms, commitment for the revolver)
   const costInputs: AmortizingCostInput[] = [
@@ -257,6 +258,8 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       // §3 step 7 / §3.7 — null schedule ≡ zeros ≡ feature off (byte-identical to pre-v1.1.0)
       distribution_request: assumptions.structure.distributions?.[t] ?? 0,
       rp_trap_level: assumptions.covenants.rp_trap?.level ?? null,
+      // §3.8 [v2.1.0] the surplus-cash policy (null ≡ OFF ≡ byte-identical)
+      surplus: surplusPolicy,
       ebitda_adj: y.ebitda_adj,
       // §3 step 2R / §18.4 — mandatory refi financing use (0 when no refi lands this year)
       refinancing_cash_cost: refiCashCostTotal,
@@ -446,4 +449,22 @@ export function stripInterimSplit(
     management_share: management,
     loan_note_balance_at_exit: balance,
   };
+}
+
+/**
+ * §3.8 [v2.1.0] Build rejections for the surplus-cash policy, and its kernel form. ONE
+ * distribution policy per deal: a schedule and a surplus policy together are rejected (the
+ * analyst picks which governs — the model never guesses which one wins).
+ */
+export function validateSurplusDistribution(
+  structure: Pick<DealAssumptions['structure'], 'distributions' | 'surplus_distribution'>,
+): { payout_pct: number; after_debt_repaid: boolean } | null {
+  const sd = structure.surplus_distribution ?? null;
+  if (!sd) return null;
+  if (structure.distributions !== null) {
+    throw new RangeError('distributions: choose ONE policy — a requested schedule or the surplus-cash policy, not both (SPEC §3.8)');
+  }
+  if (!(sd.payout_pct >= 0 && sd.payout_pct <= 1)) throw new RangeError('distributions: the surplus payout must be between 0% and 100% (SPEC §3.8)');
+  if (sd.start !== 'immediately' && sd.start !== 'after_debt_repaid') throw new RangeError("distributions: the surplus policy starts 'immediately' or 'after_debt_repaid' (SPEC §3.8)");
+  return { payout_pct: sd.payout_pct, after_debt_repaid: sd.start === 'after_debt_repaid' };
 }

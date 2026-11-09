@@ -289,7 +289,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     });
     I.line('sg_else', '   sweep % below every threshold', { 0: { input: grid.else_pct, fmt: FMT_PCT } });
   }
-  const dists = a.structure.distributions;
+  const sched = a.structure.distributions;
+  const surplusD = a.structure.surplus_distribution;
+  /** a distribution policy is in force — a requested schedule OR the §3.8 surplus policy */
+  const dists = sched !== null || surplusD !== null;
   const trap = a.covenants.rp_trap;
   if (trap) I.line('rp_level', 'Restricted-payment trap: distributions only while pro-forma net leverage ≤', { 0: { input: trap.level, fmt: FMT_MULT } });
   const covs = a.covenants;
@@ -399,7 +402,11 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       I.line(`${tk[i]}_el`, `${t.name}: coupon election (cash / pik)`, per(1, N, (y) => ({ input: el[y - 1], fmt: '@' })));
     }
   });
-  if (dists) I.line('dist_req', 'Requested distribution to equity (paid only from cash above the minimum)', per(1, N, (t) => ({ input: dists[t - 1] })));
+  if (sched) I.line('dist_req', 'Requested distribution to equity (paid only from cash above the minimum)', per(1, N, (t) => ({ input: sched[t - 1] })));
+  if (surplusD) {
+    I.line('sd_payout', 'Surplus cash paid to equity each year (% of cash above the minimum, after the sweep)', { 0: { input: surplusD.payout_pct, fmt: FMT_PCT } });
+    I.line('sd_start', 'Surplus distributions start: immediately / after_debt_repaid', { 0: { input: surplusD.start, fmt: '@' } });
+  }
   I.section('5. Tax');
   I.line('tax_rate', 'Tax rate', { 0: { input: a.tax.rate, fmt: FMT_PCT } });
   I.line('int_ded', 'Interest is tax-deductible (TRUE/FALSE)', { 0: { input: a.tax.interest_deductible } });
@@ -782,8 +789,16 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
         f: `MAX(0,${m('cash_c', t)}-(${m('debt_close', t)}-${iv('rp_level')}*${ea(t)}))`, v: wf[t - 1].rp_max,
       })));
     }
+    // §3.8: under the surplus policy the request IS the surplus — payout × the cash above the
+    // floor — gated, when 'after_debt_repaid', on the year's closing debt (term + revolver)
+    M.line('dist_req_m', surplusD ? 'Surplus offered to equity  =  payout × MAX(0, cash − minimum), once the gate is open' : 'Requested distribution', per(1, N, (t) => ({
+      f: surplusD
+        ? `IF(OR(${iv('sd_start')}="immediately",${m('debt_close', t)}<=0.005),${iv('sd_payout')}*MAX(0,${m('cash_c', t)}-${iv('min_cash')}),0)`
+        : iy('dist_req', t),
+      v: wf[t - 1].distribution_requested,
+    })));
     M.line('dist_paid', 'Distribution paid  =  MAX(0, MIN(request, cash − minimum' + (trap ? ', trap capacity))' : '))'), per(1, N, (t) => ({
-      f: `MAX(0,MIN(${iy('dist_req', t)},${m('cash_c', t)}-${iv('min_cash')}${trap ? `,${m('rp_max', t)}` : ''}))`, v: wf[t - 1].distribution_paid,
+      f: `MAX(0,MIN(${m('dist_req_m', t)},${m('cash_c', t)}-${iv('min_cash')}${trap ? `,${m('rp_max', t)}` : ''}))`, v: wf[t - 1].distribution_paid,
     })), { bold: true });
   }
   M.line('cash_close', 'Closing cash', {
