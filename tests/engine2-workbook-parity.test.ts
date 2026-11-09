@@ -241,6 +241,31 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
   SELL_UNDERWATER: { facts: GOLDEN_DEALS.G2DIST.facts, assumptions: { ...GOLDEN_DEALS.G2DIST.assumptions, structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 2, fraction: 0.25, event_multiple: 2.0 } } } },
   // a sale with no distribution policy at all (the only interim sponsor flow is the sale)
   SELL_NODIST: { facts: GOLDEN_DEALS.G2.facts, assumptions: { ...GOLDEN_DEALS.G2.assumptions, structure: { ...GOLDEN_DEALS.G2.assumptions.structure, selldown: { year: 4, fraction: 0.4, event_multiple: 10 } } } },
+  // everything at once: two senior tranches + a mezz + a PIK note under a toggle, a revolver
+  // that DRAWS, an NTM exit, a leverage-grid sweep, distributions under the trap, covenants,
+  // and the flow-to-equity valuation (start-of-year leverage)
+  COMBO: {
+    facts: GOLDEN_DEALS.G5.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G5.assumptions,
+      exit: { ...GOLDEN_DEALS.G5.assumptions.exit, basis: 'ntm' },
+      operations: { ...GOLDEN_DEALS.G5.assumptions.operations, margin_path: 'front_loaded', target_margin: 0.23, growth_capex: [14, 0, 0, 0, 0] },
+      structure: {
+        ...GOLDEN_DEALS.G5.assumptions.structure,
+        sweep: { base_pct: 0.5, grid: { tiers: [{ above_net_leverage: 3.0, pct: 0.75 }], else_pct: 0.25 } },
+        distributions: [0, 0, 2, 3, 3],
+        tranches: [
+          { name: 'A', type: 'senior', size: { x_ebitda: 1.5 }, pricing: { kind: 'fixed', rate: 0.07 }, amort_pct_of_face: 0.05, maturity_years: 7, oid_pct: 0.01, sweep: { participates: true, priority: 1 } },
+          { name: 'B', type: 'senior', size: { x_ebitda: 1.0 }, pricing: { kind: 'floating', base_rate: 0.04, spread: 0.035, floor: 0.045 }, amort_pct_of_face: 0, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 } },
+          { name: 'Mezz', type: 'mezzanine', size: { amount: 8 }, pricing: { kind: 'fixed', rate: 0.11 }, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.02, sweep: { participates: true, priority: 2 } },
+          { name: 'PIK', type: 'pik_note', size: { amount: 6 }, cash_coupon: 0.06, pik_coupon: 0.1, amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.01, sweep: { participates: false, priority: 3 }, elections: ['pik', 'pik', 'cash', 'pik', 'cash'] },
+          { name: 'RCF', type: 'revolver', commitment: { amount: 10 }, pricing: { kind: 'fixed', rate: 0.06 }, commitment_fee: 0.005, maturity_years: 6, drawn_at_close: 0 },
+        ],
+      },
+      covenants: { ...GOLDEN_DEALS.G5.assumptions.covenants, leverage_max: [6, 5.5, 5, 4.5, 4], rp_trap: { metric: 'net_leverage', level: 3.5 } },
+      valuation: { ...VALUATION, leverage_timing: 'start_of_year', debt_beta: 0.15 },
+    },
+  },
   // two tranches sharing a sweep priority (pro rata) + a junior at priority 2, front-loaded margin
   G5_TIERS: {
     facts: GOLDEN_DEALS.G5.facts,
@@ -466,6 +491,14 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(nd.waterfall.every((w) => w.distribution_paid === 0)).toBe(true);
     expect(nd.returns.dpi[3]).toBeGreaterThan(0);
   });
+  it('COMBO really combines: a revolver draw, PIK accrual and cash-pay years, an NTM exit, valuation on', () => {
+    const o = runModel(CASES.COMBO.facts, CASES.COMBO.assumptions);
+    expect(o.waterfall.some((w) => w.revolver_draw > 0)).toBe(true);
+    expect(o.tranches[3].some((r) => r.pik_accrual > 0)).toBe(true);
+    expect(o.tranches[3].some((r) => r.cash_interest > 0)).toBe(true);
+    expect(o.exit.exit_ebitda_basis_value).toBeGreaterThan(o.operating[4].ebitda_adj);
+    expect(o.valuation).not.toBeNull();
+  });
   it('SWEET_TOP clears every sweet ratchet tier (the walk ends at the top share)', () => {
     const a = CASES.SWEET_TOP.assumptions;
     expect(runModel(CASES.SWEET_TOP.facts, a).equity_strip!.ratchet_tiers_reached).toBe(a.sweet_equity!.ratchet!.length);
@@ -474,5 +507,42 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     const o = runModel(CASES.G5_TIERS.facts, CASES.G5_TIERS.assumptions);
     expect(o.tranches[0].some((r, t) => r.sweep_repayment > 0 && o.tranches[1][t].sweep_repayment > 0)).toBe(true);
     expect(o.tranches[2].some((r) => r.sweep_repayment > 0)).toBe(true);
+  });
+});
+
+describe('§26 workbook layout — the sheets an analyst opens', () => {
+  const o = runModel(GOLDEN_DEALS.G2DIST.facts, GOLDEN_DEALS.G2DIST.assumptions);
+  const { wb } = buildFormulaWorkbook(o, { cachedResults: true });
+  it('sheet order: Summary first, then Inputs, Model, Sensitivity, Checks, Methodology', () => {
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'Inputs', 'Model', 'Sensitivity', 'Checks', 'Methodology']);
+  });
+  it('the Methodology sheet carries every §15 disclosure the app shows (one shared list)', async () => {
+    const { DISCLOSURES } = await import('../lib/engine2/disclosures');
+    const ws = wb.getWorksheet('Methodology')!;
+    const names = new Set<string>();
+    ws.eachRow((r) => names.add(String(r.getCell(2).value)));
+    for (const [what] of DISCLOSURES) expect(names.has(what), what).toBe(true);
+  });
+  it('key inputs carry named ranges, every numeric row a unit, every tab a colour', () => {
+    const model = wb.definedNames.model as unknown as { name: string; ranges: string[] }[];
+    const named = new Set(model.map((d) => d.name));
+    for (const n of ['Exit_Multiple', 'Entry_Multiple', 'Tax_Rate', 'Minimum_Cash', 'Hold_Years']) expect(named.has(n), n).toBe(true);
+    const inputs = wb.getWorksheet('Inputs')!;
+    let rateRow = 0;
+    inputs.eachRow((r, i) => { if (String(r.getCell(2).value) === 'Tax rate') rateRow = i; });
+    expect(inputs.getCell(`C${rateRow}`).value).toBe('%');
+    for (const ws of wb.worksheets) expect(ws.properties.tabColor, ws.name).toBeDefined();
+  });
+  it('every IRR cell is seeded and guarded (deep losses converge; no rate ⇒ "N/A", never an error)', () => {
+    const model = wb.getWorksheet('Model')!;
+    let irrCells = 0;
+    model.eachRow((r) => r.eachCell((c) => {
+      const v = c.value as { formula?: string } | null;
+      if (v && typeof v === 'object' && v.formula && /IRR\(/.test(v.formula)) {
+        irrCells += 1;
+        expect(v.formula.startsWith('IFERROR(IRR(')).toBe(true);
+      }
+    }));
+    expect(irrCells).toBeGreaterThanOrEqual(3);
   });
 });

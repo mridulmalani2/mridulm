@@ -24,6 +24,20 @@
 import ExcelJS from 'exceljs';
 import type { Engine2ModelOutput } from './facade';
 import type { CashPayTrancheAssumption, LineSpec, PikNoteAssumption } from './types';
+import { DISCLOSURES } from './disclosures';
+import { runModel } from './facade';
+
+/**
+ * A robust IRR cell: the spreadsheet IRR seeded with the money-multiple estimate
+ * (inflows ÷ outlay)^(1/N) − 1, so deep losses still converge (the default 10% guess fails
+ * there in Excel and LibreOffice alike); "N/A" when there is no rate, never a fabricated one.
+ */
+function irrF(first: string, last: string, n: number): string {
+  return `IFERROR(IRR(${first}:${last},MAX(-0.95,(SUMIF(${first}:${last},">0")/MAX(1E-9,-${first}))^(1/${n})-1)),"N/A")`;
+}
+
+/** The exit-multiple sensitivity: the base multiple and two steps of 0.5× either side. */
+const SENS_STEPS = [-1, -0.5, 0, 0.5, 1];
 
 // ── styling (the reference model's conventions) ──────────────────────────────────────────
 const BLUE = 'FF0000FF';
@@ -114,21 +128,32 @@ class SheetBuilder {
     private readonly pending: PendingFormula[],
     labelWidth: number,
     yearCols: number,
+    tabColor: string,
+    private readonly unitWord: string,
   ) {
     this.ws = wb.addWorksheet(name, {
+      properties: { tabColor: { argb: tabColor } },
       views: [{ showGridLines: false, state: 'frozen', xSplit: 3, ySplit: 3 }],
       // print the whole year grid on one page width (a model is read across, not down two pages)
       pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
     });
     this.ws.getColumn(1).width = 2;
     this.ws.getColumn(2).width = labelWidth;
-    this.ws.getColumn(3).width = 2;
+    this.ws.getColumn(3).width = 7; // the units column
     for (let c = 4; c < 4 + yearCols; c++) this.ws.getColumn(c).width = 13;
     this.ws.getColumn(4 + yearCols).width = 3;
     this.ws.getColumn(5 + yearCols).width = 90;
     this.noteCol = 5 + yearCols;
   }
   private readonly noteCol: number;
+  /** The units column (C): what every number on the row is measured in. */
+  private unitOf(fmt: string | undefined): string {
+    if (fmt === FMT_PCT) return '%';
+    if (fmt === FMT_MULT) return 'x';
+    if (fmt === FMT_YEAR) return 'year';
+    if (fmt === FMT_MONEY || fmt === undefined) return this.unitWord;
+    return '';
+  }
   row(key: string): number {
     const r = this.rows.get(key);
     if (r === undefined) throw new Error(`workbook: a formula references row "${key}" on ${this.name}, which was never written`);
@@ -185,6 +210,14 @@ class SheetBuilder {
     lab.value = label;
     if (opts.bold || opts.answer) lab.font = { bold: true, color: opts.answer ? { argb: GREEN } : undefined };
     if (opts.italic) lab.font = { italic: true, color: { argb: GREY } };
+    const first = Object.values(cells)[0];
+    const isText = first && 'input' in first && (typeof first.input === 'string' || typeof first.input === 'boolean');
+    const unit = isText ? '' : this.unitOf((first && first.fmt) ?? opts.fmt);
+    if (unit) {
+      const u = this.ws.getCell(`C${r}`);
+      u.value = unit;
+      u.font = { italic: true, size: 9, color: { argb: GREY } };
+    }
     for (const [tStr, cell] of Object.entries(cells)) {
       const addr = `${Y(Number(tStr))}${r}`;
       const c = this.ws.getCell(addr);
@@ -196,6 +229,7 @@ class SheetBuilder {
         continue;
       }
       c.numFmt = cell.fmt ?? opts.fmt ?? FMT_MONEY;
+      if (opts.bold || opts.answer) c.border = { top: { style: 'thin', color: { argb: GREY } } }; // a total reads as a total
       if (opts.bold) c.font = { bold: true };
       if (opts.answer) {
         c.font = { bold: true, color: { argb: GREEN } };
@@ -233,10 +267,14 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   wb.calcProperties = { fullCalcOnLoad: true };
   const parity: ParityCell[] = [];
   const pending: PendingFormula[] = [];
-  const I = new SheetBuilder(wb, 'Inputs', parity, pending, 64, N + 1);
-  const M = new SheetBuilder(wb, 'Model', parity, pending, 66, N + 1);
-  const C = new SheetBuilder(wb, 'Checks', parity, pending, 66, 1);
-  const sheets = new Map([[I.name, I], [M.name, M], [C.name, C]]);
+  const unitWord = `${f.currency}m`;
+  const S = new SheetBuilder(wb, 'Summary', parity, pending, 58, N + 1, 'FF00703C', unitWord);
+  const I = new SheetBuilder(wb, 'Inputs', parity, pending, 64, N + 1, 'FF0000FF', unitWord);
+  const M = new SheetBuilder(wb, 'Model', parity, pending, 66, N + 1, 'FF404040', unitWord);
+  const K = SENS_STEPS.length;
+  const X = new SheetBuilder(wb, 'Sensitivity', parity, pending, 62, Math.max(N + 1, K), 'FF7030A0', unitWord);
+  const C = new SheetBuilder(wb, 'Checks', parity, pending, 66, 1, 'FFC00000', unitWord);
+  const sheets = new Map([[S.name, S], [I.name, I], [M.name, M], [X.name, X], [C.name, C]]);
   const ccy = f.currency;
   const years = (from: number, to: number) => Object.fromEntries(range(to - from + 1, from).map((t) => [t, `Year ${t}`]));
   const iv = (key: string) => I.ext(key, 0); // a scalar input (column D)
@@ -1007,7 +1045,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     v: o.returns.unlevered.cashflows[t],
   }])));
   const irrRow = (key: string, label: string, cfKey: string, valIrr: number | null, answer = false) =>
-    M.line(key, label, { 0: { f: `IRR(${m(cfKey, 0)}:${m(cfKey, N)})`, v: valIrr, fmt: FMT_PCT } }, { answer, bold: !answer });
+    M.line(key, label, { 0: { f: irrF(m(cfKey, 0), m(cfKey, N), N), v: valIrr, fmt: FMT_PCT } }, { answer, bold: !answer });
   const moicRow = (key: string, label: string, cfKey: string, invested: string, valM: number | null) =>
     M.line(key, label, { 0: { f: `SUMIF(${m(cfKey, 0)}:${m(cfKey, N)},">0")/${invested}`, v: valM, fmt: FMT_MULT } });
   irrRow('irr_sponsor', 'Sponsor IRR', 'cf_sponsor', o.returns.sponsor_net.irr, true);
@@ -1069,7 +1107,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     M.line('f_paidin', 'LP paid-in capital', { 0: { f: `SUM(${m('f_contrib', 0)}:${m('f_contrib', N)})`, v: fo.paid_in_total } });
     M.line('f_committed', 'Committed capital (reported)', { 0: { f: `IF(ISNUMBER(${iv('f_commit')}),${iv('f_commit')},${m('f_paidin', 0)})`, v: fo.committed_capital } });
     M.line('f_cf', 'LP net cash flows  =  distributions − contributions', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? `-${m('f_contrib', 0)}` : `${m('f_lp', t)}-${m('f_contrib', t)}`, v: null }])), { noParity: true });
-    M.line('f_irr', 'LP net IRR', { 0: { f: `IRR(${m('f_cf', 0)}:${m('f_cf', N)})`, v: fo.fund_lp_net.irr, fmt: FMT_PCT } }, { answer: true });
+    M.line('f_irr', 'LP net IRR', { 0: { f: irrF(m('f_cf', 0), m('f_cf', N), N), v: fo.fund_lp_net.irr, fmt: FMT_PCT } }, { answer: true });
     M.line('f_moic', 'LP net money multiple  =  distributions ÷ paid-in', { 0: { f: `IF(${m('f_paidin', 0)}>0,SUM(${m('f_lp', 1)}:${m('f_lp', N)})/${m('f_paidin', 0)},0)`, v: fo.fund_lp_net.moic, fmt: FMT_MULT } }, { answer: true });
   }
 
@@ -1142,8 +1180,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       M.line(`${k}_cfv`, '   helper: the same flows, bought at value', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
         f: t === 0 ? `-${m(`${k}_E`, 0)}` : t === N ? `${m(`${k}_ecf`, t)}+${m(`${k}_E`, N)}` : m(`${k}_ecf`, t), v: null,
       }])), { italic: true, noParity: true });
-      M.line(`${k}_irr`, 'Equity IRR at this exit', { 0: { f: `IRR(${m(`${k}_cfe`, 0)}:${m(`${k}_cfe`, N)})`, v: c.equity_irr, fmt: FMT_PCT } }, { answer: true });
-      M.line(`${k}_req`, 'Return the equity requires over the hold  =  IRR on value', { 0: { f: `IRR(${m(`${k}_cfv`, 0)}:${m(`${k}_cfv`, N)})`, v: c.required_return, fmt: FMT_PCT } });
+      M.line(`${k}_irr`, 'Equity IRR at this exit', { 0: { f: irrF(m(`${k}_cfe`, 0), m(`${k}_cfe`, N), N), v: c.equity_irr, fmt: FMT_PCT } }, { answer: true });
+      M.line(`${k}_req`, 'Return the equity requires over the hold  =  IRR on value', { 0: { f: irrF(m(`${k}_cfv`, 0), m(`${k}_cfv`, N), N), v: c.required_return, fmt: FMT_PCT } });
       M.line(`${k}_excess`, 'Excess return a year  =  IRR − required (same sign as the NPV, always)', { 0: { f: `${m(`${k}_irr`, 0)}-${m(`${k}_req`, 0)}`, v: c.excess_return, fmt: FMT_PCT } }, { bold: true });
     }
     M.section('10. What would have to be true — break-evens (NPV = 0, one input at a time)');
@@ -1160,6 +1198,119 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
         v: null,
       }])), { italic: true, noParity: true });
       M.line('be_npv', 'NPV at the break-even exit multiple (reads 0 until an input changes)', { 0: { f: `${m('be_E', 0)}-${m('equity_total', 0)}`, v: 0 } }, { bold: true });
+    }
+  }
+
+  // ═══════════════════════════════ SENSITIVITY ═══════════════════════════════
+  // The exit multiple moves ONLY the exit: every interim flow, the debt path and the interim
+  // equity flows are unchanged, so each point restates the §9/§10/§22/§23 exit chain on the
+  // Model's own year-N figures — live formulas, held to a full engine re-run at that multiple.
+  {
+    const mm = (key: string, t = 0) => M.ext(key, t);
+    const sensMults = SENS_STEPS.map((d) => Math.max(0.5, a.exit.multiple + d));
+    const runs = sensMults.map((mult) => runModel(f, { ...a, exit: { ...a.exit, multiple: mult } }));
+    const pts = (fn: (j: number) => Cell): Record<number, Cell> => Object.fromEntries(range(K, 0).map((j) => [j, fn(j)]));
+    const pointHead = Object.fromEntries(range(K, 0).map((j) => [j, `Point ${j + 1}`]));
+    I.section('Sensitivity — exit multiples to test (the Sensitivity sheet recalculates at each)');
+    I.header(pointHead);
+    I.line('sens_m', 'Exit multiple', pts((j) => ({ input: sensMults[j], fmt: FMT_MULT })));
+    X.title(`${a.deal_name} — sensitivity to the exit multiple`, [
+      'Each column re-runs the exit at the multiple on the Inputs sheet (Sensitivity section). Every interim flow is the Model’s own.',
+    ]);
+    X.section('The exit at each multiple');
+    X.header(pointHead);
+    const x = (key: string, j: number) => X.at(key, j);
+    X.line('x_m', 'Exit multiple', pts((j) => ({ f: I.ext('sens_m', j), v: sensMults[j], fmt: FMT_MULT })), { bold: true });
+    X.line('x_ev', 'Exit enterprise value  =  multiple × basis EBITDA', pts((j) => ({ f: `${x('x_m', j)}*${mm('exit_basis_ebitda')}`, v: runs[j].exit.exit_ev })));
+    X.line('x_eq', 'Exit equity, all holders  =  EV − debt + cash − exit fees − termination', pts((j) => ({
+      f: `${x('x_ev', j)}-${mm('payoff')}+${mm('exit_cash')}-${iv('exit_fee')}*${x('x_ev', j)}-${mm('mon_term')}`, v: runs[j].exit.exit_equity_pre_mip_total,
+    })), { bold: true });
+    const lnRedX = (j: number) => (sweet ? `-${x('x_lnred', j)}` : '');
+    if (sweet) X.line('x_lnred', 'Loan notes redeemed  =  MIN(accrued, MAX(0, exit equity))', pts((j) => ({ f: `MIN(${mm('ln_bal', N)},MAX(0,${x('x_eq', j)}))`, v: runs[j].equity_strip!.loan_notes_redeemed })));
+    if (a.mip) {
+      X.line('x_proc', '   proceeds for the promote  =  exit equity + distributions paid', pts((j) => ({ f: `${x('x_eq', j)}${dists ? `+SUM(${mm('dist_paid', 1)}:${mm('dist_paid', N)})` : ''}`, v: null })), { italic: true, noParity: true });
+      X.line('x_mip', 'Management promote', pts((j) => {
+        const prom = tiers.map((tr, k) => {
+          const lo = `${tr.h}*${mm('equity_total')}`;
+          const hi = k + 1 < tiers.length ? `MIN(${x('x_proc', j)},${tiers[k + 1].h}*${mm('equity_total')})` : x('x_proc', j);
+          return `${tr.s}*MAX(0,${hi}-${lo})`;
+        }).join('+');
+        return { f: `MIN(${prom},MAX(0,${x('x_eq', j)}))`, v: runs[j].exit.mip_payout };
+      }));
+    }
+    const mipX = (j: number) => (a.mip ? `-${x('x_mip', j)}` : '');
+    X.line('x_wpot', '   ordinary pot before the warrant', pts((j) => ({ f: `${x('x_eq', j)}${lnRedX(j)}${mipX(j)}`, v: null })), { italic: true, noParity: true });
+    if (a.warrant) {
+      X.line('x_wnet', 'Warrant payout, net of strike', pts((j) => ({
+        f: `IF(${iv('w_pct')}*(${x('x_wpot', j)}+${iv('w_strike')})>${iv('w_strike')},${iv('w_pct')}*(${x('x_wpot', j)}+${iv('w_strike')})-${iv('w_strike')},0)`, v: runs[j].exit.warrant_payout_net,
+      })));
+    }
+    X.line('x_pot', '   ordinary pot after the warrant', pts((j) => ({ f: a.warrant ? `${x('x_wpot', j)}-${x('x_wnet', j)}` : x('x_wpot', j), v: null })), { italic: true, noParity: true });
+    let preF: (j: number) => string;
+    if (sweet) {
+      const tiersS = sweet.ratchet ?? [];
+      X.line('x_V0', '   institution value realized before the ordinary split', pts((j) => ({ f: `SUM(${mm('inst_int', 1)}:${mm('inst_int', N)})+${x('x_lnred', j)}`, v: null })), { italic: true, noParity: true });
+      X.line('x_rem0', '   pot to allocate', pts((j) => ({ f: `MAX(0,${x('x_pot', j)})`, v: null })), { italic: true, noParity: true });
+      const finalTerms: ((j: number) => string)[] = [];
+      let prevV = (j: number) => x('x_V0', j);
+      let prevRem = (j: number) => x('x_rem0', j);
+      let prevShare = iv('se_s0');
+      tiersS.forEach((_, k) => {
+        const T = `${iv(`se_r${k}_h`)}*${mm('sponsor')}`;
+        const pv = prevV; const pr = prevRem; const ps = prevShare;
+        X.line(`x_t${k}_take`, `   pot taken below sweet ratchet tier ${k + 1}`, pts((j) => ({ f: `IF(${pv(j)}<${T},MIN((${T}-${pv(j)})/(1-${ps}),${pr(j)}),0)`, v: null })), { italic: true, noParity: true });
+        X.line(`x_t${k}_V`, '   institution value after that slice', pts((j) => ({ f: `${pv(j)}+(1-${ps})*${x(`x_t${k}_take`, j)}`, v: null })), { italic: true, noParity: true });
+        X.line(`x_t${k}_rem`, '   pot left', pts((j) => ({ f: `${pr(j)}-${x(`x_t${k}_take`, j)}`, v: null })), { italic: true, noParity: true });
+        finalTerms.push((j) => `${ps}*${x(`x_t${k}_take`, j)}`);
+        prevV = (j) => x(`x_t${k}_V`, j);
+        prevRem = (j) => x(`x_t${k}_rem`, j);
+        prevShare = iv(`se_r${k}_s`);
+      });
+      const lastShare = prevShare; const lastRem = prevRem;
+      X.line('x_mgmt', 'Management’s sweet equity', pts((j) => ({ f: `IF(${x('x_pot', j)}<=0,0,${[...finalTerms.map((t) => t(j)), `${lastShare}*${lastRem(j)}`].join('+')})`, v: runs[j].exit.management_ordinary_share })));
+      preF = (j) => `${x('x_lnred', j)}+${x('x_pot', j)}-${x('x_mgmt', j)}`;
+    } else {
+      preF = (j) => `${x('x_pot', j)}*(1-IF(${mm('equity_total')}>0,${mm('rollover')}/${mm('equity_total')},0))`;
+    }
+    X.line('x_pre', '   sponsor split (before any partial-exit partition)', pts((j) => ({ f: preF(j), v: null })), { italic: true, noParity: true });
+    X.line('x_sp', 'Sponsor exit proceeds', pts((j) => ({ f: sell ? `(1-${iv('sd_frac')})*${x('x_pre', j)}` : x('x_pre', j), v: runs[j].exit.sponsor_share })), { bold: true });
+
+    X.section('Cash flows at each multiple (only the exit year changes)');
+    X.header({ 0: 'Year 0', ...years(1, N) });
+    range(K, 0).forEach((j) => {
+      X.line(`x_cf${j}`, `Sponsor cash flows at point ${j + 1}`, Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+        f: t < N ? mm('cf_sponsor', t) : `${x('x_sp', j)}+${mm('cf_sponsor', N)}-${mm('sponsor_exit')}`, v: runs[j].returns.sponsor_net.cashflows[t],
+      }])), { noParity: false });
+    });
+    range(K, 0).forEach((j) => {
+      X.line(`x_ecf${j}`, `Total equity cash flows at point ${j + 1}`, Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+        f: t < N ? mm('cf_equity', t) : `${x('x_eq', j)}+${mm('cf_equity', N)}-${mm('exit_eq')}`, v: runs[j].returns.pre_promote.cashflows[t],
+      }])));
+    });
+    const sooyX = v?.leverage_timing === 'start_of_year';
+    if (v && val) {
+      range(K, 0).forEach((j) => {
+        const key = `x_E${j}`;
+        const E = (t: number) => X.at(key, t);
+        X.line(key, `   equity value by year at point ${j + 1} (flow to equity, worked back from the exit)`, Object.fromEntries(range(N + 1, 0).map((t) => {
+          let fml: string;
+          if (t === N) fml = x('x_eq', j);
+          else if (!sooyX) fml = `(${E(t + 1)}+${paid(t + 1)})/(1+${iv('rf')}+(${iv('beta_a')}+(${iv('beta_a')}*(${mm('debt_close', t + 1)}-${mm('cash_close', t + 1)})-${iv('beta_d')}*${mm('debt_close', t + 1)})/${E(t + 1)})*${iv('mrp')})`;
+          else fml = `(${E(t + 1)}+${paid(t + 1)}-${iv('mrp')}*(${iv('beta_a')}*(${mm('debt_close', t)}-${mm('cash_close', t)})-${iv('beta_d')}*${mm('debt_close', t)}))/(1+${iv('rf')}+${iv('beta_a')}*${iv('mrp')})`;
+          return [t, { f: fml, v: null }];
+        })), { italic: true, noParity: true });
+      });
+    }
+
+    X.section('Returns at each multiple');
+    X.header(pointHead);
+    X.line('x_m2', 'Exit multiple', pts((j) => ({ f: x('x_m', j), v: sensMults[j], fmt: FMT_MULT })), { bold: true });
+    const irrOf = (key: string) => irrF(X.at(key, 0), X.at(key, N), N);
+    X.line('x_irr', 'Sponsor IRR', pts((j) => ({ f: irrOf(`x_cf${j}`), v: runs[j].returns.sponsor_net.irr, fmt: FMT_PCT })), { answer: true });
+    X.line('x_moic', 'Sponsor money multiple', pts((j) => ({ f: `SUMIF(${X.at(`x_cf${j}`, 0)}:${X.at(`x_cf${j}`, N)},">0")/${mm('sponsor')}`, v: runs[j].returns.sponsor_net.moic, fmt: FMT_MULT })), { answer: true });
+    X.line('x_eqirr', 'Total equity IRR (before the promote)', pts((j) => ({ f: irrOf(`x_ecf${j}`), v: runs[j].returns.pre_promote.irr, fmt: FMT_PCT })));
+    if (v && val) {
+      X.line('x_npv', 'NPV of the equity at this exit (flow to equity)', pts((j) => ({ f: `${X.at(`x_E${j}`, 0)}-${mm('equity_total')}`, v: runs[j].valuation!.assumed.npv })), { bold: true });
     }
   }
 
@@ -1207,6 +1358,80 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       { noParity: true, note: 'When positive, the ordinary pot is wiped out and management’s sweet equity is worthless on this case.' });
   }
 
+  // ═══════════════════════════════ SUMMARY ═══════════════════════════════
+  // The one page an MD reads first. Every number is a formula on the Model / Checks sheets.
+  {
+    const mm = (key: string, t = 0) => M.ext(key, t);
+    S.title(`${a.deal_name} — summary`, [
+      `${ccy} millions unless stated. Every number on this page is a live formula on the Model sheet; change the Inputs sheet and it moves.`,
+    ]);
+    S.section('Price and structure');
+    S.line('s_ev', 'Purchase price (enterprise value)', { 0: { f: mm('ev'), v: su.enterprise_value } }, { bold: true });
+    S.line('s_entry_mult', `Entry multiple (× ${a.entry.basis === 'fy' ? 'historical' : 'forecast year-1'} EBITDA)`, { 0: { f: mm('entry_mult'), v: o.derived.entry_multiple, fmt: FMT_MULT } });
+    S.line('s_debt', 'Debt at close (par)', { 0: { f: mm('total_par'), v: o.derived.total_debt_at_par } });
+    if (f.fy_ebitda !== null && o.derived.entry_gross_leverage_fy !== null) {
+      S.line('s_lev', `Gross leverage at close (debt ÷ ${basisWord} EBITDA)`, { 0: { f: `${mm('total_par')}/${I.ext('ltm_ebitda', 0)}`, v: o.derived.entry_gross_leverage_fy, fmt: FMT_MULT } });
+    }
+    S.line('s_sponsor', 'Sponsor equity', { 0: { f: mm('sponsor'), v: su.sponsor_equity } }, { bold: true });
+    S.line('s_eq_total', 'Total equity invested (incl. rollover and management)', { 0: { f: mm('equity_total'), v: su.sponsor_equity + su.rollover_equity + su.management_subscription } });
+    S.line('s_eq_pct', 'Equity as % of total sources', { 0: { f: `${mm('equity_total')}/${mm('sources')}`, v: (su.sponsor_equity + su.rollover_equity + su.management_subscription) / su.total_sources, fmt: FMT_PCT } });
+    S.section('Exit');
+    S.line('s_exit_mult', 'Exit multiple', { 0: { f: I.ext('exit_mult', 0), v: a.exit.multiple, fmt: FMT_MULT } });
+    S.line('s_exit_ev', 'Exit enterprise value', { 0: { f: mm('exit_ev'), v: ex.exit_ev } });
+    S.line('s_exit_eq', 'Exit equity, all holders', { 0: { f: mm('exit_eq'), v: ex.exit_equity_pre_mip_total } });
+    S.line('s_sponsor_exit', 'Sponsor exit proceeds', { 0: { f: mm('sponsor_exit'), v: ex.sponsor_share } });
+    S.section('Returns');
+    S.line('s_irr', 'Sponsor IRR', { 0: { f: mm('irr_sponsor'), v: o.returns.sponsor_net.irr, fmt: FMT_PCT } }, { answer: true });
+    S.line('s_moic', 'Sponsor money multiple', { 0: { f: mm('moic_sponsor'), v: o.returns.sponsor_net.moic, fmt: FMT_MULT } }, { answer: true });
+    S.line('s_irr_eq', 'Total equity IRR (before the promote)', { 0: { f: mm('irr_equity'), v: o.returns.pre_promote.irr, fmt: FMT_PCT } });
+    S.line('s_irr_u', 'Unlevered IRR', { 0: { f: mm('irr_unlev'), v: o.returns.unlevered.irr, fmt: FMT_PCT } });
+    if (dists || sell) {
+      S.line('s_dpi', 'DPI at exit (cash realized before the exit ÷ sponsor equity)', { 0: { f: mm('dpi', N), v: o.returns.dpi[N - 1], fmt: FMT_NUM } });
+      S.line('s_payback', 'Payback year', { 0: { f: mm('payback'), v: o.returns.payback_year, fmt: FMT_YEAR } });
+    }
+    if (fund && o.fund) {
+      S.line('s_lp_irr', 'LP net IRR (after fund fees and carry)', { 0: { f: mm('f_irr'), v: o.fund.fund_lp_net.irr, fmt: FMT_PCT } }, { answer: true });
+      S.line('s_lp_moic', 'LP net money multiple', { 0: { f: mm('f_moic'), v: o.fund.fund_lp_net.moic, fmt: FMT_MULT } });
+    }
+    if (v && val) {
+      S.section('Valuation — flow to equity');
+      for (const [k, title, c] of [['a', 'at the assumed exit multiple', val.assumed], ['b', 'from fundamentals', val.fundamentals]] as const) {
+        if (!c) continue;
+        S.line(`s_${k}_npv`, `NPV of the equity, ${title}`, { 0: { f: mm(`${k}_npv`), v: c.npv } }, { answer: true });
+        S.line(`s_${k}_req`, `   return the equity requires, ${title}`, { 0: { f: mm(`${k}_req`), v: c.required_return, fmt: FMT_PCT } });
+      }
+    }
+    S.section('Credit by year (closing balances)');
+    S.header(years(1, N));
+    S.line('s_netlev', 'Net leverage', per(1, N, (t) => ({ f: mm('net_lev', t), v: o.credit[t - 1].net_leverage, fmt: FMT_MULT })));
+    S.line('s_icr', 'Interest cover (EBITDA ÷ cash interest)', per(1, N, (t) => ({ f: mm('icr', t), v: o.credit[t - 1].icr, fmt: FMT_MULT })));
+    S.line('s_dscr', 'Debt service cover', per(1, N, (t) => ({ f: mm('dscr', t), v: o.credit[t - 1].dscr, fmt: FMT_MULT })));
+    S.line('s_debt_close', 'Debt at year end', per(1, N, (t) => ({ f: mm('debt_close', t), v: o.balance_sheet[t].debt_at_par })));
+    S.section('Integrity');
+    S.line('s_checks', 'Model checks total (must read 0 — see the Checks sheet)', { 0: { f: C.ext('ck_total', 0), v: 0, fmt: '0.000000' } }, { bold: true });
+  }
+
+  // ═══════════════════════════════ METHODOLOGY ═══════════════════════════════
+  {
+    const ws = wb.addWorksheet('Methodology', { properties: { tabColor: { argb: GREY } }, views: [{ showGridLines: false }] });
+    ws.getColumn(1).width = 2;
+    ws.getColumn(2).width = 44;
+    ws.getColumn(3).width = 120;
+    const t = ws.getCell('B1');
+    t.value = 'Assumptions and methodology (SPEC §15) — what this model simplifies, and why';
+    t.font = { bold: true, size: 14, color: { argb: NAVY } };
+    DISCLOSURES.forEach(([what, why], i) => {
+      const r = i + 3;
+      const a1 = ws.getCell(`B${r}`);
+      a1.value = what;
+      a1.font = { bold: true };
+      a1.alignment = { vertical: 'top', wrapText: true };
+      const b1 = ws.getCell(`C${r}`);
+      b1.value = why;
+      b1.alignment = { vertical: 'top', wrapText: true };
+    });
+  }
+
   // ═══════════════════ resolve symbolic references, write formulas ═══════════════════
   for (const p of pending) {
     const formula = p.formula.replace(REF, (_all, sheetName: string, key: string, tStr: string, abs: string) => {
@@ -1219,5 +1444,16 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     });
     p.sheet.ws.getCell(p.addr).value = opts.cachedResults && p.result !== null ? { formula, result: p.result } : { formula };
   }
+  // named ranges for the inputs an analyst flexes most (they survive row insertions in Excel)
+  const named: [string, string][] = [
+    ['exit_mult', 'Exit_Multiple'], ['entry_mult', 'Entry_Multiple'], ['entry_ev', 'Purchase_Price'],
+    ['tax_rate', 'Tax_Rate'], ['min_cash', 'Minimum_Cash'], ['exit_fee', 'Exit_Fees_Pct'], ['hold', 'Hold_Years'],
+  ];
+  for (const [key, name] of named) {
+    const r = I.rows.get(key);
+    if (r !== undefined) wb.definedNames.add(`'Inputs'!$D$${r}`, name);
+  }
+  // print areas: the whole used block of each sheet, landscape, one page wide
+  for (const b of [S, I, M, X, C]) b.ws.pageSetup.printArea = `A1:${colLetter(b.ws.columnCount)}${b.ws.rowCount}`;
   return { wb, parity };
 }

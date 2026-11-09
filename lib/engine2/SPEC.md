@@ -4105,11 +4105,34 @@ formula; the analyst changes an input in Excel and the model moves. It is not a 
 engine: it is a projection of THIS spec into spreadsheet formulas, and it is held to the
 engine by verification, not by trust.
 
-- **Layout.** One `Inputs` sheet holds every input (blue font); calculation sheets hold only
-  formulas (black); headline answers are green on a green fill; a `Checks` sheet holds
-  identity checks that must read zero, with a total. Number format
-  `#,##0.0_);(#,##0.0);"–"_)` for money, `0.0%` rates, `0.00"x"` multiples. Years across
-  columns, labels in column B, formula text in labels where the line is an identity.
+- **Layout [v2.2.0].** Six sheets in reading order: `Summary` (the one page an MD reads first —
+  price and structure, exit, returns, fund and valuation when on, credit by year, the checks
+  total — every number a formula on `Model`/`Checks`); `Inputs` (every input, blue font; the
+  sensitivity's test multiples included); `Model` (formulas only, black); `Sensitivity`;
+  `Checks` (identities that must read zero, with a total, then deal WARNINGS that are outcomes,
+  never part of the total); `Methodology` (the §15 simplifications — the SAME list the app's
+  Methodology tab shows, one shared module). Headline answers are green on a green fill; a
+  total carries a rule above it; column C states each row's unit (`USDm`, `%`, `x`, `year`).
+  Number formats: `#,##0.00_);(#,##0.00);"–"_)` money (negatives in parentheses, zero as a
+  dash), `0.00%` rates (two decimals, because rates like 4.25% are common), `0.00"x"`
+  multiples. Years across columns, labels in column B, formula text in labels where the line
+  is an identity. Named ranges on the most-flexed inputs (`Exit_Multiple`, `Entry_Multiple`,
+  `Purchase_Price`, `Tax_Rate`, `Minimum_Cash`, `Exit_Fees_Pct`, `Hold_Years`); a print area
+  and a tab colour on every sheet.
+- **IRR cells [v2.2.0].** Every IRR is the spreadsheet IRR SEEDED with the money-multiple
+  estimate `(inflows ÷ outlay)^(1/N) − 1` (floored at −95%) and wrapped to read "N/A" when no
+  rate exists. The unseeded default (10%) fails to converge on deep losses in Excel and
+  LibreOffice alike; an error cell in a model is a defect, a fabricated rate is worse.
+- **Sensitivity [v2.2.0].** The exit multiple is the axis that moves ONLY the exit (§9): every
+  interim flow, the debt path and the interim equity flows are the Model's own, so each test
+  point restates the exit chain — exit equity, loan-note redemption (§22.2), the promote
+  (§10/§22.4), the warrant (§22.6), the sweet ratchet (§22.5), the rollover split, the selldown
+  partition (§23.5) — and, when valuation is on, the §25 flow-to-equity recursion, as live
+  formulas. The parity values for each point are a FULL engine re-run at that multiple
+  (`runModel` with only `exit.multiple` changed), so the sheet is held to the engine exactly as
+  the Model is. Other axes (entry multiple, leverage, growth, margin) change the year loop
+  itself; they stay on the app's §13 grid, which re-runs the engine, and are not faked in the
+  workbook as pasted values.
 - **Parity rule (§14.26).** For every exported deal the test suite recalculates the workbook in
   an independent spreadsheet engine and asserts every mapped cell equals the engine's
   ModelOutput value within 1e-6 relative (1e-6 absolute near zero). A cell that cannot be
