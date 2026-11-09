@@ -206,12 +206,18 @@ const Workbench: React.FC = () => {
         <div className="mt-2 flex items-center justify-between">
           <button
             onClick={async () => {
-              const { buildEngine2Workbook } = await import('../../../lib/engine2/excelExport');
-              const buf = await buildEngine2Workbook(output, ccy).xlsx.writeBuffer();
+              // SPEC §26: a live formula model. Unsupported features BLOCK the export by name.
+              const { buildFormulaWorkbook, formulaCoverageBlockers } = await import('../../../lib/engine2/workbook');
+              const blockers = formulaCoverageBlockers(output);
+              if (blockers.length) {
+                alert(`The Excel model does not yet implement: ${blockers.join(', ')}. Export is blocked rather than exporting pasted values.`);
+                return;
+              }
+              const buf = await buildFormulaWorkbook(output, { cachedResults: true }).wb.xlsx.writeBuffer();
               const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
               const a = document.createElement('a');
               a.href = url;
-              a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_engine2.xlsx`;
+              a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_LBO_model.xlsx`;
               a.click();
               URL.revokeObjectURL(url);
             }}

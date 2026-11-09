@@ -1,0 +1,835 @@
+/**
+ * engine2/workbook.ts — SPEC §26 [v2.0.0]: the exported workbook is a LIVE FORMULA MODEL.
+ *
+ * One `Inputs` sheet holds every input (blue). The `Model` sheet holds only formulas (black)
+ * that restate THIS spec cell by cell — the same order and the same conventions as the engine
+ * (§3 waterfall, §4 opening-balance interest, §5 strict sequence, §6 tax state machine, §7
+ * fee amortization incl. the v1.0.3 write-off timing, §8 balance sheet, §9 exit, §10 MIP,
+ * §11 credit, §25 flow to equity). Headline answers are green. A `Checks` sheet holds
+ * identities that must read zero.
+ *
+ * It is NOT a second engine: every formula cell that has a ModelOutput counterpart is paired
+ * with the engine's own value (`parity`), and the test suite recalculates the workbook in an
+ * independent spreadsheet engine (LibreOffice) and asserts every pair agrees (§14.26). A
+ * feature the formulas do not yet implement BLOCKS export by name (`formulaCoverageBlockers`)
+ * — never a pasted value, never a silent omission.
+ *
+ * Formulas are written with SYMBOLIC row references (`ref`) and resolved once every row
+ * exists, because a financial model references forward (opening balance ← prior closing
+ * balance; tax ← the prior year's carryforward).
+ *
+ * No imports from lib/engine (boundary test).
+ */
+
+import ExcelJS from 'exceljs';
+import type { Engine2ModelOutput } from './facade';
+import type { CashPayTrancheAssumption, LineSpec, PikNoteAssumption } from './types';
+
+// ── styling (the reference model's conventions) ──────────────────────────────────────────
+const BLUE = 'FF0000FF';
+const NAVY = 'FF1F4E79';
+const GREEN = 'FF00703C';
+const GREY = 'FF777777';
+const FILL_HEAD = 'FFEBF3FA';
+const FILL_ANSWER = 'FFE2EFDA';
+const FMT_MONEY = '#,##0.00_);(#,##0.00);"–"_)';
+const FMT_PCT = '0.00%';
+const FMT_MULT = '0.00"x"';
+const FMT_NUM = '0.0000';
+const FMT_YEAR = '0';
+
+export interface ParityCell {
+  sheet: string;
+  addr: string;
+  label: string;
+  /** The engine's value; null ⇔ the engine reports N/A, and the cell must not be a number. */
+  expected: number | null;
+}
+
+export interface FormulaWorkbook {
+  wb: ExcelJS.Workbook;
+  parity: ParityCell[];
+}
+
+/**
+ * §26 coverage rule: the features the formula model does not implement yet. A non-empty
+ * list BLOCKS export — the UI shows these names; nothing is exported as pasted values.
+ */
+export function formulaCoverageBlockers(o: Engine2ModelOutput): string[] {
+  const a = o.assumptions;
+  const out: string[] = [];
+  if (a.fees.monitoring) out.push('monitoring fee');
+  if (a.structure.distributions && a.structure.distributions.some((d) => d !== 0)) out.push('interim distributions');
+  if (a.covenants.rp_trap) out.push('restricted-payment cash trap');
+  if (a.structure.refinancing && a.structure.refinancing.length > 0) out.push('refinancing events');
+  if (a.structure.sweep.grid) out.push('leverage-based sweep grid');
+  if (a.structure.tranches.some((t) => t.type === 'pik_note' && t.elections !== null)) out.push('PIK toggle elections');
+  if (a.mip?.ratchet && a.mip.ratchet.length > 0) out.push('MIP ratchet tiers');
+  if (a.sweet_equity) out.push('sweet equity strip');
+  if (a.warrant) out.push('warrant');
+  if (a.fund) out.push('fund/LP overlay');
+  const c = a.covenants;
+  if (c.leverage_max !== null || c.dscr_min !== null || c.fccr_min !== null || c.springing !== null) out.push('covenant tests');
+  return out;
+}
+
+// ── address helpers ─────────────────────────────────────────────────────────────────────
+function colLetter(n: number): string {
+  let s = '';
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+/** Year t (0 = close) lives in column D + t on BOTH sheets, so a year reads the same letter everywhere. */
+const Y = (t: number) => colLetter(4 + t);
+
+/** Symbolic reference: `@{sheet:key:t:abs}` — resolved by `resolve()` once all rows exist. */
+const REF = /@\{([^:}]+):([^:}]+):(-?\d+):([01])\}/g;
+const ref = (sheet: string, key: string, t: number, abs: boolean) => `@{${sheet}:${key}:${t}:${abs ? 1 : 0}}`;
+
+type Val = number | null;
+type Cell =
+  | { f: string; v: Val; fmt?: string } // formula + the engine value it must equal
+  | { input: number | string | boolean; fmt?: string }; // an input (Inputs sheet only)
+
+interface RowOpts {
+  bold?: boolean;
+  answer?: boolean;
+  fmt?: string;
+  note?: string;
+  italic?: boolean;
+  /** An intermediate with no ModelOutput counterpart (still a live formula; not parity-mapped). */
+  noParity?: boolean;
+}
+
+interface PendingFormula {
+  sheet: SheetBuilder;
+  addr: string;
+  formula: string;
+  result: number | string;
+}
+
+class SheetBuilder {
+  readonly ws: ExcelJS.Worksheet;
+  r = 1;
+  readonly rows = new Map<string, number>();
+  constructor(
+    wb: ExcelJS.Workbook,
+    readonly name: string,
+    private readonly parity: ParityCell[],
+    private readonly pending: PendingFormula[],
+    labelWidth: number,
+    yearCols: number,
+  ) {
+    this.ws = wb.addWorksheet(name, { views: [{ showGridLines: false, state: 'frozen', xSplit: 3, ySplit: 3 }] });
+    this.ws.getColumn(1).width = 2;
+    this.ws.getColumn(2).width = labelWidth;
+    this.ws.getColumn(3).width = 2;
+    for (let c = 4; c < 4 + yearCols; c++) this.ws.getColumn(c).width = 13;
+    this.ws.getColumn(4 + yearCols).width = 3;
+    this.ws.getColumn(5 + yearCols).width = 90;
+    this.noteCol = 5 + yearCols;
+  }
+  private readonly noteCol: number;
+  row(key: string): number {
+    const r = this.rows.get(key);
+    if (r === undefined) throw new Error(`workbook: a formula references row "${key}" on ${this.name}, which was never written`);
+    return r;
+  }
+  at(key: string, t: number, abs = false): string {
+    return ref(this.name, key, t, abs);
+  }
+  /** Cross-sheet reference (always absolute). */
+  ext(key: string, t: number): string {
+    return ref(this.name, key, t, true);
+  }
+  title(text: string, sub: string[]) {
+    const c = this.ws.getCell(`B${this.r}`);
+    c.value = text;
+    c.font = { bold: true, size: 14, color: { argb: NAVY } };
+    this.r += 1;
+    for (const s of sub) {
+      const d = this.ws.getCell(`B${this.r}`);
+      d.value = s;
+      d.font = { italic: true, color: { argb: GREY } };
+      this.r += 1;
+    }
+  }
+  section(text: string) {
+    this.r += 1;
+    const c = this.ws.getCell(`B${this.r}`);
+    c.value = text;
+    c.font = { bold: true, size: 12, color: { argb: NAVY } };
+    this.r += 1;
+  }
+  header(labels: Record<number, string>) {
+    for (const [col, text] of Object.entries(labels)) {
+      const c = this.ws.getCell(`${Y(Number(col))}${this.r}`);
+      c.value = text;
+      c.font = { bold: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_HEAD } };
+      c.alignment = { horizontal: 'right' };
+    }
+    this.r += 1;
+  }
+  note(text: string) {
+    const c = this.ws.getCell(`B${this.r}`);
+    c.value = text;
+    c.font = { italic: true, color: { argb: GREY } };
+    this.r += 1;
+  }
+  /** One labelled row; `cells` maps year index t → cell. Returns the row number. */
+  line(key: string, label: string, cells: Record<number, Cell>, opts: RowOpts = {}): number {
+    if (this.rows.has(key)) throw new Error(`workbook: duplicate row key "${key}" on ${this.name}`);
+    const r = this.r;
+    this.rows.set(key, r);
+    const lab = this.ws.getCell(`B${r}`);
+    lab.value = label;
+    if (opts.bold || opts.answer) lab.font = { bold: true, color: opts.answer ? { argb: GREEN } : undefined };
+    if (opts.italic) lab.font = { italic: true, color: { argb: GREY } };
+    for (const [tStr, cell] of Object.entries(cells)) {
+      const addr = `${Y(Number(tStr))}${r}`;
+      const c = this.ws.getCell(addr);
+      if ('input' in cell) {
+        c.value = cell.input;
+        c.font = { color: { argb: BLUE } };
+        c.numFmt = cell.fmt ?? opts.fmt ?? FMT_MONEY;
+        continue;
+      }
+      c.numFmt = cell.fmt ?? opts.fmt ?? FMT_MONEY;
+      if (opts.bold) c.font = { bold: true };
+      if (opts.answer) {
+        c.font = { bold: true, color: { argb: GREEN } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_ANSWER } };
+      }
+      this.pending.push({ sheet: this, addr, formula: cell.f, result: cell.v === null ? 'N/A' : cell.v });
+      if (!opts.noParity) this.parity.push({ sheet: this.name, addr, label: `${label.trim()} [${tStr}]`, expected: cell.v });
+    }
+    if (opts.note) {
+      const n = this.ws.getCell(`${colLetter(this.noteCol)}${r}`);
+      n.value = opts.note;
+      n.font = { italic: true, color: { argb: GREY } };
+    }
+    this.r += 1;
+    return r;
+  }
+}
+
+const range = (n: number, from = 1) => Array.from({ length: n }, (_, i) => i + from);
+const per = (from: number, to: number, fn: (t: number) => Cell): Record<number, Cell> =>
+  Object.fromEntries(range(to - from + 1, from).map((t) => [t, fn(t)]));
+
+export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResults: boolean }): FormulaWorkbook {
+  const blockers = formulaCoverageBlockers(o);
+  if (blockers.length) {
+    throw new RangeError(`workbook: the formula model does not implement yet: ${blockers.join(', ')} — export blocked (SPEC §26 coverage rule)`);
+  }
+  const a = o.assumptions;
+  const f = o.facts;
+  const N = a.entry.hold_years;
+  const lines = a.operations.lines;
+  const ops = a.operations;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Deal Engine (engine2 v2.0.0)';
+  wb.calcProperties = { fullCalcOnLoad: true };
+  const parity: ParityCell[] = [];
+  const pending: PendingFormula[] = [];
+  const I = new SheetBuilder(wb, 'Inputs', parity, pending, 64, N + 1);
+  const M = new SheetBuilder(wb, 'Model', parity, pending, 66, N + 1);
+  const C = new SheetBuilder(wb, 'Checks', parity, pending, 66, 1);
+  const sheets = new Map([[I.name, I], [M.name, M], [C.name, C]]);
+  const ccy = f.currency;
+  const years = (from: number, to: number) => Object.fromEntries(range(to - from + 1, from).map((t) => [t, `Year ${t}`]));
+  const iv = (key: string) => I.ext(key, 0); // a scalar input (column D)
+  const iy = (key: string, t: number) => I.ext(key, t); // a per-year input
+  const m = (key: string, t: number, abs = false) => M.at(key, t, abs);
+  const terms = a.structure.tranches.filter((t): t is CashPayTrancheAssumption | PikNoteAssumption => t.type !== 'revolver');
+  const rcfA = a.structure.tranches.find((t) => t.type === 'revolver');
+  const revolver = rcfA && rcfA.type === 'revolver' ? rcfA : null;
+  const tk = terms.map((_, i) => `t${i}`);
+  const all = (t: number) => range(N + 1, 0).map((x) => x === t);
+  void all;
+
+  // ═══════════════════════════════ INPUTS ═══════════════════════════════
+  I.title(`${a.deal_name} — inputs`, [
+    `${ccy} millions unless stated. Blue = input. Every other number in this workbook is a formula on these cells.`,
+    'Structural choices (holding period, the tranche list, forecast-line modes, the NWC method) are fixed at export — re-export from the deal engine to change them.',
+  ]);
+  I.section('1. Historical facts (the §1.1 sizing basis)');
+  const basisWord = f.sizing_basis === 'LTM' ? 'LTM' : 'FY';
+  if (f.fy_revenue !== null) I.line('ltm_revenue', `${basisWord} revenue`, { 0: { input: f.fy_revenue } });
+  if (f.fy_ebitda !== null) I.line('ltm_ebitda', `${basisWord} EBITDA`, { 0: { input: f.fy_ebitda } });
+  if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year — every operating line is entered directly (§24.2).');
+  I.line('net_ppe', 'Net PP&E at close (0 if the source states none)', { 0: { input: f.net_ppe ?? 0 } },
+    { note: f.net_ppe === null ? 'Not stated in the source — seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
+
+  I.section('2. Transaction');
+  I.line('hold', 'Holding period, years (structural)', { 0: { input: N, fmt: FMT_YEAR } });
+  I.line('entry_basis', 'Entry multiple basis: FY (historical) or NTM (forecast year 1)', { 0: { input: a.entry.basis === 'fy' ? 'FY' : 'NTM', fmt: '@' } });
+  if (a.entry.driver === 'ev') I.line('entry_ev', 'Purchase price (enterprise value)', { 0: { input: a.entry.enterprise_value! } });
+  else I.line('entry_mult', 'Entry multiple (× basis EBITDA)', { 0: { input: a.entry.entry_multiple!, fmt: FMT_MULT } });
+  I.line('txn_pct', 'Transaction costs (% of EV)', { 0: { input: a.fees.transaction_pct_of_ev, fmt: FMT_PCT } });
+  I.line('fin_pct', 'Financing fees (% of total commitments incl. the undrawn revolver)', { 0: { input: a.fees.financing_pct_of_commitments, fmt: FMT_PCT } });
+  I.line('min_cash', 'Minimum cash (funded at close)', { 0: { input: a.structure.min_cash } });
+  I.line('rollover', 'Rollover equity', { 0: { input: a.rollover_equity } });
+  I.line('sweep_pct', 'Cash sweep (% of cash above the minimum)', { 0: { input: a.structure.sweep.base_pct, fmt: FMT_PCT } });
+
+  I.section('3. Debt');
+  terms.forEach((t, i) => {
+    const k = tk[i];
+    I.note(`${t.name} — ${t.type.replace('_', ' ')}; ${t.sweep.participates ? `sweep priority ${t.sweep.priority}` : 'does not take the sweep'}`);
+    if (t.size.x_ebitda !== undefined) I.line(`${k}_x`, `${t.name}: size (× ${basisWord} EBITDA)`, { 0: { input: t.size.x_ebitda, fmt: FMT_MULT } });
+    else I.line(`${k}_amt`, `${t.name}: size (amount)`, { 0: { input: t.size.amount } });
+    if (t.type === 'pik_note') {
+      I.line(`${k}_cash`, `${t.name}: cash coupon`, { 0: { input: t.cash_coupon, fmt: FMT_PCT } });
+      I.line(`${k}_pik`, `${t.name}: PIK coupon (accrues on the opening balance)`, { 0: { input: t.pik_coupon, fmt: FMT_PCT } });
+    } else if (t.pricing.kind === 'fixed') {
+      I.line(`${k}_rate`, `${t.name}: fixed rate`, { 0: { input: t.pricing.rate, fmt: FMT_PCT } });
+    } else {
+      I.line(`${k}_base`, `${t.name}: base rate`, { 0: { input: t.pricing.base_rate, fmt: FMT_PCT } });
+      I.line(`${k}_floor`, `${t.name}: base-rate floor`, { 0: { input: t.pricing.floor, fmt: FMT_PCT } });
+      I.line(`${k}_spread`, `${t.name}: spread`, { 0: { input: t.pricing.spread, fmt: FMT_PCT } });
+    }
+    I.line(`${k}_amort`, `${t.name}: mandatory amortization (% of original face a year)`, { 0: { input: t.amort_pct_of_face, fmt: FMT_PCT } });
+    I.line(`${k}_oid`, `${t.name}: OID (% of par)`, { 0: { input: t.oid_pct, fmt: FMT_PCT } });
+    I.line(`${k}_mat`, `${t.name}: maturity, years (the fee/OID amortization horizon)`, { 0: { input: t.maturity_years, fmt: FMT_YEAR } });
+  });
+  if (revolver) {
+    I.note(`${revolver.name} — revolver (undrawn at close)`);
+    if (revolver.commitment.x_ebitda !== undefined) I.line('rcf_x', `${revolver.name}: commitment (× ${basisWord} EBITDA)`, { 0: { input: revolver.commitment.x_ebitda, fmt: FMT_MULT } });
+    else I.line('rcf_amt', `${revolver.name}: commitment (amount)`, { 0: { input: revolver.commitment.amount } });
+    if (revolver.pricing.kind === 'fixed') I.line('rcf_rate', `${revolver.name}: fixed rate on drawn`, { 0: { input: revolver.pricing.rate, fmt: FMT_PCT } });
+    else {
+      I.line('rcf_base', `${revolver.name}: base rate`, { 0: { input: revolver.pricing.base_rate, fmt: FMT_PCT } });
+      I.line('rcf_floor', `${revolver.name}: base-rate floor`, { 0: { input: revolver.pricing.floor, fmt: FMT_PCT } });
+      I.line('rcf_spread', `${revolver.name}: spread`, { 0: { input: revolver.pricing.spread, fmt: FMT_PCT } });
+    }
+    I.line('rcf_fee', `${revolver.name}: commitment fee on undrawn`, { 0: { input: revolver.commitment_fee, fmt: FMT_PCT } });
+    I.line('rcf_mat', `${revolver.name}: maturity, years (the fee amortization horizon)`, { 0: { input: revolver.maturity_years, fmt: FMT_YEAR } });
+  }
+  if (terms.length === 0 && !revolver) I.note('All-equity deal — no debt.');
+
+  I.section('4. Operating forecast');
+  I.header(years(1, N));
+  const lineInputs = (key: string, label: string, spec: LineSpec) => {
+    if (spec.mode === 'explicit') I.line(key, label, per(1, N, (t) => ({ input: spec.values[t - 1] })));
+    else {
+      I.line(`${key}_y1`, `${label}: year-1 amount`, { 1: { input: spec.year1 } });
+      I.line(`${key}_g`, `${label}: growth`, per(2, N, (t) => ({ input: spec.growth[t - 2], fmt: FMT_PCT })));
+    }
+  };
+  const revModelled = !(lines?.revenue && lines.revenue.mode === 'not_modelled');
+  if (!lines?.revenue) I.line('g', 'Revenue growth', per(1, N, (t) => ({ input: ops.growth[t - 1], fmt: FMT_PCT })));
+  else if (lines.revenue.mode !== 'not_modelled') lineInputs('rev', 'Revenue', lines.revenue);
+  else I.note('Revenue: not modelled in this case.');
+  if (!lines?.ebitda) {
+    I.line('target_margin', 'Target EBITDA margin (reached in the final hold year)', { 0: { input: ops.target_margin, fmt: FMT_PCT } });
+    I.line('margin_path', 'Margin path: linear / front_loaded / back_loaded', { 0: { input: ops.margin_path, fmt: '@' } });
+  } else lineInputs('ebx', lines.ebitda.measure === 'ebit' ? 'EBIT' : 'EBITDA', lines.ebitda);
+  if (!lines?.da) I.line('da_pct', 'D&A (% of revenue)', { 0: { input: ops.da_pct_revenue, fmt: FMT_PCT } });
+  else lineInputs('da', 'Depreciation & amortization', lines.da);
+  if (!lines?.capex) {
+    I.line('capex_pct', 'Maintenance capex (% of revenue)', { 0: { input: ops.maint_capex_pct_revenue, fmt: FMT_PCT } });
+    I.line('gcapex', 'Growth capex', per(1, N, (t) => ({ input: ops.growth_capex[t - 1] })));
+  } else if (lines.capex.mode === 'pct_of_da') {
+    I.line('capex_da', 'Capex as a multiple of D&A (1.00 = capex equals depreciation)', { 0: { input: lines.capex.pct, fmt: FMT_NUM } });
+  } else lineInputs('capex', 'Capital expenditure', lines.capex);
+  if (!lines?.delta_nwc) {
+    if (ops.nwc.method === 'pct') I.line('nwc_pct', 'Operating NWC (% of revenue)', { 0: { input: ops.nwc.pct_revenue, fmt: FMT_PCT } });
+    else {
+      I.line('dso', 'DSO (days, 365 basis)', { 0: { input: ops.nwc.dso, fmt: '0.0' } });
+      I.line('dio', 'DIO (days, on the COGS proxy = revenue × (1 − margin))', { 0: { input: ops.nwc.dio, fmt: '0.0' } });
+      I.line('dpo', 'DPO (days, on the COGS proxy)', { 0: { input: ops.nwc.dpo, fmt: '0.0' } });
+    }
+  } else {
+    lineInputs('dnwc', 'Increase in net working capital', lines.delta_nwc);
+    I.line('nwc0', 'Opening operating NWC (0 if the source states none)', { 0: { input: f.operating_nwc ?? 0 } },
+      { note: f.operating_nwc === null ? 'Not stated — seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
+  }
+  if (lines && lines.year_n_plus_1_growth !== null) I.line('gN1', 'Growth of every line into year N+1 (NTM exit and terminal value)', { 0: { input: lines.year_n_plus_1_growth, fmt: FMT_PCT } });
+
+  I.section('5. Tax');
+  I.line('tax_rate', 'Tax rate', { 0: { input: a.tax.rate, fmt: FMT_PCT } });
+  I.line('int_ded', 'Interest is tax-deductible (TRUE/FALSE)', { 0: { input: a.tax.interest_deductible } });
+  I.line('s163j', 'An interest-deduction cap applies, e.g. US §163(j) (TRUE/FALSE)', { 0: { input: a.tax.s163j.applies } });
+  I.line('ati_pct', 'Cap: % of adjusted taxable income (ATI)', { 0: { input: Number.isFinite(a.tax.s163j.ati_pct) ? a.tax.s163j.ati_pct : 0, fmt: FMT_PCT } },
+    { note: a.tax.s163j.applies ? undefined : 'Not used while the cap does not apply.' });
+  I.line('ati_basis', 'ATI basis: EBITDA or EBIT', { 0: { input: a.tax.s163j.ati_basis === 'ebitda' ? 'EBITDA' : 'EBIT', fmt: '@' } });
+  I.line('nol_acq', 'Acquired NOLs at close', { 0: { input: a.tax.nol.acquired_opening } });
+  I.line('nol_usable', 'Acquired NOLs are usable (TRUE/FALSE)', { 0: { input: a.tax.nol.acquired_usable } });
+  I.line('nol_pre18', 'Acquired NOLs arose before 2018 — 100% cap instead of 80% (TRUE/FALSE)', { 0: { input: a.tax.nol.arose_pre_2018 } });
+  I.line('s382', '§382 annual limit on acquired NOLs (blank = none)', { 0: { input: a.tax.nol.s382_annual_limit ?? '' } });
+  I.line('min_tax', 'Minimum tax rate on the pre-NOL base (0 = none)', { 0: { input: a.tax.minimum_rate, fmt: FMT_PCT } });
+
+  I.section('6. Exit');
+  I.line('exit_mult', 'Exit multiple', { 0: { input: a.exit.multiple, fmt: FMT_MULT } });
+  I.line('exit_basis', 'Exit multiple basis: FY (exit-year EBITDA) or NTM (year N+1)', { 0: { input: a.exit.basis === 'fy' ? 'FY' : 'NTM', fmt: '@' } });
+  I.line('exit_fee', 'Exit fees (% of exit EV)', { 0: { input: a.exit.fees_pct, fmt: FMT_PCT } });
+  if (a.mip) {
+    I.line('mip_pool', 'Management promote: pool (% of total proceeds above the hurdle)', { 0: { input: a.mip.pool_pct, fmt: FMT_PCT } });
+    I.line('mip_hurdle', 'Management promote: hurdle (× total invested equity)', { 0: { input: a.mip.hurdle_moic, fmt: FMT_MULT } });
+  }
+  const v = a.valuation;
+  const val = o.valuation;
+  if (v && val) {
+    I.section('7. Valuation — flow to equity (CAPM)');
+    I.line('rf', 'Risk-free rate', { 0: { input: v.risk_free, fmt: FMT_PCT } });
+    I.line('mrp', 'Market risk premium', { 0: { input: v.mrp, fmt: FMT_PCT } });
+    I.line('beta_a', 'Asset beta', { 0: { input: v.asset_beta, fmt: '0.000' } });
+    I.line('beta_d', 'Debt beta (0 = riskless debt)', { 0: { input: v.debt_beta, fmt: '0.000' } });
+    I.line('g_lr', 'Long-run growth after the exit', { 0: { input: v.long_run_growth, fmt: FMT_PCT } });
+    I.line('timing', 'Leverage timing for the cost of equity (structural)', { 0: { input: v.leverage_timing === 'end_of_year' ? 'end of year' : 'start of year', fmt: '@' } });
+    I.section('8. Break-evens (engine-solved; Goal Seek targets after you change inputs)');
+    const be = val.break_evens;
+    const beRow = (key: string, label: string, b: { value: number | null; reason: string | null }, fmt: string) =>
+      I.line(key, label, { 0: { input: b.value ?? '', fmt } }, { note: b.value === null ? `Not defined — ${b.reason}` : 'Solved by the deal engine. Re-solve with Goal Seek if you change any input.' });
+    beRow('be_mult', 'Break-even exit multiple, exit (a)', be.exit_multiple, FMT_MULT);
+    beRow('be_beta', 'Break-even asset beta, exit (b)', be.asset_beta, '0.0000');
+    beRow('be_g', 'Break-even long-run growth, exit (b)', be.long_run_growth, FMT_PCT);
+  }
+
+  // ═══════════════════════════════ MODEL ═══════════════════════════════
+  M.title(`${a.deal_name} — LBO model`, [
+    `${ccy} millions unless stated. Black = formula on the Inputs sheet. Green = answer.`,
+    'Conventions: interest on the opening balance (no circularity); tax after interest; flows at year end; sweep after mandatory amortization.',
+  ]);
+  const op = o.operating;
+  M.section('1. Operating forecast');
+  M.header({ 0: 'Close', ...years(1, N) });
+  M.line('year', 'Year', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${t}`, v: t, fmt: FMT_YEAR }])), { italic: true, noParity: true });
+  const yr = (t: number) => m('year', t);
+  const lineF = (key: string, spec: LineSpec, t: number, rowKey: string): string =>
+    spec.mode === 'explicit' ? iy(key, t) : t === 1 ? iy(`${key}_y1`, 1) : `${m(rowKey, t - 1)}*(1+${iy(`${key}_g`, t)})`;
+
+  if (revModelled) {
+    if (!lines?.revenue) {
+      M.line('rev', 'Revenue  =  prior × (1 + growth)', {
+        0: { f: iv('ltm_revenue'), v: f.fy_revenue },
+        ...per(1, N, (t) => ({ f: `${m('rev', t - 1)}*(1+${iy('g', t)})`, v: op[t - 1].revenue })),
+      });
+    } else {
+      M.line('rev', 'Revenue', per(1, N, (t) => ({ f: lineF('rev', lines.revenue as LineSpec, t, 'rev'), v: op[t - 1].revenue })));
+    }
+  }
+  if (!lines?.da) M.line('da', 'Depreciation & amortization  =  % × revenue', per(1, N, (t) => ({ f: `${iv('da_pct')}*${m('rev', t)}`, v: op[t - 1].da })));
+  else M.line('da', 'Depreciation & amortization', per(1, N, (t) => ({ f: lineF('da', lines.da!, t, 'da'), v: op[t - 1].da })));
+  if (!lines?.ebitda) {
+    M.line('w', '   margin-path weight  w(t) ÷ w(N)', per(1, N, (t) => ({
+      f: `IF(${iv('margin_path')}="front_loaded",SQRT(${yr(t)})/SQRT(${iv('hold')}),IF(${iv('margin_path')}="back_loaded",(${yr(t)}/${iv('hold')})^2,${yr(t)}/${iv('hold')}))`,
+      v: null, fmt: FMT_NUM,
+    })), { italic: true, noParity: true });
+    M.line('margin', 'EBITDA margin  =  base + (target − base) × weight', {
+      0: { f: `${iv('ltm_ebitda')}/${iv('ltm_revenue')}`, v: f.fy_ebitda_margin, fmt: FMT_PCT },
+      ...per(1, N, (t) => ({ f: `${m('margin', 0, true)}+(${iv('target_margin')}-${m('margin', 0, true)})*${m('w', t)}`, v: op[t - 1].margin, fmt: FMT_PCT })),
+    });
+    M.line('ebitda', 'EBITDA  =  revenue × margin', per(1, N, (t) => ({ f: `${m('rev', t)}*${m('margin', t)}`, v: op[t - 1].ebitda })), { bold: true });
+  } else if (lines.ebitda.measure === 'ebit') {
+    M.line('ebit_given', 'EBIT (as the case states it)', per(1, N, (t) => ({ f: lineF('ebx', lines.ebitda!, t, 'ebit_given'), v: op[t - 1].ebit })));
+    M.line('ebitda', 'EBITDA  =  EBIT + D&A', per(1, N, (t) => ({ f: `${m('ebit_given', t)}+${m('da', t)}`, v: op[t - 1].ebitda })), { bold: true });
+  } else {
+    M.line('ebitda', 'EBITDA', per(1, N, (t) => ({ f: lineF('ebx', lines.ebitda!, t, 'ebitda'), v: op[t - 1].ebitda })), { bold: true });
+  }
+  if (revModelled && lines?.ebitda) M.line('margin', 'EBITDA margin', per(1, N, (t) => ({ f: `IF(${m('rev', t)}=0,"N/A",${m('ebitda', t)}/${m('rev', t)})`, v: op[t - 1].margin, fmt: FMT_PCT })));
+  M.line('ebit', 'EBIT  =  EBITDA − D&A', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('da', t)}`, v: op[t - 1].ebit })));
+  if (!lines?.capex) {
+    M.line('capex', 'Capex  =  maintenance % × revenue + growth capex', per(1, N, (t) => ({ f: `${iv('capex_pct')}*${m('rev', t)}+${iy('gcapex', t)}`, v: op[t - 1].maint_capex + op[t - 1].growth_capex })));
+  } else if (lines.capex.mode === 'pct_of_da') {
+    M.line('capex', 'Capex  =  k × D&A', per(1, N, (t) => ({ f: `${iv('capex_da')}*${m('da', t)}`, v: op[t - 1].maint_capex })));
+  } else {
+    M.line('capex', 'Capital expenditure', per(1, N, (t) => ({ f: lineF('capex', lines.capex as LineSpec, t, 'capex'), v: op[t - 1].maint_capex })));
+  }
+  if (!lines?.delta_nwc) {
+    const bal = (revRef: string, marginRef: string) =>
+      ops.nwc.method === 'pct'
+        ? `${iv('nwc_pct')}*${revRef}`
+        : `${iv('dso')}/365*${revRef}+(${iv('dio')}-${iv('dpo')})/365*${revRef}*(1-${marginRef})`;
+    M.line('nwc', `Operating NWC (balance)  =  ${ops.nwc.method === 'pct' ? '% × revenue' : 'receivables + inventory − payables (days)'}`, {
+      0: { f: bal(iv('ltm_revenue'), `${iv('ltm_ebitda')}/${iv('ltm_revenue')}`), v: o.balance_sheet[0].operating_nwc },
+      ...per(1, N, (t) => ({ f: bal(m('rev', t), m('margin', t)), v: op[t - 1].nwc_balance })),
+    });
+    M.line('dnwc', 'Increase in NWC', per(1, N, (t) => ({ f: `${m('nwc', t)}-${m('nwc', t - 1)}`, v: op[t - 1].delta_nwc })));
+  } else {
+    M.line('dnwc', 'Increase in NWC', per(1, N, (t) => ({ f: lineF('dnwc', lines.delta_nwc!, t, 'dnwc'), v: op[t - 1].delta_nwc })));
+    M.line('nwc', 'Operating NWC (balance)  =  prior + increase', {
+      0: { f: iv('nwc0'), v: o.balance_sheet[0].operating_nwc },
+      ...per(1, N, (t) => ({ f: `${m('nwc', t - 1)}+${m('dnwc', t)}`, v: op[t - 1].nwc_balance })),
+    });
+  }
+
+  // ── Sources & uses ──
+  M.section('2. Sources & uses at close');
+  const su = o.sources_uses;
+  M.line('entry_basis_ebitda', 'EBITDA the entry multiple applies to (FY, or forecast year 1 under NTM)', {
+    0: { f: `IF(${iv('entry_basis')}="FY",${f.fy_ebitda !== null ? iv('ltm_ebitda') : 'NA()'},${m('ebitda', 1)})`, v: o.derived.entry_ebitda_for_valuation },
+  });
+  if (a.entry.driver === 'ev') {
+    M.line('ev', 'Enterprise value (the purchase price)', { 0: { f: iv('entry_ev'), v: su.enterprise_value } }, { bold: true });
+    M.line('entry_mult', 'Entry multiple  =  EV ÷ basis EBITDA', { 0: { f: `${m('ev', 0)}/${m('entry_basis_ebitda', 0)}`, v: o.derived.entry_multiple, fmt: FMT_MULT } });
+  } else {
+    M.line('entry_mult', 'Entry multiple', { 0: { f: iv('entry_mult'), v: o.derived.entry_multiple, fmt: FMT_MULT } });
+    M.line('ev', 'Enterprise value  =  multiple × basis EBITDA', { 0: { f: `${m('entry_mult', 0)}*${m('entry_basis_ebitda', 0)}`, v: su.enterprise_value } }, { bold: true });
+  }
+  const sizeF = (xKey: string, amtKey: string, isX: boolean) => (isX ? `${iv(xKey)}*${iv('ltm_ebitda')}` : iv(amtKey));
+  terms.forEach((t, i) => {
+    M.line(`${tk[i]}_par`, `${t.name}: par at close`, { 0: { f: sizeF(`${tk[i]}_x`, `${tk[i]}_amt`, t.size.x_ebitda !== undefined), v: su.debt_at_par[i].amount } });
+  });
+  // The commitment has no ModelOutput field of its own; it is verified TRANSITIVELY through the
+  // commitment-fee and financing-fee rows (both parity-mapped), never reconstructed here.
+  if (revolver) M.line('rcf_commit', `${revolver.name}: commitment`, { 0: { f: sizeF('rcf_x', 'rcf_amt', revolver.commitment.x_ebitda !== undefined), v: null } }, { noParity: true });
+  const sumOf = (keys: string[], t: number) => (keys.length ? keys.map((k) => m(k, t)).join('+') : '0');
+  M.line('total_par', 'Total debt at par', { 0: { f: sumOf(tk.map((k) => `${k}_par`), 0), v: o.derived.total_debt_at_par } }, { bold: true });
+  M.line('commitments', 'Total commitments  =  debt at par + revolver commitment', { 0: { f: `${m('total_par', 0)}${revolver ? `+${m('rcf_commit', 0)}` : ''}`, v: null } }, { noParity: true });
+  M.line('txn', 'Transaction costs  =  % × EV', { 0: { f: `${iv('txn_pct')}*${m('ev', 0)}`, v: su.transaction_costs } });
+  M.line('fin_fees', 'Financing fees  =  % × total commitments', { 0: { f: `${iv('fin_pct')}*${m('commitments', 0)}`, v: su.financing_fees } });
+  terms.forEach((t, i) => {
+    M.line(`${tk[i]}_oid_amt`, `${t.name}: OID funded  =  par × OID %`, { 0: { f: `${m(`${tk[i]}_par`, 0)}*${iv(`${tk[i]}_oid`)}`, v: su.debt_at_par[i].amount * t.oid_pct } });
+  });
+  M.line('oid', 'OID funded (total)', { 0: { f: sumOf(tk.map((k) => `${k}_oid_amt`), 0), v: su.oid_funded } });
+  M.line('cash_bs', 'Cash to the balance sheet (the minimum cash)', { 0: { f: iv('min_cash'), v: su.cash_to_balance_sheet } });
+  M.line('uses', 'Total uses', { 0: { f: `${m('ev', 0)}+${m('txn', 0)}+${m('fin_fees', 0)}+${m('oid', 0)}+${m('cash_bs', 0)}`, v: su.total_uses } }, { bold: true });
+  M.line('rollover', 'Rollover equity', { 0: { f: iv('rollover'), v: su.rollover_equity } });
+  M.line('sponsor', 'Sponsor equity  =  uses − debt − rollover (the plug)', { 0: { f: `${m('uses', 0)}-${m('total_par', 0)}-${m('rollover', 0)}`, v: su.sponsor_equity } }, { answer: true });
+  M.line('sources', 'Total sources', { 0: { f: `${m('total_par', 0)}+${m('rollover', 0)}+${m('sponsor', 0)}`, v: su.total_sources } }, { bold: true });
+  M.line('equity_total', 'Total equity invested  =  sponsor + rollover', { 0: { f: `${m('sponsor', 0)}+${m('rollover', 0)}`, v: su.sponsor_equity + su.rollover_equity } });
+
+  // ── Fee & OID amortization ──
+  M.section('3. Financing fees and OID — straight-line over each maturity; written off when a tranche is fully repaid, and at exit');
+  M.header(years(1, N));
+  type Amortee = { key: string; name: string; isRevolver: boolean };
+  const amortees: Amortee[] = [...terms.map((t, i) => ({ key: tk[i], name: t.name, isRevolver: false })), ...(revolver ? [{ key: 'rcf', name: revolver.name, isRevolver: true }] : [])];
+  const oidAmKeys: string[] = [];
+  const feeAmKeys: string[] = [];
+  const afterKeysByAmortee = new Map<string, string[]>();
+  for (const am of amortees) {
+    const commitRef = am.isRevolver ? m('rcf_commit', 0, true) : m(`${am.key}_par`, 0, true);
+    M.line(`${am.key}_fee_alloc`, `${am.name}: financing fee allocated (pro rata to commitment)`, {
+      0: { f: `IF(${m('commitments', 0, true)}>0,${m('fin_fees', 0, true)}*${commitRef}/${m('commitments', 0, true)},0)`, v: null },
+    }, { noParity: true });
+    const afterKeys: string[] = [];
+    for (const kind of (am.isRevolver ? ['fee'] : ['oid', 'fee']) as ('oid' | 'fee')[]) {
+      const amount = kind === 'oid' ? m(`${am.key}_oid_amt`, 0, true) : m(`${am.key}_fee_alloc`, 0, true);
+      const word = kind === 'oid' ? 'OID' : 'fee';
+      const remKey = `${am.key}_${kind}_rem`;
+      const amKey = `${am.key}_${kind}_am`;
+      const afterKey = `${am.key}_${kind}_after`;
+      const prevRem = (t: number) => (t === 1 ? amount : m(remKey, t - 1));
+      const mat = iv(`${am.key}_mat`);
+      M.line(amKey, `${am.name}: ${word} amortization`, per(1, N, (t) => ({ f: `IF(${amount}>0,MIN(${prevRem(t)},${amount}/${mat}),0)`, v: null })), { italic: true, noParity: true });
+      M.line(afterKey, `${am.name}: ${word} remaining after amortization`, per(1, N, (t) => ({ f: `${prevRem(t)}-${m(amKey, t)}`, v: null })), { italic: true, noParity: true });
+      M.line(remKey, `${am.name}: ${word} remaining at year end (0 once written off)`, per(1, N, (t) => ({
+        f: t === N ? '0' : am.isRevolver ? m(afterKey, t) : `IF(${m(`${am.key}_retired`, t)},0,${m(afterKey, t)})`, v: null,
+      })), { italic: true, noParity: true });
+      (kind === 'oid' ? oidAmKeys : feeAmKeys).push(amKey);
+      afterKeys.push(afterKey);
+    }
+    afterKeysByAmortee.set(am.key, afterKeys);
+  }
+  M.line('oid_am', 'OID amortization (total) — capped interest for tax', per(1, N, (t) => ({ f: sumOf(oidAmKeys, t), v: op[t - 1].oid_amortization })));
+  M.line('fee_am', 'Financing-fee amortization (total) — an uncapped deduction', per(1, N, (t) => ({ f: sumOf(feeAmKeys, t), v: op[t - 1].financing_fee_amortization })));
+  const allAfter = [...afterKeysByAmortee.values()].flat();
+  M.line('book_wo', 'Unamortized fees/OID written off (book): retired tranches; everything at exit', per(1, N, (t) => ({
+    f: t === N
+      ? sumOf(allAfter, t)
+      : amortees.filter((am) => !am.isRevolver).map((am) => `IF(${m(`${am.key}_retired`, t)},${sumOf(afterKeysByAmortee.get(am.key)!, t)},0)`).join('+') || '0',
+    v: t === N ? o.exit.unamortized_fees_written_off : null,
+  })), { noParity: false });
+  // only the exit-year book write-off has a ModelOutput counterpart
+  for (let t = 1; t < N; t++) {
+    const idx = parity.findIndex((p) => p.sheet === 'Model' && p.addr === `${Y(t)}${M.rows.get('book_wo')}`);
+    if (idx >= 0) parity.splice(idx, 1);
+  }
+  M.line('tax_wo', 'Write-off deductible this year  =  prior-year retirements (+ the exit write-off in the exit year)', per(1, N, (t) => ({
+    f: `${t > 1 ? m('book_wo', t - 1) : '0'}${t === N ? `+${m('book_wo', t)}` : ''}`, v: null,
+  })), { noParity: true });
+
+  // ── Debt & waterfall ──
+  M.section('4. Debt schedule and cash waterfall — §3 order: interest → mandatory amortization → revolver → sweep → draw');
+  M.header({ 0: 'Close', ...years(1, N) });
+  const priorities = [...new Set(terms.filter((t) => t.sweep.participates).map((t) => t.sweep.priority))].sort((x, y) => x - y);
+  terms.forEach((t, i) => {
+    const k = tk[i];
+    const rows = o.tranches[i];
+    M.note(t.name);
+    M.line(`${k}_open`, `${t.name}: opening balance`, per(1, N, (tt) => ({ f: tt === 1 ? m(`${k}_par`, 0) : m(`${k}_close`, tt - 1), v: rows[tt - 1].beginning_balance })));
+    const rate = t.type === 'pik_note' ? iv(`${k}_cash`) : t.pricing.kind === 'fixed' ? iv(`${k}_rate`) : `(MAX(${iv(`${k}_base`)},${iv(`${k}_floor`)})+${iv(`${k}_spread`)})`;
+    M.line(`${k}_int`, `${t.name}: cash interest  =  rate × opening balance`, per(1, N, (tt) => ({ f: `${m(`${k}_open`, tt)}*${rate}`, v: rows[tt - 1].cash_interest })));
+    M.line(`${k}_pik`, `${t.name}: PIK accrual  =  PIK coupon × opening balance`, per(1, N, (tt) => ({ f: t.type === 'pik_note' ? `${m(`${k}_open`, tt)}*${iv(`${k}_pik`)}` : '0', v: rows[tt - 1].pik_accrual })));
+    M.line(`${k}_out`, `${t.name}: outstanding before repayment  =  opening + PIK`, per(1, N, (tt) => ({ f: `${m(`${k}_open`, tt)}+${m(`${k}_pik`, tt)}`, v: null })), { italic: true, noParity: true });
+    M.line(`${k}_mand`, `${t.name}: mandatory amortization  =  MIN(% × original face, outstanding)`, per(1, N, (tt) => ({ f: `MIN(${iv(`${k}_amort`)}*${m(`${k}_par`, 0, true)},MAX(0,${m(`${k}_out`, tt)}))`, v: rows[tt - 1].mandatory_amort })));
+    M.line(`${k}_cap`, `${t.name}: room for the sweep  =  outstanding − mandatory`, per(1, N, (tt) => ({ f: t.sweep.participates ? `MAX(0,${m(`${k}_out`, tt)}-${m(`${k}_mand`, tt)})` : '0', v: null })), { italic: true, noParity: true });
+  });
+  if (revolver && o.revolver) {
+    const rr = o.revolver;
+    M.note(`${revolver.name} (revolver)`);
+    M.line('rcf_open', `${revolver.name}: opening drawn`, per(1, N, (t) => ({ f: t === 1 ? '0' : m('rcf_close', t - 1), v: rr[t - 1].beginning_drawn })));
+    const rrate = revolver.pricing.kind === 'fixed' ? iv('rcf_rate') : `(MAX(${iv('rcf_base')},${iv('rcf_floor')})+${iv('rcf_spread')})`;
+    M.line('rcf_int', `${revolver.name}: interest on the opening drawn balance`, per(1, N, (t) => ({ f: `${m('rcf_open', t)}*${rrate}`, v: rr[t - 1].cash_interest })));
+    M.line('rcf_cfee', `${revolver.name}: commitment fee on the opening undrawn amount`, per(1, N, (t) => ({ f: `(${m('rcf_commit', 0, true)}-${m('rcf_open', t)})*${iv('rcf_fee')}`, v: rr[t - 1].commitment_fee })));
+  }
+  const wf = o.waterfall;
+  M.note('Cash waterfall');
+  M.line('cash_open', 'Opening cash', per(1, N, (t) => ({ f: t === 1 ? m('cash_bs', 0) : m('cash_close', t - 1), v: wf[t - 1].opening_cash })));
+  M.line('fcf', 'Free cash flow before debt service  =  EBITDA − cash tax − capex − ΔNWC', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('cash_tax', t)}-${m('capex', t)}-${m('dnwc', t)}`, v: op[t - 1].fcf_pre_debt })), { bold: true });
+  const intKeys = [...tk.map((k) => `${k}_int`), ...(revolver ? ['rcf_int'] : [])];
+  M.line('int_total', 'Cash interest (total)', per(1, N, (t) => ({ f: sumOf(intKeys, t), v: wf[t - 1].cash_interest_total })));
+  M.line('cfee_total', 'Commitment fees', per(1, N, (t) => ({ f: revolver ? m('rcf_cfee', t) : '0', v: wf[t - 1].commitment_fees })));
+  M.line('mand_total', 'Mandatory amortization (total)', per(1, N, (t) => ({ f: sumOf(tk.map((k) => `${k}_mand`), t), v: wf[t - 1].mandatory_amort_total })));
+  M.line('cash_a', '   cash after interest, fees and mandatory amortization', per(1, N, (t) => ({ f: `${m('cash_open', t)}+${m('fcf', t)}-${m('int_total', t)}-${m('cfee_total', t)}-${m('mand_total', t)}`, v: null })), { italic: true, noParity: true });
+  M.line('rcf_repay', 'Revolver repayment  =  MIN(drawn, cash above the minimum)', per(1, N, (t) => ({ f: revolver ? `MIN(${m('rcf_open', t)},MAX(0,${m('cash_a', t)}-${iv('min_cash')}))` : '0', v: wf[t - 1].revolver_repayment })));
+  M.line('pool', 'Sweep pool  =  MAX(0, cash − minimum)', per(1, N, (t) => ({ f: `MAX(0,${m('cash_a', t)}-${m('rcf_repay', t)}-${iv('min_cash')})`, v: wf[t - 1].sweep_pool })));
+  M.line('sweepable', 'Available to sweep  =  sweep % × pool', per(1, N, (t) => ({ f: `${iv('sweep_pct')}*${m('pool', t)}`, v: wf[t - 1].sweep_pct_applied * wf[t - 1].sweep_pool })));
+  priorities.forEach((p, pi) => {
+    const members = terms.map((t, i) => ({ t, i })).filter(({ t }) => t.sweep.participates && t.sweep.priority === p);
+    const before = (t: number) => (pi === 0 ? m('sweepable', t) : m(`tier${pi - 1}_rem`, t));
+    M.line(`tier${pi}_cap`, `   sweep priority ${p}: room in this tier`, per(1, N, (t) => ({ f: members.map(({ i }) => m(`${tk[i]}_cap`, t)).join('+'), v: null })), { italic: true, noParity: true });
+    M.line(`tier${pi}_alloc`, `   sweep priority ${p}: allocated`, per(1, N, (t) => ({ f: `IF(${m(`tier${pi}_cap`, t)}<=0,0,MIN(MAX(0,${before(t)}),${m(`tier${pi}_cap`, t)}))`, v: null })), { italic: true, noParity: true });
+    M.line(`tier${pi}_rem`, `   sweep priority ${p}: left for lower priorities`, per(1, N, (t) => ({ f: `${before(t)}-${m(`tier${pi}_alloc`, t)}`, v: null })), { italic: true, noParity: true });
+  });
+  terms.forEach((t, i) => {
+    const k = tk[i];
+    const pi = priorities.indexOf(t.sweep.priority);
+    M.line(`${k}_sweep`, `${t.name}: sweep repayment (pro rata within its priority)`, per(1, N, (tt) => ({
+      f: t.sweep.participates
+        ? `IF(${m(`tier${pi}_cap`, tt)}<=0,0,IF(${m(`tier${pi}_alloc`, tt)}=${m(`tier${pi}_cap`, tt)},${m(`${k}_cap`, tt)},MIN(${m(`tier${pi}_alloc`, tt)}*${m(`${k}_cap`, tt)}/${m(`tier${pi}_cap`, tt)},${m(`${k}_cap`, tt)})))`
+        : '0',
+      v: o.tranches[i][tt - 1].sweep_repayment,
+    })));
+    M.line(`${k}_close`, `${t.name}: closing balance`, {
+      0: { f: m(`${k}_par`, 0), v: su.debt_at_par[i].amount },
+      ...per(1, N, (tt) => ({ f: `${m(`${k}_out`, tt)}-${m(`${k}_mand`, tt)}-${m(`${k}_sweep`, tt)}`, v: o.tranches[i][tt - 1].ending_balance })),
+    }, { bold: true });
+    M.line(`${k}_retired`, `${t.name}: fully repaid this year (opening > 0.005, closing ≤ 0.005)`, per(1, N, (tt) => ({ f: `AND(${m(`${k}_open`, tt)}>0.005,${m(`${k}_close`, tt)}<=0.005)`, v: null, fmt: 'General' })), { italic: true, noParity: true });
+  });
+  M.line('sweep_total', 'Sweep applied (total)', per(1, N, (t) => ({ f: sumOf(tk.map((k) => `${k}_sweep`), t), v: wf[t - 1].sweep_applied_total })));
+  M.line('cash_b', '   cash after the sweep', per(1, N, (t) => ({ f: `${m('cash_a', t)}-${m('rcf_repay', t)}-${m('sweep_total', t)}`, v: null })), { italic: true, noParity: true });
+  M.line('rcf_draw', 'Revolver draw  =  MIN(shortfall below the minimum, undrawn commitment)', per(1, N, (t) => ({
+    f: revolver ? `IF(${m('cash_b', t)}<${iv('min_cash')}-1E-12,MIN(${iv('min_cash')}-${m('cash_b', t)},${m('rcf_commit', 0, true)}-(${m('rcf_open', t)}-${m('rcf_repay', t)})),0)` : '0',
+    v: wf[t - 1].revolver_draw,
+  })));
+  if (revolver && o.revolver) {
+    const rr = o.revolver;
+    M.line('rcf_close', `${revolver.name}: closing drawn`, {
+      0: { f: '0', v: 0 },
+      ...per(1, N, (t) => ({ f: `${m('rcf_open', t)}-${m('rcf_repay', t)}+${m('rcf_draw', t)}`, v: rr[t - 1].ending_drawn })),
+    }, { bold: true });
+  }
+  M.line('cash_close', 'Closing cash', {
+    0: { f: m('cash_bs', 0), v: su.cash_to_balance_sheet },
+    ...per(1, N, (t) => ({ f: `${m('cash_b', t)}+${m('rcf_draw', t)}`, v: wf[t - 1].closing_cash })),
+  }, { bold: true });
+  const debtKeys = [...tk.map((k) => `${k}_close`), ...(revolver ? ['rcf_close'] : [])];
+  M.line('debt_close', 'Total debt at par (incl. accrued PIK and the drawn revolver)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: sumOf(debtKeys, t), v: o.balance_sheet[t].debt_at_par }])), { bold: true });
+
+  // ── Tax ──
+  M.section('5. Tax — §6: interest cap with an indefinite carryforward; acquired and post-close NOL pools; minimum tax');
+  M.header(years(1, N));
+  const tx = o.tax;
+  const pikSum = (t: number) => sumOf(tk.map((k) => `${k}_pik`), t);
+  M.line('ati', 'Adjusted taxable income (ATI)', per(1, N, (t) => ({ f: `IF(${iv('ati_basis')}="EBITDA",${m('ebitda', t)},${m('ebit', t)})`, v: tx[t - 1].ati })));
+  M.line('capped', 'Capped interest pool  =  cash interest + PIK + OID amortization', per(1, N, (t) => ({ f: `${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}`, v: tx[t - 1].capped_interest_pool })));
+  M.line('uncapped', 'Uncapped deductions  =  fee amortization + commitment fees + write-offs', per(1, N, (t) => ({ f: `${m('fee_am', t)}+${m('cfee_total', t)}+${m('tax_wo', t)}`, v: tx[t - 1].uncapped_deductions })));
+  const cfOpen = (t: number) => (t === 1 ? '0' : m('cf_end', t - 1));
+  M.line('ded', 'Deductible interest  =  MIN(pool + carryforward, cap × ATI) when capped', per(1, N, (t) => ({
+    f: `IF(NOT(${iv('int_ded')}),0,IF(NOT(${iv('s163j')}),${m('capped', t)}+${cfOpen(t)},MIN(${m('capped', t)}+${cfOpen(t)},MAX(0,${iv('ati_pct')}*${m('ati', t)}))))`,
+    v: tx[t - 1].deductible_capped_interest,
+  })));
+  M.line('cf_end', 'Disallowed interest carried forward', per(1, N, (t) => ({ f: `IF(AND(${iv('int_ded')},${iv('s163j')}),${m('capped', t)}+${cfOpen(t)}-${m('ded', t)},0)`, v: tx[t - 1].s163j_carryforward_end })));
+  M.line('taxable', 'Taxable income before NOLs  =  EBIT − deductible interest − uncapped deductions', per(1, N, (t) => ({ f: `${m('ebit', t)}-${m('ded', t)}-${m('uncapped', t)}`, v: tx[t - 1].taxable_before_nol })));
+  const nolBlock = (prefix: string, taxableKey: string, label: string, expected: (t: number) => { acq: Val; pc: Val; acqEnd: Val; pcEnd: Val }) => {
+    const acqOpen = (t: number) => (t === 1 ? iv('nol_acq') : m(`${prefix}acq_end`, t - 1));
+    const pcOpen = (t: number) => (t === 1 ? '0' : m(`${prefix}pc_end`, t - 1));
+    const np = expected(1).acq === null;
+    M.line(`${prefix}acq_used`, `${label}acquired NOLs used (80% cap, or 100% if pre-2018; §382 limit)`, per(1, N, (t) => ({
+      f: `IF(OR(${m(taxableKey, t)}<=0,NOT(${iv('nol_usable')})),0,MIN(${acqOpen(t)},IF(ISNUMBER(${iv('s382')}),${iv('s382')},${acqOpen(t)}),IF(${iv('nol_pre18')},1,0.8)*${m(taxableKey, t)}))`,
+      v: expected(t).acq,
+    })), { noParity: np, italic: np });
+    M.line(`${prefix}pc_used`, `${label}post-close NOLs used (80% limitation)`, per(1, N, (t) => ({
+      f: `IF(${m(taxableKey, t)}<=0,0,MIN(${pcOpen(t)},MAX(0,0.8*(${m(taxableKey, t)}-IF(${iv('nol_pre18')},${m(`${prefix}acq_used`, t)},0))-IF(${iv('nol_pre18')},0,${m(`${prefix}acq_used`, t)}))))`,
+      v: expected(t).pc,
+    })), { noParity: np, italic: np });
+    M.line(`${prefix}acq_end`, `${label}acquired NOL pool at year end`, per(1, N, (t) => ({ f: `${acqOpen(t)}-${m(`${prefix}acq_used`, t)}`, v: expected(t).acqEnd })), { noParity: np, italic: np });
+    M.line(`${prefix}pc_end`, `${label}post-close NOL pool at year end (losses banked)`, per(1, N, (t) => ({ f: `${pcOpen(t)}-${m(`${prefix}pc_used`, t)}+IF(${m(taxableKey, t)}<=0,-${m(taxableKey, t)},0)`, v: expected(t).pcEnd })), { noParity: np, italic: np });
+  };
+  nolBlock('', 'taxable', '', (t) => ({ acq: tx[t - 1].acquired_nol_used, pc: tx[t - 1].postclose_nol_used, acqEnd: tx[t - 1].acquired_nol_end, pcEnd: tx[t - 1].postclose_nol_end }));
+  M.line('reg_tax', 'Regular tax  =  rate × (taxable − NOLs used)', per(1, N, (t) => ({ f: `IF(${m('taxable', t)}<=0,0,${iv('tax_rate')}*(${m('taxable', t)}-${m('acq_used', t)}-${m('pc_used', t)}))`, v: tx[t - 1].regular_tax })));
+  M.line('min_tax', 'Minimum tax  =  minimum rate × taxable before NOLs', per(1, N, (t) => ({ f: `IF(${m('taxable', t)}<=0,0,${iv('min_tax')}*${m('taxable', t)})`, v: tx[t - 1].minimum_tax })));
+  M.line('cash_tax', 'Cash tax  =  MAX(regular, minimum)', per(1, N, (t) => ({ f: `MAX(${m('reg_tax', t)},${m('min_tax', t)})`, v: tx[t - 1].cash_tax })), { bold: true });
+
+  // ── Balance sheet ──
+  M.section('6. Balance sheet — §8: goodwill is the purchase-accounting plug at close');
+  M.header({ 0: 'Close', ...years(1, N) });
+  const bs = o.balance_sheet;
+  M.line('ppe', 'Net PP&E  =  prior + capex − D&A', { 0: { f: iv('net_ppe'), v: bs[0].ppe }, ...per(1, N, (t) => ({ f: `${m('ppe', t - 1)}+${m('capex', t)}-${m('da', t)}`, v: bs[t].ppe })) });
+  M.line('dfc', 'Deferred financing costs  =  prior − amortization − write-offs', {
+    0: { f: `${m('fin_fees', 0)}+${m('oid', 0)}`, v: bs[0].deferred_financing_costs },
+    ...per(1, N, (t) => ({ f: `${m('dfc', t - 1)}-${m('oid_am', t)}-${m('fee_am', t)}-${m('book_wo', t)}`, v: bs[t].deferred_financing_costs })),
+  });
+  M.line('goodwill', 'Goodwill (the plug at close, then constant)', {
+    0: { f: `${m('debt_close', 0)}+${m('equity_total', 0)}-(${m('cash_close', 0)}+${m('nwc', 0)}+${m('ppe', 0)}+${m('dfc', 0)})`, v: bs[0].goodwill },
+    ...per(1, N, (t) => ({ f: m('goodwill', t - 1), v: bs[t].goodwill })),
+  });
+  M.line('assets', 'Total assets', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${m('cash_close', t)}+${m('nwc', t)}+${m('ppe', t)}+${m('dfc', t)}+${m('goodwill', t)}`, v: bs[t].total_assets }])), { bold: true });
+  M.line('ni', 'Net income  =  EBIT − interest − PIK − fee/OID amortization − commitment fees − write-offs − tax', per(1, N, (t) => ({
+    f: `${m('ebit', t)}-(${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}+${m('fee_am', t)}+${m('cfee_total', t)}+${m('book_wo', t)})-${m('cash_tax', t)}`, v: null,
+  })), { noParity: true });
+  M.line('equity', 'Shareholders’ equity  =  prior + net income', { 0: { f: m('equity_total', 0), v: bs[0].equity }, ...per(1, N, (t) => ({ f: `${m('equity', t - 1)}+${m('ni', t)}`, v: bs[t].equity })) });
+  M.line('bs_check', 'Check: assets − debt − equity (must be 0)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${m('assets', t)}-${m('debt_close', t)}-${m('equity', t)}`, v: bs[t].check }])), { italic: true });
+
+  // ── Exit & returns ──
+  M.section('7. Exit and returns');
+  const ex = o.exit;
+  const gN1Ref = lines ? (lines.year_n_plus_1_growth !== null ? iv('gN1') : 'NA()') : iy('g', N);
+  M.line('exit_basis_ebitda', 'EBITDA the exit multiple applies to (exit year, or year N+1 under NTM)', { 0: { f: `IF(${iv('exit_basis')}="FY",${m('ebitda', N)},${m('ebitda', N)}*(1+${gN1Ref}))`, v: ex.exit_ebitda_basis_value } });
+  M.line('exit_ev', 'Exit enterprise value  =  multiple × basis EBITDA', { 0: { f: `${iv('exit_mult')}*${m('exit_basis_ebitda', 0)}`, v: ex.exit_ev } }, { bold: true });
+  M.line('exit_fees', 'Exit fees', { 0: { f: `${iv('exit_fee')}*${m('exit_ev', 0)}`, v: ex.exit_fees } });
+  M.line('payoff', 'Debt repaid at exit (par + accrued PIK + drawn revolver)', { 0: { f: m('debt_close', N), v: ex.debt_payoff_at_par_plus_pik } });
+  M.line('exit_cash', 'Cash at exit', { 0: { f: m('cash_close', N), v: ex.cash_at_exit } });
+  M.line('exit_eq', 'Exit equity, all holders  =  EV − debt + cash − fees', { 0: { f: `${m('exit_ev', 0)}-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('exit_fees', 0)}`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
+  M.line('mip', 'Management promote  =  MIN(pool × MAX(0, proceeds − hurdle × invested), exit equity)', {
+    0: { f: a.mip ? `MIN(${iv('mip_pool')}*MAX(0,${m('exit_eq', 0)}-${iv('mip_hurdle')}*${m('equity_total', 0)}),MAX(0,${m('exit_eq', 0)}))` : '0', v: ex.mip_payout },
+  });
+  M.line('roll_share', 'Rollover holders’ share (pari passu)', { 0: { f: `IF(${m('equity_total', 0)}>0,(${m('exit_eq', 0)}-${m('mip', 0)})*${m('rollover', 0)}/${m('equity_total', 0)},0)`, v: ex.rollover_share } });
+  M.line('sponsor_exit', 'Sponsor exit proceeds', { 0: { f: `${m('exit_eq', 0)}-${m('mip', 0)}-${m('roll_share', 0)}`, v: ex.sponsor_share } }, { bold: true });
+  M.header({ 0: 'Year 0', ...years(1, N) });
+  const cfRow = (key: string, label: string, t0: string, last: string, values: number[]) =>
+    M.line(key, label, Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: t === 0 ? t0 : t === N ? last : '0', v: values[t] }])));
+  cfRow('cf_sponsor', 'Sponsor cash flows', `-${m('sponsor', 0)}`, m('sponsor_exit', 0), o.returns.sponsor_net.cashflows);
+  cfRow('cf_equity', 'Total equity cash flows (before the promote)', `-${m('equity_total', 0)}`, m('exit_eq', 0), o.returns.pre_promote.cashflows);
+  M.line('u_taxable', '   unlevered: taxable income  =  EBITDA − D&A (no interest)', per(1, N, (t) => ({ f: `${m('ebitda', t)}-${m('da', t)}`, v: null })), { italic: true, noParity: true });
+  nolBlock('u_', 'u_taxable', '   unlevered: ', () => ({ acq: null, pc: null, acqEnd: null, pcEnd: null }));
+  M.line('u_tax', '   unlevered: cash tax', per(1, N, (t) => ({ f: `IF(${m('u_taxable', t)}<=0,0,MAX(${iv('tax_rate')}*(${m('u_taxable', t)}-${m('u_acq_used', t)}-${m('u_pc_used', t)}),${iv('min_tax')}*${m('u_taxable', t)}))`, v: null })), { italic: true, noParity: true });
+  M.line('cf_unlev', 'Unlevered cash flows  =  −(EV + costs); unlevered FCF; + exit EV − fees', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+    f: t === 0 ? `-(${m('ev', 0)}+${m('txn', 0)})` : `${m('ebitda', t)}-${m('u_tax', t)}-${m('capex', t)}-${m('dnwc', t)}${t === N ? `+${m('exit_ev', 0)}-${m('exit_fees', 0)}` : ''}`,
+    v: o.returns.unlevered.cashflows[t],
+  }])));
+  const irrRow = (key: string, label: string, cfKey: string, valIrr: number | null, answer = false) =>
+    M.line(key, label, { 0: { f: `IRR(${m(cfKey, 0)}:${m(cfKey, N)})`, v: valIrr, fmt: FMT_PCT } }, { answer, bold: !answer });
+  const moicRow = (key: string, label: string, cfKey: string, invested: string, valM: number | null) =>
+    M.line(key, label, { 0: { f: `SUMIF(${m(cfKey, 0)}:${m(cfKey, N)},">0")/${invested}`, v: valM, fmt: FMT_MULT } });
+  irrRow('irr_sponsor', 'Sponsor IRR', 'cf_sponsor', o.returns.sponsor_net.irr, true);
+  moicRow('moic_sponsor', 'Sponsor money multiple', 'cf_sponsor', m('sponsor', 0), o.returns.sponsor_net.moic);
+  irrRow('irr_equity', 'Total equity IRR (before the promote)', 'cf_equity', o.returns.pre_promote.irr);
+  moicRow('moic_equity', 'Total equity money multiple (before the promote)', 'cf_equity', m('equity_total', 0), o.returns.pre_promote.moic);
+  irrRow('irr_unlev', 'Unlevered IRR', 'cf_unlev', o.returns.unlevered.irr);
+
+  // ── Credit ──
+  M.section('8. Credit statistics (closing balances; N/A where the denominator is not positive)');
+  M.header(years(1, N));
+  const cr = o.credit;
+  const na = (cond: string, value: string) => `IF(${cond},${value},"N/A")`;
+  M.line('net_lev', 'Net leverage  =  (debt − cash) ÷ EBITDA', per(1, N, (t) => ({ f: na(`${m('ebitda', t)}>0`, `(${m('debt_close', t)}-${m('cash_close', t)})/${m('ebitda', t)}`), v: cr[t - 1].net_leverage, fmt: FMT_MULT })));
+  M.line('icr', 'Interest cover  =  EBITDA ÷ cash interest', per(1, N, (t) => ({ f: na(`${m('int_total', t)}>0`, `${m('ebitda', t)}/${m('int_total', t)}`), v: cr[t - 1].icr, fmt: FMT_MULT })));
+  M.line('svc', '   debt service  =  cash interest + commitment fees + mandatory amortization', per(1, N, (t) => ({ f: `${m('int_total', t)}+${m('cfee_total', t)}+${m('mand_total', t)}`, v: null })), { italic: true, noParity: true });
+  M.line('dscr', 'DSCR  =  FCF before debt service ÷ debt service', per(1, N, (t) => ({ f: na(`${m('svc', t)}>0`, `${m('fcf', t)}/${m('svc', t)}`), v: cr[t - 1].dscr, fmt: FMT_MULT })));
+  M.line('paydown', 'Cumulative paydown (% of entry debt)', per(1, N, (t) => ({ f: na(`${m('total_par', 0, true)}>0`, `(${m('total_par', 0, true)}-${m('debt_close', t)})/${m('total_par', 0, true)}`), v: cr[t - 1].cumulative_paydown_pct_of_entry_debt, fmt: FMT_PCT })));
+
+  // ── Valuation ──
+  if (v && val) {
+    M.section('9. Flow to equity — what the equity is worth (CAPM; the cost of equity re-levered every year)');
+    M.line('ru', 'Unlevered cost of capital  rU  =  rf + βA × MRP', { 0: { f: `${iv('rf')}+${iv('beta_a')}*${iv('mrp')}`, v: val.r_unlevered, fmt: FMT_PCT } });
+    M.line('ufcf6', 'Year N+1 unlevered FCF  =  (1+g) × [EBIT(1−t) + D&A − capex − ΔNWC]', {
+      0: { f: `(1+${gN1Ref})*((${m('ebitda', N)}-${m('da', N)})*(1-${iv('tax_rate')})+${m('da', N)}-${m('capex', N)}-${m('dnwc', N)})`, v: val.ufcf_n_plus_1 },
+    }, { note: 'Every line of this cash flow must be able to continue for ever at g — check capex against D&A, and the working-capital build.' });
+    M.line('ev_b', 'Exit EV from fundamentals  =  UFCF(N+1) ÷ (rU − g)', { 0: { f: `IF(${m('ru', 0)}>${iv('g_lr')},${m('ufcf6', 0)}/(${m('ru', 0)}-${iv('g_lr')}),"N/A")`, v: val.gordon_ev } }, { bold: true });
+    M.line('mult_b', '   as a multiple of the exit-basis EBITDA', { 0: { f: `IF(ISNUMBER(${m('ev_b', 0)}),${m('ev_b', 0)}/${m('exit_basis_ebitda', 0)},"N/A")`, v: val.gordon_implied_multiple, fmt: FMT_MULT } });
+    const sooy = v.leverage_timing === 'start_of_year';
+    const cases = [
+      { k: 'a', title: '(a) Exit at the assumed multiple', c: val.assumed, ev: m('exit_ev', 0) },
+      { k: 'b', title: '(b) Exit from fundamentals', c: val.fundamentals, ev: m('ev_b', 0) },
+    ] as const;
+    for (const { k, title, c, ev } of cases) {
+      if (c === null) { M.note(`${title}: not defined — ${val.gordon_null_reason ?? ''}`); continue; }
+      M.note(title);
+      M.header({ 0: 'Year 0', ...years(1, N) });
+      M.line(`${k}_exit_eq`, 'Exit equity  =  EV − debt + cash − exit fees', { 0: { f: `${ev}-${m('payoff', 0)}+${m('exit_cash', 0)}-${iv('exit_fee')}*${ev}`, v: c.exit_equity_total } });
+      M.line(`${k}_ecf`, 'Cash flow to equity during the year', per(1, N, () => ({ f: '0', v: 0 })), { noParity: true });
+      const eFormula = (t: number) => {
+        if (t === N) return m(`${k}_exit_eq`, 0);
+        if (!sooy) return `(${m(`${k}_E`, t + 1)}+${m(`${k}_ecf`, t + 1)})/(1+${m(`${k}_re`, t + 1)})`;
+        return `(${m(`${k}_E`, t + 1)}+${m(`${k}_ecf`, t + 1)}-${iv('mrp')}*(${iv('beta_a')}*(${m(`${k}_D`, t)}-${m(`${k}_C`, t)})-${iv('beta_d')}*${m(`${k}_D`, t)}))/(1+${iv('rf')}+${iv('beta_a')}*${iv('mrp')})`;
+      };
+      M.line(`${k}_E`, 'Equity value, end of year — worked backwards from the exit', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: eFormula(t), v: c.equity_value ? c.equity_value[t] : null }])), { bold: true },
+      );
+      M.line(`${k}_D`, 'Debt, end of year', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: m('debt_close', t), v: c.debt[t] }])));
+      M.line(`${k}_C`, 'Cash, end of year', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: m('cash_close', t), v: c.cash[t] }])));
+      M.line(`${k}_w`, 'Equity ÷ (debt + equity)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${m(`${k}_E`, t)}/(${m(`${k}_D`, t)}+${m(`${k}_E`, t)})`, v: c.equity_weight ? c.equity_weight[t] : null, fmt: FMT_NUM }])));
+      M.line(`${k}_beta`, 'Equity beta  =  βA + (βA × (D − C) − βD × D) ÷ E', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+        f: `${iv('beta_a')}+(${iv('beta_a')}*(${m(`${k}_D`, t)}-${m(`${k}_C`, t)})-${iv('beta_d')}*${m(`${k}_D`, t)})/${m(`${k}_E`, t)}`, v: c.beta_equity ? c.beta_equity[t] : null, fmt: '0.000',
+      }])));
+      M.line(`${k}_re`, `Cost of equity  =  rf + βE × MRP — leverage at the ${sooy ? 'START' : 'END'} of the year discounted`,
+        sooy
+          ? per(1, N, (t) => ({ f: `${iv('rf')}+${m(`${k}_beta`, t - 1)}*${iv('mrp')}`, v: c.cost_of_equity ? c.cost_of_equity[t] : null, fmt: FMT_PCT }))
+          : Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${iv('rf')}+${m(`${k}_beta`, t)}*${iv('mrp')}`, v: c.cost_of_equity ? c.cost_of_equity[t] : null, fmt: FMT_PCT }])));
+      M.line(`${k}_value`, 'Equity value at entry', { 0: { f: m(`${k}_E`, 0), v: c.equity_value_at_entry } }, { answer: true });
+      M.line(`${k}_npv`, 'NPV of the equity investment  =  value − equity invested', { 0: { f: `${m(`${k}_E`, 0)}-${m('equity_total', 0)}`, v: c.npv } }, { answer: true });
+      M.line(`${k}_vpd`, 'Value per dollar invested', { 0: { f: `${m(`${k}_E`, 0)}/${m('equity_total', 0)}`, v: c.value_per_dollar, fmt: '0.000' } });
+      M.line(`${k}_cfe`, 'Equity cash flows at this exit', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+        f: t === 0 ? `-${m('equity_total', 0)}` : t === N ? `${m(`${k}_ecf`, t)}+${m(`${k}_exit_eq`, 0)}` : m(`${k}_ecf`, t), v: c.equity_cashflows[t],
+      }])));
+      M.line(`${k}_cfv`, '   helper: the same flows, bought at value', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+        f: t === 0 ? `-${m(`${k}_E`, 0)}` : t === N ? `${m(`${k}_ecf`, t)}+${m(`${k}_E`, N)}` : m(`${k}_ecf`, t), v: null,
+      }])), { italic: true, noParity: true });
+      M.line(`${k}_irr`, 'Equity IRR at this exit', { 0: { f: `IRR(${m(`${k}_cfe`, 0)}:${m(`${k}_cfe`, N)})`, v: c.equity_irr, fmt: FMT_PCT } }, { answer: true });
+      M.line(`${k}_req`, 'Return the equity requires over the hold  =  IRR on value', { 0: { f: `IRR(${m(`${k}_cfv`, 0)}:${m(`${k}_cfv`, N)})`, v: c.required_return, fmt: FMT_PCT } });
+      M.line(`${k}_excess`, 'Excess return a year  =  IRR − required (same sign as the NPV, always)', { 0: { f: `${m(`${k}_irr`, 0)}-${m(`${k}_req`, 0)}`, v: c.excess_return, fmt: FMT_PCT } }, { bold: true });
+    }
+    M.section('10. What would have to be true — break-evens (NPV = 0, one input at a time)');
+    const be = val.break_evens;
+    M.line('be_mult_m', 'Break-even exit multiple, exit (a) — from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_mult')}),${iv('be_mult')},"N/A")`, v: be.exit_multiple.value, fmt: FMT_MULT } }, { note: 'Solved by the deal engine; after you change inputs, re-solve with Goal Seek. The live NPV below shows when it stops reading 0.' });
+    M.line('be_beta_m', 'Break-even asset beta, exit (b) — from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_beta')}),${iv('be_beta')},"N/A")`, v: be.asset_beta.value, fmt: '0.0000' } });
+    M.line('be_g_m', 'Break-even long-run growth, exit (b) — from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_g')}),${iv('be_g')},"N/A")`, v: be.long_run_growth.value, fmt: FMT_PCT } });
+    if (be.exit_multiple.value !== null && !sooy) {
+      M.header({ 0: 'Year 0', ...years(1, N) });
+      M.line('be_E', '   equity value at the break-even exit multiple (live recursion)', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
+        f: t === N
+          ? `${m('be_mult_m', 0)}*${m('exit_basis_ebitda', 0)}*(1-${iv('exit_fee')})-${m('payoff', 0)}+${m('exit_cash', 0)}`
+          : `${m('be_E', t + 1)}/(1+${iv('rf')}+(${iv('beta_a')}+(${iv('beta_a')}*(${m('debt_close', t + 1)}-${m('cash_close', t + 1)})-${iv('beta_d')}*${m('debt_close', t + 1)})/${m('be_E', t + 1)})*${iv('mrp')})`,
+        v: null,
+      }])), { italic: true, noParity: true });
+      M.line('be_npv', 'NPV at the break-even exit multiple (reads 0 until an input changes)', { 0: { f: `${m('be_E', 0)}-${m('equity_total', 0)}`, v: 0 } }, { bold: true });
+    }
+  }
+
+  // ═══════════════════════════════ CHECKS ═══════════════════════════════
+  C.title('Checks — every row must read zero', ['A non-zero row means an input change has broken an identity the model relies on.']);
+  C.r += 1;
+  const mx = (key: string, t: number) => M.ext(key, t);
+  const checks: [string, string, string][] = [
+    ['ck_su', 'Sources = uses', `${mx('sources', 0)}-${mx('uses', 0)}`],
+    ['ck_bs', 'Balance sheet balances in every year (sum of |assets − debt − equity|)', range(N + 1, 0).map((t) => `ABS(${mx('bs_check', t)})`).join('+')],
+    ['ck_exit', 'Exit split: sponsor + rollover + promote = exit equity', `${mx('sponsor_exit', 0)}+${mx('roll_share', 0)}+${mx('mip', 0)}-${mx('exit_eq', 0)}`],
+    ['ck_debt', 'Debt roll: par − repayments + PIK = closing debt (terms)', terms.length
+      ? `${mx('total_par', 0)}${range(N, 1).map((t) => terms.map((_, i) => `-${mx(`${tk[i]}_mand`, t)}-${mx(`${tk[i]}_sweep`, t)}+${mx(`${tk[i]}_pik`, t)}`).join('')).join('')}-(${terms.map((_, i) => mx(`${tk[i]}_close`, N)).join('+')})`
+      : '0'],
+  ];
+  if (v && val) {
+    checks.push(['ck_sign_a', 'Flow to equity (a): the NPV and the excess return have the same sign', `IF(SIGN(ROUND(${mx('a_npv', 0)},9))=SIGN(ROUND(${mx('a_excess', 0)},12)),0,1)`]);
+    if (val.fundamentals) checks.push(['ck_sign_b', 'Flow to equity (b): the NPV and the excess return have the same sign', `IF(SIGN(ROUND(${mx('b_npv', 0)},9))=SIGN(ROUND(${mx('b_excess', 0)},12)),0,1)`]);
+  }
+  for (const [key, label, fml] of checks) C.line(key, label, { 0: { f: `ROUND(${fml},6)`, v: 0, fmt: '0.000000' } });
+  C.line('ck_total', 'Total (must be 0)', { 0: { f: `SUMPRODUCT(ABS(${C.at(checks[0][0], 0)}:${C.at(checks[checks.length - 1][0], 0)}))`, v: 0, fmt: '0.000000' } }, { answer: true });
+
+  // Deal WARNINGS are outcomes of the deal, not broken identities — they are shown with the
+  // engine's own figure and are never part of the must-be-zero total.
+  C.section('Deal warnings (outcomes to review — not model errors)');
+  const breach = o.waterfall.some((w) => w.cash_floor_breach);
+  C.line('wn_cash', 'Cash below the minimum, summed over the hold (0 = never breached)', { 0: { f: range(N, 1).map((t) => `MAX(0,${iv('min_cash')}-${mx('cash_close', t)}-1E-9)`).join('+'), v: null } },
+    { noParity: true, note: breach ? 'The engine flags a cash-floor breach — add a revolver, lower the debt, or revisit the forecast.' : undefined });
+
+  // ═══════════════════ resolve symbolic references, write formulas ═══════════════════
+  for (const p of pending) {
+    const formula = p.formula.replace(REF, (_all, sheetName: string, key: string, tStr: string, abs: string) => {
+      const target = sheets.get(sheetName);
+      if (!target) throw new Error(`workbook: unknown sheet ${sheetName}`);
+      const row = target.row(key);
+      const col = Y(Number(tStr));
+      if (sheetName === p.sheet.name) return abs === '1' ? `$${col}$${row}` : `${col}${row}`;
+      return `'${sheetName}'!$${col}$${row}`;
+    });
+    p.sheet.ws.getCell(p.addr).value = opts.cachedResults ? { formula, result: p.result } : { formula };
+  }
+  return { wb, parity };
+}

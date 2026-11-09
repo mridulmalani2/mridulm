@@ -57,7 +57,7 @@ const DISPLAY_ROOTS: { dir: string; exts: string[] }[] = [
   { dir: 'components/deal-engine', exts: ['.tsx', '.ts'] },
   { dir: 'lib/format', exts: ['.ts'] },
 ];
-const DISPLAY_FILES_EXPLICIT = ['lib/engine2/display.ts', 'lib/engine2/excelExport.ts', 'lib/ai2/memo.ts'];
+const DISPLAY_FILES_EXPLICIT = ['lib/engine2/display.ts', 'lib/ai2/memo.ts'];
 
 /**
  * The display-derivation single-source HOME (tier-governance round 4): the ONE module where a
@@ -193,7 +193,6 @@ describe('governance gate (b): display surfaces cannot open a second calculation
       'components/deal-engine/v2/BasisBadge.tsx',
       'components/deal-engine/MemoModal.tsx',
       'lib/format/index.ts',
-      'lib/engine2/excelExport.ts',
       'lib/ai2/memo.ts',
     ]) {
       expect(DISPLAY_SURFACES, `${known} must be in the globbed scan set`).toContain(known);
