@@ -552,3 +552,20 @@ describe('§26 workbook layout — the sheets an analyst opens', () => {
     expect(irrCells).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('§26 Summary integrity rows — the workbook flags a deal the engine flags (adversarial review F1)', () => {
+  it('the Summary carries live rows for a cash-floor breach and an uncovered exit, linked to the model', () => {
+    const o = runModel(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
+    const { wb } = buildFormulaWorkbook(o, { cachedResults: true });
+    const ws = wb.getWorksheet('Summary')!;
+    const found: Record<string, string> = {};
+    ws.eachRow((r) => {
+      const label = String(r.getCell(2).value ?? '');
+      const v = r.getCell(4).value as { formula?: string } | null;
+      if (/Cash below the minimum/.test(label)) found.cash = v?.formula ?? '';
+      if (/Debt the exit does not cover/.test(label)) found.short = v?.formula ?? '';
+    });
+    expect(found.cash).toMatch(/^'Checks'!\$D\$\d+$/);
+    expect(found.short).toMatch(/^'Model'!\$D\$\d+$/);
+  });
+});

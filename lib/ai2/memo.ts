@@ -19,7 +19,7 @@
  */
 
 import { type Engine2ModelOutput } from '../engine2/facade';
-import { entryMultipleDisplay, exitMultipleDisplay } from '../engine2/display';
+import { entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful } from '../engine2/display';
 import { money, multiple, num, pct } from '../format';
 import type { Engine2Currency } from '../format';
 
@@ -56,7 +56,9 @@ Entry EV ${money(o.derived.enterprise_value, ccy)} at ${entryMultipleClause}; ex
 | **Total** | ${money(su.total_uses, ccy)} | **Total** | ${money(su.total_sources, ccy)} |
 
 ## Returns
-Sponsor net ${pct(o.returns.sponsor_net.irr)} IRR / ${multiple(o.returns.sponsor_net.moic)} MOIC; pre-promote ${pct(o.returns.pre_promote.irr)}; unlevered ${pct(o.returns.unlevered.irr)}.
+${headlineNotMeaningful(o)
+    ? `**Not meaningful on this run** — a BLOCK condition (see Caveats) means the projected returns do not describe a deal that can be financed as structured. Unlevered ${pct(o.returns.unlevered.irr)} (capital-structure-blind) is unaffected.`
+    : `Sponsor net ${pct(o.returns.sponsor_net.irr)} IRR / ${multiple(o.returns.sponsor_net.moic)} MOIC; pre-promote ${pct(o.returns.pre_promote.irr)}; unlevered ${pct(o.returns.unlevered.irr)}.`}
 Bridge: EBITDA growth ${money(o.bridge.ebitda_growth_at_entry_multiple, ccy)}, multiple ${money(o.bridge.multiple_change_bar, ccy)}, interaction ${money(o.bridge.interaction, ccy)}, paydown ${money(o.bridge.net_debt_paydown, ccy)}.
 
 ## Capitalization

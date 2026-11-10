@@ -37,6 +37,7 @@ import type {
   SensitivityGrid,
 } from './types';
 import { covenantBreachYear } from './credit';
+import { headlineNotMeaningful } from './display';
 
 /** §13 field-level merge: only named fields change; growth/growth_capex arrays replace whole. */
 export function applyScenarioDeltas(base: DealAssumptions, deltas: ScenarioDeltas): DealAssumptions {
@@ -202,6 +203,15 @@ export function buildSensitivityGrid(
         }
       }
       const run = runModel(facts, cell);
+      // a cell whose OWN run carries a BLOCK flag (a cash-floor breach with the revolver
+      // exhausted, a non-positive plug) is not economically meaningful: it renders null — the
+      // same N/A semantics as the strip-plug rejection above, never a plausible-looking number
+      // (adversarial review F1; the headline rule's one predicate, display.ts)
+      if (headlineNotMeaningful(run)) {
+        irrRow.push(null);
+        moicRow.push(null);
+        continue;
+      }
       irrRow.push(run.returns.sponsor_net.irr);
       moicRow.push(run.returns.sponsor_net.moic);
     }

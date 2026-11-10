@@ -1413,6 +1413,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     S.line('s_dscr', 'Debt service cover', per(1, N, (t) => ({ f: mm('dscr', t), v: o.credit[t - 1].dscr, fmt: FMT_MULT })));
     S.line('s_debt_close', 'Debt at year end', per(1, N, (t) => ({ f: mm('debt_close', t), v: o.balance_sheet[t].debt_at_par })));
     S.section('Integrity');
+    // live mirrors of the Checks-sheet WARNINGS: a deal that breaches its cash floor, or whose
+    // exit does not cover the debt, is flagged on the page the reader opens first
+    S.line('s_cashwarn', 'Cash below the minimum, summed over the hold (0 = never; else the deal needs more liquidity)', { 0: { f: C.ext('wn_cash', 0), v: null } }, { noParity: true });
+    S.line('s_shortfall', 'Debt the exit does not cover (0 = covered; else the lenders’ loss)', { 0: { f: mm('shortfall'), v: ex.debt_shortfall_at_exit } });
     S.line('s_checks', 'Model checks total (must read 0 — see the Checks sheet)', { 0: { f: C.ext('ck_total', 0), v: 0, fmt: '0.000000' } }, { bold: true });
   }
 

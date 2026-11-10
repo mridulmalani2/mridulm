@@ -13,7 +13,7 @@
 import { DISCLOSURES } from '../../../lib/engine2/disclosures';
 import React, { useState } from 'react';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
-import { entryMultipleDisplay, exitMultipleDisplay, sizingBasisLabel } from '../../../lib/engine2/display';
+import { entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, sizingBasisLabel } from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -56,9 +56,10 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
   <div>
     <div className="flex gap-8 mb-4">
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Sponsor IRR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{pct(o.returns.sponsor_net.irr)}</p></div>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : pct(o.returns.sponsor_net.irr)}</p>
+        {headlineNotMeaningful(o) && <p className="text-[10px]" style={{ color: '#b91c1c' }}>not meaningful — see the ■ warning above</p>}</div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>MOIC</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.sponsor_net.moic)}</p></div>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : multiple(o.returns.sponsor_net.moic)}</p></div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}</p>
         {em.fy_canonical !== null && (
@@ -506,7 +507,7 @@ const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
     <div>
       {block('Sponsor IRR', grid.irr, (x) => pct(x))}
       {block('Sponsor MOIC', grid.moic, (x) => multiple(x))}
-      <p className="text-[10px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base.</p>
+      <p className="text-[10px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
     </div>
   );
 };

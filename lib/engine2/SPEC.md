@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v2.3.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v2.3.1 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -421,6 +421,17 @@ cash = opening_cash + FCF_pre_debt                    (FCF_pre_debt from §7 —
      `cash_floor_breach` coherence flag; the run's outputs render with the insolvency
      warning. ("Never negative cash" described the draw-to-floor design goal, not a
      clamp — a deep enough hole is reported, not hidden.)
+     **[v2.3.1] A BLOCK-severity run is never headlined.** One predicate
+     (`headlineNotMeaningful`, lib/engine2/display.ts — any `block` flag: a cash-floor breach
+     with the revolver exhausted, a non-positive sponsor plug) governs every surface that states
+     a return as an answer: the Summary tiles and the Build line read "N/M" with the warning
+     shown ABOVE the tabs; the IC memo states the run is not meaningful; a §13 sensitivity cell
+     whose own run is block-flagged is null (the strip-plug rejection's N/A semantics); goal-seek
+     treats such a structure as unreachable (as an insolvent entry) and walks to the feasibility
+     boundary. The detail tabs keep every number for diagnosis. The workbook's Summary carries
+     live rows for a cash shortfall and an uncovered exit. REJECTED: an engine-side null of the
+     returns (it would hide the numbers an analyst needs to diagnose the breach) and a
+     warning-only banner below the outputs (the v2.3.0 state the adversarial review found).
 7. − interim distribution [v1.1.0 — G-1]: pay the year's REQUESTED distribution, capped
      twice and floored at zero:
        paid = max(0, min( request[t],
@@ -4171,6 +4182,7 @@ engine by verification, not by trust.
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v2.3.1 | 2026-11-10 | **ADVERSARIAL REVIEW — one presentation defect, closed on every surface.** A run carrying a BLOCK flag (cash-floor breach / non-positive plug) was still headlined: the Summary and Build line showed its IRR with the warning BELOW the tabs; the IC memo, the §13 grid and goal-seek presented or targeted such runs silently. Now one predicate governs all four (§3 step 6 note). No engine arithmetic changed; every golden byte-identical. The review itself — the professor's workbook with randomized inputs (40 deals), an independent first-principles challenger workbook (315 deals, ~52k values), the exported workbook edited input by input in Excel (245 workbooks, 177k cells), an every-input-matters sweep and a source literal scan — found no arithmetic defect; it is recorded in rebuild/ADVERSARIAL_REVIEW_2026-11-10.md. | owner-requested adversarial review 2026-11-10 |
 | v2.3.0 | 2026-11-09 | **LIMITED LIABILITY (§9.1).** Exit equity and selldown proceeds are floored at zero; the lenders' unrecovered debt is reported (`exit.debt_shortfall_at_exit`, a §12 walk-down term, the `exit_debt_shortfall` WARN). Replaces the signed convention (the sponsor modelled as paying in at exit). §22/§23's governed §15 blocks restated. Every golden value unchanged (none is underwater); one zero column added. | owner direction 2026-11-09; equity-as-call (Merton) and modelling practice (MAX(0, …) on equity proceeds) |
 | v2.2.0 | 2026-11-09 | **PARTIAL EXITS LAND (§23, drafted as v1.8.0).** The §23 draft — round 1 closed with all eight blocking findings applied, G11-SELL adjudicated by two blind passes — is DECIDED and implemented as written: `structure.selldown`, the §23.2 year-t valuation, the §23.5 seller/buyer partition (interim strictly after the event year; exit after the promote and warrant), the realized-basis DPI/payback, the §19.7 fund leg, the ONE §14.9 walk-down term, `selldown_below_cost`, and the five §23.3 Build rejections. Owner direction 2026-11-09: finish at the same evidence bar as the other v2.x features (a signed golden, every §23.13 directed fixture, documented mutants red, the formula workbook at parity) instead of a second hostile prose round; round-1 ledger L4 (§23's length) stays open as a prose item. Every pre-existing golden: numerically identical, the one shape change being `exit.selldown_buyer_share = 0.0` (§14.24(d)). | owner direction 2026-11-09; rebuild/G11_LEDGER.md |
 | v2.1.0 | 2026-11-09 | **SURPLUS-CASH DISTRIBUTION POLICY + FULL FORMULA COVERAGE.** §3.8 added: one distribution policy per deal (none / requested schedule / surplus cash with `payout_pct` and `start ∈ {immediately, after_debt_repaid}`), the surplus computed at step 7 on the post-step-6 state and still subject to both cash caps and the §3.7 trap; Build rejections for two policies at once, an out-of-range payout and an unknown start. §26: the sweet-equity strip (§22) and the fund overlay (§19) are formula-covered — no engine feature blocks export. Goldens: the reference leverage table (external) + G13-SURPLUS / G13-SURPLUS-GATED (spec_calc, which gained §7's early-retirement path); every pre-existing golden byte-identical. | owner direction 2026-11-09; credit-agreement RP practice (builder basket on retained ECF, leverage-conditioned) |

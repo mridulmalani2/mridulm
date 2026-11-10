@@ -335,3 +335,40 @@ describe('§23 partial exit — the panel input', () => {
     expect(renderToStaticMarkup(<Workbench />)).toContain('Unavailable while the deal has rollover equity.');
   });
 });
+
+describe('a run the engine calls not meaningful never headlines a return (adversarial review F1)', () => {
+  // a deal that cannot service its debt: 8× senior at 12%, no revolver, a falling business
+  const breaching = () => enteredAssumptions(5, {
+    structure: {
+      ...enteredAssumptions().structure,
+      tranches: [{ name: 'TLB', type: 'senior', size: { x_ebitda: 8 }, pricing: { kind: 'fixed', rate: 0.12 }, amort_pct_of_face: 0.05, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 } }],
+    },
+    operations: { ...enteredAssumptions().operations, growth: [-0.1, -0.05, 0, 0, 0] },
+  });
+
+  it('a cash-floor breach: the headline IRR/MOIC read N/M and the ■ warning sits ABOVE the output tabs', () => {
+    importFixture();
+    enterDeal(breaching());
+    useEngine2Model.getState().build();
+    const out = useEngine2Model.getState().output!;
+    expect(out.coherence.some((f) => f.severity === 'block')).toBe(true); // the premise
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Sponsor IRR N/M');
+    expect(html).toContain('not meaningful — see the ■ warning above');
+    expect(html).not.toContain(`Sponsor IRR ${(out.returns.sponsor_net.irr! * 100).toFixed(1)}%`);
+    const warn = html.indexOf('■ Cash floor breached');
+    expect(warn).toBeGreaterThan(-1);
+    expect(warn).toBeLessThan(html.indexOf('Value bridge')); // above the tabs, beside the headline
+  });
+
+  it('a healthy run still headlines its returns (the gate is the block flag, nothing broader)', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    useEngine2Model.getState().build();
+    const out = useEngine2Model.getState().output!;
+    expect(out.coherence.some((f) => f.severity === 'block')).toBe(false);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).not.toContain('N/M');
+    expect(html).toContain(`Sponsor IRR ${(out.returns.sponsor_net.irr! * 100).toFixed(1)}%`);
+  });
+});

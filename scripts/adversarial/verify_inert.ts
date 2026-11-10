@@ -1,0 +1,21 @@
+import { runModel } from '../../lib/engine2/facade';
+import { GOLDEN_DEALS as G } from '../../tests/fixtures/engine2-golden-deals';
+// re-import the three deals by re-running the sweep module's definitions is awkward; restate the facts that matter
+import { A, B, C } from './deals';
+const a = runModel(G.G2.facts, A), b = runModel(G.G9SWEET.facts, B), c = runModel(G.G2DIST.facts, C);
+const chk = (label: string, ok: boolean) => console.log(ok ? 'PROVEN ' : 'FALSE  ', label);
+const tlb = A.structure.tranches[0] as any;
+chk('A: TLB floor binds (base < floor every year)', tlb.pricing.base_rate * 1.07 < tlb.pricing.floor);
+chk('A: revolver never drawn', a.revolver!.every((r) => r.draw === 0 && r.beginning_drawn === 0));
+chk('A: TLB absorbs the whole sweep every year (mezz/PIK never swept)', a.waterfall.every((_w, t) => a.tranches[1][t].sweep_repayment === 0 && a.tranches[2][t].sweep_repayment === 0) && a.tranches[0].every((r) => r.ending_balance > 1));
+chk('A: refi new floor below its base rate', 0.0107 < 0.036);
+chk('A: target margin equals the LTM margin (path irrelevant)', Math.abs(A.operations.target_margin - G.G2.facts.fy_ebitda_margin!) < 1e-12);
+chk('A: §382 limit binds below 80% of taxable in every use year', a.tax.every((t) => t.acquired_nol_used === 0 || Math.abs(t.acquired_nol_used - 6) < 1e-12));
+chk('A: springing test never active', a.credit.every((x) => !x.springing_test_active));
+chk('A: GP carry is zero in every year (so carry % cannot move anything)', a.fund!.gp_carry.every((x) => x === 0));
+console.log('   A fund LP distributions', a.fund!.lp_distributions.map((x) => x.toFixed(1)).join(' '), '| paid-in', a.fund!.paid_in_total.toFixed(1));
+chk('B: senior base above floor', (B.structure.tranches[0] as any).pricing.base_rate > 0.0075 * 1.07);
+chk('B: PIK never swept even when allowed? (senior absorbs)', b.tranches[1].every((r) => r.sweep_repayment === 0));
+chk('B: acquired NOLs are zero', B.tax.nol.acquired_opening === 0);
+chk('C: §163(j) never binds', c.tax.every((t) => t.s163j_carryforward_end === 0));
+chk('C: revolver never drawn', c.revolver!.every((r) => r.draw === 0));

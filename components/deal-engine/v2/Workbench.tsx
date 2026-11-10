@@ -12,6 +12,7 @@ import AssumptionsPanel from './AssumptionsPanel';
 import HistoryTable from './HistoryTable';
 import BasisBadge from './BasisBadge';
 import OutputTabs from './OutputTabs';
+import { headlineNotMeaningful } from '../../../lib/engine2/display';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
@@ -199,7 +200,7 @@ const Workbench: React.FC = () => {
         <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
           {output ? (
             <>
-              Sponsor IRR {pct(output.returns.sponsor_net.irr)} · MOIC {multiple(output.returns.sponsor_net.moic)} ·
+              Sponsor IRR {headlineNotMeaningful(output) ? 'N/M' : pct(output.returns.sponsor_net.irr)} · MOIC {headlineNotMeaningful(output) ? 'N/M' : multiple(output.returns.sponsor_net.moic)} ·
               Equity {money(output.sources_uses.sponsor_equity, ccy, 0)}
             </>
           ) : (
@@ -240,7 +241,6 @@ const Workbench: React.FC = () => {
         </div>
       )}
       <AiResults />
-      {output && <OutputTabs output={output} currency={ccy} />}
       {output && output.coherence.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
           {output.coherence.map((f) => (
@@ -250,6 +250,7 @@ const Workbench: React.FC = () => {
           ))}
         </div>
       )}
+      {output && <OutputTabs output={output} currency={ccy} />}
     </div>
     </div>
   );

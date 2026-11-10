@@ -65,3 +65,13 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
 export function exitMultipleDisplay(o: Pick<Engine2ModelOutput, 'exit'>): number {
   return o.exit.exit_ev / o.exit.exit_ebitda_basis_value;
 }
+
+/**
+ * A run carrying a BLOCK-severity coherence flag (a cash-floor breach with the revolver
+ * exhausted, a non-positive sponsor plug) is not economically meaningful (§3 step 6, §2): every
+ * HEADLINE return surface (the Summary tiles, the Build line, the IC memo) withholds its figures
+ * as "N/M" and points at the warning; the detail tabs keep every number for diagnosis.
+ */
+export function headlineNotMeaningful(o: Pick<Engine2ModelOutput, 'coherence'>): boolean {
+  return o.coherence.some((f) => f.severity === 'block');
+}
