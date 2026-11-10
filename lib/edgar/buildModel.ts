@@ -193,7 +193,7 @@ export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
     cash,
     net_debt,
     net_ppe: has(inp.netPpe) ? sv(inp.netPpe, 'Net PP&E at entry') : null, // absent ⇒ engine2 §8 seeds 0 with its disclosed note
-    effective_tax_rate: has(inp.taxRate) ? sv(inp.taxRate, 'Effective tax rate') : null, // absent ⇒ adapter's honest statutory-default downgrade
+    effective_tax_rate: has(inp.taxRate) ? sv(inp.taxRate, 'Effective tax rate') : null, // absent ⇒ null (the analyst enters the model's rate)
     nol_carryforward: has(inp.nol) && inp.nol > 0 ? sv(inp.nol, 'NOL carryforward') : null,
     // the DETAIL carries the user's actual sector pick — the adapter surfaces provenance
     // detail as facts.sector, so anything else here discards the user's choice (F-tail

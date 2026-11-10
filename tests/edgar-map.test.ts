@@ -284,13 +284,33 @@ describe('mapCompanyFacts — debt/lease edge cases (adversarial-review regressi
   });
 });
 
-describe('mapCompanyFacts — statutory tax fallback (not a hard gap)', () => {
-  it("uses the statutory default and flags provenance 'default' when no effective rate is derivable", () => {
+describe('mapCompanyFacts — effective tax rate is the true ratio or nothing', () => {
+  it('no derivable rate ⇒ null (never a statutory stand-in)', () => {
     const c = clone();
     delete c.facts['us-gaap']['IncomeTaxExpenseBenefit'];
-    const r = mapCompanyFacts(c, { statutoryTaxRate: 0.25 });
-    expect(r.effective_tax_rate?.value).toBeCloseTo(0.25, 9);
-    expect(r.effective_tax_rate?.provenance.source).toBe('default');
-    expect(r.gaps).not.toContain('Effective tax rate'); // always have a defensible default
+    expect(mapCompanyFacts(c).effective_tax_rate).toBeNull();
+  });
+  it('a rate above 60% or below 0% is emitted as filed — never clamped', () => {
+    const scaleTax = (k: number) => {
+      const c = clone();
+      const anchorEnd = mapCompanyFacts(c).periodEnd;
+      const pretax = mapCompanyFacts(c).effective_tax_rate!;
+      for (const f of c.facts['us-gaap']['IncomeTaxExpenseBenefit'].units.USD) if (f.end === anchorEnd) f.val = f.val * k;
+      return { rate: mapCompanyFacts(c).effective_tax_rate!.value, base: pretax.value };
+    };
+    const high = scaleTax(5);
+    expect(high.rate).toBeCloseTo(high.base * 5, 9);
+    expect(high.rate).toBeGreaterThan(0.6);
+    const neg = scaleTax(-1);
+    expect(neg.rate).toBeCloseTo(-neg.base, 9);
+    expect(neg.rate).toBeLessThan(0);
+  });
+  it('gross debt with no cash fact ⇒ net debt is a gap, never gross − 0', () => {
+    const c = clone();
+    for (const t of ['CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents', 'CashAndCashEquivalentsAtCarryingValueIncludingDiscontinuedOperations']) delete c.facts['us-gaap'][t];
+    const r = mapCompanyFacts(c);
+    expect(r.gross_debt).not.toBeNull();
+    expect(r.net_debt).toBeNull();
+    expect(r.gaps).toContain('Net debt at entry');
   });
 });

@@ -133,16 +133,15 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     expect(missing).toContain('currency_unsupported');
   });
 
-  it('badge honesty: a statutory-default tax rate wears TEMPLATE, never "from the filing"', () => {
+  it('an underivable tax rate is NULL end to end — no statutory stand-in is generated anywhere', () => {
     const noTax: CompanyFacts = JSON.parse(JSON.stringify(FIXTURE));
     delete (noTax as any).facts['us-gaap'].IncomeTaxExpenseBenefit;
     const raw = mapCompanyFacts(noTax, { sicCode: '3711' });
-    expect(raw.effective_tax_rate?.provenance.source).toBe('default'); // mapper's own honesty
-    const adapted = adaptRawHistoricals(raw);
-    expect(adapted.templateBases['tax.rate']).toContain('statutory default');
-    // and with a REAL derivable rate the honest path stays untouched
-    const real = adaptRawHistoricals(mapCompanyFacts(FIXTURE, { sicCode: '3711' }));
-    expect(real.templateBases['tax.rate']).toBeUndefined();
+    expect(raw.effective_tax_rate).toBeNull();
+    expect(adaptRawHistoricals(raw).facts.effective_tax_rate).toBeNull();
+    // and a REAL derivable rate passes through as the true ratio
+    const real = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
+    expect(adaptRawHistoricals(real).facts.effective_tax_rate).toBe(real.effective_tax_rate!.value);
   });
 
   it('honesty: a MISSING capex fact stays null and yields NO capex proposal (nothing pre-filled, no badge to lie)', () => {

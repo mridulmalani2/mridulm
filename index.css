@@ -193,3 +193,30 @@ a:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Deal Engine design tokens ──────────────────────────────────────────────────────────────
+   The deal-engine screens take every colour from these variables (components carry no hex).
+   Paper, ink and the red accent are the existing identity; the rest are the working tones a
+   financial model needs: input blue, a positive, a caution and a rule. */
+.de-root {
+  --de-paper: #F9F9F7;
+  --de-surface: #FFFFFF;
+  --de-sunken: #F2F2EE;
+  --de-ink: #111111;
+  --de-ink-2: rgba(17, 17, 17, 0.72);
+  --de-ink-3: rgba(17, 17, 17, 0.58);
+  --de-rule: rgba(17, 17, 17, 0.12);
+  --de-rule-strong: rgba(17, 17, 17, 0.82);
+  --de-accent: #CC0000;
+  --de-accent-soft: rgba(204, 0, 0, 0.06);
+  --de-input: #1D3FBF;
+  --de-input-soft: rgba(29, 63, 191, 0.07);
+  --de-pos: #166E45;
+  --de-pos-soft: rgba(22, 110, 69, 0.09);
+  --de-warn: #8A5A00;
+  --de-warn-soft: rgba(180, 120, 0, 0.09);
+  background: var(--de-paper);
+  color: var(--de-ink);
+}
+.de-root .de-num { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.de-root :focus-visible { outline: 2px solid var(--de-input); outline-offset: 1px; }

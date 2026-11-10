@@ -53,10 +53,9 @@ export function isIfrsCompanyFacts(facts: CompanyFacts): boolean {
 
 export function mapCompanyFactsIfrs(
   facts: CompanyFacts,
-  opts: { unitScale?: number; statutoryTaxRate?: number; sicDescription?: string; sicCode?: string } = {},
+  opts: { unitScale?: number; sicDescription?: string; sicCode?: string; /** Include IFRS-16 lease liabilities in gross/net debt (default true). */ includeLeasesInDebt?: boolean } = {},
 ): RawHistoricals {
   const scale = opts.unitScale ?? 1e6;
-  const statutory = opts.statutoryTaxRate ?? 0.25;
   const cik10 = facts.cik != null ? `CIK${String(facts.cik).padStart(10, '0')}` : undefined;
   const gaps: string[] = [];
   const sv = (value: number, prov: Provenance): SourcedValue => ({ value, provenance: prov });
@@ -157,7 +156,7 @@ export function mapCompanyFactsIfrs(
   } else {
     const base = borrowTotal ? [borrowTotal] : borrowSplit;
     if (base.length) {
-      const leases = leaseTotal ? [leaseTotal] : leaseSplit;
+      const leases = (opts.includeLeasesInDebt ?? true) ? (leaseTotal ? [leaseTotal] : leaseSplit) : [];
       const total = base.reduce((s, p) => s + p.value, 0) + leases.reduce((s, p) => s + p.value, 0);
       gross_debt = sv(total, {
         source: 'edgar',
@@ -174,16 +173,17 @@ export function mapCompanyFactsIfrs(
         ? { ...ppeRaw.prov, detail: `${ppeRaw.prov.detail} (incl. right-of-use assets)` }
         : ppeRaw.prov)
     : null;
-  const net_debt = gross_debt
-    ? sv(gross_debt.value - (cash?.value ?? 0), { source: 'edgar', detail: cash ? 'Gross debt − cash (derived)' : 'Gross debt (no cash at period) (derived)', tag: 'derived:NetDebt', taxonomy: T, period: anchorEnd, fy: anchorFy })
+  // both sides required — a missing cash fact is a gap, never zero cash
+  const net_debt = gross_debt && cash
+    ? sv(gross_debt.value - cash.value, { source: 'edgar', detail: 'Gross debt − cash (derived)', tag: 'derived:NetDebt', taxonomy: T, period: anchorEnd, fy: anchorFy })
     : null;
   if (!net_debt) gaps.push('Net debt at entry');
 
   const taxExp = durationAt(TAX_EXPENSE, anchorEnd);
   const pretax = durationAt(PRETAX, anchorEnd);
   const effective_tax_rate = taxExp && pretax && pretax.value > 0
-    ? sv(Math.min(0.6, Math.max(0, taxExp.value / pretax.value)), { source: 'edgar', detail: `${taxExp.tag} ÷ ${pretax.tag} (derived)`, tag: 'derived:EffectiveTaxRate', taxonomy: T, period: anchorEnd, fy: anchorFy })
-    : sv(statutory, { source: 'default', detail: `Statutory default ${(statutory * 100).toFixed(0)}% (no derivable effective rate)` });
+    ? sv(taxExp.value / pretax.value, { source: 'edgar', detail: `${taxExp.tag} ÷ ${pretax.tag} (derived)`, tag: 'derived:EffectiveTaxRate', taxonomy: T, period: anchorEnd, fy: anchorFy })
+    : null; // the true ratio or nothing — never clamped, never a statutory stand-in
 
   // D1 history on ifrs-full (FY-only for FPIs — no 10-Qs; noted)
   const seriesOpts = { kind: 'duration' as const, taxonomy: T, unitScale: scale, unit: anchorUnit };

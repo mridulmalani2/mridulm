@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v2.4.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v2.5.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -4193,10 +4193,86 @@ engine by verification, not by trust.
 
 ---
 
+## §27 Normalised figures and the two EBITDA bases [v2.5.0 — implemented 2026-11-10 on the owner's instruction to finish the cleaning plan; **NOT yet through an independent sign-off round**; Tier B, DATA-SIDE — no engine arithmetic changes]
+
+A deal that comes through the Clean step (`lib/cleaning/`, `rebuild/CLEANING_AND_SUITE_PLAN.md`)
+reaches the engine as the SAME Class-A facts as any other deal. The cleaning layer sits in front
+of `factsAdapter`; the engine never reads the ledger or the display-only `facts.normalisation`.
+
+### §27.1 What the engine reads
+
+| Fact | Value |
+|---|---|
+| `fy_revenue` | adjusted revenue at the sizing period (§1.1 basis) |
+| `fy_ebitda` | **adjusted EBITDA** at the sizing period — reported, after restated cells, plus every included EBITDA row. The price basis (`EV = multiple × fy_ebitda`, FY entry) and the leverage basis (§17, §11). |
+| `fy_ebitda_margin` | `forecast-base EBITDA ÷ fy_revenue`, where **forecast-base EBITDA = adjusted EBITDA − Σ included EBITDA rows marked `continues`** |
+| `net_debt` | adjusted net debt (display and the trading anchor only — no engine arithmetic reads it) |
+
+With no `continues` row the forecast base IS the adjusted EBITDA and `fy_ebitda_margin =
+fy_ebitda ÷ fy_revenue`, exactly as before. With an empty ledger every fact is the sourced one
+(identity — `tests/cleaning-core`).
+
+### §27.2 Why two bases
+
+An add-back raises the EBITDA a buyer pays for and a lender lends against. Whether it also
+raises forecast CASH FLOW depends on whether the cost stops:
+
+- **`gone`** — a one-off (a restructuring charge, an impairment). The cost will not recur, so it
+  is in the price basis AND the forecast base.
+- **`continues`** — excluded for valuation only (share-based pay that will be paid in cash under
+  private ownership, a run-rate saving not yet achieved). The cost keeps being paid, so it is in
+  the price basis and NOT in the forecast base.
+
+The engine forecasts `EBITDA(t) = revenue(t) × margin(t)` on a path that starts at
+`fy_ebitda_margin` (§7). Forming that margin on the full adjusted figure would turn every
+`continues` add-back into free cash flow the business will not produce — overstating debt
+paydown and the IRR. Lenders and sponsors price on adjusted EBITDA and underwrite on cash.
+
+**The choice is the analyst's, per row, REQUIRED, with no default** (the Clean step blocks on
+`forecast_choice` until it is made). The category of a row never decides it.
+
+### §27.3 Consequence, stated
+
+When a `continues` row exists, `revenue₀ × margin₀ ≠ fy_ebitda`: entry leverage and the entry
+multiple are on adjusted EBITDA while the forecast starts from the lower cash base. This is the
+ONE sanctioned exception to §1.1's "year-0 implied EBITDA equals the entry EBITDA" — it is
+deliberate, it is disclosed (§15 row "Add-backs that continue", the Clean step's `forecast_base`
+note, the Normalisation sheet's own row), and it exists only on deals where the analyst made the
+choice. §1.1's single-basis rule is unaffected: both bases are on the same period.
+
+`operations.target_margin` remains the analyst's input. The suggestion catalogue proposes
+`fy_ebitda_margin` (the forecast base) held flat — i.e. no proposal ever assumes a continuing
+cost disappears.
+
+### §27.4 Workbook (§26)
+
+The Normalisation sheet carries the EBITDA bridge and, when a `continues` row exists, the row
+"EBITDA base for the forecast margin" `= adjusted − Σ continuing rows`. The Inputs sheet's sizing
+EBITDA references the adjusted row; the Model's year-0 margin references the forecast-base row.
+Parity deal `CLEAN_CONTINUES` holds both links (§14.26).
+
+### §27.5 Rejected alternatives
+
+- **One base (every add-back raises the margin).** Rejected: converts non-cash and unrealised
+  add-backs into forecast cash.
+- **Decide by category (SBC always continues, restructuring always stops).** Rejected: a category
+  is a label; the same line item stops in one deal and continues in another. No category changes
+  arithmetic.
+- **A default of `gone`.** Rejected: a default is an assumption made for the analyst.
+
+### §27.6 Pins
+
+`tests/cleaning-core` "SPEC §27": reported 250.0 + restructuring 20.0 (`gone`) + share-based pay
+12.0 (`continues`) ⇒ `fy_ebitda` 282.0, forecast base 270.0, `fy_ebitda_margin` 270 ÷ 1,250 =
+21.6%; EV and debt at par identical to the all-`gone` deal; year-1 EBITDA and IRR lower. Mutants
+(adapter ignores the base; the base adds instead of subtracts; the workbook margin on the price
+basis) each run RED.
+
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v2.5.0 | 2026-11-10 | **NORMALISED FIGURES AND THE TWO EBITDA BASES (§27).** Deals now reach the engine through the Clean step (`lib/cleaning/`, a pure layer in front of `factsAdapter`; no engine arithmetic changed, every golden byte-identical). `fy_ebitda` is adjusted EBITDA (price and leverage basis); `fy_ebitda_margin` is formed on adjusted EBITDA LESS the add-backs the analyst marks `continues`, so a cost that keeps being paid never becomes forecast cash flow. Required per-row choice, no default. `DealFacts.normalisation` added (display only — the workbook's Normalisation sheet and the results screen; a boundary test forbids engine reads). Data-layer rules tightened: the effective tax rate is the true ratio or null (no clamp, no statutory stand-in); net debt needs both legs; alias chains resolve per period; the US size band and financing conventions are proposed for USD deals only. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-10; `rebuild/CLEANING_AND_SUITE_PLAN.md` §4.4 |
 | v2.4.0 | 2026-11-10 | **TAX CHARACTER AND TIMING OF DEBT RETIRED OR REFINANCED (§7.1).** Researched against the standard and applied as a rule, not a setting (owner direction 2026-11-10: "nothing should be hardcoded — if there's a standard, use that, else make it a setting"). Unamortized OID and any call premium are repurchase premium (Treas. Reg. §1.163-7(c)) — §163(j) INTEREST, the capped pool; unamortized debt-issuance costs are not interest under the final §163(j) regulations — uncapped. The exit and a scheduled refinancing deduct in their own year (§18.5 no longer defers to R+1); a sweep-driven early retirement keeps the one-year lag, now split by character, because a same-year deduction would make its year circular (§5). Replaces the v1.0.3/v1.3.0 treatment (everything uncapped, refinancing deferred), which over-deducted where §163(j) binds. Goldens re-derived by `spec_calc.py` first: G3, G3-DIST, G4, G6-REFI, G8-PIKT, G9-SWEET, G10-RATCHET move (sponsor IRR within ±0.74bp), every other golden byte-identical — measured leaf-by-leaf in DERIVATION.md. Workbook: the write-off rows split by character; parity extended to a refi-with-OID under a binding cap and an OID-bearing sweep retirement. | owner direction 2026-11-10; Treas. Reg. §1.163-7(c), §1.163(j)-1(b)(22), §1.446-5, §1.1001-3 |
 | v2.3.1 | 2026-11-10 | **ADVERSARIAL REVIEW — one presentation defect, closed on every surface.** A run carrying a BLOCK flag (cash-floor breach / non-positive plug) was still headlined: the Summary and Build line showed its IRR with the warning BELOW the tabs; the IC memo, the §13 grid and goal-seek presented or targeted such runs silently. Now one predicate governs all four (§3 step 6 note). No engine arithmetic changed; every golden byte-identical. The review itself — the professor's workbook with randomized inputs (40 deals), an independent first-principles challenger workbook (315 deals, ~52k values), the exported workbook edited input by input in Excel (245 workbooks, 177k cells), an every-input-matters sweep and a source literal scan — found no arithmetic defect; it is recorded in rebuild/ADVERSARIAL_REVIEW_2026-11-10.md. | owner-requested adversarial review 2026-11-10 |
 | v2.3.0 | 2026-11-09 | **LIMITED LIABILITY (§9.1).** Exit equity and selldown proceeds are floored at zero; the lenders' unrecovered debt is reported (`exit.debt_shortfall_at_exit`, a §12 walk-down term, the `exit_debt_shortfall` WARN). Replaces the signed convention (the sponsor modelled as paying in at exit). §22/§23's governed §15 blocks restated. Every golden value unchanged (none is underwater); one zero column added. | owner direction 2026-11-09; equity-as-call (Merton) and modelling practice (MAX(0, …) on equity proceeds) |

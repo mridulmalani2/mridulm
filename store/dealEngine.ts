@@ -18,7 +18,9 @@ import type { RawHistoricals } from '../lib/edgar/types';
 import type { CompanyFacts } from '../lib/edgar/client';
 import { detectProvider, type AIProvider } from '../lib/ai2/gateway/providers';
 import { fetchTradingAnchor } from '../lib/edgar/quote';
-import { useEngine2Model } from './engine2Model';
+import { cleaningStore } from './cleaning';
+import { buildStatementPack } from '../lib/statements/pack';
+import type { Gaap } from '../lib/statements/types';
 
 export interface DealEngineStore {
   isCalculating: boolean;
@@ -48,9 +50,14 @@ export interface DealEngineStore {
  */
 function feedEngine2FromImport(
   raw: RawHistoricals,
+  /** What the Clean step needs beside the figures: the same extraction with leases left out of
+   *  debt (null where the route cannot separate them), the accounting framework, and — on the
+   *  EDGAR us-gaap route — the payload the statement grid is widened from. */
+  src: { rawExLeases: RawHistoricals | null; gaap: Gaap; facts?: CompanyFacts },
   quote?: { ticker?: string; factsPayload: CompanyFacts; latestAnnualForm?: string },
 ): void {
-  useEngine2Model.getState().importFromRaw(raw);
+  // The Clean step's store feeds the engine2 store (sourced figures + an empty ledger).
+  cleaningStore.getState().load(raw, buildStatementPack({ raw, ...src }));
   if (!quote?.ticker) return;
   void fetchTradingAnchor(quote.ticker, quote.factsPayload, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null, {
     reportingCurrency: raw.currency_unsupported ?? raw.currency,
@@ -58,8 +65,9 @@ function feedEngine2FromImport(
   })
     .then((a) => {
       if (!a) return;
-      // v2.0.0: the anchor is a FACT update in place — never a re-import (nothing to clobber).
-      useEngine2Model.getState().setTradingAnchor(raw.entityName, a.ev_ebitda);
+      // The anchor is a FACT update in place — never a re-import (nothing to clobber). The
+      // Clean step's store keeps the quote so the anchor follows the adjusted figures.
+      cleaningStore.getState().setMarket(raw.entityName, a);
     })
     .catch(() => undefined);
 }
@@ -104,10 +112,14 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
       } catch { /* companyfacts alone is enough */ }
 
       // D6: IFRS-reporting 20-F filers carry facts['ifrs-full'] — route to the IFRS mapper.
-      const raw = isIfrsCompanyFacts(facts)
+      const ifrs = isIfrsCompanyFacts(facts);
+      const raw = ifrs
         ? mapCompanyFactsIfrs(facts, { sicDescription, sicCode })
         : mapCompanyFacts(facts, { sicDescription, sicCode });
-      feedEngine2FromImport(raw, { ticker, factsPayload: facts, latestAnnualForm });
+      const rawExLeases = ifrs
+        ? mapCompanyFactsIfrs(facts, { sicDescription, sicCode, includeLeasesInDebt: false })
+        : mapCompanyFacts(facts, { sicDescription, sicCode, includeFinanceLeasesInDebt: false });
+      feedEngine2FromImport(raw, { rawExLeases, gaap: ifrs ? 'ifrs' : 'us-gaap', facts: ifrs ? undefined : facts }, { ticker, factsPayload: facts, latestAnnualForm });
       set({ isCalculating: false });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
@@ -132,9 +144,10 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
       const docUrl = (f: typeof filings[number]) => `${base}${f.reportUrl ?? f.viewerUrl ?? f.jsonUrl}`;
       const filing = filings[0];
       const report = await getEsefReport(filing.jsonUrl);
-      const raw = mapIfrsReport(report, { entityName: opts?.dealName ?? filing.entityName, reportUrl: docUrl(filing) });
+      const mapOpts = { entityName: opts?.dealName ?? filing.entityName, reportUrl: docUrl(filing) };
+      const raw = mapIfrsReport(report, mapOpts);
       // No quote context: no US listing pairing to verify ⇒ the honest-anchor gate stays closed.
-      feedEngine2FromImport(raw);
+      feedEngine2FromImport(raw, { rawExLeases: mapIfrsReport(report, { ...mapOpts, includeLeasesInDebt: false }), gaap: 'ifrs' });
       set({ isCalculating: false });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
@@ -144,7 +157,9 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
 
   loadFromHistoricals: (raw) => {
     // facts.sector rides raw.sector provenance (manual: the user's pick; EDGAR: the SIC text)
-    feedEngine2FromImport(raw);
+    // manual and upload: the route cannot separate leases from borrowings, and the framework
+    // is whatever the analyst's source used
+    feedEngine2FromImport(raw, { rawExLeases: null, gaap: 'unknown' });
     set({ error: null });
   },
 

@@ -119,7 +119,7 @@ const AssumptionsPanel: React.FC = () => {
       <>
         <div className="flex items-center justify-between gap-2 mb-2">
           <Label>{who}: {what} basis</Label>
-          <select aria-label={`${who} ${what} basis`} value={isX ? 'x' : 'amt'} className="px-1 py-1 text-[11px]"
+          <select aria-label={`${who} ${what} basis`} value={isX ? 'x' : 'amt'} className="px-1 py-1 text-[13px]"
             style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
             onChange={(e) => set(at(base, e.target.value === 'x' ? { x_ebitda: U } : { amount: U }), [base])}>
             <option value="amt">amount</option>
@@ -160,7 +160,7 @@ const AssumptionsPanel: React.FC = () => {
           ? <NumField path="entry.entry_multiple" label="Entry multiple" unit="mult" value={a.entry.entry_multiple} />
           : <NumField path="entry.enterprise_value" label="Purchase price (enterprise value)" unit="money" value={a.entry.enterprise_value} />}
         {facts.implied_trading_ev_ebitda !== null && (
-          <p className="text-[10px] mb-2 text-right" style={labelStyle}>
+          <p className="text-[12px] mb-2 text-right" style={labelStyle}>
             trades at ~{multiple(facts.implied_trading_ev_ebitda)} {sizingBasisLabel(facts.sizing_basis)} EBITDA (read-only anchor)
           </p>
         )}
@@ -180,7 +180,7 @@ const AssumptionsPanel: React.FC = () => {
       <Section title="2 · Debt" note="Add each tranche as the term sheet states it. Interest accrues on the opening balance; the sweep runs after mandatory amortization, by priority.">
         {pending.includes('structure.tranches') && (
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px]" style={{ ...labelStyle, color: '#CC0000' }}>add tranches, or confirm an all-equity deal</span>
+            <span className="text-[12px]" style={{ ...labelStyle, color: '#CC0000' }}>add tranches, or confirm an all-equity deal</span>
             <SmallButton onClick={() => editWithChoices({ ...a, structure: { ...a.structure, tranches: [] } }, ['structure.tranches'], [])}>no debt</SmallButton>
           </div>
         )}
@@ -190,10 +190,10 @@ const AssumptionsPanel: React.FC = () => {
           return (
             <div key={i} className="mb-3 p-2" style={{ border: '1px solid rgba(17,17,17,0.08)' }}>
               <div className="flex items-center justify-between mb-2">
-                <input aria-label={`tranche ${i + 1} name`} value={t.name} className="text-[11px] px-1 py-0.5" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.12)' }}
+                <input aria-label={`tranche ${i + 1} name`} value={t.name} className="text-[13px] px-1 py-0.5" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.12)' }}
                   onChange={(e) => set(at(`${base}.name`, e.target.value), [`${base}.name`])} />
                 <span className="flex gap-1 items-center">
-                  <span className="text-[9px]" style={labelStyle}>{t.type.replace('_', ' ')}</span>
+                  <span className="text-[12px]" style={labelStyle}>{t.type.replace('_', ' ')}</span>
                   <SmallButton danger onClick={() => removeTranche(i)}>remove</SmallButton>
                 </span>
               </div>
@@ -246,7 +246,7 @@ const AssumptionsPanel: React.FC = () => {
             <>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <Label hint="Excess-cash sweeps commonly step down as leverage falls (e.g. 75% above 4.5×, 50% above 3.5×, 0% below).">Cash sweep</Label>
-                <select aria-label="Cash sweep basis" className="px-1 py-1 text-[11px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+                <select aria-label="Cash sweep basis" className="px-1 py-1 text-[13px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
                   value={grid ? 'grid' : 'flat'}
                   onChange={(e) => set(at('structure.sweep.grid', e.target.value === 'grid' ? { tiers: [{ above_net_leverage: U, pct: U }], else_pct: U } : null), ['structure.sweep.grid'])}>
                   <option value="flat">one % every year</option>
@@ -281,7 +281,7 @@ const AssumptionsPanel: React.FC = () => {
           return (
             <>
               {lev !== null && (
-                <p className="text-[10px] mb-1 text-right" style={labelStyle}>
+                <p className="text-[12px] mb-1 text-right" style={labelStyle}>
                   Total leverage (gross, x {sizingBasisLabel(facts.sizing_basis)} EBITDA): {multiple(lev)}
                 </p>
               )}
@@ -289,7 +289,7 @@ const AssumptionsPanel: React.FC = () => {
                 if (t.type === 'pik_note' || t.pricing.kind !== 'floating') return null;
                 const p = t.pricing;
                 if (!isSet(p.base_rate) || !isSet(p.floor) || !isSet(p.spread)) return null;
-                return <p key={i} className="text-[10px] mb-1 text-right" style={labelStyle}>{t.name}: all-in rate {toPctInput(allInRate(p))}%</p>;
+                return <p key={i} className="text-[12px] mb-1 text-right" style={labelStyle}>{t.name}: all-in rate {toPctInput(allInRate(p))}%</p>;
               })}
             </>
           );
@@ -395,7 +395,7 @@ const AssumptionsPanel: React.FC = () => {
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <Label>§382 annual limit</Label>
                   <span className="flex items-center gap-1">
-                    <label className="text-[9px]" style={labelStyle}>
+                    <label className="text-[12px]" style={labelStyle}>
                       <input type="checkbox" checked={a.tax.nol.s382_annual_limit === null}
                         onChange={(e) => set(at('tax.nol.s382_annual_limit', e.target.checked ? null : U), ['tax.nol.s382_annual_limit'])} /> none
                     </label>
@@ -494,7 +494,7 @@ const AssumptionsPanel: React.FC = () => {
                 onOn={() => { if (!blockedBy) set(at('structure.selldown', { year: U, fraction: U, event_multiple: U }), ['structure.selldown']); }}
                 onOff={() => set(at('structure.selldown', null), ['structure.selldown'])} />
               {blockedBy && sd === null && (
-                <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>Unavailable while the deal has {blockedBy}.</p>
+                <p className="text-[12px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>Unavailable while the deal has {blockedBy}.</p>
               )}
               {sd && (
                 <>
@@ -515,7 +515,7 @@ const AssumptionsPanel: React.FC = () => {
             debt service and the sweep, and is still subject to the restricted-payment trap. */}
         <div className="flex items-center justify-between gap-2 mb-2">
           <Label>Distributions to equity during the hold</Label>
-          <select aria-label="Distribution policy" className="px-1 py-1 text-[11px]"
+          <select aria-label="Distribution policy" className="px-1 py-1 text-[13px]"
             style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
             value={a.structure.surplus_distribution ? 'surplus' : a.structure.distributions ? 'scheduled' : 'none'}
             onChange={(e) => {
@@ -535,7 +535,7 @@ const AssumptionsPanel: React.FC = () => {
         {a.structure.distributions && <YearGrid path="structure.distributions" label="Requested distribution" unit="money" values={a.structure.distributions} />}
         {a.structure.surplus_distribution && (
           <>
-            <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>
+            <p className="text-[12px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>
               Pre-filled with the common case — 100% of the surplus, every year. Change either setting to match your deal’s restricted-payments terms.
             </p>
             <NumField path="structure.surplus_distribution.payout_pct" label="Share of surplus cash paid out" unit="pct" value={a.structure.surplus_distribution.payout_pct}
@@ -557,7 +557,7 @@ const AssumptionsPanel: React.FC = () => {
               {val !== null && (
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <Label hint="Leverage covenants usually step down over the life of the loan.">{label}: level</Label>
-                  <select aria-label={`${label} schedule`} className="px-1 py-1 text-[11px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+                  <select aria-label={`${label} schedule`} className="px-1 py-1 text-[13px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
                     value={Array.isArray(val) ? 'year' : 'flat'}
                     onChange={(e) => set(at(`covenants.${k}`, e.target.value === 'year' ? blanks(N) : U), [`covenants.${k}`])}>
                     <option value="flat">same every year</option>
@@ -681,8 +681,8 @@ const LineMode: React.FC<{ label: string; value: string; options: { value: strin
   const valid = options.some((o) => o.value === value);
   return (
     <div className="flex items-center justify-between gap-2 mb-1.5 mt-2">
-      <span className="text-[10px] tracking-wider uppercase font-semibold" style={{ ...labelStyle, color: '#111' }}>{label}</span>
-      <select aria-label={`${label} input mode`} value={valid ? value : ''} onChange={(e) => e.target.value && onChoose(e.target.value)} className="px-1 py-1 text-[11px]"
+      <span className="text-[12px] tracking-wider uppercase font-semibold" style={{ ...labelStyle, color: '#111' }}>{label}</span>
+      <select aria-label={`${label} input mode`} value={valid ? value : ''} onChange={(e) => e.target.value && onChoose(e.target.value)} className="px-1 py-1 text-[13px]"
         style={{ fontFamily: mono, border: valid ? '1px solid rgba(17,17,17,0.14)' : '1px solid rgba(204,0,0,0.55)', background: valid ? '#fff' : 'rgba(204,0,0,0.03)' }}>
         {!valid && <option value="">choose…</option>}
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

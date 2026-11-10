@@ -6,9 +6,8 @@
  *   • is aligned to ONE fiscal year (anchored on revenue's latest annual period) so revenue,
  *     EBITDA, capex and the balance sheet all come from the same period;
  *   • carries provenance (tag, FY, form, accession, filing link);
- *   • is recorded as a GAP when it cannot be derived — never silently defaulted (the one
- *     exception is the effective tax rate, which falls back to a statutory default flagged as
- *     'default' provenance, since a tax rate is always needed).
+ *   • is recorded as a GAP when it cannot be derived — never silently defaulted (an
+ *     underivable effective tax rate is null, never a statutory stand-in).
  *
  * Monetary XBRL values are absolute; we scale to the engine's millions unit.
  */
@@ -21,15 +20,19 @@ import { stitchLtm } from './ltmStitch';
 const ANNUAL_FORMS = new Set(['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']);
 
 // ── Tag alias chains (most-preferred first) ─────────────────────────────────
-const REVENUE_TAGS = [
+// The contract-with-customer concept comes FIRST on purpose. A non-dimensional `Revenues` fact is
+// not always consolidated revenue: Hasbro tags the pre-elimination segment total there (FY2024
+// 4,745.9 against reported net revenues of 4,135.5), so preferring it would overstate revenue.
+// Pinned by tests/edgar-frozen-hasbro.
+export const REVENUE_TAGS = [
   'RevenueFromContractWithCustomerExcludingAssessedTax',
   'RevenueFromContractWithCustomerIncludingAssessedTax',
   'Revenues',
   'SalesRevenueNet',
   'SalesRevenueGoodsNet',
 ];
-const OPERATING_INCOME_TAGS = ['OperatingIncomeLoss'];
-const DA_TAGS = [
+export const OPERATING_INCOME_TAGS = ['OperatingIncomeLoss'];
+export const DA_TAGS = [
   'DepreciationDepletionAndAmortization',
   'DepreciationAmortizationAndAccretionNet',
   'DepreciationAndAmortization',
@@ -37,21 +40,21 @@ const DA_TAGS = [
 ];
 // Components to reconstruct D&A when no combined concept is tagged (require BOTH — depreciation
 // alone would understate). Mirrors the IFRS reconstruction in mapIfrs.ts.
-const DEPRECIATION_TAGS = ['Depreciation', 'DepreciationNonproduction'];
-const AMORTIZATION_TAGS = ['AmortizationOfIntangibleAssets', 'AmortizationOfDeferredChargesAndOtherDeferredCosts'];
-const CAPEX_TAGS = [
+export const DEPRECIATION_TAGS = ['Depreciation', 'DepreciationNonproduction'];
+export const AMORTIZATION_TAGS = ['AmortizationOfIntangibleAssets', 'AmortizationOfDeferredChargesAndOtherDeferredCosts'];
+export const CAPEX_TAGS = [
   'PaymentsToAcquirePropertyPlantAndEquipment',
   'PaymentsToAcquireProductiveAssets',
   'PaymentsForCapitalImprovements',
 ];
 const ASSETS_CURRENT_TAGS = ['AssetsCurrent'];
 const LIABILITIES_CURRENT_TAGS = ['LiabilitiesCurrent'];
-const LT_DEBT_NONCURRENT_TAGS = ['LongTermDebtNoncurrent', 'LongTermDebtAndCapitalLeaseObligations'];
-const LT_DEBT_CURRENT_TAGS = ['LongTermDebtCurrent', 'LongTermDebtAndCapitalLeaseObligationsCurrent'];
+export const LT_DEBT_NONCURRENT_TAGS = ['LongTermDebtNoncurrent', 'LongTermDebtAndCapitalLeaseObligations'];
+export const LT_DEBT_CURRENT_TAGS = ['LongTermDebtCurrent', 'LongTermDebtAndCapitalLeaseObligationsCurrent'];
 // ShortTermBorrowings is disjoint from the current LT portion. DebtCurrent is the TOTAL current
 // debt (it usually already includes the current LT portion), so it's a fallback only — summing
 // it alongside LongTermDebtCurrent would double-count (Finding 4).
-const SHORT_TERM_DEBT_TAGS = ['ShortTermBorrowings'];
+export const SHORT_TERM_DEBT_TAGS = ['ShortTermBorrowings'];
 const DEBT_CURRENT_TOTAL_TAGS = ['DebtCurrent'];
 const TOTAL_DEBT_TAGS = ['DebtLongtermAndShorttermCombinedAmount', 'LongTermDebt'];
 // us-gaap:LongTermDebt is the roll-up of current+noncurrent BORROWINGS and EXCLUDES leases, so
@@ -64,39 +67,39 @@ const LEASE_EXCLUDING_TOTAL_TAGS = new Set(['LongTermDebt']);
 // Operating lease liabilities (ASC 842) are conventionally excluded from debt in credit analysis,
 // so they are NOT added (this is the US-GAAP analogue of the all-leases IFRS-16 treatment, which
 // has no operating/finance split for lessees).
-const FINANCE_LEASE_NONCURRENT_TAGS = ['FinanceLeaseLiabilityNoncurrent'];
-const FINANCE_LEASE_CURRENT_TAGS = ['FinanceLeaseLiabilityCurrent'];
+export const FINANCE_LEASE_NONCURRENT_TAGS = ['FinanceLeaseLiabilityNoncurrent'];
+export const FINANCE_LEASE_CURRENT_TAGS = ['FinanceLeaseLiabilityCurrent'];
 const LEASE_INCLUSIVE_DEBT_TAGS = new Set(['LongTermDebtAndCapitalLeaseObligations', 'LongTermDebtAndCapitalLeaseObligationsCurrent']);
 // Net PP&E (engine2 §8 opening-roll seed). The pure concept first; the combined
 // PP&E + finance-lease-ROU concept only as fallback (its use is stated in the detail).
-const PPE_NET_TAGS = [
+export const PPE_NET_TAGS = [
   'PropertyPlantAndEquipmentNet',
   'PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization',
 ];
-const CASH_TAGS = [
+export const CASH_TAGS = [
   'CashAndCashEquivalentsAtCarryingValue',
   'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
   'CashAndCashEquivalentsAtCarryingValueIncludingDiscontinuedOperations',
 ];
-const SHORT_TERM_INVESTMENT_TAGS = ['ShortTermInvestments', 'MarketableSecuritiesCurrent'];
+export const SHORT_TERM_INVESTMENT_TAGS = ['ShortTermInvestments', 'MarketableSecuritiesCurrent'];
 // ── D2 working-capital days chains ──
-const AR_TAGS = [
+export const AR_TAGS = [
   'AccountsReceivableNetCurrent',
   'ReceivablesNetCurrent',
   'AccountsNotesAndLoansReceivableNetCurrent',
 ];
-const INVENTORY_TAGS = ['InventoryNet'];
+export const INVENTORY_TAGS = ['InventoryNet'];
 // FG/WIP/RM components — ALL THREE present ⇒ reconstruct; partial ⇒ gap (no fake total).
 const INVENTORY_COMPONENT_TAGS = ['InventoryFinishedGoodsNetOfReserves', 'InventoryWorkInProcessNetOfReserves', 'InventoryRawMaterialsNetOfReserves'];
 // AP: the clean payables concepts ONLY. If just the bundled payables+accrued concept
 // exists, DPO is a GAP (fall back to the % method) — never computed off the bundle.
-const AP_TAGS = ['AccountsPayableCurrent', 'AccountsPayableTradeCurrent'];
+export const AP_TAGS = ['AccountsPayableCurrent', 'AccountsPayableTradeCurrent'];
 const AP_BUNDLED_TAGS = ['AccountsPayableAndAccruedLiabilitiesCurrent'];
-const COGS_TAGS = ['CostOfRevenue', 'CostOfGoodsAndServicesSold', 'CostOfGoodsSold'];
+export const COGS_TAGS = ['CostOfRevenue', 'CostOfGoodsAndServicesSold', 'CostOfGoodsSold'];
 // Accepted but flagged in provenance (understates purchases-basis DPO/DIO slightly).
 const COGS_EXCL_DA_TAGS = ['CostOfGoodsAndServicesSoldExcludingDepreciationDepletionAndAmortization', 'CostOfRevenueExcludingDepreciationAndAmortization'];
-const TAX_EXPENSE_TAGS = ['IncomeTaxExpenseBenefit'];
-const PRETAX_TAGS = [
+export const TAX_EXPENSE_TAGS = ['IncomeTaxExpenseBenefit'];
+export const PRETAX_TAGS = [
   'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
   'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
   'IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic',
@@ -104,7 +107,7 @@ const PRETAX_TAGS = [
 const NOL_TAGS = ['OperatingLossCarryforwards'];
 // D4: GROSS interest concepts only. InterestIncomeExpenseNet and its kin are NEVER a
 // numerator (netting suppresses the cost) — absence of a gross line is a gap, not a proxy.
-const INTEREST_EXPENSE_TAGS = [
+export const INTEREST_EXPENSE_TAGS = [
   'InterestExpenseDebt',
   'InterestExpense',
   'InterestAndDebtExpense',
@@ -187,7 +190,7 @@ function instantAtStrict(concept: XbrlConcept, end?: string): { fact: XbrlFactVa
 
 // ── Provenance ──────────────────────────────────────────────────────────────
 
-function filingUrl(cik10?: string, accession?: string): string | undefined {
+export function filingUrl(cik10?: string, accession?: string): string | undefined {
   if (!cik10 || !accession) return undefined;
   const cikNum = Number(cik10.replace(/\D/g, ''));
   const accNoDash = accession.replace(/-/g, '');
@@ -209,8 +212,6 @@ function edgarProvenance(tag: string, taxonomy: string, unit: string, f: XbrlFac
 export interface MapOptions {
   /** Divide raw XBRL absolute values by this to reach the engine's millions unit. Default 1e6. */
   unitScale?: number;
-  /** Fallback statutory tax rate (decimal) when an effective rate can't be computed. Default 0.21 (US federal). */
-  statutoryTaxRate?: number;
   /** Reporting-currency override; defaults to 'USD' (EDGAR). */
   currency?: string;
   /** Sector hint (e.g. SIC description from the submissions payload). */
@@ -228,22 +229,27 @@ export interface MapOptions {
 
 export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): RawHistoricals {
   const scale = opts.unitScale ?? 1e6;
-  const statutory = opts.statutoryTaxRate ?? 0.21;
   const cik10 = facts.cik != null ? `CIK${String(facts.cik).padStart(10, '0')}` : undefined;
   const M = (v: number) => v / scale;
   const gaps: string[] = [];
   const sv = (value: number, prov: Provenance): SourcedValue => ({ value, provenance: prov });
 
-  const rawDuration = (tags: string[], end?: string): { value: number; prov: Provenance; tag: string } | null => {
-    const c = firstConcept(facts, tags); if (!c) return null;
-    const pick = durationAtStrict(c.concept, end); if (!pick) return null;
-    return { value: M(pick.fact.val), prov: edgarProvenance(c.tag, 'us-gaap', pick.unit, pick.fact, cik10), tag: c.tag };
+  // Alias chains resolve PER PERIOD (the history.ts rule 1): the first tag in the chain that has
+  // a fact AT THIS PERIOD wins. Resolving once per concept returned null for a filer that
+  // switched tags (Hasbro tags cash under the restricted-cash-inclusive concept from FY2023 while
+  // the older concept still exists with stale facts) — and a null cash once read as zero cash.
+  const space = facts.facts?.['us-gaap'] ?? {};
+  const resolveAt = (tags: string[], end: string | undefined, at: typeof durationAtStrict): { value: number; prov: Provenance; tag: string } | null => {
+    for (const tag of tags) {
+      const concept = space[tag];
+      if (!concept?.units || !Object.keys(concept.units).length) continue;
+      const pick = at(concept, end);
+      if (pick) return { value: M(pick.fact.val), prov: edgarProvenance(tag, 'us-gaap', pick.unit, pick.fact, cik10), tag };
+    }
+    return null;
   };
-  const rawInstant = (tags: string[], end?: string): { value: number; prov: Provenance; tag: string } | null => {
-    const c = firstConcept(facts, tags); if (!c) return null;
-    const pick = instantAtStrict(c.concept, end); if (!pick) return null;
-    return { value: M(pick.fact.val), prov: edgarProvenance(c.tag, 'us-gaap', pick.unit, pick.fact, cik10), tag: c.tag };
-  };
+  const rawDuration = (tags: string[], end?: string) => resolveAt(tags, end, durationAtStrict);
+  const rawInstant = (tags: string[], end?: string) => resolveAt(tags, end, instantAtStrict);
 
   // ── Reporting anchor: the latest FULL-YEAR period from revenue (or operating income when
   //    revenue is untagged). EVERY figure below is pulled STRICTLY from this one period — a
@@ -344,24 +350,32 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   //                             − (CurrentLiabilities − current debt − current finance leases).
   //    ONE definition feeds both the historical NWC% and the days method — the two can
   //    never contradict each other. ──
-  const ac = rawInstant(ASSETS_CURRENT_TAGS, anchorEnd);
-  const lc = rawInstant(LIABILITIES_CURRENT_TAGS, anchorEnd);
-  const stiRaw = rawInstant(SHORT_TERM_INVESTMENT_TAGS, anchorEnd);
-  const cashForNwc = rawInstant(CASH_TAGS, anchorEnd);
-  const curDebtForNwcParts = [rawInstant(SHORT_TERM_DEBT_TAGS, anchorEnd), rawInstant(LT_DEBT_CURRENT_TAGS, anchorEnd)].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
-  const curDebtForNwc = curDebtForNwcParts.length
-    ? curDebtForNwcParts.reduce((s, p) => s + p.value, 0)
-    : rawInstant(DEBT_CURRENT_TOTAL_TAGS, anchorEnd)?.value ?? 0;
-  const curFinLeaseForNwc = rawInstant(FINANCE_LEASE_CURRENT_TAGS, anchorEnd)?.value ?? 0;
+  // The definition is a function of the period end so the SAME assembly gives the history
+  // (plan §3.1 D7): a year where a required component is untagged has no figure — never a
+  // different definition, never a plug.
+  const operatingNwcAt = (end?: string): { value: number; detail: string; url?: string } | null => {
+    const ac = rawInstant(ASSETS_CURRENT_TAGS, end);
+    const lc = rawInstant(LIABILITIES_CURRENT_TAGS, end);
+    const cashAt = rawInstant(CASH_TAGS, end);
+    if (!ac || !lc || !cashAt) return null;
+    const sti = rawInstant(SHORT_TERM_INVESTMENT_TAGS, end);
+    const curDebtParts = [rawInstant(SHORT_TERM_DEBT_TAGS, end), rawInstant(LT_DEBT_CURRENT_TAGS, end)].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
+    const curDebt = curDebtParts.length
+      ? curDebtParts.reduce((s, p) => s + p.value, 0)
+      : rawInstant(DEBT_CURRENT_TOTAL_TAGS, end)?.value ?? 0;
+    const curFinLease = rawInstant(FINANCE_LEASE_CURRENT_TAGS, end)?.value ?? 0;
+    return {
+      value: (ac.value - cashAt.value - (sti?.value ?? 0)) - (lc.value - curDebt - curFinLease),
+      detail: `(AssetsCurrent − cash${sti ? ' − ST investments' : ''}) − (LiabilitiesCurrent − current debt${curFinLease ? ' − current finance leases' : ''}) — OPERATING NWC (derived)`,
+      url: ac.prov.url,
+    };
+  };
+  const nwcAtAnchor = operatingNwcAt(anchorEnd);
   let nwc: SourcedValue | null = null;
-  if (ac && lc && cashForNwc) {
-    const operatingCa = ac.value - cashForNwc.value - (stiRaw?.value ?? 0);
-    const operatingCl = lc.value - curDebtForNwc - curFinLeaseForNwc;
-    nwc = sv(operatingCa - operatingCl, {
-      source: 'edgar',
-      detail: `(AssetsCurrent − cash${stiRaw ? ' − ST investments' : ''}) − (LiabilitiesCurrent − current debt${curFinLeaseForNwc ? ' − current finance leases' : ''}) — OPERATING NWC (derived)`,
-      tag: 'derived:OperatingNWC',
-      period: anchorEnd, fy: anchorFy, url: ac.prov.url,
+  if (nwcAtAnchor) {
+    nwc = sv(nwcAtAnchor.value, {
+      source: 'edgar', detail: nwcAtAnchor.detail, tag: 'derived:OperatingNWC',
+      period: anchorEnd, fy: anchorFy, url: nwcAtAnchor.url,
     });
   } else {
     gaps.push('NWC %');
@@ -469,12 +483,21 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   }
   const capexSeries = buildAnnualSeries(facts, 'capex', CAPEX_TAGS, seriesOpts);
   const ebitdaSeries = deriveSeries('ebitda', [opincSeries, daSeries], ([oi, d]) => oi + d);
+  // operating NWC at each revenue year end, on the anchor's own definition
+  const nwcSeries: typeof revenueSeries = {
+    metric: 'operating_nwc', anchor_tag: 'derived:OperatingNWC', unit: revenueSeries.unit, notes: [],
+    points: revenueSeries.points.flatMap((p) => {
+      const x = operatingNwcAt(p.end);
+      return x ? [{ end: p.end, start: null, value: x.value, tag: 'derived:OperatingNWC', filed: p.filed, form: p.form }] : [];
+    }),
+  };
   const history = {
     revenue: revenueSeries,
     operating_income: opincSeries,
     da: daSeries,
     capex: capexSeries,
     ebitda: ebitdaSeries,
+    operating_nwc: nwcSeries,
   };
   const revenueSeriesEnds = revenueSeries.points.map((p) => p.end);
 
@@ -555,10 +578,12 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
       })
     : null;
   let net_debt: SourcedValue | null = null;
-  if (gross_debt) {
-    net_debt = sv(gross_debt.value - (cash?.value ?? 0), {
+  // Net debt needs BOTH sides. A missing cash fact is a gap (as on the manual route) — it is
+  // never read as zero cash.
+  if (gross_debt && cash) {
+    net_debt = sv(gross_debt.value - cash.value, {
       source: 'edgar',
-      detail: cash ? 'Gross debt − cash (derived)' : 'Gross debt (no cash reported at period) (derived)',
+      detail: 'Gross debt − cash (derived)',
       tag: 'derived:NetDebt', period: anchorEnd, fy: anchorFy, url: gross_debt.provenance.url,
     });
   } else {
@@ -596,20 +621,20 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     }
   }
 
-  // ── Effective tax rate = tax expense ÷ pretax income (statutory fallback) ──
+  // ── Effective tax rate = tax expense ÷ pretax income (null when not derivable) ──
   const taxExp = rawDuration(TAX_EXPENSE_TAGS, anchorEnd);
   const pretax = rawDuration(PRETAX_TAGS, anchorEnd);
   let effective_tax_rate: SourcedValue | null = null;
   if (taxExp && pretax && pretax.value > 0) {
-    const rate = Math.min(0.6, Math.max(0, taxExp.value / pretax.value)); // clamp out nonsensical ratios
-    effective_tax_rate = sv(rate, {
+    // The TRUE ratio — never clamped. A 75% or a negative rate is what the filing says; a
+    // clamped figure wearing a filing badge would be an invented number.
+    effective_tax_rate = sv(taxExp.value / pretax.value, {
       source: 'edgar', detail: 'IncomeTaxExpenseBenefit ÷ pretax income (derived)', tag: 'derived:EffectiveTaxRate',
       period: anchorEnd, fy: anchorFy, url: taxExp.prov.url,
     });
-  } else {
-    // Always need a tax rate — fall back to statutory, flagged as a default (not a hard gap).
-    effective_tax_rate = sv(statutory, { source: 'default', detail: `Statutory default ${(statutory * 100).toFixed(0)}% (no derivable effective rate)` });
   }
+  // else: pretax income ≤ 0 or untagged ⇒ no rate is derivable. It stays null (the analyst
+  // enters the model's rate) — never a statutory stand-in.
 
   // ── NOL carryforward (optional — absence is not a gap). D6: companyfacts returns
   //    NON-DIMENSIONAL facts only — member-tagged NOL layers are invisible, so the

@@ -270,11 +270,15 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const unitWord = `${f.currency}m`;
   const S = new SheetBuilder(wb, 'Summary', parity, pending, 58, N + 1, 'FF00703C', unitWord);
   const I = new SheetBuilder(wb, 'Inputs', parity, pending, 64, N + 1, 'FF0000FF', unitWord);
+  // The Clean step's bridges (display-only facts) get their own sheet, between Inputs and Model.
+  const nz = f.normalisation ?? null;
+  const NZ = nz ? new SheetBuilder(wb, 'Normalisation', parity, pending, 62, Math.max(nz.periods.length, 1), 'FF7F6000', unitWord) : null;
   const M = new SheetBuilder(wb, 'Model', parity, pending, 66, N + 1, 'FF404040', unitWord);
   const K = SENS_STEPS.length;
   const X = new SheetBuilder(wb, 'Sensitivity', parity, pending, 62, Math.max(N + 1, K), 'FF7030A0', unitWord);
   const C = new SheetBuilder(wb, 'Checks', parity, pending, 66, 1, 'FFC00000', unitWord);
   const sheets = new Map([[S.name, S], [I.name, I], [M.name, M], [X.name, X], [C.name, C]]);
+  if (NZ) sheets.set(NZ.name, NZ);
   const ccy = f.currency;
   const years = (from: number, to: number) => Object.fromEntries(range(to - from + 1, from).map((t) => [t, `Year ${t}`]));
   const iv = (key: string) => I.ext(key, 0); // a scalar input (column D)
@@ -293,10 +297,95 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     `${ccy} millions unless stated. Blue = input. Every other number in this workbook is a formula on these cells.`,
     'Structural choices (holding period, the tranche list, forecast-line modes, the NWC method) are fixed at export — re-export from the deal engine to change them.',
   ]);
+  // ═══════════════════════════════ NORMALISATION ═══════════════════════════════
+  // How the sourced figures became the figures the model reads. Reported lines and every
+  // adjustment are inputs (blue); the adjusted figures are formulas; and the Inputs sheet's
+  // sizing revenue / EBITDA REFERENCE this sheet — so adding to an amount here moves the model.
+  // A period where an amount was not entered reads "n/a", never a number (blank ≠ zero).
+  const sizingCol = nz && nz.sizing !== null ? nz.periods.findIndex((p) => p.key === nz.sizing) : -1;
+  const linked = { revenue: false, ebitda: false, forecast: false };
+  if (nz && NZ) {
+    const P = nz.periods.length;
+    const close = (x: number | null, y: number | null) => x !== null && y !== null && Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(y));
+    NZ.title(`${a.deal_name} — normalisation`, [
+      `${ccy} millions. Blue = input. The adjusted figures are formulas, and the model's sizing revenue and EBITDA on the Inputs sheet point here.`,
+      nz.as_reported
+        ? 'This deal is modelled on the figures AS REPORTED — no normalisation was applied.'
+        : 'A positive amount increases the line (a cost added back to EBITDA is entered as a positive number). The type in brackets is a label only.',
+    ]);
+    const bridge = (key: 'rev' | 'eb', label: string, list: typeof nz.ebitda) => {
+      NZ.section(label);
+      NZ.header(Object.fromEntries(nz.periods.map((p, t) => [t, p.label])));
+      const restatedNote = list.filter((b) => b.reported !== null && b.restated !== null && b.reported !== b.restated)
+        .map((b) => `${nz.periods.find((p) => p.key === b.period)?.label ?? b.period}: restated from ${b.reported}`).join('; ');
+      const cells = (pick: (b: (typeof list)[number]) => number | null): Record<number, Cell> =>
+        Object.fromEntries(list.flatMap((b, t) => { const x = pick(b); return x === null ? [] : [[t, { input: x } as Cell]]; }));
+      NZ.line(`${key}_rep`, `${label} as sourced${restatedNote ? ' (restated)' : ''}`, cells((b) => b.restated), { note: restatedNote || undefined });
+      const rows = list[0]?.rows ?? [];
+      rows.forEach((r, i) => {
+        const fc = key === 'eb' && r.forecast === 'continues' ? '; continues — not in the forecast base' : '';
+        NZ.line(`${key}_a${i}`, `   ${r.label || 'Adjustment'} (${r.category.replace(/_/g, ' ')}${fc})`, cells((b) => b.rows[i]?.amount ?? null), { note: r.note || undefined });
+      });
+      const last = rows.length ? `${key}_a${rows.length - 1}` : `${key}_rep`;
+      NZ.line(`${key}_adj`, `Adjusted ${label.toLowerCase()}`, Object.fromEntries(range(P, 0).map((t) => [t, {
+        f: `IF(COUNT(${NZ.at(`${key}_rep`, t)}:${NZ.at(last, t)})<${rows.length + 1},"n/a",SUM(${NZ.at(`${key}_rep`, t)}:${NZ.at(last, t)}))`,
+        v: list[t].adjusted,
+      } as Cell])), { bold: true });
+    };
+    bridge('rev', 'Revenue', nz.revenue);
+    bridge('eb', 'EBITDA', nz.ebitda);
+    // §27: the forecast margin starts from adjusted EBITDA less the add-backs that continue.
+    const contIdx = (nz.ebitda[0]?.rows ?? []).flatMap((r, i) => (r.forecast === 'continues' ? [i] : []));
+    if (contIdx.length) {
+      NZ.line('eb_fc', 'EBITDA base for the forecast margin (adjusted, less the add-backs that continue)', Object.fromEntries(range(P, 0).map((t) => {
+        const b = nz.ebitda[t];
+        const known = b.adjusted !== null && contIdx.every((i) => b.rows[i].amount !== null);
+        let v: number | null = known ? b.adjusted : null;
+        if (v !== null) for (const i of contIdx) v -= b.rows[i].amount!;
+        return [t, { f: `IF(ISNUMBER(${NZ.at('eb_adj', t)}),${NZ.at('eb_adj', t)}${contIdx.map((i) => `-${NZ.at(`eb_a${i}`, t)}`).join('')},"n/a")`, v } as Cell];
+      })), { bold: true, note: 'SPEC §27: an add-back that keeps costing cash is in the price basis, not in forecast cash flow.' });
+    }
+    const nd = nz.net_debt;
+    NZ.section(`Net debt at ${nz.anchor ?? 'entry'}`);
+    if (nd && !nz.as_reported && nd.adjusted !== null && nd.borrowings !== null && nd.cash !== null) {
+      NZ.line('nd_borrow', 'Borrowings', { 0: { input: nd.borrowings } });
+      const debtRows = [...nd.leases.filter((l) => l.included).map((l) => ({ label: l.label, amount: l.amount, note: '' })), ...nd.debt_like.map((r) => ({ label: r.label, amount: r.amount!, note: r.note }))];
+      debtRows.forEach((r, i) => NZ.line(`nd_d${i}`, `   ${r.label}`, { 0: { input: r.amount } }, { note: r.note || undefined }));
+      NZ.line('nd_cash', 'Cash', { 0: { input: nd.cash } });
+      nd.cash_like.forEach((r, i) => NZ.line(`nd_c${i}`, `   ${r.label} (cash-like; negative = not available)`, { 0: { input: r.amount! } }, { note: r.note || undefined }));
+      const lastDebt = debtRows.length ? `nd_d${debtRows.length - 1}` : 'nd_borrow';
+      const lastCash = nd.cash_like.length ? `nd_c${nd.cash_like.length - 1}` : 'nd_cash';
+      NZ.line('nd_adj', 'Adjusted net debt', { 0: { f: `SUM(${NZ.at('nd_borrow', 0)}:${NZ.at(lastDebt, 0)})-SUM(${NZ.at('nd_cash', 0)}:${NZ.at(lastCash, 0)})`, v: nd.adjusted } }, { bold: true,
+        note: nd.leases.some((l) => !l.included) ? `Lease liabilities not counted as debt: ${nd.leases.filter((l) => !l.included).map((l) => `${l.label} ${l.amount}`).join('; ')}` : undefined });
+    } else if (f.net_debt !== null) {
+      NZ.line('nd_adj', 'Net debt as sourced', { 0: { input: f.net_debt } });
+    } else {
+      NZ.note('The source gives no net debt figure.');
+    }
+    NZ.note('Net debt does not enter the model’s returns (the model prices the whole enterprise); it sets what the sellers receive — see the Summary.');
+    // The Inputs cells point here only when the bridge reproduces the figure the engine read.
+    if (sizingCol >= 0) {
+      linked.revenue = close(nz.revenue[sizingCol]?.adjusted ?? null, f.fy_revenue);
+      linked.ebitda = close(nz.ebitda[sizingCol]?.adjusted ?? null, f.fy_ebitda);
+      linked.forecast = linked.ebitda && linked.revenue && contIdx.length > 0 && nz.forecast_ebitda !== null
+        && f.fy_revenue !== null && close(nz.forecast_ebitda / f.fy_revenue, f.fy_ebitda_margin);
+    }
+  }
+
   I.section('1. Historical facts (the debt-sizing basis)');
   const basisWord = f.sizing_basis === 'LTM' ? 'LTM' : 'FY';
-  if (f.fy_revenue !== null) I.line('ltm_revenue', `${basisWord} revenue`, { 0: { input: f.fy_revenue } });
-  if (f.fy_ebitda !== null) I.line('ltm_ebitda', `${basisWord} EBITDA`, { 0: { input: f.fy_ebitda } });
+  const fromNz = 'From the Normalisation sheet — change the amounts there.';
+  if (f.fy_revenue !== null) {
+    if (linked.revenue && NZ) I.line('ltm_revenue', `${basisWord} revenue (adjusted)`, { 0: { f: NZ.ext('rev_adj', sizingCol), v: f.fy_revenue } }, { note: fromNz });
+    else I.line('ltm_revenue', `${basisWord} revenue`, { 0: { input: f.fy_revenue } });
+  }
+  if (f.fy_ebitda !== null) {
+    if (linked.ebitda && NZ) I.line('ltm_ebitda', `${basisWord} EBITDA (adjusted)`, { 0: { f: NZ.ext('eb_adj', sizingCol), v: f.fy_ebitda } }, { note: fromNz });
+    else I.line('ltm_ebitda', `${basisWord} EBITDA`, { 0: { input: f.fy_ebitda } });
+  }
+  if (linked.forecast && NZ && nz) {
+    I.line('ltm_ebitda_fc', `${basisWord} EBITDA base for the forecast margin (§27)`, { 0: { f: NZ.ext('eb_fc', sizingCol), v: nz.forecast_ebitda } }, { note: fromNz });
+  }
   if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year — every operating line is entered directly.');
   I.line('net_ppe', 'Net PP&E at close (0 if the source states none)', { 0: { input: f.net_ppe ?? 0 } },
     { note: f.net_ppe === null ? 'Not stated in the source — seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
@@ -555,7 +644,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       v: null, fmt: FMT_NUM,
     })), { italic: true, noParity: true });
     M.line('margin', 'EBITDA margin  =  base + (target − base) × weight', {
-      0: { f: `${iv('ltm_ebitda')}/${iv('ltm_revenue')}`, v: f.fy_ebitda_margin, fmt: FMT_PCT },
+      0: { f: `${iv(linked.forecast ? 'ltm_ebitda_fc' : 'ltm_ebitda')}/${iv('ltm_revenue')}`, v: f.fy_ebitda_margin, fmt: FMT_PCT },
       ...per(1, N, (t) => ({ f: `${m('margin', 0, true)}+(${iv('target_margin')}-${m('margin', 0, true)})*${m('w', t)}`, v: op[t - 1].margin, fmt: FMT_PCT })),
     });
     M.line('ebitda', 'EBITDA  =  revenue × margin', per(1, N, (t) => ({ f: `${m('rev', t)}*${m('margin', t)}`, v: op[t - 1].ebitda })), { bold: true });
@@ -1346,6 +1435,9 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       ? `${mx('total_par', 0)}${range(N, 1).map((t) => terms.map((_, i) => `-${mx(`${tk[i]}_mand`, t)}-${mx(`${tk[i]}_sweep`, t)}+${mx(`${tk[i]}_pik`, t)}`).join('')).join('')}-(${terms.map((_, i) => mx(`${tk[i]}_close`, N)).join('+')})`
       : '0'],
   ];
+  if (NZ && linked.ebitda) {
+    checks.push(['ck_norm', 'Sizing EBITDA is the adjusted EBITDA on the Normalisation sheet (non-zero ⇒ the link was overwritten)', `${I.ext('ltm_ebitda', 0)}-${NZ.ext('eb_adj', sizingCol)}`]);
+  }
   if (sweet) {
     // §22.3(vi): a strip needs a positive institutional plug — otherwise the loan-note /
     // ordinary split is meaningless (the deal engine refuses to build such a deal)
@@ -1391,6 +1483,15 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     S.line('s_ev', 'Purchase price (enterprise value)', { 0: { f: mm('ev'), v: su.enterprise_value } }, { bold: true });
     S.line('s_entry_mult', `Entry multiple (× ${a.entry.basis === 'fy' ? 'historical' : 'forecast year-1'} EBITDA)`, { 0: { f: mm('entry_mult'), v: o.derived.entry_multiple, fmt: FMT_MULT } });
     S.line('s_debt', 'Debt at close (par)', { 0: { f: mm('total_par'), v: o.derived.total_debt_at_par } });
+    if (nz && NZ && linked.ebitda) {
+      const eb = nz.ebitda[sizingCol];
+      if (eb.restated !== null) S.line('s_ebitda_rep', `${basisWord} EBITDA as sourced`, { 0: { f: NZ.ext('eb_rep', sizingCol), v: eb.restated } });
+      S.line('s_ebitda_adj', `${basisWord} EBITDA, adjusted (the pricing and leverage basis)`, { 0: { f: NZ.ext('eb_adj', sizingCol), v: f.fy_ebitda } });
+    }
+    if (NZ && f.net_debt !== null) {
+      S.line('s_net_debt', nz && !nz.as_reported ? 'Net debt at entry, adjusted' : 'Net debt at entry', { 0: { f: NZ.ext('nd_adj', 0), v: f.net_debt } });
+      S.line('s_seller_eq', 'Implied equity value to the sellers (purchase price − net debt)', { 0: { f: `${mm('ev')}-${NZ.ext('nd_adj', 0)}`, v: su.enterprise_value - f.net_debt } });
+    }
     if (f.fy_ebitda !== null && o.derived.entry_gross_leverage_fy !== null) {
       S.line('s_lev', `Gross leverage at close (debt ÷ ${basisWord} EBITDA)`, { 0: { f: `${mm('total_par')}/${I.ext('ltm_ebitda', 0)}`, v: o.derived.entry_gross_leverage_fy, fmt: FMT_MULT } });
     }
@@ -1456,6 +1557,18 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       b1.value = why;
       b1.alignment = { vertical: 'top', wrapText: true };
     });
+    if (nz) {
+      const r = DISCLOSURES.length + 3;
+      const a1 = ws.getCell(`B${r}`);
+      a1.value = 'Normalisation of the sourced figures';
+      a1.font = { bold: true };
+      a1.alignment = { vertical: 'top', wrapText: true };
+      const b1 = ws.getCell(`C${r}`);
+      b1.value = nz.as_reported
+        ? 'The deal is modelled on the figures as reported: the analyst chose to apply no normalisation.'
+        : 'Revenue, EBITDA and net debt were normalised before modelling. Every restated figure and every adjustment is itemised on the Normalisation sheet, which the Inputs sheet references. An add-back marked as continuing (SPEC §27) is in the price and leverage basis but not in the forecast margin base, because the cost keeps being paid in cash; every other add-back is in both.';
+      b1.alignment = { vertical: 'top', wrapText: true };
+    }
   }
 
   // ═══════════════════ resolve symbolic references, write formulas ═══════════════════

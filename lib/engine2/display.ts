@@ -75,3 +75,32 @@ export function exitMultipleDisplay(o: Pick<Engine2ModelOutput, 'exit'>): number
 export function headlineNotMeaningful(o: Pick<Engine2ModelOutput, 'coherence'>): boolean {
   return o.coherence.some((f) => f.severity === 'block');
 }
+
+/**
+ * What the sellers receive, read off the purchase price: enterprise value less the net debt the
+ * buyer takes on (the ADJUSTED net debt when the deal came through the Clean step). The engine
+ * prices the enterprise, so net debt never moves the sponsor's returns — it moves this number.
+ * Per-share and premium figures exist only when a verified quote is attached (a domestic USD
+ * 10-K filer); otherwise they are null, never estimated. Display only.
+ */
+export function impliedEquityDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'facts'>): {
+  enterprise_value: number;
+  net_debt: number | null;
+  equity_value: number | null;
+  per_share: number | null;
+  /** equity value ÷ current market capitalisation − 1 */
+  premium_to_market: number | null;
+} {
+  const nd = o.facts.net_debt;
+  const equity = nd === null ? null : o.derived.enterprise_value - nd;
+  const n = o.facts.normalisation ?? null;
+  const shares = n?.shares_millions ?? null;
+  const mcap = n?.market_cap ?? null;
+  return {
+    enterprise_value: o.derived.enterprise_value,
+    net_debt: nd,
+    equity_value: equity,
+    per_share: equity !== null && shares !== null && shares > 0 ? equity / shares : null,
+    premium_to_market: equity !== null && mcap !== null && mcap > 0 ? equity / mcap - 1 : null,
+  };
+}

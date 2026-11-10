@@ -18,7 +18,7 @@ import { runModelWithScenarios } from '../lib/engine2/scenarios';
 import { suggestionsFor, type SuggestionBasis, type SuggestionCatalogue } from '../lib/engine2/suggest';
 import { blankAssumptions, CHOICE_PATHS, missingInputs, resizeHold, setPath, type MissingInput } from '../lib/engine2/draft';
 import type { RawHistoricals } from '../lib/edgar/types';
-import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
+import type { DealAssumptions, DealFacts, NormalisationFacts } from '../lib/engine2/types';
 
 export type FieldBasis = SuggestionBasis | { kind: 'user'; detail: string } | { kind: 'ai'; detail: string };
 
@@ -50,6 +50,11 @@ export interface Engine2ModelStore {
   /** Screen 1 → 2. With no `hold_years` the draft does not exist yet: the holding period is
    *  the FIRST input (it sizes every per-year array — no default N). */
   importFromRaw: (raw: RawHistoricals, opts?: { hold_years?: number; trading_anchor?: number | null }) => void;
+  /** The Clean step changed the figures (store/cleaning): swap the FACTS for the cleaned ones and
+   *  refresh the proposals. Unlike a re-import this keeps everything the analyst entered — the
+   *  assumptions, the open choices, the badges and any fact confirmed by hand. The output is
+   *  cleared (outputs never render stale). `trading_anchor: undefined` keeps the current one. */
+  applyCleaned: (raw: RawHistoricals, opts: { normalisation: NormalisationFacts | null; trading_anchor?: number | null }) => void;
   /** The D5 trading anchor resolved in the background: update the fact in place (never a
    *  re-import — nothing the analyst entered is touched). */
   setTradingAnchor: (entityName: string, anchor: number | null) => void;
@@ -123,6 +128,38 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       output: null, error: null,
       // AI notes/redlines describe assumptions that no longer exist after ANY re-import
       aiNotes: [], redlineItems: null,
+    });
+  },
+
+  applyCleaned: (raw, opts) => {
+    const prev = get();
+    if (!prev.facts) return;
+    const adapted = adaptRawHistoricals(raw);
+    const facts: DealFacts = {
+      ...adapted.facts,
+      implied_trading_ev_ebitda: opts.trading_anchor === undefined ? prev.facts.implied_trading_ev_ebitda : opts.trading_anchor,
+      normalisation: opts.normalisation,
+    };
+    // a fact the analyst confirmed by hand (the source lacked it) stays confirmed
+    let missing = adapted.missing;
+    const bag = facts as unknown as Record<string, unknown>;
+    let pairConfirmed = false;
+    for (const [key, b] of Object.entries(prev.basis)) {
+      if (!key.startsWith('facts.') || b.kind !== 'user') continue;
+      const path = key.slice('facts.'.length);
+      if (!missing.includes(path)) continue;
+      bag[path] = (prev.facts as unknown as Record<string, unknown>)[path];
+      missing = missing.filter((m) => m !== path);
+      if (path === 'fy_revenue' || path === 'fy_ebitda') pairConfirmed = true;
+    }
+    // only a hand-confirmed sizing figure needs the margin re-formed; otherwise the adapter's
+    // margin stands (it carries the §27 forecast base)
+    if (pairConfirmed) facts.fy_ebitda_margin = facts.fy_revenue !== null && facts.fy_ebitda !== null && facts.fy_revenue > 0 ? facts.fy_ebitda / facts.fy_revenue : null;
+    const a = prev.assumptions;
+    set({
+      facts, missingFacts: missing, factNotes: adapted.notes,
+      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a) : {},
+      output: null, error: null,
     });
   },
 

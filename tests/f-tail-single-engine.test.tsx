@@ -1,7 +1,7 @@
 /**
  * F TAIL (owner-accelerated 2026-07-24) — the single-engine world. The old engine is
  * DELETED (tag `pre-deletion-lib-engine` holds the last pre-deletion tree): /deal-engine
- * routes between the import screens and the v2 workbench and nothing else; previous-engine
+ * runs the Source → Clean → Assumptions → Results flow on the one engine; previous-engine
  * saves surface the retirement notice; the ONE feeder wires every import route to engine2.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -9,14 +9,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import DealEngine, { resolveDealEngineSurface } from '../pages/DealEngine';
+import DealEngine, { resolveStep, stepFromPath } from '../pages/DealEngine';
+import { useCleaning } from '../store/cleaning';
 import { SHOW_DEAL_ENGINE_NAV } from '../config/features';
 import { useEngine2Model } from '../store/engine2Model';
 import { useDealEngineStore } from '../store/dealEngine';
 import { manualHistoricals } from '../lib/edgar/buildModel';
 
-const page = () => renderToStaticMarkup(
-  <MemoryRouter initialEntries={['/deal-engine']}><DealEngine /></MemoryRouter>,
+const page = (path = '/deal-engine') => renderToStaticMarkup(
+  <MemoryRouter initialEntries={[path]}><DealEngine /></MemoryRouter>,
 );
 
 const MANUAL = {
@@ -28,6 +29,7 @@ const MANUAL = {
 
 beforeEach(() => {
   useEngine2Model.getState().reset();
+  useCleaning.getState().reset();
   useDealEngineStore.setState({ legacySaveNotice: false, error: null, isCalculating: false });
 });
 
@@ -44,10 +46,28 @@ describe('F tail — the old engine is gone from the tree', () => {
   });
 });
 
-describe('F tail — /deal-engine routing (two surfaces only)', () => {
-  it('routing is a pure two-way switch on engine2 facts', () => {
-    expect(resolveDealEngineSurface({ hasEngine2Facts: false })).toBe('import-screens');
-    expect(resolveDealEngineSurface({ hasEngine2Facts: true })).toBe('workbench');
+describe('/deal-engine routing — Source → Clean → Assumptions → Results', () => {
+  it('the URL names the step; anything else names none', () => {
+    expect(stepFromPath('/deal-engine/lbo/clean')).toBe('clean');
+    expect(stepFromPath('/deal-engine/lbo/results/')).toBe('results');
+    expect(stepFromPath('/deal-engine')).toBeNull();
+    expect(stepFromPath('/deal-engine/lbo/hub')).toBeNull();
+  });
+
+  it('a later step never opens before the one in front of it is complete; going back always works', () => {
+    const none = { hasFacts: false, cleanDone: false, hasOutput: false };
+    const sourced = { hasFacts: true, cleanDone: false, hasOutput: false };
+    const cleaned = { hasFacts: true, cleanDone: true, hasOutput: false };
+    const built = { hasFacts: true, cleanDone: true, hasOutput: true };
+    for (const s of ['source', 'clean', 'assumptions', 'results'] as const) expect(resolveStep(s, none)).toBe('source');
+    expect(resolveStep('results', sourced)).toBe('clean'); // a deep link past the Clean step lands on it
+    expect(resolveStep('assumptions', sourced)).toBe('clean');
+    expect(resolveStep('results', cleaned)).toBe('assumptions'); // no output ⇒ nothing stale to show
+    expect(resolveStep('results', built)).toBe('results');
+    expect(resolveStep('clean', built)).toBe('clean');
+    expect(resolveStep('source', built)).toBe('source');
+    // no step in the URL ⇒ resume where the deal stands
+    expect([none, sourced, cleaned, built].map((st) => resolveStep(null, st))).toEqual(['source', 'clean', 'assumptions', 'results']);
   });
 
   it('empty state ⇒ the import screen with the saved-model load path', () => {
@@ -57,18 +77,33 @@ describe('F tail — /deal-engine routing (two surfaces only)', () => {
     expect(html).not.toContain('Suggest everything');
   });
 
-  it('manual entry feeds engine2 and the page renders the WORKBENCH', () => {
+  it('manual entry feeds engine2 and the page lands on the CLEAN step, with the sourced figures', () => {
     useDealEngineStore.getState().loadFromHistoricals(manualHistoricals(MANUAL));
     expect(useEngine2Model.getState().facts?.entity_name).toBe('Single Engine Co');
     const html = page();
     expect(html).toContain('Single Engine Co');
-    expect(html).toContain('The holding period sizes every per-year input'); // v2.0.0: the blank draft starts with the hold
-    expect(html).toContain('← New import');
+    expect(html).toContain('Clean the numbers');
+    expect(html).toContain('Statements as sourced');
+    expect(html).toContain('Use the figures as reported');
+    expect(html).not.toContain('The holding period sizes every per-year input'); // Assumptions is the NEXT step
+    // a deep link to a later step is turned back to Clean, never rendered half-ready
+    expect(page('/deal-engine/lbo/results')).toContain('Clean the numbers');
   });
 
-  it('the workbench "New import" escape returns to Screen 1', () => {
+  it('leaving Clean opens the Assumptions step: the blank draft starts with the hold', () => {
+    useDealEngineStore.getState().loadFromHistoricals(manualHistoricals(MANUAL));
+    useCleaning.getState().useAsReported();
+    const html = page();
+    expect(html).toContain('The holding period sizes every per-year input');
+    expect(html).not.toContain('Clean the numbers');
+    expect(html).toContain('New deal');
+    expect(page('/deal-engine/lbo/clean')).toContain('Clean the numbers'); // going back is always allowed
+  });
+
+  it('"New deal" (both stores reset) returns to Source', () => {
     useDealEngineStore.getState().loadFromHistoricals(manualHistoricals(MANUAL));
     useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
     expect(page()).toContain('Source the target');
   });
 

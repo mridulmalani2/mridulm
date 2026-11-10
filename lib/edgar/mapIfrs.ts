@@ -170,7 +170,6 @@ function buildIndex(report: XbrlJsonReport): ReportIndex {
 
 export interface MapIfrsOptions {
   unitScale?: number;          // ÷ to reach engine millions. Default 1e6.
-  statutoryTaxRate?: number;   // fallback effective rate. Default 0.25.
   entityName?: string;
   reportUrl?: string;          // filings.xbrl.org viewer/report URL, for provenance links
   /** Include IFRS-16 lease liabilities in gross/net debt (default true — leverage-relevant). */
@@ -185,7 +184,6 @@ interface Hit { value: number; kind: HitKind; method: string; concept?: string; 
 
 export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {}): RawHistoricals {
   const scale = opts.unitScale ?? 1e6;
-  const statutory = opts.statutoryTaxRate ?? 0.25;
   const includeLeases = opts.includeLeasesInDebt ?? true;
   const url = opts.reportUrl;
   const idx = buildIndex(report);
@@ -414,7 +412,8 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   let net_debt: SourcedValue | null = null;
   if (reportedNetDebt) {
     net_debt = sv(reportedNetDebt.value, provHit(reportedNetDebt));
-  } else if (gross_debt) {
+  } else if (gross_debt && cash) {
+    // both sides required — a missing cash fact is a gap, never zero cash
     const leaseNote = lease > 0 ? ' incl. lease liabilities (IFRS 16)' : '';
     // net_debt is the field the draft/review actually consume, so the lease-ambiguity caveat must
     // ride on IT (not only gross_debt) — otherwise the analyst sees a confident, possibly
@@ -422,22 +421,22 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     const ambigNote = borrowingsAmbiguous && leaseCandidate > 0
       ? ` — ${round1(leaseCandidate)} lease liabilities excluded (issuer-extension total; may understate IFRS-16 leverage — verify)`
       : '';
-    net_debt = sv(gross_debt.value - (cash?.value ?? 0), derivedProv(
-      `Gross debt (${round1(gross_debt.value)})${leaseNote} − cash (${round1(cash?.value ?? 0)})${cash ? '' : ' — no cash reported'}${ambigNote}`));
+    net_debt = sv(gross_debt.value - cash.value, derivedProv(
+      `Gross debt (${round1(gross_debt.value)})${leaseNote} − cash (${round1(cash.value)})${ambigNote}`));
   } else {
     gaps.push('Net debt at entry');
   }
 
-  // ── Effective tax rate (statutory fallback) ──
+  // ── Effective tax rate (null when not derivable) ──
   const taxHit = ifrsFlow(TAX);
   const pretaxHit = ifrsFlow(PRETAX);
   let effective_tax_rate: SourcedValue | null = null;
   if (taxHit && pretaxHit && pretaxHit.value > 0) {
-    const rate = Math.min(0.6, Math.max(0, Math.abs(taxHit.value) / pretaxHit.value));
-    effective_tax_rate = sv(rate, derivedProv('Income tax expense ÷ pretax profit'));
-  } else {
-    effective_tax_rate = sv(statutory, { source: 'default', detail: `Statutory default ${(statutory * 100).toFixed(0)}% (no derivable effective rate)` });
+    // the true ratio — never clamped (the sign convention of the tax line varies by filer,
+    // hence the magnitude)
+    effective_tax_rate = sv(Math.abs(taxHit.value) / pretaxHit.value, derivedProv('Income tax expense ÷ pretax profit'));
   }
+  // else: not derivable ⇒ null, never a statutory stand-in
 
   // Period end: ESEF often encodes the year-end instant as the next-day midnight (YYYY-01-01),
   // so normalise that back to the actual closing date (YYYY-1-12-31).

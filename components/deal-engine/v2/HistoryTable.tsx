@@ -9,7 +9,7 @@ import type { Engine2Currency } from '../../../lib/format';
 import type { DealFacts } from '../../../lib/engine2/types';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const label = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
+const label = { color: 'rgba(17,17,17,0.62)', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' } as const;
 // §1.1 staleness tiers — the sizing as-of's age vs import date (fresh ≤4.5m / aging ≤14.5m / stale).
 const STALE_COLOR: Record<'fresh' | 'aging' | 'stale', string> = { fresh: '#2e7d32', aging: '#b26a00', stale: '#c62828' };
 
@@ -29,7 +29,7 @@ const HistoryTable: React.FC<{
   const sourceNoun = facts.source === 'manual' ? 'entered' : 'filing';
   if (!rows.length) {
     return (
-      <p className="text-[11px]" style={label}>
+      <p className="text-[13px]" style={label}>
         {facts.source === 'manual'
           ? 'No usable multi-year history was entered (≥3 full-year points are needed for a history-based suggestion).'
           : 'No usable multi-year history in the filing (≥3 full-year points are needed for a history-based suggestion).'}
@@ -40,16 +40,16 @@ const HistoryTable: React.FC<{
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-[10px] tracking-wider uppercase" style={label}>{sourceNoun === 'entered' ? 'Entered history' : 'Filing history'}</span>
+        <span className="text-[12px] tracking-wider uppercase" style={label}>{sourceNoun === 'entered' ? 'Entered history' : 'Filing history'}</span>
         <span className="flex flex-col items-end gap-0.5">
-          <span className="text-[10px]" style={label}>{staleness(facts.fiscal_year ?? undefined, facts.period_end ?? undefined, today)}</span>
+          <span className="text-[12px]" style={label}>{staleness(facts.fiscal_year ?? undefined, facts.period_end ?? undefined, today)}</span>
           {/* §1.1: the SIZING basis (leverage + entry EBITDA) — the LTM quarter-stitch when interim
               filings allow, else FY — with its staleness tier. Distinct from the FY-anchored filing
               history above (an LTM deal's sizing as-of runs past the latest FY end). */}
           {facts.sizing_basis && (() => {
             const tier = stalenessTier(facts.sizing_as_of, today); // view-relative, uniform across all filer paths
             return (
-              <span className="text-[10px] flex items-center gap-1" style={label}
+              <span className="text-[12px] flex items-center gap-1" style={label}
                 title="Sizing basis for leverage & entry EBITDA (SPEC §1.1)">
                 <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: STALE_COLOR[tier ?? 'fresh'] }} />
                 {facts.sizing_basis === 'LTM' ? `sizing: LTM ending ${facts.sizing_as_of}` : 'sizing: FY'}
@@ -59,7 +59,7 @@ const HistoryTable: React.FC<{
           })()}
         </span>
       </div>
-      <table className="w-full text-[11px]" style={{ fontFamily: mono, borderCollapse: 'collapse' }}>
+      <table className="w-full text-[13px]" style={{ fontFamily: mono, borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ color: 'rgba(17,17,17,0.45)' }}>
             <th className="text-left font-normal py-1">FY end</th>

@@ -10,7 +10,9 @@
  *  falsely imply the user typed it). It appears only in the draft's `ProvenanceMap`, never inside
  *  a `RawHistoricals` (those stay null + recorded in `gaps`). Once the user fills it, the store
  *  flips the source to 'user'. */
-export type ProvenanceSource = 'edgar' | 'esef' | 'upload' | 'ai' | 'user' | 'default' | 'missing';
+/** `'adjusted'` = a sourced figure the analyst normalised on the Clean step (lib/cleaning): the
+ *  detail states the reported figure and what was added to it. */
+export type ProvenanceSource = 'edgar' | 'esef' | 'upload' | 'ai' | 'user' | 'default' | 'missing' | 'adjusted';
 
 export interface Provenance {
   source: ProvenanceSource;
@@ -63,6 +65,10 @@ export interface RawHistoricals {
   fy_revenue: SourcedValue | null;          // revenue (£m/$m)
   fy_ebitda: SourcedValue | null;           // EBITDA = operating income + D&A
   ebitda_margin: SourcedValue | null;        // EBITDA / revenue (decimal)
+  /** SPEC §27: the EBITDA the FORECAST margin starts from, when it differs from the sizing
+   *  EBITDA — adjusted EBITDA less the add-backs that keep costing cash. Set only by the Clean
+   *  step, and only when such an add-back exists; absent ⇒ the forecast base is `fy_ebitda`. */
+  forecast_ebitda?: SourcedValue | null;
   da: SourcedValue | null;                   // depreciation & amortisation (£m/$m)
   da_pct_revenue: SourcedValue | null;       // D&A / revenue (decimal)
   capex: SourcedValue | null;                // capital expenditure (£m/$m)
@@ -116,6 +122,8 @@ export interface RawHistoricals {
     capex: import('./history').HistorySeries;
     /** operating income + D&A, only at ends where BOTH resolve (no fake totals). */
     ebitda: import('./history').HistorySeries;
+    /** Operating NWC at each year end, on the SAME definition as `nwc` (US GAAP route only). */
+    operating_nwc?: import('./history').HistorySeries;
   };
 }
 

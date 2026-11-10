@@ -65,7 +65,9 @@ const App: React.FC = () => {
       <Suspense fallback={<div className="min-h-screen" aria-hidden="true" />}>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/deal-engine" element={<DealEngine />} />
+          {/* /deal-engine/lbo/<step> — the page reads the step from the URL and redirects to the
+              furthest step the deal has actually reached. */}
+          <Route path="/deal-engine/*" element={<DealEngine />} />
 
           {/* The toolkit moved to /deal-engine. Old links keep working — the edge
               redirect in vercel.json catches a cold load, this catches an in-app
