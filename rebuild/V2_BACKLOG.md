@@ -79,18 +79,23 @@ Methodology row, live Excel formulas. Open prose item only: ledger L4 (§23 is ~
 - Later: AI-assisted cleaning of the statements (an analyst-in-the-loop proposal list, the
   same proposal discipline as `suggest.ts`).
 
-## Open questions for the owner
+## Decided since the last pass
 
-- **Negative exit equity.** The engine carries exit equity SIGNED (SPEC §22's committed
-  convention): when debt exceeds exit EV the sponsor's final flow is negative, as if the sponsor
-  paid in the shortfall. Under limited liability equity is floored at zero and lenders take the
-  loss. A floor would change §9/§22 and their goldens' domains — a spec decision, not made here.
+- ☑ 1b7195d **Limited liability (SPEC §9.1, v2.3.0).** Researched (equity as a call on the
+  firm struck at its debt; modelling practice floors proceeds with MAX(0, …)) and adopted:
+  exit equity and selldown proceeds are floored at zero, the lenders' unrecovered debt is
+  reported (`exit.debt_shortfall_at_exit`, a bridge term, a WARN). The signed convention is
+  rejected — it modelled the sponsor paying in at exit.
+- ☑ 4c28e8a §23 ledger closed (L4); the runbook STATE section is current.
 
-## Housekeeping (not done — needs the owner's go-ahead: deletes are hard to undo)
+## Housekeeping  ☑ 2026-11-09
 
-- Stale remote branches: `claude/partial-exits-spec`, `archive/partial-exits-spec-draft`,
-  `claude/fund-lp-overlay-feature-go3xav`, `claude/entry-leverage-naming`,
-  `claude/f-tail-deletion`, `claude/phase-g1-goldens`, `claude/phase-c-drafts`, and now
-  `claude/deal-engine-partial-exits-586f25` (merged here).
-- Two detached local worktrees under `.claude/worktrees/` (`phase-g1-goldens-a3df47`,
-  `quirky-herschel-717d76`).
+- Remote: 50 stale branches deleted; only `main` and the PR #126 branch remain. The two that
+  held unique (superseded) work are preserved as tags `archived/phase-c-drafts` and
+  `archived/fund-lp-overlay-feature-go3xav`.
+- Local: two dead worktrees removed (both clean, their commits on main); 68 merged local
+  branches deleted.
+- Left for the owner: the cloud routine "Deal Engine autonomous build — 5h resume"
+  (trig_01BHRUyxTy5GJSF711ZhhTao) is still enabled and resumes from this runbook every 5 hours;
+  and the main checkout still has `claude/excel-model-completion` (now fully inside PR #126)
+  checked out — switch it to `main` after the merge.
