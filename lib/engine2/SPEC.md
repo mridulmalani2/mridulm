@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v2.3.1 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v2.4.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -535,8 +535,8 @@ typed precision, under BOTH starts — external, never produced by this codebase
 (G5 with a 1.5× senior, 75% payout, trap 0.5× — year 1 blocked, year 2 clipped) and
 G13-SURPLUS-GATED (100%, after_debt_repaid — nothing until the senior retires in year 4), both
 from the different-language reference `scripts/goldens/spec_calc.py`, whose scope gained §7's
-early-retirement path (book write-off in the retirement year, deduction in year t+1's uncapped
-pool) to derive them — every pre-existing golden byte-identical.
+early-retirement path (book write-off in the retirement year, deduction in year t+1 — by
+tax character since v2.4.0, §7.1) to derive them — every pre-existing golden byte-identical.
 
 Rejected (the old engine's mechanic): "sweep % × outstanding" as a per-tranche cap with no %
 applied to the pool — DR-1 Item 2 (WSO worked example) confirms the standard interpretation
@@ -610,10 +610,13 @@ ATI basis        : 'ebitda' → ATI = EBITDA_adj   (post-OBBBA default; monitori
                    deducted expense, so ATI is on the ADJUSTED figure)
                    'ebit'   → ATI = EBITDA_adj − D&A   (pre-2025 fiscal years)
 capped pool      = cash interest + PIK accrual + OID amortization        (§163(j) interest)
+                   + REPURCHASE PREMIUM on debt retired or refinanced (§7.1 [v2.4.0]):
+                     its unamortized OID + any call premium (Treas. Reg. §1.163-7(c);
+                     interest under §1.163(j)-1(b)(22))
 uncapped deds    = financing-fee amortization + commitment fees
-                   + exit-year unamortized-fee write-off (year N only, §9)
-                   (debt issuance costs & commitment fees are NOT §163(j) interest —
-                    Treas. Reg. §1.163(j)-1(b)(22); deducted in full)
+                   + unamortized debt-issuance costs of debt retired or refinanced (§7.1)
+                   (debt issuance costs & commitment fees are NOT §163(j) interest under
+                    the final regulations, §1.163(j)-1(b)(22); deducted in full)
 
 1. Interest deduction:
    if !interest_deductible:        deductible = 0; carryforward stays 0 (permanent
@@ -696,15 +699,33 @@ AP = DPO/365 × COGS; **COGS proxy = revenue × (1 − EBITDA margin)** (disclos
 - **Financing-fee amortization**: total fee = pct × total commitments, allocated pro-rata by
   commitment/par across tranches (incl. the revolver), straight-line over EACH tranche's
   maturity; an UNCAPPED ordinary deduction (Treas. Reg. §1.163(j)-1(b)(22)).
-Both: remaining balance **written off on full early retirement** (non-cash; year-N tax
-treatment per §6 uncapped line); both flow to the interest line for book EBIT, never D&A
-(DR-2 Item 1 flag); both added back in FCF. **Early-retirement timing [v1.0.3]:** the
-BOOK write-off lands in the retirement year; the TAX deduction enters the FOLLOWING
-year's uncapped pool (§5 strict sequentiality — retirement is only known post-waterfall,
-after that year's tax is computed). If retirement occurs in year N it merges into the
-exit-year deduction (§9). **A §18 refinancing reuses this exact timing** — the old
-tranche's unamortized OID/DFC (and the call premium) write off in book year R with the
-tax deduction in year R+1's uncapped pool, merging into the exit deduction when R+1 = N.
+Both: remaining balance **written off when the debt is retired** — a full early retirement,
+the exit (§9) or a §18 refinancing (non-cash; tax per §7.1); both flow to the interest line
+for book EBIT, never D&A (DR-2 Item 1 flag); both added back in FCF.
+
+**§7.1 Debt retired or refinanced — tax character and timing [DECIDED v2.4.0; supersedes
+v1.0.3's timing and §18.5's deferral].** BOOK: the write-off (and a refinancing's call
+premium, §18.5) lands in the year of the event. TAX — the standard, applied as a rule, not a
+setting (owner direction 2026-11-10: "if there's a standard, use that"):
+- **Character.** Retiring a debt instrument for more than its adjusted issue price gives
+  **repurchase premium** (Treas. Reg. §1.163-7(c)) — the unamortized OID and any call premium —
+  which is **§163(j) interest** (§1.163(j)-1(b)(22)) → the CAPPED pool (§6). Unamortized
+  **debt-issuance costs** (§1.446-5) are **not interest** under the final §163(j) regulations →
+  the UNCAPPED pool.
+- **Timing.** The deduction belongs to the year of the retirement (§1.163-7(c)). The engine
+  takes it there whenever the event is known before that year's tax: **the exit** (year N) and
+  **a scheduled refinancing** (year R, §18.5). A **sweep-driven full retirement** is the year's
+  own cash outcome — known only after the waterfall, which itself needs that year's cash tax —
+  so a same-year deduction would make the year circular (§5 strict sequentiality, no solver).
+  Its deduction enters the **FOLLOWING** year's pools, split by the same character, and merges
+  into the exit year when t+1 = N. This one-year lag is a disclosed convention (§15):
+  conservative on timing only — same amount, same character, one year later.
+REJECTED: an analyst setting for character or timing (a governing rule exists; a setting would
+only let the model depart from it); a same-year sweep-retirement deduction solved by iteration
+(the circular year above); the v1.0.3–v2.3.1 treatment — every write-off and the call premium
+UNCAPPED, a refinancing's deduction deferred to R+1 — which over-deducted where §163(j) binds
+(the OID and premium escaped the cap) and deferred a scheduled event's deduction for no
+sequencing reason.
 `FCF_pre_debt = EBITDA_adj − cash tax − capex − ΔNWC` (D&A and fee amortization non-cash;
 cash tax single-sourced from the §6 computation — mirror invariant §14.16).
 
@@ -800,7 +821,8 @@ mirror of the exit-side proxy (symmetry; golden-uncovered, disclosed). **When §
 makes `fy_ebitda` an LTM figure, this base is `LTM × (1 + growth[0])` and `growth[0]` is the
 annualized FY-over-FY rate, so the base is "the twelve months following the LTM anchor" — see
 §1.1 [B1] for why the flip is coherent, not an over-projection.** The year-N §6 run
-includes the retirement-triggered unamortized-fee write-off as an UNCAPPED deduction.
+includes the exit write-off of every tranche's remaining balances, by tax character (§7.1):
+unamortized OID as capped interest, unamortized debt-issuance costs uncapped.
 
 **Naming [CONFIRMED DR-2 Item 2]:** the pre-carry series is labelled **"pre-promote IRR"**
 — never "gross" (ILPA/GIPS reserve "gross" for the before-fund-fees-and-carry concept). It is
@@ -1141,8 +1163,9 @@ This only ever WIDENS a null-domain, which is the intended direction in every ca
     principal, only re-prices/re-terms); (b) **BS closes in the refi year**, |check| < $0.005m
     (§14.2 already asserts this every year — restated as a refi-specific check because §18.6's
     equity/DFC/cash legs must net exactly); (c) **the write-off + call-premium tax deduction is
-    in year R+1's UNCAPPED pool** (or merges into the year-N exit uncapped pool when R+1 = N),
-    never in year R's; (d) **`refinancing_cash_cost[R] = call_premium + new_OID + new_fees`**
+    in year R's own pools [v2.4.0]** — old unamortized OID + call premium in the CAPPED pool,
+    old unamortized debt-issuance costs in the UNCAPPED pool (§7.1/§18.5) — and nothing of it
+    in year R+1's; (d) **`refinancing_cash_cost[R] = call_premium + new_OID + new_fees`**
     and it is a cash use of that year's running-cash variable (§14.3 conservation includes it).
 
 20. Fund/LP overlay [v1.4.0 — §19] (domain: `fund` non-null; all trivially satisfied /
@@ -1377,7 +1400,10 @@ interest); static rates; constant tax rate; period-end flows; exit = entry multi
 static §382 limit (unused-limitation carryforward omitted, conservative); NOL usage is
 not optimized across years — consumed in full per §6.3 even when the minimum-tax floor
 binds or the current-year benefit is nil (no credit carryforward); acquired §163(j)
-carryforwards out of scope; exit-year fee write-off deducted UNCAPPED; PP&E rolls
+carryforwards out of scope; debt retired at exit or by refinancing deducts in that year by tax
+character — unamortized OID and call premium as §163(j) interest, debt-issuance costs uncapped
+(§7.1) — while a sweep-driven early retirement's deduction lags one year (the year would
+otherwise be circular); PP&E rolls
 mechanically and may go negative (warned); post-2025 OBBBA §163(j) sub-changes out of
 scope; interim distributions [v1.1.0] pay at year-end after full debt service (never
 revolver-funded), blocked capacity does not accrue, and the RP trap is the closed-form
@@ -1385,9 +1411,8 @@ pro-forma net-leverage test (§3.7 — no solver); the fund/LP overlay [v1.4.0 �
 per-tranche event (no forward-curve or covenant-cure trigger), one refi per tranche,
 par-for-par (no dividend recap / upsizing), cash-pay term tranches only (no PIK refi), the
 repricing effective for the whole of the refi year (no mid-year proration), and the old
-OID/DFC write-off plus the call premium deducted UNCAPPED in the FOLLOWING year (vs the
-Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1-year, inert without a
-binding §163(j)), with sweep priority carried over unchanged. Framing:
+OID/DFC write-off plus the call premium deducted in the refi year by tax character (§7.1),
+with sweep priority carried over unchanged. Framing:
 "a model is a range, not a point" — the sensitivity/scenario exhibits are themselves the
 primary caveat mechanism.
 
@@ -1582,10 +1607,10 @@ Asserts: entry S&U byte-identical to G3; rp_max renders **N/A every year** and N
 blocked (trap off ⇒ only the two cash caps bind — the branch every existing golden leaves
 untested, because they all request zero); Y1/Y3 cash-capped to the 8.0 floor, Y2/Y4/Y5
 request-capped; the unlevered stream byte-identical to G3's; the promote strictly in the
-money. Check value: **MIP = 0.15 × (600.23 + 98.09 − 1.5 × 392.08) = 16.53** — under the
-pre-v1.1.0 hurdle base (exit equity alone) the SAME deal pays 1.82, so the fixture
-discriminates the §10 amendment by 9.1×. Sponsor IRR 12.5305% (mid-year 12.7509%),
-MOIC 1.7389; pre-promote IRR 13.0918%, MOIC 1.7811; DPI ends 0.2502, payback N/A.
+money. Check value [re-derived v2.4.0, §7.1]: **MIP = 0.15 × (599.97 + 98.09 − 1.5 × 392.08)
+= 16.49** — under the pre-v1.1.0 hurdle base (exit equity alone) the SAME deal pays 1.78, so the
+fixture discriminates the §10 amendment by 9.3×. Sponsor IRR 12.5231% (mid-year 12.7434%),
+MOIC 1.7384; pre-promote IRR 13.0833%, MOIC 1.7804; DPI ends 0.2502, payback N/A.
 
 **G2-DIST-D — the §13 scenario × distributions golden [v1.1.1]** (proves that the request
 schedule and the trap are FROZEN across scenarios while the BINDING is not): G2-DIST's
@@ -1756,40 +1781,28 @@ check at R (v1 has no mid-hold equity injection — that is a follow-on, backlog
 netting OID/fees into the new debt's par (that is the net-of-OID sources error §2 already
 rejects — debt is carried at face).
 
-**§18.5 The old-tranche write-off — book in year R, tax deferred to R+1 [DECIDED; reuses §7].**
-At the start of year R the old tranche's **unamortized OID + unamortized financing fees** (the
-`oidRemaining`/`feeRemaining` balances after years 1..R−1) are written off. The **BOOK** charge
-lands in year R — it reduces deferred financing costs and flows through net income to equity
-(§8), together with the **call premium** (a loss on extinguishment, expensed in year R; the new
-OID/fees are NOT expensed — they are capitalized). The **TAX** deduction — of the write-off AND
-the call premium together — enters year **R+1**'s UNCAPPED §163(j) pool, via the SAME
-`pendingRetirementDeduction` mechanism §7 uses for early retirement. If `R + 1 = N` it merges
-into the exit-year deduction (§9), exactly as §7 already specifies for a year-N retirement.
-**The deferral is a deliberate CHOICE, not a sequencing necessity — stated plainly so it is
-neither over-justified nor mis-implemented.** The refi is SCHEDULED and its write-off amount
-(old unamortized OID + DFC after years 1..R−1) is deterministic and **known BEFORE the year-R
-waterfall** — exactly like the exit-year write-off (§9), which the engine computes pre-waterfall
-and deducts SAME-YEAR. A par-for-par refi does **not** retire the tranche (its balance continues
-at `B` — §14.19(a)/§18.2), so it **never trips §7's balance-crossing `fully_retired` detection**;
-the engine must add the refi write-off + premium to the year-R+1 `pendingRetirementDeduction`
-bucket by **EXPLICIT refi handling**, reusing only the deferral bucket — never the retirement-
-detection path. v1 chooses to defer (rather than deduct same-year like §9) for two reasons: a
-**single write-off deferral code path** (no third tax-timing branch beyond exit-same-year and
-retirement-deferred) and a **≤1-year deferral of a deduction, conservative on TIMING** (the same
-flavour of disclosed conservative bias as beginning-balance interest, §4). REJECTED — and this
-is the technically more precise reading, named so it is not mistaken for an oversight: under
-Treas. Reg. §1.1001-3 a repricing that moves yield materially is a "significant modification" =
-debt extinguishment, whose unamortized OID/DIC and repayment premium are deductible in the YEAR
-of the refi (year R, same-year, and the premium as capped §163(j) interest at that). v1 deducts
-them a year later and UNCAPPED. The two directions of the resulting bias, split honestly (the
-spec is otherwise scrupulous about this — §8/§11): the **timing** deferral (R vs R+1) is
-conservative (defers a deduction); the **uncapped** treatment of the call premium (vs the
-capped-§163(j) reading) is *anti-*conservative — it OVER-deducts — but ONLY when §163(j) binds
-AND the premium is large, and it is INERT otherwise. The refi golden (G6-REFI) is built with
-positive §163(j) headroom so capped ≡ uncapped there; the binding case is disclosed (§15) and
-exercised by the directed fixture §18.11(ii). Same-year, capped, pre-waterfall treatment would
-fork the §6 tax path for a ≤1-year difference. The write-off never reduces cash (it is non-cash
-— §9's rule); only the call premium and the new OID/fees move cash (§18.4).
+**§18.5 The old-tranche write-off — book AND tax in year R, by tax character [DECIDED v2.4.0;
+§7.1].** At the start of year R the old tranche's **unamortized OID + unamortized financing
+fees** (the `oidRemaining`/`feeRemaining` balances after years 1..R−1) are written off. The
+**BOOK** charge lands in year R — it reduces deferred financing costs and flows through net
+income to equity (§8), together with the **call premium** (a loss on extinguishment, expensed
+in year R; the new OID/fees are NOT expensed — they are capitalized). The **TAX** deduction
+lands in year R too, split by character (§7.1): the old unamortized OID **and the call
+premium** are repurchase premium — §163(j) interest, the CAPPED pool; the old unamortized
+debt-issuance costs — the UNCAPPED pool. This is the standard reading: under Treas. Reg.
+§1.1001-3 a repricing that moves yield materially is a "significant modification" = an
+extinguishment of the old debt, and §1.163-7(c) deducts its repurchase premium in that year.
+The refi is SCHEDULED, so its amounts (old unamortized OID + DFC after years 1..R−1, the premium
+on `B`) are deterministic and **known BEFORE year R's tax** — exactly like the exit write-off
+(§9) — so no sequencing reason defers them. A par-for-par refi does **not** retire the tranche
+(its balance continues at `B` — §14.19(a)/§18.2), so it **never trips §7's balance-crossing
+`fully_retired` detection**; the engine adds the refi deduction to year R's pools by
+**EXPLICIT refi handling**, never via the retirement-detection path. History: v1.3.0–v2.3.1
+deferred this deduction to R+1 and took all of it UNCAPPED — a disclosed simplification
+(conservative on timing, anti-conservative where §163(j) binds, because the OID and premium
+escaped the cap); v2.4.0 replaces it with the standard (owner direction 2026-11-10). The
+write-off never reduces cash (it is non-cash — §9's rule); only the call premium and the new
+OID/fees move cash (§18.4).
 
 **§18.6 Balance-sheet coherence (the refi closes the BS in year R) [DECIDED].** With `WO =
 old_unamortized_OID + old_unamortized_DFC`:
@@ -1855,9 +1868,9 @@ dust the engine itself calls retired. The v1 simplifications
 in §18.1–§18.5 are each listed on the assumptions & methodology page (§15): scheduled trigger
 only (no forward-curve/covenant trigger); single refi per tranche; par-for-par (no dividend
 recap); cash-pay term tranches only (no PIK refi); whole-year repricing at the start of year R
-(no mid-year proration); write-off + premium deducted UNCAPPED in year R+1 (vs the §1.1001-3
-same-year capped reading — conservative, ≤1-year, inert without a binding §163(j)); sweep
-priority carried over unchanged.
+(no mid-year proration); sweep priority carried over unchanged. (The write-off + premium tax
+treatment is no longer a simplification: since v2.4.0 it is the standard — year R, by tax
+character, §7.1/§18.5.)
 
 **§18.9 Golden re-derivation plan [where numbers move].** The `refinancing` assumption defaults
 **absent/null** (feature OFF), and **no** existing §17 golden sets it, so the regeneration is
@@ -1877,22 +1890,23 @@ premium 1.0%** (101 soft call), **new maturity 6 years** (from the refi; absolut
 Asserts: entry S&U byte-identical to G2 (§18 is post-close — the refi cannot re-price entry);
 years 1–2 byte-identical to G2 (the refi is a year-3 event); year-3 TLB cash interest FALLS
 (repricing) and the year-3 waterfall carries the refi cash cost (premium + new OID + new fees);
-the year-3 BOOK write-off of the old TLB's unamortized OID/fees lands in year 3 while its TAX
-deduction lands in year 4's uncapped pool; §163(j) never binds (positive headroom every year, so
-the capped/uncapped write-off treatment is inert — G2's property, preserved by the lower post-
-refi interest); the BS closes every year (§14.2); the unlevered stream is byte-identical to G2's
+the year-3 BOOK write-off of the old TLB's unamortized OID/fees lands in year 3 and so does its
+TAX deduction [v2.4.0, §18.5] — the call premium in year 3's capped pool, the old fees in its
+uncapped pool (the G2 TLB carries no OID); §163(j) never binds (positive headroom every year, so
+the character split does not move the deductible total here — G2's property, preserved by the
+lower post-refi interest); the BS closes every year (§14.2); the unlevered stream is byte-identical to G2's
 (§9 is capital-structure-blind — a refinancing is a financing event). Check values are fixed by
 the reference derivation (`scripts/goldens/spec_calc.py`) and adjudicated at ±$0.005m / ±0.1bp.
 
 **§18.11 Golden-uncovered by design [v1.3.0]** — each covered by a directed kernel/module fixture
 in the G-5 engine PR, mutation-tested against the exact wrong reading it discriminates (the same
 discipline §17 [v1.1.1] applies to the distribution branches):
-(i) **refi where `R + 1 = N`** — the deferred write-off/premium deduction MERGES into the exit-
-year uncapped pool (§18.5 / §9); G6-REFI runs R = 3, N = 5, so the deduction lands cleanly in
-year 4 and never merges. A fixture must exercise the merge or the merge path is untested;
-(ii) **refi under a BINDING §163(j)** — where the year-R+1 uncapped write-off/premium deduction
-and the capped-vs-uncapped call-premium simplification (§18.5) actually MOVE cash tax; G6-REFI
-has positive headroom every year, so capped ≡ uncapped there and the simplification is inert —
+(i) **refi in year N−1** [restated v2.4.0] — the refi's deduction stays in year N−1 and the exit
+year carries the exit write-off alone (the new incarnation's residual OID capped, its fees
+uncapped); G6-REFI runs R = 3, N = 5, so a fixture pins that nothing leaks into the exit year;
+(ii) **refi under a BINDING §163(j)** — where the CHARACTER of the refi deduction (§7.1) moves
+cash tax: the old OID + call premium are disallowed this year and join the carryforward, the old
+fees deduct in full; G6-REFI has positive headroom every year, so the split is inert there —
 untested without a directed binding-headroom fixture;
 (iii) **refi cash cost forcing a revolver DRAW / floor breach** — §18.4's "senior to the sweep,
 can pull cash toward the floor" clause; G6-REFI stays well above the floor, so the interaction of
@@ -1916,8 +1930,8 @@ written off at the refi** and (b) **old OID amortization not stopped** (old + ne
 double-amortizing) — both of which pass G6-REFI byte-for-byte. This is the mainstream case
 (TLBs at 99–99.5, unitranche — cf. G3/G4 OID) and closes the sign-off's blocking finding;
 (vii) **multiple independent refis in one deal** (§18.1 permits one refi per tranche across
-several tranches). The write-offs/premiums co-accumulate into the single year-R+1
-`pendingRetirementDeduction` and the cash costs sum at step 2R — additive and independent, the
+several tranches). The write-offs/premiums co-accumulate into year R's capped/uncapped refi
+deductions (by character, §7.1) and the cash costs sum at step 2R — additive and independent, the
 same summing the exit-year write-off already does across tranches. Covered by construction, but a
 one-line directed fixture (two tranches refinanced in different years) pins the accumulation;
 (viii) **the retired-balance no-op [v1.3.1]** — a tranche fully swept/retired to zero before its
@@ -3470,7 +3484,8 @@ ADJUDICATED during workbook construction, never assumed — the §20.9 rule):
   **515.833334601984**` (§14.23(a)'s closed form).
 - Ratchet thresholds, exact from the inputs: `T₁ = 1.50 × 390.075 = **585.1125**`,
   `T₂ = 2.00 × 390.075 = **780.15**`.
-- **`exit_equity_pre_mip_total` is IDENTICAL to G3's committed value** (2dp fixture: 703.83;
+- **`exit_equity_pre_mip_total` is IDENTICAL to G3's committed value** (2dp fixture: 703.58
+  since v2.4.0's §7.1 re-derivation, 703.83 before;
   the workbook carries full precision). The plug is a §2 residual and the strip re-cuts the
   equity pot without changing its SIZE — traced in the round-1 sign-off and re-stated
   precisely in round 3 [round-2 gov-M5 — `facade.ts:44` DOES pass the plug into the exit block
@@ -3502,19 +3517,19 @@ identity holds AFTER G3's own fixture gains the `sources_uses.management_subscri
 column — an unqualified byte-identity claim across a shape change is exactly what §16's
 round-2 blocker was about).
 Closed-form check values, exact from the inputs: `T₀ = 1.50 × 392.075 = **588.1125**`,
-`T₁ = 1.75 × 392.075 = **686.13125**`. Against G3's committed pre-MIP total X (DERIVATION
-records the single-tier promote as **17.358111**, which the bracket form reproduces EXACTLY at
-one tier — the §22.4 ≡ §10 identity, verified numerically in the round-1 sign-off), the
-two-tier promote is **≈19.128310**, a discriminating delta of **≈1.770199** on a top-bracket
-slice of **≈17.701988** that is genuinely CONSUMED. **The seed is named**:
-these follow from `X ≈ 703.833238`, the pre-MIP total DERIVATION.md records at full precision
-(not the 2dp fixture); `dPromote/dX = 0.25`, so the 6-dp seed is safe to ~1e-7. Asserts: the
-promote is strictly greater than G3's; the top bracket is non-empty, so the `min(X, T_{j+1})`
-term is exercised and TWO distinct mutants are discriminated — dropping the ratchet reads
-**17.358111**, and applying `s_n` to the WHOLE excess reads **28.9301845**
-exactly — pinned UNROUNDED [round-3 arith-M4: the 6-dp form is an exact decimal tie, half-up
-28.930185 vs half-even 28.930184, and §21 round 4 requires a stated mutant value to be
-reproducible under the reader's own rounding] [round-2, BOTH
+`T₁ = 1.75 × 392.075 = **686.13125**`. Against G3's committed pre-MIP total X (re-derived in
+v2.4.0, §7.1 — DERIVATION.md records both generations), the single-tier promote is
+**≈17.320142**, which the bracket form reproduces EXACTLY at one tier — the §22.4 ≡ §10
+identity, verified numerically in the round-1 sign-off; the two-tier promote is **≈19.065028**,
+a discriminating delta of **≈1.744886** on a top-bracket slice of **≈17.448863** that is
+genuinely CONSUMED. **The seed is named**: these follow from `X ≈ 703.580113`, the pre-MIP total
+DERIVATION.md records at full precision (not the 2dp fixture); `dPromote/dX = 0.25`, so the
+6-dp seed is safe to ~1e-7. Asserts: the promote is strictly greater than G3's; the top bracket
+is non-empty, so the `min(X, T_{j+1})` term is exercised and TWO distinct mutants are
+discriminated — dropping the ratchet reads **≈17.320142**, and applying `s_n` to the WHOLE
+excess reads **≈28.866903** (v1.7.0–v2.3.1, on X ≈ 703.833238: 17.358111 and 28.9301845 —
+the latter pinned UNROUNDED then [round-3 arith-M4: an exact decimal tie at 6 dp, and §21
+round 4 requires a stated mutant value to be reproducible under the reader's own rounding]) [round-2, BOTH
 reviewers: the r2 draft named the second mutant and priced the first, and §21 round 4
 established that a stated mutant value must be reproducible]; `ratchet` tiers are
 frozen across scenarios; entry S&U byte-identical to G3.
@@ -3543,10 +3558,10 @@ walk and the §22.4 bracket sum in ITS OWN §2/§9/§10 blocks — no engine reu
 rule). Adjudication: the standard two independent blind passes.
 
 **§22.13 Golden-uncovered by design** (directed fixtures, each mutation-tested):
-(i) **`mip.ratchet: []` ≡ `mip.ratchet: null` ≡ v1 §10** [round-9 M3 — "with ONE tier" was AMBIGUOUS and false under one reading: an array of LENGTH 1 does NOT reproduce §10 (19.1283095 vs 17.3581107 on G10-RATCHET's own inputs), while "one BRACKET" made the named mutant vacuous since s_n ≡ s₀. A length-1 ratchet whose tier is UNREACHED (X ≤ T₁) is a third admissible construction and is KEPT] on an otherwise-identical deal (the identity
+(i) **`mip.ratchet: []` ≡ `mip.ratchet: null` ≡ v1 §10** [round-9 M3 — "with ONE tier" was AMBIGUOUS and false under one reading: an array of LENGTH 1 does NOT reproduce §10 (≈19.065028 vs ≈17.320142 on G10-RATCHET's own inputs since v2.4.0; 19.1283095 vs 17.3581107 before), while "one BRACKET" made the named mutant vacuous since s_n ≡ s₀. A length-1 ratchet whose tier is UNREACHED (X ≤ T₁) is a third admissible construction and is KEPT] on an otherwise-identical deal (the identity
 G10-RATCHET's base leg relies on). **The whole-excess mutant is VACUOUS on an EMPTY ratchet** — with no tiers
-`s_n` IS `s₀`, so normative and mutant BOTH read 17.3581107 — so it is pinned on
-**G10-RATCHET at 28.9301845** (§22.12) instead [round-10: the round-9 M3 fix NAMED this hazard
+`s_n` IS `s₀`, so normative and mutant BOTH read ≈17.320142 — so it is pinned on
+**G10-RATCHET at ≈28.866903** (§22.12; 28.9301845 before v2.4.0) instead [round-10: the round-9 M3 fix NAMED this hazard
 and then adopted the reading that triggers it, leaving the mutant clause attached to a
 configuration on which it cannot RED];
 (ii) the **§22.4 exit-equity CAP** binding on a ratcheted promote — §17(iv) already records
@@ -4182,6 +4197,7 @@ engine by verification, not by trust.
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v2.4.0 | 2026-11-10 | **TAX CHARACTER AND TIMING OF DEBT RETIRED OR REFINANCED (§7.1).** Researched against the standard and applied as a rule, not a setting (owner direction 2026-11-10: "nothing should be hardcoded — if there's a standard, use that, else make it a setting"). Unamortized OID and any call premium are repurchase premium (Treas. Reg. §1.163-7(c)) — §163(j) INTEREST, the capped pool; unamortized debt-issuance costs are not interest under the final §163(j) regulations — uncapped. The exit and a scheduled refinancing deduct in their own year (§18.5 no longer defers to R+1); a sweep-driven early retirement keeps the one-year lag, now split by character, because a same-year deduction would make its year circular (§5). Replaces the v1.0.3/v1.3.0 treatment (everything uncapped, refinancing deferred), which over-deducted where §163(j) binds. Goldens re-derived by `spec_calc.py` first: G3, G3-DIST, G4, G6-REFI, G8-PIKT, G9-SWEET, G10-RATCHET move (sponsor IRR within ±0.74bp), every other golden byte-identical — measured leaf-by-leaf in DERIVATION.md. Workbook: the write-off rows split by character; parity extended to a refi-with-OID under a binding cap and an OID-bearing sweep retirement. | owner direction 2026-11-10; Treas. Reg. §1.163-7(c), §1.163(j)-1(b)(22), §1.446-5, §1.1001-3 |
 | v2.3.1 | 2026-11-10 | **ADVERSARIAL REVIEW — one presentation defect, closed on every surface.** A run carrying a BLOCK flag (cash-floor breach / non-positive plug) was still headlined: the Summary and Build line showed its IRR with the warning BELOW the tabs; the IC memo, the §13 grid and goal-seek presented or targeted such runs silently. Now one predicate governs all four (§3 step 6 note). No engine arithmetic changed; every golden byte-identical. The review itself — the professor's workbook with randomized inputs (40 deals), an independent first-principles challenger workbook (315 deals, ~52k values), the exported workbook edited input by input in Excel (245 workbooks, 177k cells), an every-input-matters sweep and a source literal scan — found no arithmetic defect; it is recorded in rebuild/ADVERSARIAL_REVIEW_2026-11-10.md. | owner-requested adversarial review 2026-11-10 |
 | v2.3.0 | 2026-11-09 | **LIMITED LIABILITY (§9.1).** Exit equity and selldown proceeds are floored at zero; the lenders' unrecovered debt is reported (`exit.debt_shortfall_at_exit`, a §12 walk-down term, the `exit_debt_shortfall` WARN). Replaces the signed convention (the sponsor modelled as paying in at exit). §22/§23's governed §15 blocks restated. Every golden value unchanged (none is underwater); one zero column added. | owner direction 2026-11-09; equity-as-call (Merton) and modelling practice (MAX(0, …) on equity proceeds) |
 | v2.2.0 | 2026-11-09 | **PARTIAL EXITS LAND (§23, drafted as v1.8.0).** The §23 draft — round 1 closed with all eight blocking findings applied, G11-SELL adjudicated by two blind passes — is DECIDED and implemented as written: `structure.selldown`, the §23.2 year-t valuation, the §23.5 seller/buyer partition (interim strictly after the event year; exit after the promote and warrant), the realized-basis DPI/payback, the §19.7 fund leg, the ONE §14.9 walk-down term, `selldown_below_cost`, and the five §23.3 Build rejections. Owner direction 2026-11-09: finish at the same evidence bar as the other v2.x features (a signed golden, every §23.13 directed fixture, documented mutants red, the formula workbook at parity) instead of a second hostile prose round; round-1 ledger L4 (§23's length) stays open as a prose item. Every pre-existing golden: numerically identical, the one shape change being `exit.selldown_buyer_share = 0.0` (§14.24(d)). | owner direction 2026-11-09; rebuild/G11_LEDGER.md |

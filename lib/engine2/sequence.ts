@@ -149,7 +149,10 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
   let dfc = opening.row.deferred_financing_costs;
   let equity = opening.row.equity;
   const goodwill = opening.row.goodwill;
-  let pendingRetirementDeduction = 0; // v1.0.3: early-retirement write-off deducts NEXT year
+  // §7.1 [v2.4.0]: a SWEEP-driven early retirement deducts NEXT year (the retirement is the
+  // year's own cash outcome — same-year would be circular), split by tax character
+  let pendingRetirementInterest = 0; // unamortized OID → repurchase premium → capped
+  let pendingRetirementNoninterest = 0; // unamortized debt-issuance costs → uncapped
 
   const operating: OperatingYear[] = [];
   const tax: TaxYear[] = [];
@@ -167,13 +170,15 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     // ── §18 refinancing — applied at the START of year R = t+1, before interest accrues ──
     // Par-for-par retirement + origination: new face B = the tranche's beginning balance. The
     // rate switch takes effect for the whole of year R (§18.3); the old unamortized OID/DFC
-    // write off (book, year R) + the call premium defer their TAX deduction to year R+1's
-    // UNCAPPED pool (§18.5) via `pendingRetirementDeduction` — EXPLICIT handling, never the
-    // early-retirement balance-crossing path (the tranche does NOT retire — it continues at B).
+    // write off (book, year R). §18.5 [v2.4.0]: the refinancing is SCHEDULED (known before year
+    // R's tax), so its TAX deductions land in year R too — the old OID + the call premium as
+    // repurchase premium (capped interest), the old debt-issuance costs uncapped. EXPLICIT
+    // handling, never the early-retirement balance-crossing path (the tranche continues at B).
     let refiCashCostTotal = 0;
     let refiBookCharge = 0; // Σ (WO + call premium) — book loss on extinguishment (§18.6)
     let refiDfcDelta = 0; // Σ (new OID + new fees) − WO (BS deferred-cost adjustment)
-    let refiDeferral = 0; // this year's WO + premium — deducted NEXT year (§18.5)
+    let refiDeductionInterest = 0; // old unamortized OID + call premium — capped, year R (§18.5)
+    let refiDeductionNoninterest = 0; // old unamortized debt-issuance costs — uncapped, year R
     const refiThisYear = new Map<number, { cost: number; writeoff: number }>();
     for (const ev of assumptions.structure.refinancing ?? []) {
       if (ev.year !== t + 1) continue;
@@ -181,6 +186,8 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       const ci = scheduleIndex.get(ev.tranche_name)!;
       const B = debtState.term_balances[ti]; // par-for-par: new face = beginning balance
       const WO = oidRemaining[ci] + feeRemaining[ci]; // §18.5 old unamortized OID + DFC
+      refiDeductionInterest += oidRemaining[ci]; // read BEFORE the new incarnation overwrites them
+      refiDeductionNoninterest += feeRemaining[ci];
       const premium = ev.call_premium_pct * B;
       const newOid = ev.new_oid_pct * B;
       const newFees = ev.new_financing_fee_pct * B; // §18.4 basis = new_fee_pct × B (NOT re-allocated)
@@ -202,7 +209,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       refiCashCostTotal += premium + newOid + newFees;
       refiBookCharge += WO + premium;
       refiDfcDelta += newOid + newFees - WO;
-      refiDeferral += WO + premium;
+      refiDeductionInterest += premium;
       refiThisYear.set(ti, { cost: premium + newOid + newFees, writeoff: WO });
     }
 
@@ -224,11 +231,14 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     }
     const oidAmortTotal = oidAmort.reduce((a, b) => a + b, 0);
     const feeAmortTotal = feeAmort.reduce((a, b) => a + b, 0);
-    // §9: the exit-year write-off (post year-N amortization) is deterministic pre-waterfall
-    const yearWriteoffForTax = exitYear
-      ? oidRemaining.reduce((a, b) => a + b, 0) + feeRemaining.reduce((a, b) => a + b, 0) + pendingRetirementDeduction
-      : pendingRetirementDeduction;
-    pendingRetirementDeduction = 0;
+    // §9: the exit-year write-off (post year-N amortization) is deterministic pre-waterfall;
+    // the exit repays every tranche at par, so the same character split applies (§7.1)
+    const retirementInterest =
+      (exitYear ? oidRemaining.reduce((a, b) => a + b, 0) : 0) + refiDeductionInterest + pendingRetirementInterest;
+    const retirementNoninterest =
+      (exitYear ? feeRemaining.reduce((a, b) => a + b, 0) : 0) + refiDeductionNoninterest + pendingRetirementNoninterest;
+    pendingRetirementInterest = 0;
+    pendingRetirementNoninterest = 0;
 
     // ── tax (§6) ──
     const taxResult = runTaxYear(assumptions.tax, taxState, {
@@ -239,7 +249,8 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       oid_amortization: oidAmortTotal,
       financing_fee_amortization: feeAmortTotal,
       commitment_fees: lines.commitment_fee,
-      retirement_writeoff: yearWriteoffForTax,
+      retirement_interest: retirementInterest,
+      retirement_noninterest: retirementNoninterest,
     });
     taxState = taxResult.state_end;
     tax.push(taxResult.row);
@@ -281,7 +292,7 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
     let bookWriteoff = 0;
     if (exitYear) {
       // the ExitBlock display amount = balances actually written off AT exit; any deferred
-      // early-retirement deduction is already inside yearWriteoffForTax for the §6 run
+      // early-retirement deduction is already inside this year's §6 run
       bookWriteoff = oidRemaining.reduce((a, b) => a + b, 0) + feeRemaining.reduce((a, b) => a + b, 0);
       exitWriteoff = bookWriteoff;
       oidRemaining.fill(0);
@@ -290,17 +301,13 @@ export function runCore(facts: DealFacts, assumptions: DealAssumptions): EngineC
       for (const name of debtOut.fully_retired) {
         const i = scheduleIndex.get(name);
         if (i === undefined) continue;
-        const amount = oidRemaining[i] + feeRemaining[i];
-        bookWriteoff += amount;
-        pendingRetirementDeduction += amount; // tax deduction lands in year t+1 (v1.0.3)
+        bookWriteoff += oidRemaining[i] + feeRemaining[i];
+        pendingRetirementInterest += oidRemaining[i]; // tax deduction lands in year t+1 (§7.1)
+        pendingRetirementNoninterest += feeRemaining[i];
         oidRemaining[i] = 0;
         feeRemaining[i] = 0;
       }
     }
-    // §18.5: the refi write-off + call premium defer their tax deduction to next year's UNCAPPED
-    // pool — the SAME bucket the early-retirement path above uses (merges into the exit deduction
-    // when R+1 = N). 0 in a non-refi year and in the exit year (a refi is validated to year ≤ N−1).
-    pendingRetirementDeduction += refiDeferral;
 
     // ── operating row (fcf now known — §14.16 single source) ──
     operating.push({

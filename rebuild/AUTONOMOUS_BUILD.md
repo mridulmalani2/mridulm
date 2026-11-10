@@ -95,6 +95,11 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
     `rebuild/G11_LEDGER.md` EMPTY);
   - v2.3.0 §9.1 limited liability — exit equity and selldown proceeds floored at zero, the
     lenders' shortfall reported.
+  - v2.3.1 adversarial review (rebuild/ADVERSARIAL_REVIEW_2026-11-10.md) — BLOCK-flagged runs
+    no longer headlined;
+  - v2.4.0 §7.1 tax character and timing of retired / refinanced debt — OID and call premium
+    capped as §163(j) interest, debt-issuance costs uncapped, exit and refinancing same-year,
+    sweep retirement lagged a year (circularity); 7 goldens re-derived.
 - **Backlog:** `rebuild/V2_BACKLOG.md` is the live tracker. Items 1–4 DONE. **NEXT: item 5,
   the 10-K reconciliation bridges** (EBITDA bridge + net-debt bridge, formula-linked on the
   workbook's Inputs sheet) — the owner scheduled it last, after #126 merges.
@@ -102,8 +107,8 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
   every policy is an analyst control; finish features at the "signed golden + directed
   fixtures + mutants + LibreOffice parity" bar rather than further blind prose rounds; ask via
   AskUserQuestion when a call is genuinely the owner's, then build.
-- **Gates at last commit:** tsc clean, vitest 878 passed + 3 live-skipped (60 files),
-  `npm run build` green, LibreOffice parity across 37 deals.
+- **Gates at last commit:** tsc clean, vitest 891 passed + 3 live-skipped (61 files),
+  `npm run build` green, LibreOffice parity across 39 deals.
 
 ## 3. PER-FEATURE LOOP
 

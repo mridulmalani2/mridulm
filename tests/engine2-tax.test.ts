@@ -56,6 +56,10 @@ function inputsFromFixture(g: any, y: number): TaxYearInputs {
     (s, sched) => s + (sched[y]?.pik_accrual ?? 0),
     0,
   );
+  // §7.1 [v2.4.0] the exit write-off splits by tax character: the OID still unamortized at exit
+  // (funded OID − Σ OID amortized; G1–G5 carry no refinancing or early retirement) is repurchase
+  // premium → capped; the rest of the write-off is debt-issuance cost → uncapped
+  const exitOid = g.sources_uses.oid_funded - g.operating.reduce((s: number, r: any) => s + r.oid_amortization, 0);
   return {
     ebitda_adj: g.operating[y].ebitda_adj,
     da: g.operating[y].da,
@@ -64,7 +68,8 @@ function inputsFromFixture(g: any, y: number): TaxYearInputs {
     oid_amortization: g.operating[y].oid_amortization,
     financing_fee_amortization: g.operating[y].financing_fee_amortization,
     commitment_fees: g.waterfall[y].commitment_fees,
-    retirement_writeoff: y === N - 1 ? g.exit.unamortized_fees_written_off : 0,
+    retirement_interest: y === N - 1 ? exitOid : 0,
+    retirement_noninterest: y === N - 1 ? g.exit.unamortized_fees_written_off - exitOid : 0,
   };
 }
 
@@ -152,7 +157,8 @@ describe('tax.ts §6 properties', () => {
     oid_amortization: money(0, 5),
     financing_fee_amortization: money(0, 5),
     commitment_fees: money(0, 2),
-    retirement_writeoff: money(0, 10),
+    retirement_interest: money(0, 10),
+    retirement_noninterest: money(0, 10),
   });
 
   const taxArb: fc.Arbitrary<TaxAssumption> = fc.record({
@@ -177,8 +183,10 @@ describe('tax.ts §6 properties', () => {
       fc.property(taxArb, inputsArb, (tax, y) => {
         const { row } = runTaxYear(tax, openingTaxState(tax), y);
         expect(row.ati).toBe(tax.s163j.ati_basis === 'ebitda' ? y.ebitda_adj : y.ebitda_adj - y.da);
-        expect(row.capped_interest_pool).toBe(y.cash_interest_total + y.pik_accrual_total + y.oid_amortization);
-        expect(row.uncapped_deductions).toBe(y.financing_fee_amortization + y.commitment_fees + y.retirement_writeoff);
+        expect(row.capped_interest_pool).toBe(
+          y.cash_interest_total + y.pik_accrual_total + y.oid_amortization + y.retirement_interest,
+        );
+        expect(row.uncapped_deductions).toBe(y.financing_fee_amortization + y.commitment_fees + y.retirement_noninterest);
         expect(row.s163j_disallowed_added).toBeGreaterThanOrEqual(0);
       }),
     );

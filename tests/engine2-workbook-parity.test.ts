@@ -73,8 +73,38 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
     },
   },
   // §18 refinancing (the adjudicated golden): re-termed par for par, call premium, new OID/fees,
-  // the old OID/fees written off with the tax deduction deferred a year
+  // the old fees written off and deducted in the refinancing year (§18.5 [v2.4.0])
   G6REFI: GOLDEN_DEALS.G6REFI,
+  // §7.1/§18.5 [v2.4.0] the tax CHARACTER of retired debt where it bites: a refinanced Senior that
+  // carries OLD OID under a BINDING §163(j) (G3) — old OID + call premium join the capped pool in
+  // the refinancing year, the old fees deduct uncapped — and the exit OID on the PIK note
+  REFI_OID_BINDING: {
+    facts: GOLDEN_DEALS.G3.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G3.assumptions,
+      structure: {
+        ...GOLDEN_DEALS.G3.assumptions.structure,
+        tranches: GOLDEN_DEALS.G3.assumptions.structure.tranches.map((t) => (t.name === 'Senior' ? { ...t, oid_pct: 0.02 } : t)) as typeof GOLDEN_DEALS.G3.assumptions.structure.tranches,
+        refinancing: [{ tranche_name: 'Senior', year: 3, new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.035, floor: 0.0075 }, call_premium_pct: 0.02, new_maturity_years: 6, new_oid_pct: 0.01, new_financing_fee_pct: 0.01, new_amort_pct_of_face: 0.05 }],
+      },
+    },
+  },
+  // §7.1 a sweep-driven early retirement of a tranche with OID: the unamortized OID deducts the
+  // NEXT year in the capped pool, its fees in the uncapped pool
+  EARLY_RETIRE_OID: {
+    facts: GOLDEN_DEALS.G2.facts,
+    assumptions: {
+      ...GOLDEN_DEALS.G2.assumptions,
+      structure: {
+        ...GOLDEN_DEALS.G2.assumptions.structure,
+        sweep: { base_pct: 1, grid: null },
+        tranches: [
+          { name: 'Stub TL', type: 'senior', size: { amount: 6 }, pricing: { kind: 'floating', base_rate: 0.036, spread: 0.05, floor: 0 }, amort_pct_of_face: 0, maturity_years: 6, oid_pct: 0.05, sweep: { participates: true, priority: 0 } },
+          ...GOLDEN_DEALS.G2.assumptions.structure.tranches,
+        ] as typeof GOLDEN_DEALS.G2.assumptions.structure.tranches,
+      },
+    },
+  },
   // §20 PIK toggle: a whole-coupon cash/PIK election each year
   PIK_TOGGLE: {
     facts: GOLDEN_DEALS.G3.facts,
@@ -413,6 +443,23 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
   it('G6REFI really refinances: a cash cost, a write-off, and the new rate from the refinancing year', () => {
     const o = runModel(CASES.G6REFI.facts, CASES.G6REFI.assumptions);
     expect(o.tranches.some((rows) => rows.some((r) => r.refinanced && r.refinancing_cash_cost > 0 && r.unamortized_writeoff > 0))).toBe(true);
+  });
+  it('REFI_OID_BINDING refinances a tranche carrying old OID while §163(j) binds every year', () => {
+    const o = runModel(CASES.REFI_OID_BINDING.facts, CASES.REFI_OID_BINDING.assumptions);
+    const sr = o.tranches[0][2];
+    expect(sr.refinanced).toBe(true);
+    expect(o.tax.every((t) => t.s163j_carryforward_end > 0)).toBe(true);
+    const lines = (y: number) => o.waterfall[y].cash_interest_total + o.tranches.reduce((x, tr) => x + tr[y].pik_accrual, 0) + o.operating[y].oid_amortization;
+    // the year-3 capped pool carries the call premium AND the old OID (not the premium alone)
+    expect(o.tax[2].capped_interest_pool - lines(2)).toBeGreaterThan(0.02 * sr.beginning_balance + 0.01);
+  });
+  it('EARLY_RETIRE_OID retires the stub before the exit year, with OID left to deduct', () => {
+    const o = runModel(CASES.EARLY_RETIRE_OID.facts, CASES.EARLY_RETIRE_OID.assumptions);
+    const t = o.tranches[0].findIndex((r) => r.beginning_balance > 1e-9 && r.ending_balance <= 1e-9);
+    expect(t).toBeGreaterThanOrEqual(0);
+    expect(t).toBeLessThan(o.tax.length - 2);
+    const lines = (y: number) => o.waterfall[y].cash_interest_total + o.tranches.reduce((x, tr) => x + tr[y].pik_accrual, 0) + o.operating[y].oid_amortization;
+    expect(o.tax[t + 1].capped_interest_pool - lines(t + 1)).toBeGreaterThan(0.01);
   });
   it('PIK_TOGGLE pays cash in the cash years and accrues in the PIK years', () => {
     const o = runModel(CASES.PIK_TOGGLE.facts, CASES.PIK_TOGGLE.assumptions);

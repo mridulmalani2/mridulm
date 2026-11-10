@@ -853,3 +853,39 @@ INPUT and was required precisely because §23.12 forbids seeding from its own di
 Both passes stopped reading §23.12 at the "REFERENCE-DERIVED ACTUALS" heading and opened that
 block only after their leaf-by-leaf comparison was complete. Scratch paths are session-scoped
 and do not survive; this record is the durable copy.
+
+## v2.4.0 — tax character and timing of debt retired or refinanced (SPEC §7.1, 2026-11-10)
+
+**What changed in the reference.** `scripts/goldens/spec_calc.py` was changed FIRST (before any
+engine edit), to the standard SPEC §7.1 adopts: on retirement, unamortized OID and any call
+premium are repurchase premium (Treas. Reg. §1.163-7(c)) and go to the CAPPED §163(j) pool;
+unamortized debt-issuance costs go to the UNCAPPED pool; the exit and a scheduled refinancing
+deduct in their own year; a sweep-driven early retirement deducts the following year, split by
+the same character. The engine (`tax.ts`, `sequence.ts`) and the formula workbook were then
+changed to match, and agree with the regenerated fixtures at full precision.
+
+**Measured leaf-by-leaf against the v2.3.1 fixtures** (0 keys added, 0 removed on every golden):
+
+| Golden | Leaves moved | Why | Sponsor IRR |
+|---|---|---|---|
+| G3, G3-DIST, G8-PIKT, G9-SWEET, G10-RATCHET | 29 / 29 / 29 / 38 / 29 | the PIK note's exit-year OID (≈1.01) moves from uncapped to capped; §163(j) binds every year on these decks, so it is disallowed (carried forward, and lost at exit) — year-5 cash tax +0.25, which flows to exit cash, exit equity, the promote and every return | −0.62 to −0.74bp |
+| G4 | 3 | the same exit-OID move (tax[4] capped / deductible / uncapped); §163(j) does not bind, so the deductible total and cash tax are unchanged | 0 |
+| G6-REFI | 67 | the refi's deduction moves from year 4 to year 3: the call premium (3.50) into year 3's capped pool, the old fees (4.71) into its uncapped pool; year 3 cash tax −2.06, year 4 +2.08, the cash path and every later balance shift accordingly | +0.20bp |
+| all others | 0 | no OID left at exit, no refinancing, or no binding cap on a moved amount | — |
+
+New full-precision anchors (replacing the v1.7.0 values quoted in the G9/G10 record above,
+which describe the fixtures as they then were): G3 pre-MIP total **X = 703.58011303858**;
+single-tier promote **17.320141955787**; G10 two-tier promote **19.065028259645** (bracket
+14.7028125 + 4.362215759645; delta vs G3 **1.744886303858**); whole-excess mutant
+**28.866903259645**; G9 `ordinary_pot_pre_warrant` **187.746778436596**, warrant gross
+**9.487338921830**, ordinary pot **180.259439514766**, management ordinary share
+**23.190073405103**. G3-DIST: exit equity 599.972572447785, cumulative paid 98.093584805812,
+MIP 16.493048588040.
+
+**Evidence bar.** These fixtures were NOT re-adjudicated by two blind passes (the G-series
+protocol); they were derived by the reference before the engine change and the engine was then
+brought to them, with every committed assertion that pinned an old value updated by hand
+against the full-precision numbers above (`tests/goldens.test.ts`), and the formula workbook
+held to the engine by LibreOffice recalculation, including two new deals that exercise the
+moved paths where they bite (a refinanced tranche carrying old OID under a binding §163(j),
+and a sweep retirement of an OID-bearing tranche).

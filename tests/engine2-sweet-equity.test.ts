@@ -108,7 +108,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     });
     const unreached = runModel(g3.facts, {
       ...g3.assumptions,
-      // X ≈ 703.833238 on G3; T₁ = 10 × 392.075 is far above it, so the tier is UNREACHED.
+      // X ≈ 703.580113 on G3 (v2.4.0); T₁ = 10 × 392.075 is far above it, so the tier is UNREACHED.
       mip: { ...g3.assumptions.mip!, ratchet: [{ hurdle_moic: 10, share_pct: 0.99 }] },
     });
     expect(empty.exit).toEqual(base.exit);

@@ -40,15 +40,19 @@ Changing it would be a fix for a state the product cannot produce.
 80 mismatches (a truncated list read as "two left"); the challenger's own IRR used a 10% guess and
 failed on deep losses; reference IRR `#N/A` cells were spreadsheet non-convergence.
 
-## For the owner — a disclosed simplification, not changed
+## Follow-up decided by the owner — write-off tax character and timing (v2.4.0)
 
-The TAX deduction for unamortized fees/OID written off on an early retirement, and for a
-refinancing's write-off and call premium, is taken in the year AFTER the event (§7, §18.5). The
-strict rule deducts in the event year. For sweep-driven retirements the lag is forced (tax is
-computed before the waterfall decides the retirement — a same-year deduction would make the year
-circular); for SCHEDULED refinancings it is a disclosed, conservative choice made for one code
-path. A timing difference of one year on that deduction; changing it touches signed §18.5 and the
-G6-REFI golden, so it is an owner decision.
+Raised here as a disclosed simplification (write-offs and call premiums deducted UNCAPPED, a
+refinancing's deduction a year late). Owner direction: research it; use the standard if there is
+one, else make it a setting. There is a standard, so it is applied as a rule (SPEC §7.1): OID and
+call premium are repurchase premium — §163(j) interest, capped (Treas. Reg. §1.163-7(c)); debt-
+issuance costs are not interest — uncapped; the exit and a scheduled refinancing deduct in their
+own year. Only the sweep-driven retirement keeps a one-year lag (its year would otherwise be
+circular), now split by the same character. Evidence: the reference re-derived first (7 goldens
+move, sponsor IRR within ±0.74bp, measured in DERIVATION.md); the challenger rebuilt to the
+standard from first principles (`make_v5_from_v4.py`) — **0 mismatches on 26,190 values across
+135 deals**, while the old-rule challenger now diverges on every one of them; the workbook at
+parity including two new deals on the moved paths; 9 mutants of the change, every one red.
 
 ## Not independently challenged here
 

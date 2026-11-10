@@ -37,8 +37,9 @@ function assertBlockMatches(actual: Record<string, unknown>[], fixture: Record<s
 describe('§7 early retirement — the deferred tax deduction lands in t+1 (accuracy-audit gate hole, 2026-07-24)', () => {
   // Golden-uncovered BY DESIGN (spec_calc.py raises on early retirement), so this is the
   // ONE committed end-to-end pin: a small priority-1 tranche with OID under a 100% sweep
-  // retires early; the unamortized OID+fee remainder must hit the UNCAPPED pool exactly
-  // one year later (book write-off in year t, deduction in t+1 — SPEC v1.0.3 §7).
+  // retires early; the unamortized remainder is deducted exactly one year later (book write-off
+  // in year t, deduction in t+1 — SPEC §7.1), split by tax character [v2.4.0]: the OID part is
+  // repurchase premium → CAPPED pool; the debt-issuance-cost part → UNCAPPED pool.
   it('retirement year carries only scheduled amortization; t+1 jumps by exactly the remainder', () => {
     const facts = DEALS.G2.facts;
     const base = DEALS.G2.assumptions;
@@ -63,14 +64,21 @@ describe('§7 early retirement — the deferred tax deduction lands in t+1 (accu
     // remainder = unamortized OID+fee at the END of year t under straight-line-to-maturity
     const fee = a.fees.financing_pct_of_commitments * 6;
     const oid = 0.05 * 6;
-    const perYear = (fee + oid) / 6;
-    const remainder = fee + oid - perYear * (t + 1);
-    expect(remainder).toBeGreaterThan(0.01); // the test is vacuous if nothing remains
-    // t+1's uncapped pool = that year's own scheduled amortization + commitment fees + the remainder
+    const feeRemainder = fee - (fee / 6) * (t + 1);
+    const oidRemainder = oid - (oid / 6) * (t + 1);
+    // the test is vacuous if nothing remains on either leg
+    expect(feeRemainder).toBeGreaterThan(0.01);
+    expect(oidRemainder).toBeGreaterThan(0.01);
+    // t+1's uncapped pool = that year's own scheduled fee amortization + commitment fees + the FEE remainder
     const scheduledPlusFees = (y: number) => core.operating[y].financing_fee_amortization
       + (core.revolver ? core.revolver[y].commitment_fee : 0);
     expect(core.tax[t].uncapped_deductions).toBeCloseTo(scheduledPlusFees(t), 9);
-    expect(core.tax[t + 1].uncapped_deductions - scheduledPlusFees(t + 1)).toBeCloseTo(remainder, 9);
+    expect(core.tax[t + 1].uncapped_deductions - scheduledPlusFees(t + 1)).toBeCloseTo(feeRemainder, 9);
+    // t+1's capped pool = that year's interest + PIK + OID amortization + the OID remainder
+    const interestLines = (y: number) => core.waterfall[y].cash_interest_total
+      + core.tranches.reduce((s, tr) => s + tr[y].pik_accrual, 0) + core.operating[y].oid_amortization;
+    expect(core.tax[t].capped_interest_pool).toBeCloseTo(interestLines(t), 9);
+    expect(core.tax[t + 1].capped_interest_pool - interestLines(t + 1)).toBeCloseTo(oidRemainder, 9);
     // and the balance sheet closes at full precision through the retirement
     for (const bs of core.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(1e-9);
   });

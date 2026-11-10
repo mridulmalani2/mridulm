@@ -38,6 +38,17 @@ const REFI = (over: Partial<RefinancingEvent> & Pick<RefinancingEvent, 'tranche_
 const bsCloses = (core: ReturnType<typeof runCore>) =>
   core.balance_sheet.every((r) => Math.abs(r.check) < 1e-9);
 
+/**
+ * §7.1/§18.5 [v2.4.0] what a year's tax pools carry BEYOND the ordinary finance lines — i.e. the
+ * retirement / refinancing deductions, by character. `capped` = repurchase premium (unamortized
+ * OID + call premium), §163(j) interest; `uncapped` = unamortized debt-issuance costs.
+ */
+const extraCapped = (core: ReturnType<typeof runCore>, y: number) =>
+  core.tax[y].capped_interest_pool -
+  (core.waterfall[y].cash_interest_total + core.tranches.reduce((s, tr) => s + tr[y].pik_accrual, 0) + core.operating[y].oid_amortization);
+const extraUncapped = (core: ReturnType<typeof runCore>, y: number) =>
+  core.tax[y].uncapped_deductions - (core.operating[y].financing_fee_amortization + core.waterfall[y].commitment_fees);
+
 describe('§18.11(vi) — refi of a tranche with NON-ZERO unamortized OID (the sign-off blocking gap)', () => {
   // G6-REFI refis the OID=0 G2 TLB, so the OLD-OID write-off and OLD-OID-amortization-STOP
   // sub-paths run with all-zero inputs. This fixture gives the refinanced tranche old OID > 0
@@ -73,54 +84,74 @@ describe('§18.11(vi) — refi of a tranche with NON-ZERO unamortized OID (the s
     expect(tlb[2].refinanced).toBe(true);
   });
 
-  it('the full write-off + premium defers to year 4 UNCAPPED, and the BS closes every year', () => {
-    // Y4 uncapped = new-fee amort (0.5826) + deferred (WO 11.55 + premium 0.01×B).
+  it('§18.5 [v2.4.0] the refi deducts IN year 3, by character: old OID + premium CAPPED, old DFC UNCAPPED; BS closes', () => {
+    // A scheduled refi is known before year 3's tax, so it deducts in year 3 (no deferral).
+    // Old OID 6.60 + call premium 0.01×B = repurchase premium → §163(j) interest (capped);
+    // old DFC 4.95 → not interest (uncapped). MUTANTS: deferring to year 4, or routing the
+    // premium / old OID to the uncapped pool, each break an equality below.
     const premium = 0.01 * B;
-    expect(core.tax[3].uncapped_deductions).toBeCloseTo((0.01 * B) / 6 + 11.55 + premium, 3);
-    // Y3 (the refi year) does NOT carry the deferral — only the ongoing amortization.
-    expect(core.tax[2].uncapped_deductions).toBeCloseTo((0.01 * B) / 6, 4);
+    expect(extraCapped(core, 2)).toBeCloseTo(6.6 + premium, 9);
+    expect(extraUncapped(core, 2)).toBeCloseTo(4.95, 9);
+    expect(core.tax[2].uncapped_deductions).toBeCloseTo((0.01 * B) / 6 + 4.95, 9); // new-fee amort + old DFC
+    // Year 4 carries NOTHING from the refi — only the ongoing amortization.
+    expect(extraCapped(core, 3)).toBeCloseTo(0, 9);
+    expect(extraUncapped(core, 3)).toBeCloseTo(0, 9);
     expect(bsCloses(core)).toBe(true);
   });
 });
 
-describe('§18.11(i) — refi with R+1 = N: the deferred deduction merges into the exit-year pool', () => {
-  const deal = withRefi('G2', [REFI({ tranche_name: 'TLB', year: 4 })]); // R=4, N=5 ⇒ deducts in year 5 (exit)
+describe('§18.11(i) — refi in year N−1: its deduction stays in year N−1, the exit year carries only the exit write-off', () => {
+  const deal = withRefi('G2', [REFI({ tranche_name: 'TLB', year: 4 })]); // R=4, N=5
   const core = runCore(deal.facts, deal.assumptions);
-  it('year 4 carries the refi flag/cost; the write-off+premium deduction lands in year 5, merged with the exit write-off', () => {
+  it('year 4 carries the refi flag/cost AND its deduction; year 5 carries the exit write-off alone, split by character', () => {
     expect(core.tranches[0][3].refinanced).toBe(true);
     expect(core.tranches[0][3].refinancing_cash_cost).toBeGreaterThan(0);
     const wo = core.tranches[0][3].unamortized_writeoff;
     expect(wo).toBeGreaterThan(0);
-    // Year 5 uncapped is pinned EXACTLY (§6 composition: fee amortization + commitment fees +
-    // retirement pool, where at exit the pool = exit write-off ⊕ the deferred WO + premium —
-    // sequence.ts single-reads pendingRetirementDeduction into it). The former '>' bound let a
-    // merge DOUBLE-COUNT mutant (2× deferral) live; equality kills it. Premium = call_premium_pct
-    // × the year-R beginning balance (§18.4; REFI default 1%).
-    const premium = 0.01 * core.tranches[0][3].beginning_balance;
-    expect(core.tax[4].uncapped_deductions).toBeCloseTo(
-      core.operating[4].financing_fee_amortization + core.waterfall[4].commitment_fees +
-        core.exit_writeoff + wo + premium,
-      9,
-    );
-    // and year 4's own uncapped does NOT carry the deferral (it is next year's by §18.5)
-    expect(core.tax[3].uncapped_deductions).toBeCloseTo(
-      core.operating[3].financing_fee_amortization + core.waterfall[3].commitment_fees,
-      9,
-    );
+    // §18.5 [v2.4.0]: G2's TLB carries no OID, so the old write-off is all debt-issuance cost
+    // (uncapped) and the call premium (call_premium_pct × the year-R beginning balance, §18.4;
+    // REFI default 1%) is the whole capped part. Equalities, so a deferral (to the exit year) or
+    // a double-count mutant dies.
+    const B = core.tranches[0][3].beginning_balance;
+    expect(extraCapped(core, 3)).toBeCloseTo(0.01 * B, 9);
+    expect(extraUncapped(core, 3)).toBeCloseTo(wo, 9);
+    // Year 5 (exit): the NEW incarnation's residual — new OID (0.5% × B, issued in year 4, less
+    // its years-4–5 amortization) capped, the rest of the exit write-off uncapped. Nothing from
+    // the refi itself.
+    const exitOid = 0.005 * B - core.operating[3].oid_amortization - core.operating[4].oid_amortization;
+    expect(exitOid).toBeGreaterThan(0.01);
+    expect(extraCapped(core, 4)).toBeCloseTo(exitOid, 9);
+    expect(extraUncapped(core, 4)).toBeCloseTo(core.exit_writeoff - exitOid, 9);
     expect(bsCloses(core)).toBe(true);
   });
 });
 
 describe('§18.11(ii) — refi under a BINDING §163(j)', () => {
   // G3 binds §163(j) every year (PIK compounding). Refi its Senior tranche (the PIK note is not
-  // refinanceable). The refi's write-off/premium deduct UNCAPPED in R+1 — the corner where the
-  // capped/uncapped simplification (§18.5) is NOT inert; here we just prove the path is coherent.
+  // refinanceable). This is the corner where the tax CHARACTER of the refi deduction matters
+  // (§18.5 [v2.4.0]): the old OID + call premium are §163(j) interest, so under a binding cap
+  // they are DISALLOWED this year and join the carryforward; only the old DFC deducts in full.
   const deal = withRefi('G3', [REFI({ tranche_name: 'Senior', year: 3, call_premium_pct: 0.02, new_oid_pct: 0.01, new_amort_pct_of_face: 0.05, new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.035, floor: 0.0075 } })]);
   const core = runCore(deal.facts, deal.assumptions);
-  it('§163(j) still binds every year and the refi chain (defer to R+1, BS close) holds', () => {
+  it('§163(j) still binds every year; the year-3 deduction splits WO + premium exactly; the capped part feeds the carryforward', () => {
     for (const t of core.tax) expect(t.s163j_carryforward_end).toBeGreaterThan(0);
     expect(core.tranches[0][2].refinanced).toBe(true);
-    expect(core.tax[3].uncapped_deductions).toBeGreaterThan(core.tax[2].uncapped_deductions); // deferral lands Y4
+    const B = core.tranches[0][2].beginning_balance;
+    const premium = 0.02 * B;
+    // the two characters together are exactly the write-off + premium, in the refi year
+    expect(extraCapped(core, 2) + extraUncapped(core, 2)).toBeCloseTo(core.tranches[0][2].unamortized_writeoff + premium, 9);
+    // G3's OID sits on the PIK note, so the Senior's old write-off is all debt-issuance cost:
+    // the capped part is exactly the premium, the uncapped part exactly the write-off
+    expect(extraCapped(core, 2)).toBeCloseTo(premium, 9);
+    expect(extraUncapped(core, 2)).toBeCloseTo(core.tranches[0][2].unamortized_writeoff, 9);
+    // binding: the deductible capped interest is the cap, so the capped part lands in the
+    // carryforward rather than the deduction — the carryforward grows by AT LEAST it
+    const cf = (y: number) => core.tax[y].s163j_carryforward_end;
+    expect(core.tax[2].deductible_capped_interest).toBeLessThan(core.tax[2].capped_interest_pool);
+    expect(cf(2) - cf(1)).toBeGreaterThan(0);
+    // nothing deferred into year 4
+    expect(extraCapped(core, 3)).toBeCloseTo(0, 9);
+    expect(extraUncapped(core, 3)).toBeCloseTo(0, 9);
     expect(bsCloses(core)).toBe(true);
   });
 });
@@ -179,7 +210,7 @@ describe('§18.11(vii) — multiple independent refis accumulate additively', ()
   });
 
   // Accuracy-audit coverage note (2026-07-27): two refis landing in the SAME year both sum into
-  // that year's refiCashCostTotal / refiBookCharge / refiDeferral accumulators (`+=`). The SPEC
+  // that year's refiCashCostTotal / refiBookCharge / refiDeduction* accumulators (`+=`). The SPEC
   // treats same-year as "covered by construction"; pin it directly so the accumulation is not
   // golden-uncovered.
   const sameYear = withRefi(
@@ -192,22 +223,25 @@ describe('§18.11(vii) — multiple independent refis accumulate additively', ()
       ];
     },
   );
-  it('two refis in the SAME year accumulate additively (both cash costs + both deferrals)', () => {
+  it('two refis in the SAME year accumulate additively (both cash costs + both deductions)', () => {
     const c = runCore(sameYear.facts, sameYear.assumptions);
     // both tranches flag year 2, and each carries its own cash cost + write-off
     expect(c.tranches[0][1].refinanced).toBe(true);
     expect(c.tranches[1][1].refinanced).toBe(true);
     expect(c.tranches[0][1].refinancing_cash_cost).toBeGreaterThan(0);
     expect(c.tranches[1][1].refinancing_cash_cost).toBeGreaterThan(0);
-    // year-3 uncapped carries the SUM of both write-offs + both premiums (both deferred to R+1=3)
+    // year 2 (the refi year, §18.5 [v2.4.0]) carries the SUM of both write-offs + both premiums,
+    // split by character; year 3 carries none of it
     const woPlusPrem = (rows: typeof c.tranches[number]) => {
       const B = rows[1].beginning_balance;
       return rows[1].unamortized_writeoff + 0.01 * B; // WO + premium (call_premium_pct 0.01)
     };
-    const bothDeferred = woPlusPrem(c.tranches[0]) + woPlusPrem(c.tranches[1]);
-    // year-3 uncapped = ongoing fee amort + commitment fee + both deferrals; assert the deferral
-    // component by differencing against year 4 (no deferral lands in year 4).
-    expect(c.tax[2].uncapped_deductions).toBeGreaterThan(bothDeferred);
+    const both = woPlusPrem(c.tranches[0]) + woPlusPrem(c.tranches[1]);
+    expect(extraCapped(c, 1) + extraUncapped(c, 1)).toBeCloseTo(both, 9);
+    const premiums = 0.01 * (c.tranches[0][1].beginning_balance + c.tranches[1][1].beginning_balance);
+    expect(extraCapped(c, 1)).toBeGreaterThan(premiums + 0.01); // both tranches carry old OID (1%)
+    expect(extraCapped(c, 2)).toBeCloseTo(0, 9);
+    expect(extraUncapped(c, 2)).toBeCloseTo(0, 9);
     expect(bsCloses(c)).toBe(true);
   });
 });
@@ -249,7 +283,7 @@ describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, n
   });
 });
 
-describe('§14.19 — refinancing invariants (par-for-par, BS close, R+1 uncapped deferral, cash cost)', () => {
+describe('§14.19 — refinancing invariants (par-for-par, BS close, cash cost)', () => {
   // Applied across G6-REFI and the directed fixtures above.
   const cases: { name: string; deal: { facts: DealAssumptions extends never ? never : any; assumptions: DealAssumptions } }[] = [
     { name: 'G6-REFI', deal: GOLDEN_DEALS.G6REFI },

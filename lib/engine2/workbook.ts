@@ -699,6 +699,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       const isR = (t: number) => `${yr(t)}=${iv(`${am.key}_rf_y`)}`;
       const remPrev = (t: number, kind: 'oid' | 'fee') => (t === 1 ? (kind === 'oid' ? m(`${am.key}_oid_amt`, 0, true) : m(`${am.key}_fee_alloc`, 0, true)) : m(`${am.key}_${kind}_rem`, t - 1));
       M.line(`${am.key}_rf_wo`, `${am.name}: old OID + fees written off at refinancing (book)`, per(1, N, (t) => ({ f: `IF(${isR(t)},${remPrev(t, 'oid')}+${remPrev(t, 'fee')},0)`, v: rows[t - 1].unamortized_writeoff })));
+      // §18.5 [v2.4.0] the OID part of the write-off is repurchase premium (§163(j) interest)
+      M.line(`${am.key}_rf_wo_oid`, `${am.name}:    of which old OID (repurchase premium — interest for tax)`, per(1, N, (t) => ({ f: `IF(${isR(t)},${remPrev(t, 'oid')},0)`, v: null })), { italic: true, noParity: true });
       M.line(`${am.key}_rf_premium`, `${am.name}: call premium`, per(1, N, (t) => ({ f: `IF(${isR(t)},${iv(`${am.key}_rf_prem`)}*${m(`${am.key}_open`, t)},0)`, v: null })), { noParity: true });
       M.line(`${am.key}_rf_cost`, `${am.name}: refinancing cash cost  =  premium + new OID + new fees`, per(1, N, (t) => ({
         f: `IF(${isR(t)},(${iv(`${am.key}_rf_prem`)}+${iv(`${am.key}_rf_oid`)}+${iv(`${am.key}_rf_fee`)})*${m(`${am.key}_open`, t)},0)`, v: rows[t - 1].refinancing_cash_cost,
@@ -722,8 +724,23 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     const idx = parity.findIndex((p) => p.sheet === 'Model' && p.addr === `${Y(t)}${M.rows.get('book_wo')}`);
     if (idx >= 0) parity.splice(idx, 1);
   }
-  M.line('tax_wo', 'Write-off deductible this year  =  prior-year retirements (+ the exit write-off in the exit year)', per(1, N, (t) => ({
-    f: `${t > 1 ? m('book_wo', t - 1) : '0'}${t === N ? `+${m('book_wo', t)}` : ''}${t > 1 && refis.length ? `+${refiSum('rf_wo', t - 1)}+${refiSum('rf_premium', t - 1)}` : ''}`, v: null,
+  // §7.1 [v2.4.0] the TAX deduction for debt retired or refinanced, by CHARACTER: unamortized OID
+  // and any call premium are repurchase premium — §163(j) INTEREST (capped pool); unamortized
+  // debt-issuance costs are not interest (uncapped pool). Timing: the exit and a scheduled
+  // refinancing deduct in their own year; a sweep-driven early retirement deducts the year after
+  // (the retirement is that year's own cash outcome — a same-year deduction would be circular).
+  const oidAfter = amortees.filter((am) => !am.isRevolver).map((am) => `${am.key}_oid_after`);
+  M.line('book_wo_oid', '   of which unamortized OID', per(1, N, (t) => ({
+    f: t === N
+      ? sumOf(oidAfter, t)
+      : amortees.filter((am) => !am.isRevolver).map((am) => `IF(${m(`${am.key}_retired`, t)},${m(`${am.key}_oid_after`, t)},0)`).join('+') || '0',
+    v: null,
+  })), { italic: true, noParity: true });
+  M.line('tax_wo_int', 'Repurchase premium deductible this year (interest, capped)  =  OID of prior-year retirements (+ exit OID) + refinancing: old OID + call premium', per(1, N, (t) => ({
+    f: `${t > 1 ? m('book_wo_oid', t - 1) : '0'}${t === N ? `+${m('book_wo_oid', t)}` : ''}${refis.length ? `+${refiSum('rf_wo_oid', t)}+${refiSum('rf_premium', t)}` : ''}`, v: null,
+  })), { noParity: true });
+  M.line('tax_wo_fee', 'Debt-issuance costs deductible this year (not interest, uncapped)  =  fees of prior-year retirements (+ exit fees) + refinancing: old fees', per(1, N, (t) => ({
+    f: `${t > 1 ? `${m('book_wo', t - 1)}-${m('book_wo_oid', t - 1)}` : '0'}${t === N ? `+${m('book_wo', t)}-${m('book_wo_oid', t)}` : ''}${refis.length ? `+${refiSum('rf_wo', t)}-${refiSum('rf_wo_oid', t)}` : ''}`, v: null,
   })), { noParity: true });
 
   // ── Debt & waterfall ──
@@ -859,8 +876,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const tx = o.tax;
   const pikSum = (t: number) => sumOf(tk.map((k) => `${k}_pik`), t);
   M.line('ati', 'Adjusted taxable income (ATI)', per(1, N, (t) => ({ f: `IF(${iv('ati_basis')}="EBITDA",${ea(t)},${m('ebit', t)})`, v: tx[t - 1].ati })));
-  M.line('capped', 'Capped interest pool  =  cash interest + PIK + OID amortization', per(1, N, (t) => ({ f: `${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}`, v: tx[t - 1].capped_interest_pool })));
-  M.line('uncapped', 'Uncapped deductions  =  fee amortization + commitment fees + write-offs', per(1, N, (t) => ({ f: `${m('fee_am', t)}+${m('cfee_total', t)}+${m('tax_wo', t)}`, v: tx[t - 1].uncapped_deductions })));
+  M.line('capped', 'Capped interest pool  =  cash interest + PIK + OID amortization + repurchase premium on debt retired', per(1, N, (t) => ({ f: `${m('int_total', t)}+${pikSum(t)}+${m('oid_am', t)}+${m('tax_wo_int', t)}`, v: tx[t - 1].capped_interest_pool })));
+  M.line('uncapped', 'Uncapped deductions  =  fee amortization + commitment fees + debt-issuance costs written off', per(1, N, (t) => ({ f: `${m('fee_am', t)}+${m('cfee_total', t)}+${m('tax_wo_fee', t)}`, v: tx[t - 1].uncapped_deductions })));
   const cfOpen = (t: number) => (t === 1 ? '0' : m('cf_end', t - 1));
   M.line('ded', 'Deductible interest  =  MIN(pool + carryforward, cap × ATI) when capped', per(1, N, (t) => ({
     f: `IF(NOT(${iv('int_ded')}),0,IF(NOT(${iv('s163j')}),${m('capped', t)}+${cfOpen(t)},MIN(${m('capped', t)}+${cfOpen(t)},MAX(0,${iv('ati_pct')}*${m('ati', t)}))))`,

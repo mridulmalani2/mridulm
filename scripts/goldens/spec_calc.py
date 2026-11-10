@@ -195,7 +195,10 @@ def run(golden):
     out["balance_sheet"].append(bs_row(cash, nwc0, ppe, dfc, goodwill, total_par + drawn, equity_bs))
 
     prev_nwc = nwc0
-    pending_ret_ded = 0.0      # §18.5/§7: deferred refi write-off+premium deduction (into current year)
+    # §7.1 [v2.4.0] a SWEEP-driven early retirement deducts NEXT year (the retirement is the
+    # year's own cash outcome — same-year would be circular), split by character:
+    pending_cap = 0.0          # unamortized OID → repurchase premium → §163(j) INTEREST
+    pending_unc = 0.0          # unamortized debt-issuance costs → NOT interest (final §163(j) regs)
     paid_by_year = []         # §3 step 7: distributions actually paid (total equity)
     ufcf_stream = []          # unlevered (§9): interim UFCF inflows
     u_acq, u_post = (a["tax"]["nol"]["acquired_opening"] if acq_usable else 0.0), 0.0  # unlevered NOL state
@@ -207,21 +210,24 @@ def run(golden):
         R = t + 1
         # ── §18 refinancing — applied at the START of year R, before interest accrues ──
         # Par-for-par retirement + origination: new face = old beginning balance B (§18.2).
-        # The rate switch takes effect for the whole of year R (§18.3); the old unamortized
-        # OID/DFC write off (book, year R) + the call premium defer their TAX deduction to
-        # year R+1's uncapped pool (§18.5, EXPLICIT handling — the tranche does NOT retire, so
-        # this never routes through the early-retirement balance-crossing detection).
+        # The rate switch takes effect for the whole of year R (§18.3). §18.5 [v2.4.0]: the
+        # refinancing is SCHEDULED (known before year R's tax), so its deductions land in year R
+        # — the standard (§1.163-7(c), §1.446-5): the call premium and the old unamortized OID
+        # are repurchase premium = §163(j) INTEREST (capped pool); the old unamortized
+        # debt-issuance costs are NOT interest (uncapped pool).
         refi_cost_by_tr = {}      # per-tranche §18.4 cash cost (premium + new OID + new fees)
         refi_wo_by_tr = {}        # per-tranche old unamortized OID+DFC written off at the refi
         refi_book_charge = 0.0    # Σ (WO + call premium) — book loss on extinguishment (year R)
         refi_dfc_delta = 0.0      # Σ (new OID + new fees) − WO (BS deferred-cost adjustment)
-        new_pending = 0.0         # this year's WO + premium — deducted NEXT year (§18.5)
+        refi_ded_cap = 0.0        # year-R capped deduction: old OID + call premium (§18.5 [v2.4.0])
+        refi_ded_unc = 0.0        # year-R uncapped deduction: old debt-issuance costs
         for refi in refi_by_year.get(R, []):
             name = refi["tranche_name"]
             tr = next(tt for tt in terms if tt["name"] == name)
             assert tr["type"] not in ("revolver", "pik_note"), "§18.2: cash-pay term tranches only"
             B = bal[name]                          # par-for-par: new face = old beginning balance
             WO = oid_rem[name] + fee_rem[name]     # §18.5 old unamortized OID + DFC
+            old_oid, old_fee = oid_rem[name], fee_rem[name]
             premium = refi["call_premium_pct"] * B
             new_oid = refi["new_oid_pct"] * B
             new_fees = refi["new_financing_fee_pct"] * B      # §18.4 basis = new_fee_pct × B (NOT re-allocated)
@@ -236,7 +242,8 @@ def run(golden):
             refi_wo_by_tr[name] = WO
             refi_book_charge += WO + premium
             refi_dfc_delta += (new_oid + new_fees) - WO
-            new_pending += WO + premium
+            refi_ded_cap += old_oid + premium
+            refi_ded_unc += old_fee
         refi_cash_cost = sum(refi_cost_by_tr.values())
         rev_ = revenue[t]; m = margins[t]
         ebitda = rev_ * m; ebitda_adj = ebitda  # monitoring null (§7)
@@ -285,11 +292,16 @@ def run(golden):
         # early-retirement / exit write-off pool (computed after waterfall; tax needs it → two-pass within year:
         # §5 order is tax BEFORE waterfall; write-off is known only for the EXIT year (retirement at exit).
         exit_writeoff = (sum(oid_rem.values()) + sum(fee_rem.values())) if exit_year else 0.0
+        # §9/§7.1 [v2.4.0] the exit repays every tranche at par: unamortized OID is repurchase
+        # premium (capped interest), unamortized debt-issuance costs are not interest (uncapped)
+        exit_oid = sum(oid_rem.values()) if exit_year else 0.0
+        exit_fee = sum(fee_rem.values()) if exit_year else 0.0
 
         # §6 tax
         ati = ebitda_adj if a["tax"]["s163j"]["ati_basis"] == "ebitda" else ebitda_adj - da
-        capped_pool = sum(cash_int.values()) + rev_int + sum(pik_acc.values()) + sum(oid_amort.values())
-        uncapped = sum(fee_amort.values()) + commit_fee + exit_writeoff + pending_ret_ded
+        capped_pool = (sum(cash_int.values()) + rev_int + sum(pik_acc.values()) + sum(oid_amort.values())
+                       + exit_oid + refi_ded_cap + pending_cap)
+        uncapped = sum(fee_amort.values()) + commit_fee + exit_fee + refi_ded_unc + pending_unc
         if not a["tax"]["interest_deductible"]:
             deductible, cf_new = 0.0, 0.0
         elif not a["tax"]["s163j"]["applies"]:
@@ -399,16 +411,18 @@ def run(golden):
             bal[tr["name"]] = bal[tr["name"]] + pik_acc[tr["name"]] - mand[tr["name"]] - sweep[tr["name"]]
         # early full retirement → write off remaining OID/fees NOW (§7) — only if pre-exit year
         early_wo = 0.0
+        early_oid = early_fee = 0.0
         if not exit_year:
             for tr in terms:
                 if bal[tr["name"]] <= TOL and (oid_rem[tr["name"]] > 0 or fee_rem[tr["name"]] > 0):
                     early_wo += oid_rem[tr["name"]] + fee_rem[tr["name"]]
+                    early_oid += oid_rem[tr["name"]]; early_fee += fee_rem[tr["name"]]
                     oid_rem[tr["name"]] = fee_rem[tr["name"]] = 0.0
             # §7 [v1.0.3] (scope extended for §3.8 [v2.1.0], whose gated golden retires its senior
             # mid-hold): the remaining OID + fees leave the BS and hit NI in the retirement year
             # (book); the TAX deduction lands in year t+1's UNCAPPED pool — the same deferral
             # bucket §18.5 uses — and merges into the exit deduction when t+1 = N.
-            new_pending += early_wo
+            # (the deduction is split by character into next year's pools, below)
 
         # §8 BS roll
         ppe = ppe + (mcap + gcap) - da
@@ -471,7 +485,7 @@ def run(golden):
                                  "distribution_blocked": bool(blocked)})
         out["balance_sheet"].append(row)
         cash = closing_cash; prev_nwc = nwc
-        pending_ret_ded = new_pending   # §18.5: this year's refi write-off+premium deducts NEXT year
+        pending_cap, pending_unc = early_oid, early_fee   # §7.1: a sweep retirement deducts NEXT year
 
         # unlevered stream (§9/§6): interest & monitoring = 0; tax base EBITDA; NOL/§382 apply
         u_taxable = ebitda - da

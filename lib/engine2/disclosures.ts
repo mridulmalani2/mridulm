@@ -15,7 +15,7 @@ export const DISCLOSURES: [string, string][] = [
   ['§382 limit static', 'unused-limitation carryforward omitted — conservative'],
   ['NOL usage not optimized', 'consumed in full per §6.3 even when the minimum-tax floor binds or the current-year benefit is nil'],
   ['Acquired §163(j) carryforwards', 'out of scope in v1'],
-  ['Exit-year fee write-off', 'deducted UNCAPPED (Treas. Reg. §1.163(j)-1(b)(22))'],
+  ['Debt retired or refinanced (§7.1)', 'unamortized OID and any call premium are repurchase premium — §163(j) interest, capped (Treas. Reg. §1.163-7(c)); unamortized debt-issuance costs are not interest — uncapped. Deducted in the year of the exit or the refinancing; a sweep-driven early retirement deducts the FOLLOWING year (that year would otherwise be circular — the retirement depends on its own tax)'],
   ['PP&E roll', 'mechanical (capex − D&A); may go negative — warned, never clamped'],
   ['Post-2025 OBBBA sub-changes', 'no interest capitalization, no CFC modeling'],
   ['Call protection', 'BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions (Phase G)'],
@@ -23,7 +23,7 @@ export const DISCLOSURES: [string, string][] = [
   // found by the same hostile review (the SPEC sentence carried these clauses with no surface listing them)
   ['Interim distributions (§3 step 7)', 'paid at YEAR-END after full debt service — never revolver-funded; blocked capacity does not accrue (no carryforward); the RP trap is the closed-form pro-forma net-leverage test (§3.7 — no solver)'],
   // §18.8: the v1 refinancing simplifications are LISTED here — the SPEC sentence §15 carries verbatim-mirrored
-  ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted UNCAPPED the FOLLOWING year (vs the Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1yr)'],
+  ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted IN the refi year by tax character (§7.1)'],
   // §19.8 [v1.4.0]: the fund-of-one simplifications — the SPEC §15 sentence mirrored here
   ['Fund/LP overlay (§19)', "fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs, no NAV basis); no subscription line; no GP commitment; no clawback (nothing to claw back by construction); 'european' = all-contributions hurdle + pref base, 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, NOT fund carry; the year-N fee draws BEFORE the final distribution"],
   // §21.9 [v1.6.0]: the sector-comps simplifications — the SPEC §15 sentence mirrored here

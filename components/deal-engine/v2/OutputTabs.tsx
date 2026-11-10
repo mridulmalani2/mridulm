@@ -378,8 +378,8 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
         </div>
       )}
       {/* §18 [v1.3.0]: the refinancing events — each reprices/re-terms a tranche at year R,
-          paying a call premium and writing off the old unamortized OID/fees (book that year, tax
-          deduction the FOLLOWING year — §18.5). Reads the named TrancheYear fields directly (no
+          paying a call premium and writing off the old unamortized OID/fees (book AND tax that year,
+          by tax character — §7.1/§18.5 [v2.4.0]). Reads the named TrancheYear fields directly (no
           aggregation, no engine import). Rendered only when a refi exists. */}
       {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
         <div className="mb-3">
@@ -401,8 +401,9 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           </Table>
           <p className="text-[10px] mt-1" style={label}>
             Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off (old
-            unamortized OID + financing fees) is a NON-cash book charge that year; its tax deduction
-            lands the following year, uncapped (§18.5).
+            unamortized OID + financing fees) is a NON-cash book charge that year, and it is deducted
+            for tax the same year with the call premium: the old OID and the premium as interest
+            (subject to the §163(j) cap), the old fees in full (§7.1/§18.5).
             Par-for-par — leverage is unchanged at the refi and then deleverages on the new schedule.
           </p>
         </div>

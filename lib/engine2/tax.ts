@@ -56,13 +56,19 @@ export interface TaxYearInputs {
   financing_fee_amortization: number;
   commitment_fees: number;
   /**
-   * Unamortized OID + financing fees written off on retirement (§6.2/§7/§9). 0 otherwise.
-   * TIMING [v1.0.3 §7]: the TAX deduction for a FULL EARLY retirement in year t belongs in
-   * year t+1's input (book write-off stays in year t; §5 sequentiality — retirement is only
-   * known post-waterfall). A year-N retirement merges into the exit-year deduction, which
-   * IS passed in year N. The caller owns this placement.
+   * §7.1 [v2.4.0] Debt retired or refinanced — the deduction, split by its TAX CHARACTER:
+   * - `retirement_interest`: unamortized OID + any call premium. Repaying a debt instrument for
+   *   more than its adjusted issue price is REPURCHASE PREMIUM (Treas. Reg. §1.163-7(c)), and
+   *   repurchase premium is INTEREST for §163(j) (§1.163(j)-1(b)(22)) → the CAPPED pool.
+   * - `retirement_noninterest`: unamortized debt-issuance costs (§1.446-5). The final §163(j)
+   *   regulations do NOT treat them as interest → the UNCAPPED pool.
+   * TIMING: the year the debt is retired — the exit and a scheduled refinancing (both known
+   * before the year's tax). A SWEEP-driven early retirement in year t is passed in year t+1:
+   * the retirement is the year's own cash outcome, so a same-year deduction would make the
+   * year circular (§5). The caller owns this placement. 0 otherwise.
    */
-  retirement_writeoff: number;
+  retirement_interest: number;
+  retirement_noninterest: number;
 }
 
 export interface TaxYearResult {
@@ -77,8 +83,8 @@ export function runTaxYear(
   y: TaxYearInputs,
 ): TaxYearResult {
   const ati = tax.s163j.ati_basis === 'ebitda' ? y.ebitda_adj : y.ebitda_adj - y.da;
-  const capped = y.cash_interest_total + y.pik_accrual_total + y.oid_amortization;
-  const uncapped = y.financing_fee_amortization + y.commitment_fees + y.retirement_writeoff;
+  const capped = y.cash_interest_total + y.pik_accrual_total + y.oid_amortization + y.retirement_interest;
+  const uncapped = y.financing_fee_amortization + y.commitment_fees + y.retirement_noninterest;
   const out = taxYear(toKernelPolicy(tax), state, {
     ebit: y.ebitda_adj - y.da,
     ati,

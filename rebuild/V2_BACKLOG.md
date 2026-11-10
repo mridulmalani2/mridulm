@@ -87,6 +87,17 @@ Methodology row, live Excel formulas. Open prose item only: ledger L4 (§23 is ~
   reported (`exit.debt_shortfall_at_exit`, a bridge term, a WARN). The signed convention is
   rejected — it modelled the sponsor paying in at exit.
 - ☑ 4c28e8a §23 ledger closed (L4); the runbook STATE section is current.
+- ☑ v2.3.1 (2026-11-10) adversarial review — no arithmetic defect; one presentation defect (a
+  BLOCK-flagged run headlined as an answer) closed on every surface
+  (`rebuild/ADVERSARIAL_REVIEW_2026-11-10.md`).
+- ☑ **v2.4.0 (2026-11-10) Tax character and timing of retired / refinanced debt (SPEC §7.1).**
+  Owner direction: "nothing should be hardcoded — if there's a standard, use that, else make it
+  a setting." A standard exists, so it is a rule: unamortized OID and call premium are
+  repurchase premium — §163(j) interest, capped (Treas. Reg. §1.163-7(c)); debt-issuance costs
+  are not interest — uncapped; the exit and a scheduled refinancing deduct in their own year;
+  a sweep-driven retirement keeps a one-year lag (its year would otherwise be circular), split
+  by the same character. 7 goldens re-derived (sponsor IRR within ±0.74bp); challenger v5
+  0 mismatches on 26,190 values; 9 mutants red.
 
 ## Housekeeping  ☑ 2026-11-09
 
