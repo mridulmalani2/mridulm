@@ -44,21 +44,27 @@ export interface DealFacts {
   source: 'edgar' | 'esef' | 'manual' | 'upload';
   sector: string;
   currency: Engine2Currency;
-  fiscal_year: number;
-  period_end: string;
+  /** null ⇔ the case states no historical year (§24.2) or the filing lacked it (gated MISSING). */
+  fiscal_year: number | null;
+  period_end: string | null;
 
-  fy_revenue: number;
-  fy_ebitda: number;
-  /** = fy_ebitda / fy_revenue; carried for display, engine recomputes nothing from it. */
-  fy_ebitda_margin: number;
+  /** §24.2 [v2.0.0]: null ⇔ the case states no historical year (manual route only, by the
+   *  analyst's explicit choice) — never "unknown, assume X". Every engine path that needs it
+   *  is a named §24.3 Build rejection when it is null. */
+  fy_revenue: number | null;
+  fy_ebitda: number | null;
+  /** = fy_ebitda / fy_revenue; the §7 margin-driver base. null ⇔ either side is null. */
+  fy_ebitda_margin: number | null;
 
   /** §1.1 sizing basis: 'LTM' when the quarter-stitch succeeded, else 'FY'. Default 'FY' (manual). */
   sizing_basis?: 'FY' | 'LTM';
   /** As-of date of the sizing figures (LTM anchor `e`, or the FY period end). The UI derives the
    *  staleness tier (fresh/aging/stale) from this vs now — `lib/format.stalenessTier`. */
   sizing_as_of?: string;
-  da_pct_revenue: number;
-  maint_capex_pct_revenue: number;
+  /** §24.2 [v2.0.0]: history-derived ratios; null ⇔ no historical year (forecast-only case). The engine
+   *  never reads these — they seed suggestions only. */
+  da_pct_revenue: number | null;
+  maint_capex_pct_revenue: number | null;
   /** Opening net PP&E seed for the BS roll (SPEC §8); null ⇒ seed 0 + disclosed note. */
   net_ppe: number | null;
 
@@ -75,8 +81,10 @@ export interface DealFacts {
    *  NEVER a fabricated 0 (the no-silent-default invariant, §15). */
   gross_debt: number | null;
   cash: number | null;
-  net_debt: number;
-  effective_tax_rate: number;
+  /** null ⇔ no historical balance sheet (forecast-only case); display/suggestion only. */
+  net_debt: number | null;
+  /** null ⇔ no historical year; suggestion seed only — the model's rate is `tax.rate`. */
+  effective_tax_rate: number | null;
   /** Extracted NOL is a FLOOR (companyfacts is non-dimensional — PHASE_D D6). */
   nol_carryforward_floor: number | null;
 
@@ -213,6 +221,23 @@ export interface SweepAssumption {
   grid: { tiers: { above_net_leverage: number; pct: number }[]; else_pct: number } | null;
 }
 
+/** §24.1 [v2.0.0]: one operating line entered EXACTLY as the case states it. */
+export type LineSpec =
+  | { mode: 'explicit'; values: number[] } // year 1..N, length N
+  | { mode: 'grown'; year1: number; growth: number[] }; // v1 = year1; v[t] = v[t−1]·(1+growth[t−2]); growth length N−1
+
+/** §24.1 [v2.0.0]: per-line override of the §7 drivers. A null line ≡ its §7 driver. */
+export interface ForecastLines {
+  revenue: LineSpec | { mode: 'not_modelled' } | null;
+  /** 'ebit' ⇒ EBITDA[t] ≡ EBIT_given[t] + D&A[t] (an identity, §24.1). */
+  ebitda: (LineSpec & { measure: 'ebitda' | 'ebit' }) | null;
+  da: LineSpec | null;
+  capex: LineSpec | { mode: 'pct_of_da'; pct: number } | null;
+  delta_nwc: LineSpec | null;
+  /** §24.5: growth of every line from year N into year N+1; required per §24.3 R7. */
+  year_n_plus_1_growth: number | null;
+}
+
 export interface OperationsAssumption {
   /** One growth number per year (churn folded in — SPEC §7). Under NTM exit basis, growth[hold_years−1] is the year-N+1 proxy (SPEC §9). */
   growth: number[];
@@ -225,6 +250,20 @@ export interface OperationsAssumption {
   nwc:
     | { method: 'days'; dso: number; dio: number; dpo: number } // formulas in SPEC §7 (365 basis, COGS proxy)
     | { method: 'pct'; pct_revenue: number };
+  /** §24 [v2.0.0] REQUIRED-with-null: null ≡ every line is its §7 driver (v1 numbers). */
+  lines: ForecastLines | null;
+}
+
+/** §25.1 [v2.0.0]: the flow-to-equity valuation inputs (all rates decimals). */
+export interface ValuationAssumption {
+  risk_free: number;
+  mrp: number;
+  asset_beta: number;
+  /** 0 ≡ riskless debt (the reference convention). */
+  debt_beta: number;
+  /** Gordon perpetuity growth after the exit (fundamentals exit, §25.2). */
+  long_run_growth: number;
+  leverage_timing: 'end_of_year' | 'start_of_year';
 }
 
 export interface TaxAssumption {
@@ -333,6 +372,13 @@ export interface DealAssumptions {
      */
     distributions: number[] | null;
     /**
+     * SPEC §3.8 [v2.1.0] the SURPLUS-CASH distribution policy — the alternative to a fixed
+     * schedule: each year, after debt service, the revolver and the sweep, pay `payout_pct` of
+     * the cash above the minimum to equity (still subject to the §3.7 trap). null ≡ OFF.
+     * Mutually exclusive with `distributions` (a Build rejection — one policy per deal).
+     */
+    surplus_distribution: SurplusDistributionAssumption | null;
+    /**
      * Scheduled per-tranche refinancings (SPEC §18 [v1.3.0]); null ≡ [] ≡ feature OFF, so every
      * pre-v1.3.0 deal is byte-identical to before. At most one event per tranche, on cash-pay term
      * tranches only; structural gates (existence, cash-pay, one-per-tranche, 1 ≤ year ≤ hold−1,
@@ -340,6 +386,13 @@ export interface DealAssumptions {
      * proposes NONE (a refi is a sponsor decision with no history/convention basis).
      */
     refinancing: RefinancingEvent[] | null;
+    /**
+     * SPEC §23 [v2.2.0] a SECONDARY selldown: at the END of `year` the sponsor sells `fraction`
+     * of its position at `event_multiple × EBITDA_adj[year]` less §11 net debt; the rest rides
+     * to the §9 exit. null ≡ OFF (numeric identity). Build rejections (§23.3): with a rollover
+     * or a sweet-equity strip; fraction ∉ (0,1); year ∉ {1..N−1}; event_multiple ≤ 0.
+     */
+    selldown: SelldownAssumption | null;
   };
   operations: OperationsAssumption;
   tax: TaxAssumption;
@@ -367,6 +420,39 @@ export interface DealAssumptions {
    * of `irr` / `irr_mid_year` the UI headlines; both are always computed.
    */
   mid_year_irr: boolean;
+  /** §25 [v2.0.0] REQUIRED-with-null: null ≡ OFF (no valuation block; v1 numbers). */
+  valuation: ValuationAssumption | null;
+}
+
+/** SPEC §23.2 [v2.2.0] the selldown event — user-stated structure, frozen across scenarios. */
+export interface SelldownAssumption {
+  /** 1..hold_years−1 — the sale settles at the END of this year, after the year's flows. */
+  year: number;
+  /** (0, 1) OPEN — the share of the sponsor's position sold. */
+  fraction: number;
+  /** > 0 — applied to that year's EBITDA_adj (the §9 valuation form at year t). */
+  event_multiple: number;
+}
+
+/** SPEC §23.10 [v2.2.0] ModelOutput.selldown — named fields the display reads, never recomputes. */
+export interface SelldownBlock {
+  year: number;
+  fraction: number;
+  implied_event_ev: number;
+  /** SIGNED — an underwater sale is legal and warns (§14.24(f)). */
+  implied_event_equity: number;
+  /** fraction × implied_event_equity — the sponsor's year-t inflow (SIGNED). */
+  selldown_proceeds: number;
+}
+
+/** SPEC §3.8 [v2.1.0] the surplus-cash distribution policy (analyst-set; the UI pre-fills
+ *  payout 100% / immediately, visibly, when the analyst picks the policy). */
+export interface SurplusDistributionAssumption {
+  /** [0, 1] — the share of the year's cash above the minimum (after the sweep) paid out. */
+  payout_pct: number;
+  /** 'immediately': every year; 'after_debt_repaid': only once every term tranche and the
+   *  revolver are repaid at the year's step-6 balances (±$0.005m, the §15 retirement tol). */
+  start: 'immediately' | 'after_debt_repaid';
 }
 
 /** §19.2 [v1.4.0] — the fund-of-one overlay inputs (all rates decimals; §16 gates). */
@@ -399,10 +485,12 @@ export interface FundBlock {
 // ── Output (Class C lives here — derived, never editable) ───────────────────
 
 export interface OperatingYear {
-  revenue: number;
-  ebitda: number; // = revenue × margin (SPEC §7)
+  /** null ⇔ revenue `not_modelled` (§24.1) — never read as zero. */
+  revenue: number | null;
+  ebitda: number; // §7 driver: revenue × margin; §24 line: as given (or EBIT + D&A)
   ebitda_adj: number; // − monitoring fee (annual fee dropped in exit year — SPEC §9)
-  margin: number;
+  /** = ebitda / revenue; null ⇔ revenue null. */
+  margin: number | null;
   da: number;
   ebit: number;
   maint_capex: number;
@@ -542,7 +630,7 @@ export interface ExitBlock {
   /** = exit_ev − payoff + cash_at_exit − exit_fees − monitoring_termination (SPEC §9). */
   exit_equity_pre_mip_total: number;
   mip_payout: number;
-  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net ≡ exit_equity_pre_mip_total (§14.16 five-term [v1.7.0]); sponsor_share ≡ final sponsor_net cashflow. */
+  /** sponsor_share + rollover_share + mip_payout + management_ordinary_share + warrant_payout_net + selldown_buyer_share ≡ exit_equity_pre_mip_total (§14.16 SIX-term [v1.8.0]); sponsor_share ≡ final sponsor_net cashflow, net of any §23 selldown. */
   sponsor_share: number;
   rollover_share: number;
   /** §22.10 [v1.7.0]: unconditional carriers, `0.0` when the instruments are off — the
@@ -552,6 +640,17 @@ export interface ExitBlock {
    *  their instruments are null, so the three-term form is the degenerate case). */
   management_ordinary_share: number;
   warrant_payout_net: number;
+  /** §23.10 [v1.8.0]: the §14.16 mirror's SIXTH term — the selldown buyer's exit claim.
+   *  Unconditional carrier, `0.0` when no `structure.selldown` is configured (the same
+   *  committed-zero-column precedent as the two fields above), so the five-term form is
+   *  the degenerate case and every pre-v1.8.0 golden still closes. When an event IS
+   *  configured, `sponsor_share` carries the RETAINED (1 − fraction) only and this field
+   *  carries `fraction ×` the same post-§10/post-§22.6 split (§23.5). */
+  selldown_buyer_share: number;
+  /** §9.1 [v2.3.0] LIMITED LIABILITY: the debt the exit does not cover — max(0, −(EV − payoff
+   *  + cash − fees − termination)). The lenders' loss; equity receives zero, never pays in.
+   *  Unconditional `0.0` when the exit covers the debt. */
+  debt_shortfall_at_exit: number;
 }
 
 /**
@@ -651,9 +750,15 @@ export interface ValueBridge {
     sweet_equity_delta: number;
     /** §12 [v1.7.0] the warrant's net take at exit; 0 when `warrant` is null. */
     warrant_payout_net: number;
+    /** §12/§14.9 [v2.2.0 — §23.8] the ONE selldown walk-down term: the buyer's exit share −
+     *  the proceeds the sponsor received for it (the rollover-Δ template); 0 with no event. */
+    selldown_buyer_delta: number;
+    /** §9.1/§14.9 [v2.3.0] the lenders' unrecovered debt at exit: the bars measure the exit at
+     *  full net debt, equity's loss stops at zero, so this term closes the walk; 0 when covered. */
+    debt_shortfall_at_exit: number;
     /**
      * §12 [v1.1.0] the sponsor-net TOTAL delta: sponsor_share + cumulative sponsor-share
-     * distributions − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
+     * distributions (+ selldown proceeds [v2.2.0]) − sponsor equity. Degenerates to the pre-v1.1.0 exit-only delta when
      * no distribution is paid.
      */
     sponsor_net_delta: number;
@@ -673,6 +778,10 @@ export interface CoherenceFlag {
     | 'negative_goodwill'
     | 'negative_sponsor_equity'
     | 'loan_notes_unredeemed'
+    /** §23 [v2.2.0] §14.24(f): the sold slice fetched less than its pro-rata share of the entry check. */
+    | 'selldown_below_cost'
+    /** §9.1 [v2.3.0]: exit value does not cover the debt — equity is worth zero, lenders take the loss. */
+    | 'exit_debt_shortfall'
     /** §3.7: the RP trap clipped a distribution cash alone would have allowed. */
     | 'distribution_blocked'
     /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
@@ -746,7 +855,7 @@ export interface ModelOutput {
   derived: {
     enterprise_value: number;
     entry_multiple: number;
-    entry_ebitda_for_sizing: number; // the §1.1 FY(LTM) sizing basis — FY, or the LTM stitch when interim filings allow (§11; read facts.sizing_basis, never the "fy_" name) [G-2/M2]
+    entry_ebitda_for_sizing: number | null; // §24.2: null ⇔ no historical year. The §1.1 FY(LTM) sizing basis — FY, or the LTM stitch when interim filings allow (§11; read facts.sizing_basis, never the "fy_" name) [G-2/M2]
     total_debt_at_par: number;
     sponsor_equity: number;
     /**
@@ -758,7 +867,9 @@ export interface ModelOutput {
      * `credit[].net_leverage` is net from year 1 onward, so any surface showing both must
      * label the bases explicitly or it overstates deleveraging.
      */
-    entry_gross_leverage_fy: number;
+    entry_gross_leverage_fy: number | null; // §24.2 [v2.0.0]: null ⇔ facts.fy_ebitda null
+    /** §24.4 [v2.0.0]: the EBITDA the entry multiple applies to (FY/LTM, or forecast year 1 under NTM). */
+    entry_ebitda_for_valuation: number;
   };
   sources_uses: SourcesUses;
   operating: OperatingYear[];
@@ -776,8 +887,58 @@ export interface ModelOutput {
   coherence: CoherenceFlag[];
   /** §19 [v1.4.0] — null when the overlay is OFF (never a zero row). */
   fund: FundBlock | null;
+  /** §23.10 [v2.2.0]: null ⇔ `structure.selldown` null. */
+  selldown: SelldownBlock | null;
   /** §22.10 [v1.7.0]: null ⇔ `sweet_equity` null ∧ `warrant` null (the `fund` precedent). */
   equity_strip: EquityStripBlock | null;
   scenarios: ScenarioResult[] | null;
   sensitivity: SensitivityGrid[] | null;
+  /** §25 [v2.0.0] — null ⇔ assumptions.valuation null. */
+  valuation: ValuationBlock | null;
+}
+
+/** §25.5 one exit case of the flow-to-equity valuation. null-with-reason, never a sentinel. */
+export interface FteCase {
+  exit_multiple: number;
+  exit_ev: number;
+  exit_equity_total: number;
+  /** §9 pre_promote stream for this exit (t0-anchored, length N+1). */
+  equity_cashflows: number[];
+  equity_irr: number | null;
+  equity_moic: number | null;
+  equity_invested: number;
+  /** null with `recursion_null_reason` when the path hits E ≤ 0 (§25.5). */
+  equity_value: number[] | null; // index 0..N
+  debt: number[]; // closing debt at par + PIK, index 0..N
+  cash: number[]; // closing cash, index 0..N
+  equity_weight: number[] | null;
+  beta_equity: number[] | null;
+  /** index t = the rate discounting year t to t−1; index 0 = display under end_of_year, null under start_of_year. */
+  cost_of_equity: (number | null)[] | null;
+  equity_value_at_entry: number | null;
+  npv: number | null;
+  value_per_dollar: number | null;
+  required_return: number | null;
+  excess_return: number | null;
+  recursion_null_reason: string | null;
+  bridge: ValueBridge;
+}
+
+export interface BreakEven {
+  value: number | null;
+  base: number;
+  reason: string | null;
+}
+
+export interface ValuationBlock {
+  r_unlevered: number;
+  /** §25.2 */
+  ufcf_n_plus_1: number;
+  g_n_plus_1: number;
+  gordon_ev: number | null;
+  gordon_implied_multiple: number | null;
+  gordon_null_reason: string | null;
+  assumed: FteCase;
+  fundamentals: FteCase | null;
+  break_evens: { exit_multiple: BreakEven; asset_beta: BreakEven; long_run_growth: BreakEven };
 }

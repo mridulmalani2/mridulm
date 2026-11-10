@@ -93,7 +93,7 @@ const SPECS: Record<string, GoldenSpec> = {
 
 function build(spec: GoldenSpec) {
   return buildOperating(
-    { fy_revenue: spec.fy_revenue, fy_ebitda_margin: spec.fy_ebitda_margin },
+    { fy_revenue: spec.fy_revenue, fy_ebitda_margin: spec.fy_ebitda_margin, operating_nwc: null },
     {
       entry: { driver: 'multiple', entry_multiple: null, enterprise_value: null, basis: 'fy', hold_years: 5 },
       operations: {
@@ -104,6 +104,7 @@ function build(spec: GoldenSpec) {
         maint_capex_pct_revenue: spec.maint_capex_pct,
         growth_capex: spec.growth_capex,
         nwc: spec.nwc,
+        lines: null,
       },
       fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null },
     },
@@ -121,8 +122,8 @@ describe('operating.ts reproduces the golden operating columns (C1 gate)', () =>
         const row = g.operating[i];
         const y = out.years[i];
         const ctx = `${golden} Y${i + 1}`;
-        expect(Math.abs(y.revenue - row.revenue), `${ctx} revenue`).toBeLessThan(TOL);
-        expect(Math.abs(y.margin - row.margin), `${ctx} margin`).toBeLessThan(5e-5); // fixture 4dp
+        expect(Math.abs(y.revenue! - row.revenue), `${ctx} revenue`).toBeLessThan(TOL);
+        expect(Math.abs(y.margin! - row.margin), `${ctx} margin`).toBeLessThan(5e-5); // fixture 4dp
         expect(Math.abs(y.ebitda - row.ebitda), `${ctx} ebitda`).toBeLessThan(TOL);
         expect(Math.abs(y.ebitda_adj - row.ebitda_adj), `${ctx} ebitda_adj`).toBeLessThan(TOL);
         expect(Math.abs(y.da - row.da), `${ctx} da`).toBeLessThan(TOL);
@@ -156,13 +157,13 @@ describe('operating.ts reproduces the golden operating columns (C1 gate)', () =>
   it('monitoring fee (golden-uncovered, SPEC §7/§9): reduces EBITDA_adj in years 1..N−1, dropped in the exit year, EBIT stays consistent', () => {
     const spec = SPECS.G1;
     const withFee = buildOperating(
-      { fy_revenue: spec.fy_revenue, fy_ebitda_margin: spec.fy_ebitda_margin },
+      { fy_revenue: spec.fy_revenue, fy_ebitda_margin: spec.fy_ebitda_margin, operating_nwc: null },
       {
         entry: { driver: 'multiple', entry_multiple: null, enterprise_value: null, basis: 'fy', hold_years: 5 },
         operations: {
           growth: spec.growth, target_margin: spec.target_margin, margin_path: 'linear',
           da_pct_revenue: spec.da_pct, maint_capex_pct_revenue: spec.maint_capex_pct,
-          growth_capex: spec.growth_capex, nwc: spec.nwc,
+          growth_capex: spec.growth_capex, nwc: spec.nwc, lines: null,
         },
         fees: {
           transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015,
@@ -315,13 +316,13 @@ describe('operating.ts §7 properties', () => {
   it('input-length guard: growth/growth_capex arrays must match hold_years', () => {
     expect(() =>
       buildOperating(
-        { fy_revenue: 100, fy_ebitda_margin: 0.2 },
+        { fy_revenue: 100, fy_ebitda_margin: 0.2, operating_nwc: null },
         {
           entry: { driver: 'multiple', entry_multiple: null, enterprise_value: null, basis: 'fy', hold_years: 5 },
           operations: {
             growth: [0.1], target_margin: 0.2, margin_path: 'linear',
             da_pct_revenue: 0.03, maint_capex_pct_revenue: 0.03,
-            growth_capex: [0, 0, 0, 0, 0], nwc: { method: 'pct', pct_revenue: 0.1 },
+            growth_capex: [0, 0, 0, 0, 0], nwc: { method: 'pct', pct_revenue: 0.1 }, lines: null,
           },
           fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null },
         },

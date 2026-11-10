@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { manualHistoricals, shiftYearEnd, type ManualFactsInput } from '../lib/edgar/buildModel';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
-import { suggestAssumptions } from '../lib/engine2/suggest';
+import { suggestionsFor } from '../lib/engine2/suggest';
 
 const FULL: ManualFactsInput = {
   dealName: 'Fixture Full Co', sector: 'Industrials', currency: 'USD', basis: 'FY', ltm: null,
@@ -66,10 +66,10 @@ describe('manualHistoricals — full multi-year entry (FY basis)', () => {
     expect(adapted.facts.source).toBe('manual');
     expect(adapted.missing).toEqual([]);
     expect(adapted.facts.history.length).toBe(3);
-    const { basis, assumptions } = suggestAssumptions(adapted.facts);
-    expect(basis['operations.growth'].kind).toBe('history');
+    const growth = suggestionsFor(adapted.facts, 5)['operations.growth'];
+    expect(growth.basis.kind).toBe('history');
     // CAGR over the true span: (121/100)^(365.25/731) − 1 = 0.0999243…
-    expect(assumptions.operations.growth[0]).toBeCloseTo(0.0999243, 5);
+    expect((growth.value as number[])[0]).toBeCloseTo(0.0999243, 5);
   });
 });
 
@@ -98,10 +98,9 @@ describe('manualHistoricals — sparse entry: blanks stay gaps, NEVER fabricated
     expect(adapted.templateBases['tax.rate']).toContain('statutory default');
   });
 
-  it('a single history point keeps the growth suggestion on its TEMPLATE basis (D1 ≥3 gate)', () => {
+  it('a single history point yields NO growth proposal (D1 ≥3 gate) — never a template guess', () => {
     const adapted = adaptRawHistoricals(raw);
-    const { basis } = suggestAssumptions(adapted.facts);
-    expect(basis['operations.growth'].kind).toBe('template');
+    expect(suggestionsFor(adapted.facts, 5)['operations.growth']).toBeUndefined();
   });
 });
 

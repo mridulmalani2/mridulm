@@ -370,13 +370,15 @@ describe('§14.21 invariants on live toggles', () => {
         expect(r.pik_accrual, `pik[${i}]`).toBeCloseTo(el[i] === 'pik' ? r.beginning_balance * note.pik_coupon : 0, 9);
       });
       // (d) pool composition — the EXACT §6.1 mirror, not a bound [audit M5]: the capped pool
-      // is Σ cash interest + Σ PIK accrual + OID amortization across every tranche, so with the
-      // note contributing exactly ONE leg per year the identity pins which leg landed.
+      // is Σ cash interest + Σ PIK accrual + OID amortization across every tranche (+ in the exit
+      // year the OID still unamortized, repurchase premium — §7.1 [v2.4.0]), so with the note
+      // contributing exactly ONE leg per year the identity pins which leg landed.
       o.tax.forEach((y, i) => {
         const cashAll = o.waterfall[i].cash_interest_total;
         const pikAll = o.tranches.reduce((s, tr) => s + tr[i].pik_accrual, 0);
         expect(y.capped_interest_pool - (cashAll + pikAll), `pool−(cash+pik)=OID amort [${i}]`).toBeGreaterThanOrEqual(-1e-9);
-        expect(y.capped_interest_pool).toBeCloseTo(cashAll + pikAll + 0.3375, 9); // OID 2.70/8yr
+        // OID 2.70/8yr = 0.3375 a year; at exit the remaining 2.70 − 5 × 0.3375 = 1.0125 joins the pool
+        expect(y.capped_interest_pool).toBeCloseTo(cashAll + pikAll + 0.3375 + (i === 4 ? 2.7 - 5 * 0.3375 : 0), 9);
         expect(rows[i].cash_interest === 0 || rows[i].pik_accrual === 0).toBe(true); // never both
       });
       // (e) the flag is structural: maturity 8 ∧ any accruing year

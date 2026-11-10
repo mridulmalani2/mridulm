@@ -103,6 +103,7 @@
  "exit": {
   "cash_at_exit": 25.74,
   "debt_payoff_at_par_plus_pik": 0.0,
+  "debt_shortfall_at_exit": 0.0,
   "exit_ebitda_basis_value": 38.55,
   "exit_equity_pre_mip_total": 291.52,
   "exit_ev": 269.83,
@@ -111,6 +112,7 @@
   "mip_payout": 0.0,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
+  "selldown_buyer_share": 0.0,
   "sponsor_share": 291.52,
   "unamortized_fees_written_off": 0.48,
   "warrant_payout_net": 0.0
@@ -323,16 +325,16 @@
    "acquired_nol_end": 28.88,
    "acquired_nol_used": 3.0,
    "ati": 38.55,
-   "capped_interest_pool": 1.22,
+   "capped_interest_pool": 1.52,
    "cash_tax": 4.22,
-   "deductible_capped_interest": 1.22,
+   "deductible_capped_interest": 1.52,
    "nol_banked": 0.0,
    "postclose_nol_end": 0.0,
    "postclose_nol_used": 0.0,
    "s163j_carryforward_end": 0.0,
    "s163j_carryforward_open": 0.0,
    "taxable_before_nol": 19.89,
-   "uncapped_deductions": 0.57
+   "uncapped_deductions": 0.27
   }
  ],
  "tranches": {

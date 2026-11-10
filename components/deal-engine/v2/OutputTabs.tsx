@@ -10,9 +10,10 @@
  * exits, ratchets, PIK elections, refi editors, distributions, trace. (Fund economics left
  * this list in v1.4.0 — the §19 overlay renders on the Returns tab.)
  */
+import { DISCLOSURES } from '../../../lib/engine2/disclosures';
 import React, { useState } from 'react';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
-import { entryMultipleDisplay, exitMultipleDisplay, sizingBasisLabel } from '../../../lib/engine2/display';
+import { entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, sizingBasisLabel } from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -22,10 +23,11 @@ const th = 'text-right font-normal px-2 py-1';
 const td = 'text-right px-2 py-1';
 const rowB = { borderTop: '1px solid rgba(17,17,17,0.08)' } as const;
 
-type Tab = 'summary' | 'returns' | 'operating' | 'su' | 'debt' | 'bs' | 'credit' | 'sensitivity' | 'scenarios' | 'methodology';
+type Tab = 'summary' | 'returns' | 'valuation' | 'operating' | 'su' | 'debt' | 'bs' | 'credit' | 'sensitivity' | 'scenarios' | 'methodology';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'summary', label: 'Summary' },
   { id: 'returns', label: 'Returns' },
+  { id: 'valuation', label: 'Valuation' },
   { id: 'operating', label: 'Operating' },
   { id: 'su', label: 'S&U' },
   { id: 'debt', label: 'Debt' },
@@ -54,9 +56,10 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
   <div>
     <div className="flex gap-8 mb-4">
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Sponsor IRR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{pct(o.returns.sponsor_net.irr)}</p></div>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : pct(o.returns.sponsor_net.irr)}</p>
+        {headlineNotMeaningful(o) && <p className="text-[10px]" style={{ color: '#b91c1c' }}>not meaningful — see the ■ warning above</p>}</div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>MOIC</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.sponsor_net.moic)}</p></div>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : multiple(o.returns.sponsor_net.moic)}</p></div>
       <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}</p>
         {em.fy_canonical !== null && (
@@ -101,11 +104,11 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
     {/* §9 [v1.1.0]: DPI and payback are headline-eligible ONLY when a distribution was
         actually paid. With none, DPI is identically zero and payback is N/A by
         construction — showing them would be the degenerate headline §9 removed (L-10). */}
-    {o.waterfall.some((w) => w.distribution_paid > 0) && (
+    {(o.waterfall.some((w) => w.distribution_paid > 0) || o.selldown !== null) && (
       <div className="flex gap-8 mb-4">
-        <div><p className="text-[10px] uppercase tracking-widest" style={label}>DPI (distributions ÷ check)</p>
+        <div><p className="text-[10px] uppercase tracking-widest" style={label}>{o.selldown ? 'DPI (distributions + selldown ÷ check)' : 'DPI (distributions ÷ check)'}</p>
           <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.dpi[o.returns.dpi.length - 1] ?? null)}</p></div>
-        <div><p className="text-[10px] uppercase tracking-widest" style={label}>Payback (distributions alone)</p>
+        <div><p className="text-[10px] uppercase tracking-widest" style={label}>{o.selldown ? 'Payback (cash realized before the exit)' : 'Payback (distributions alone)'}</p>
           <p className="text-2xl" style={{ fontFamily: mono }}>{o.returns.payback_year === null ? 'N/A' : `Y${o.returns.payback_year}`}</p></div>
       </div>
     )}
@@ -160,6 +163,45 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         </p>
       )}
       <EquityStrip o={o} ccy={ccy} />
+      <Selldown o={o} ccy={ccy} />
+    </div>
+  );
+};
+
+/** §23 [v2.2.0] the partial-exit block. Rendered ONLY when `selldown` is non-null (§23.10 —
+ *  ABSENT when off, never a zero table). Every cell READS a named field: the SelldownBlock and
+ *  ExitBlock.selldown_buyer_share; the one presentational difference is the event net debt
+ *  (= implied EV − implied equity, exact by §23.2's definition). */
+export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  const s = o.selldown;
+  if (!s) return null;
+  const rows: [string, string][] = [
+    ['Sale at the end of year', `Y${s.year}`],
+    ['Share of the sponsor’s stake sold', pct(s.fraction)],
+    ['Implied enterprise value (sale multiple × that year’s EBITDA)', money(s.implied_event_ev, ccy)],
+    ['Net debt at that year end', money(s.implied_event_ev - s.implied_event_equity, ccy)],
+    ['Implied equity value', money(s.implied_event_equity, ccy)],
+    ['Proceeds to the sponsor', money(s.selldown_proceeds, ccy)],
+    ['Buyer’s share of the exit proceeds', money(o.exit.selldown_buyer_share, ccy)],
+    ['Sponsor’s retained exit proceeds', money(o.exit.sponsor_share, ccy)],
+  ];
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Partial exit — secondary selldown (SPEC §23)</p>
+      <Table head={['', '']}>
+        {rows.map(([l, v]) => (
+          <tr key={l} style={rowB}>
+            <td className="px-2 py-1">{l}</td>
+            <td className={td}>{v}</td>
+          </tr>
+        ))}
+      </Table>
+      <p className="text-[10px] mt-1" style={label}>
+        A secondary sale of the sponsor’s own stake: the company’s cash, debt and balance sheet are
+        unchanged. The proceeds are in the sponsor’s cash flows and count toward DPI and payback; the
+        promote hurdle and the value bridge bars do not include them. From the year after the sale the
+        sponsor keeps {pct(1 - s.fraction)} of each distribution and of the exit.
+      </p>
     </div>
   );
 };
@@ -221,7 +263,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       </Table>
       <p className="text-[10px] mt-1" style={label}>
         Loan notes are EQUITY (§22.2) — outside §11 leverage/ICR/FCCR/DSCR and the §3 waterfall, accruing
-        only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC — when the final sponsor flow is negative the headline MOIC exceeds the realized one (§9), and the ratchet reads the realized figure. ' : ''}
+        only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC. ' : ''}
         {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value (§22.6). ' : ''}
         Management&apos;s subscription reduces the sponsor&apos;s own cheque (§2).
       </p>
@@ -336,8 +378,8 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
         </div>
       )}
       {/* §18 [v1.3.0]: the refinancing events — each reprices/re-terms a tranche at year R,
-          paying a call premium and writing off the old unamortized OID/fees (book that year, tax
-          deduction the FOLLOWING year — §18.5). Reads the named TrancheYear fields directly (no
+          paying a call premium and writing off the old unamortized OID/fees (book AND tax that year,
+          by tax character — §7.1/§18.5 [v2.4.0]). Reads the named TrancheYear fields directly (no
           aggregation, no engine import). Rendered only when a refi exists. */}
       {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
         <div className="mb-3">
@@ -359,8 +401,9 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           </Table>
           <p className="text-[10px] mt-1" style={label}>
             Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off (old
-            unamortized OID + financing fees) is a NON-cash book charge that year; its tax deduction
-            lands the following year, uncapped (§18.5).
+            unamortized OID + financing fees) is a NON-cash book charge that year, and it is deducted
+            for tax the same year with the call premium: the old OID and the premium as interest
+            (subject to the §163(j) cap), the old fees in full (§7.1/§18.5).
             Par-for-par — leverage is unchanged at the refi and then deleverages on the new schedule.
           </p>
         </div>
@@ -465,7 +508,7 @@ const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
     <div>
       {block('Sponsor IRR', grid.irr, (x) => pct(x))}
       {block('Sponsor MOIC', grid.moic, (x) => multiple(x))}
-      <p className="text-[10px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base.</p>
+      <p className="text-[10px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
     </div>
   );
 };
@@ -504,34 +547,6 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
 };
 
 /** SPEC §15: the assumptions & methodology page — every disclosed simplification, matter-of-fact. */
-const DISCLOSURES: [string, string][] = [
-  ['Annual periods', 'flows at period end; mid-year IRR display option only'],
-  ['Beginning-balance interest', 'strictly sequential engine, no solver — conservative on amortizing/swept tranches'],
-  ['Day-count', 'annual accrual understates Actual/360 cash interest ~1.0–1.4% of interest; basis stated per tranche'],
-  ['Static rates', 'no forward curve in v1; base rate is a template value'],
-  ['Constant tax rate', 'effective rate from the filing held flat'],
-  ['Exit = entry multiple', 'multiple expansion requires an explicit thesis (DR-4)'],
-  ['§382 limit static', 'unused-limitation carryforward omitted — conservative'],
-  ['NOL usage not optimized', 'consumed in full per §6.3 even when the minimum-tax floor binds or the current-year benefit is nil'],
-  ['Acquired §163(j) carryforwards', 'out of scope in v1'],
-  ['Exit-year fee write-off', 'deducted UNCAPPED (Treas. Reg. §1.163(j)-1(b)(22))'],
-  ['PP&E roll', 'mechanical (capex − D&A); may go negative — warned, never clamped'],
-  ['Post-2025 OBBBA sub-changes', 'no interest capitalization, no CFC modeling'],
-  ['Call protection', 'BSL soft call exempt for sweeps/mandatory; private-credit hard call + CoC put disclosed omissions (Phase G)'],
-  // §15 [v1.1.0]: the interim-distributions simplifications — same-class gap as the §18.8 row below,
-  // found by the same hostile review (the SPEC sentence carried these clauses with no surface listing them)
-  ['Interim distributions (§3 step 7)', 'paid at YEAR-END after full debt service — never revolver-funded; blocked capacity does not accrue (no carryforward); the RP trap is the closed-form pro-forma net-leverage test (§3.7 — no solver)'],
-  // §18.8: the v1 refinancing simplifications are LISTED here — the SPEC sentence §15 carries verbatim-mirrored
-  ['Refinancing (§18)', 'scheduled per-tranche event only (no forward-curve or covenant-cure trigger); one refi per tranche; par-for-par — no dividend recap/upsizing; cash-pay term tranches only; repricing effective for the WHOLE refi year; old OID/DFC write-off + call premium deducted UNCAPPED the FOLLOWING year (vs the Treas. Reg. §1.1001-3 same-year-capped reading — conservative, ≤1yr)'],
-  // §19.8 [v1.4.0]: the fund-of-one simplifications — the SPEC §15 sentence mirrored here
-  ['Fund/LP overlay (§19)', "fund-of-one on the SPONSOR side only; annual fee on a constant basis (no step-downs, no NAV basis); no subscription line; no GP commitment; no clawback (nothing to claw back by construction); 'european' = all-contributions hurdle + pref base, 'american' = invested-capital base with NO fee-recovery tier; the §10 promote is portfolio-level, NOT fund carry; the year-N fee draws BEFORE the final distribution"],
-  // §21.9 [v1.6.0]: the sector-comps simplifications — the SPEC §15 sentence mirrored here
-  ['Sector comps band (§21)', "public-market TRADING multiples, NOT buyout-entry multiples — control premia, synergies, leverage and illiquidity all sit between the two, and NO ordering against your entry multiple is asserted; each figure is an INDUSTRY AGGREGATE (aggregate EV ÷ aggregate EBITDA), not a median firm, on data trailing through the prior year's Q3; annual vintage, stated per band, from a COMMITTED dataset refreshed manually (no live feed); positive-EBITDA block only, with NA and non-positive values excluded; the displayed firm count is the industry POPULATION, which includes firms outside the ratio's own aggregate; the sector map is a stated convention keyed on the numeric SIC — a 1987 taxonomy recording PRIMARY activity, so a conglomerate can sit in a bucket its business has outgrown; financials are NOT uniformly unavailable (the US bank/broker rows are NA and drop out, leaving a band set by asset managers, while Europe and India enter through BROKER multiples only — their bank rows are NA too — and only Japan publishes an actual bank multiple); a band may collapse to a point under a dominant constituent; region is inferred from reporting currency, a proxy for listing market"],
-  // §20.8 [v1.5.0]: the PIK-toggle simplifications — the SPEC §15 sentence mirrored here
-  ['PIK toggle (§20)', 'per-year WHOLE-coupon election only (no partial/50-50 elections — v2); elections are frozen across scenarios; PIK is deducted as ACCRUED, with AHYDO (§163(e)(5)/§163(i)) a disclosed omission — deferral-until-paid and the disqualified-portion disallowance are NOT modelled; qualifying notes carry the structural ahydo_shape warning (maturity > 5y + an accruing year), whose yield leg is untested (it needs the monthly AFR) and whose significant-OID leg is proxied, so the flag deliberately over-fires; PIK notes remain non-refinanceable and sweep-exempt by default'],
-  // §22.11 [v1.7.0]: the sweet-equity/ratchet/warrant simplifications — the SPEC §15 sentence mirrored here
-  ['Sweet equity / ratchets / warrants (§22)', "the institutional loan notes are EQUITY — outside §11 leverage/ICR/FCCR/DSCR, outside the §3 waterfall and the §9 debt payoff, with NO interest deduction (jurisdiction-specific, so v1 claims none — NEVER anti-conservative: neutral only where §163(j) binds every year, lower-return elsewhere), accruing only, never cash-pay, no year-0 accretion; ratchets are MARGINAL top-slice step functions on MOIC struck at EXIT ONLY, never cliffs (a cliff on a realized-return hurdle has NO SOLUTION over an interval of exit values), a value exactly ON a tier threshold takes the LOWER tier (strict >), and IRR-based ratchets are deferred to v2; the promote ratchet and the sweet-equity ratchet are struck on DELIBERATELY DIFFERENT bases (total pre-promote proceeds vs the institution's own realized value); the strip, the ratchet and the warrant are FROZEN across scenarios; MANAGEMENT'S SUBSCRIPTION REDUCES THE SPONSOR'S OWN CHEQUE (a §2 source line); a promote and a strip may NOT coexist (the DR-2 double-count — an input-gate rejection) and a strip may not coexist with a rollover in v1; when exit equity does not cover the accreted notes the ordinary pot is zero, management's sweet equity is worthless and the loan_notes_unredeemed warning fires — and when the FINAL SPONSOR FLOW is negative the HEADLINE sponsor MOIC exceeds the realized one (returns sums positive inflows only — a pre-existing convention §22 surfaces; the ratchet is struck on the REALIZED figure); AT MOST ONE warrant, rationally exercised on full dilution with the strike paid in, NOT exercised exactly at-the-money, not participating in interim distributions, its tranche association a LABEL only; the subscription price and the ordinary % are INDEPENDENT inputs — the model never checks that the terms are actually sweet"],
-];
 
 export const Methodology: React.FC = () => (
   <div>
@@ -543,6 +558,73 @@ export const Methodology: React.FC = () => (
     </Table>
   </div>
 );
+
+/**
+ * §25 [v2.0.0] — flow to equity: what the equity is worth, at both exits, and the one
+ * statement made twice (IRR vs required return ⇔ NPV sign). Reads ModelOutput.valuation only.
+ */
+export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
+  const v = o.valuation;
+  if (!v) {
+    return <p className="text-[11px]" style={label}>Valuation is off — switch on "Value the equity (flow to equity)" in section 5 of the inputs.</p>;
+  }
+  const N = o.assumptions.entry.hold_years;
+  const cases = [
+    { name: '(a) assumed exit multiple', c: v.assumed },
+    { name: '(b) exit from fundamentals', c: v.fundamentals },
+  ];
+  const be = v.break_evens;
+  return (
+    <div className="text-[11px]" style={{ fontFamily: mono }}>
+      <p className="mb-2" style={label}>
+        rU = {pct(v.r_unlevered)} · year N+1 unlevered FCF {money(v.ufcf_n_plus_1, ccy)} ·
+        fundamentals exit EV {v.gordon_ev === null ? `N/A (${v.gordon_null_reason})` : `${money(v.gordon_ev, ccy)} = ${multiple(v.gordon_implied_multiple)}`}
+      </p>
+      <Table head={['', ...cases.map((x) => x.name)]}>
+        {([
+          ['Exit multiple', (c: NonNullable<typeof v.fundamentals>) => multiple(c.exit_multiple)],
+          ['Exit equity (all holders)', (c: NonNullable<typeof v.fundamentals>) => money(c.exit_equity_total, ccy)],
+          ['Equity IRR — the LBO model', (c: NonNullable<typeof v.fundamentals>) => pct(c.equity_irr)],
+          ['Return the equity requires', (c: NonNullable<typeof v.fundamentals>) => pct(c.required_return)],
+          ['Excess return a year', (c: NonNullable<typeof v.fundamentals>) => pct(c.excess_return)],
+          ['Equity value at entry', (c: NonNullable<typeof v.fundamentals>) => money(c.equity_value_at_entry, ccy)],
+          ['Equity invested', (c: NonNullable<typeof v.fundamentals>) => money(c.equity_invested, ccy)],
+          ['NPV — flow to equity', (c: NonNullable<typeof v.fundamentals>) => money(c.npv, ccy)],
+          ['Value per dollar invested', (c: NonNullable<typeof v.fundamentals>) => num(c.value_per_dollar, 3)],
+        ] as const).map(([lab, f]) => (
+          <tr key={lab} style={rowB}>
+            <td className="px-2 py-1 text-left">{lab}</td>
+            {cases.map((x) => <td key={x.name} className={td}>{x.c ? f(x.c) : 'N/A'}</td>)}
+          </tr>
+        ))}
+      </Table>
+      <p className="mt-1 mb-3" style={label}>The IRR beats the required return exactly when the NPV is positive — one statement, made twice.</p>
+      {cases.map((x) => x.c && x.c.equity_value && (
+        <div key={x.name} className="mb-3">
+          <p className="mb-1" style={label}>{x.name} — worked backwards from the exit</p>
+          <Table head={['', ...Array.from({ length: N + 1 }, (_, t) => `Y${t}`)]}>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Equity value</td>{x.c.equity_value.map((e, t) => <td key={t} className={td}>{num(e, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Debt</td>{x.c.debt.map((d, t) => <td key={t} className={td}>{num(d, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">E ÷ (D + E)</td>{x.c.equity_weight!.map((w, t) => <td key={t} className={td}>{num(w, 4)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Equity beta</td>{x.c.beta_equity!.map((b, t) => <td key={t} className={td}>{num(b, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="px-2 py-1 text-left">Cost of equity</td>{x.c.cost_of_equity!.map((r, t) => <td key={t} className={td}>{r === null ? '–' : pct(r)}</td>)}</tr>
+          </Table>
+        </div>
+      ))}
+      {cases.map((x) => x.c && x.c.recursion_null_reason && <p key={x.name} style={label}>{x.name}: {x.c.recursion_null_reason}</p>)}
+      <p className="mt-2 mb-1" style={label}>What would have to be true — NPV = 0 by changing one input</p>
+      <Table head={['Input', 'Break-even', 'Base case']}>
+        <tr style={rowB}><td className="px-2 py-1 text-left">Exit multiple, exit (a)</td><td className={td}>{be.exit_multiple.value === null ? `N/A — ${be.exit_multiple.reason}` : multiple(be.exit_multiple.value)}</td><td className={td}>{multiple(be.exit_multiple.base)}</td></tr>
+        <tr style={rowB}><td className="px-2 py-1 text-left">Asset beta, exit (b)</td><td className={td}>{be.asset_beta.value === null ? `N/A — ${be.asset_beta.reason}` : num(be.asset_beta.value, 3)}</td><td className={td}>{num(be.asset_beta.base, 3)}</td></tr>
+        <tr style={rowB}><td className="px-2 py-1 text-left">Long-run growth, exit (b)</td><td className={td}>{be.long_run_growth.value === null ? `N/A — ${be.long_run_growth.reason}` : pct(be.long_run_growth.value)}</td><td className={td}>{pct(be.long_run_growth.base)}</td></tr>
+      </Table>
+      <p className="mt-2" style={label}>
+        Assumptions stated: debt beta {num(o.assumptions.valuation!.debt_beta, 2)} ({o.assumptions.valuation!.debt_beta === 0 ? 'riskless debt' : 'risky debt'}); the debt schedule is the base case, not an expectation;
+        tax shields are as risky as the business; cost of equity on leverage at the {o.assumptions.valuation!.leverage_timing === 'end_of_year' ? 'end' : 'start'} of each year.
+      </p>
+    </div>
+  );
+};
 
 const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Currency }> = ({ output, currency }) => {
   const [tab, setTab] = useState<Tab>('summary');
@@ -559,6 +641,7 @@ const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Curren
       </div>
       {tab === 'summary' && <Summary o={output} ccy={currency} />}
       {tab === 'returns' && <Returns o={output} ccy={currency} />}
+      {tab === 'valuation' && <Valuation o={output} ccy={currency} />}
       {tab === 'operating' && <Operating o={output} ccy={currency} />}
       {tab === 'su' && <SU o={output} ccy={currency} />}
       {tab === 'debt' && <Debt o={output} ccy={currency} />}

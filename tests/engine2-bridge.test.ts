@@ -28,7 +28,7 @@ function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock
     cumulative_distributions: 0,
     loan_notes_subscribed: 0,
     loan_note_balance_at_exit: 0,
-    institutional_interim_value: 0,
+    institutional_interim_value: 0, selldown_fraction: 0,
   };
   return buildExit(assumptions, inputs);
 }
@@ -56,6 +56,7 @@ function bridgeInputs(core: EngineCore, exit: ExitBlock, assumptions: DealAssump
     management_subscription: su.management_subscription,
     management_ordinary_share: exit.management_ordinary_share,
     warrant_payout_net: exit.warrant_payout_net,
+    selldown_buyer_share: 0, selldown_proceeds: 0, debt_shortfall_at_exit: 0,
   };
 }
 
@@ -120,7 +121,7 @@ describe('bridge.ts — §14.9 exact reconciliation on every golden (C8 gate)', 
       exit_multiple: 8.5, exit_ebitda: 120, exit_net_debt: 220, exit_costs: 20.3,
       exit_equity_pre_mip_total: E1, mip_payout: mip,
       rollover_share: rolloverShare, rollover_equity: 100,
-      management_subscription: 0, management_ordinary_share: 0, warrant_payout_net: 0,
+      management_subscription: 0, management_ordinary_share: 0, warrant_payout_net: 0, selldown_buyer_share: 0, selldown_proceeds: 0, debt_shortfall_at_exit: 0,
       sponsor_share: sponsorShare, sponsor_equity: sponsorEquity,
       monitoring_annual_total: 8,
       interim_distributions_sponsor: 0,

@@ -13,7 +13,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runCore, type EngineCore } from '../lib/engine2/sequence';
 import { buildExit, exitBasisValue, monitoringTermination, type ExitInputs } from '../lib/engine2/exit';
-import { sponsorShareOfDistributions } from '../lib/engine2/returns';
+import { selectInterimShares, selldownFromCore } from '../lib/engine2/facade';
 import { buildGpFeeIncome, buildReturns } from '../lib/engine2/returns';
 import { GOLDEN_DEALS, g2DownsideAssumptions } from './fixtures/engine2-golden-deals';
 import type { DealAssumptions, ExitBlock } from '../lib/engine2/types';
@@ -41,6 +41,7 @@ function exitFromCore(core: EngineCore, assumptions: DealAssumptions): ExitBlock
     loan_notes_subscribed: 0,
     loan_note_balance_at_exit: 0,
     institutional_interim_value: 0,
+    selldown_fraction: assumptions.structure.selldown?.fraction ?? 0, // §23.5 the exit partition
   };
   return buildExit(assumptions, inputs);
 }
@@ -54,6 +55,9 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
     ['G2DIST', GOLDEN_DEALS.G2DIST.assumptions],
     ['G3DIST', GOLDEN_DEALS.G3DIST.assumptions],
     ['G2DISTD', GOLDEN_DEALS.G2DISTD.assumptions],
+    ['G11SELL', GOLDEN_DEALS.G11SELL.assumptions], // §23 selldown: partitioned exit + flows, realized-basis DPI
+    ['G13SURPLUS', GOLDEN_DEALS.G13SURPLUS.assumptions], // §3.8 surplus policy, trap-blocked and clipped years
+    ['G13SURPLUSGATED', GOLDEN_DEALS.G13SURPLUSGATED.assumptions], // §3.8 gate opens after the mid-hold retirement
     ['G6REFI', GOLDEN_DEALS.G6REFI.assumptions], // §18: exit/returns value-compared engine-vs-fixture, not only transitively
   ];
 
@@ -67,27 +71,27 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
       for (const key of Object.keys(g.exit) as (keyof ExitBlock)[]) {
         expect(Math.abs((exit[key] as number) - (g.exit[key] as number)), `${golden} exit.${key}`).toBeLessThan(TOL);
       }
-      // §14.16 FIVE-term mirror [v1.7.0]: the two new terms are 0 on every v1 golden
+      // §14.16 SIX-term mirror [v2.2.0]: each added term is 0 when its instrument is off
       expect(
         exit.sponsor_share + exit.rollover_share + exit.mip_payout +
-        exit.management_ordinary_share + exit.warrant_payout_net,
+        exit.management_ordinary_share + exit.warrant_payout_net + exit.selldown_buyer_share,
       ).toBeCloseTo(exit.exit_equity_pre_mip_total, 9);
+      // the engine's ONE selected interim share rule (§9 pari-passu, partitioned by a §23 selldown)
+      const interimShares = selectInterimShares(core, assumptions).shares;
+      const sd = selldownFromCore(core, assumptions);
 
       const returns = buildReturns(assumptions, {
         sponsor_equity: core.sources_uses.sponsor_equity,
         rollover_equity: core.sources_uses.rollover_equity,
         management_subscription: core.sources_uses.management_subscription,
-        sponsor_interim_shares: sponsorShareOfDistributions(
-          core.distributions_paid,
-          core.sources_uses.sponsor_equity,
-          core.sources_uses.rollover_equity,
-        ),
+        sponsor_interim_shares: interimShares,
         enterprise_value: core.derived.enterprise_value,
         transaction_costs: core.sources_uses.transaction_costs,
         unlevered_fcf: core.unlevered_fcf,
         distributions_paid: core.distributions_paid,
         exit,
         hold_years: assumptions.entry.hold_years,
+        selldown: sd ? { year: sd.year, proceeds: sd.selldown_proceeds } : null,
       });
       for (const streamName of ['sponsor_net', 'pre_promote', 'unlevered'] as const) {
         const mine = returns[streamName];
@@ -123,12 +127,21 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
       // the same annual period. Every golden runs rollover = 0, so the sponsor share is the
       // full amount; the DIST goldens make the second term NON-ZERO and are what turns this
       // from a degenerate restatement into a real assertion.
-      const paidN = g.distributions.paid[g.distributions.paid.length - 1];
+      // The identity is taken on the engine's own full-precision paid[N]; the fixture's paid
+      // row is 2dp-rounded (exact only when the payment is a round requested amount — never
+      // under the §3.8 surplus policy), so it is compared at its own precision separately.
+      const paidN = core.distributions_paid[core.distributions_paid.length - 1];
+      expect(Math.abs(paidN - g.distributions.paid[g.distributions.paid.length - 1]), `${golden} paid[N]`).toBeLessThanOrEqual(0.005 + 1e-9);
+      // the sponsor's share of paid[N] — the full amount at rollover 0, (1 − f) of it after a selldown
       expect(returns.sponsor_net.cashflows[returns.sponsor_net.cashflows.length - 1])
-        .toBeCloseTo(exit.sponsor_share + paidN, 6);
-      // and the interim flows ARE the paid distributions, in order
+        .toBeCloseTo(exit.sponsor_share + interimShares[interimShares.length - 1], 9);
+      // and the interim flows ARE the paid distributions, in order — under a §23 selldown,
+      // partitioned (1 − f) strictly after the event year, with the proceeds merged into the
+      // event year's flow (the year-t distribution stays the SELLER's whole — §23.2)
       for (let t = 1; t < returns.sponsor_net.cashflows.length - 1; t++) {
-        expect(Math.abs(returns.sponsor_net.cashflows[t] - g.distributions.paid[t - 1]), `${golden} interim cf[${t}]`).toBeLessThan(TOL);
+        const share = sd && t > sd.year ? 1 - sd.fraction : 1;
+        const want = g.distributions.paid[t - 1] * share + (sd && t === sd.year ? sd.selldown_proceeds : 0);
+        expect(Math.abs(returns.sponsor_net.cashflows[t] - want), `${golden} interim cf[${t}]`).toBeLessThan(TOL);
       }
       // gp fee income: null when monitoring is OFF (§9 memo)
       expect(buildGpFeeIncome(assumptions.fees.monitoring, [], exit.monitoring_termination)).toBeNull();
@@ -160,6 +173,7 @@ describe('exit.ts + returns.ts reproduce the golden exit & return blocks (C6 gat
         distributions_paid: core.distributions_paid,
         exit,
         hold_years: 5,
+        selldown: null,
       });
     const baseIrr = r(base, baseExit, GOLDEN_DEALS.G2.assumptions).sponsor_net.irr!;
     const downIrr = r(down, downExit, g2DownsideAssumptions()).sponsor_net.irr!;
@@ -178,7 +192,7 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
       exit_year_ebitda_adj: 100, last_growth: 0.03, debt_payoff: 200, closing_cash: 30,
       unamortized_writeoff: 0, invested_equity_total: 400, rollover_equity: 0,
       cumulative_distributions: 0,
-      loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
+      loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0, selldown_fraction: 0,
     };
     const a = (monitoring: DealAssumptions['fees']['monitoring']): DealAssumptions['fees'] =>
       ({ transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring });
@@ -202,7 +216,7 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
         {
           exit_year_ebitda_adj: exitEquityDriver, last_growth: 0, debt_payoff: 0, closing_cash: 0,
           unamortized_writeoff: 0, invested_equity_total: 100, rollover_equity: 0, cumulative_distributions: 0,
-          loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
+          loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0, selldown_fraction: 0,
         },
       );
     // hurdle 2.0x on 100 invested = 200; exit equity 150 → out of the money
@@ -219,7 +233,7 @@ describe('§9/§10 golden-uncovered legs (hand fixtures)', () => {
       {
         exit_year_ebitda_adj: 120, last_growth: 0, debt_payoff: 300, closing_cash: 25,
         unamortized_writeoff: 3, invested_equity_total: 400, rollover_equity: 100, cumulative_distributions: 0,
-        loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0,
+        loan_notes_subscribed: 0, loan_note_balance_at_exit: 0, institutional_interim_value: 0, selldown_fraction: 0,
       },
     );
     expect(

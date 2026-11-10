@@ -37,9 +37,25 @@ import type {
   SensitivityGrid,
 } from './types';
 import { covenantBreachYear } from './credit';
+import { headlineNotMeaningful } from './display';
 
 /** §13 field-level merge: only named fields change; growth/growth_capex arrays replace whole. */
 export function applyScenarioDeltas(base: DealAssumptions, deltas: ScenarioDeltas): DealAssumptions {
+  // §24.3 R8: a delta on a driver the deal does not use would silently move nothing.
+  const ops = deltas.operations ?? {};
+  const lines = base.operations.lines;
+  const DRIVER_OF: Record<string, keyof NonNullable<typeof lines> | 'margin_driver'> = {
+    growth: 'revenue', target_margin: 'ebitda', margin_path: 'ebitda',
+    da_pct_revenue: 'da', maint_capex_pct_revenue: 'capex', growth_capex: 'capex', nwc: 'delta_nwc',
+  };
+  if (lines) {
+    for (const key of Object.keys(ops)) {
+      const line = DRIVER_OF[key];
+      if (line && line !== 'margin_driver' && lines[line] !== null) {
+        throw new RangeError(`scenarios: '${key}' moves a §7 driver, but that line is entered directly in this deal — shift the entered line instead (§24.3 R8)`);
+      }
+    }
+  }
   return {
     ...base,
     operations: { ...base.operations, ...(deltas.operations ?? {}) },
@@ -115,6 +131,10 @@ export function applyAxis(
     case 'exit_multiple': // operating-side (absolute)
       return { ...assumptions, exit: { ...assumptions.exit, multiple: value } };
     case 'growth': // operating-side: per-year SHIFT vs the base path (delta; center = 0)
+      // §24.3 R8: an axis that moves nothing is a defect, not a no-op.
+      if (assumptions.operations.lines?.revenue) {
+        throw new RangeError('scenarios: the growth axis moves the revenue growth driver, but revenue is entered by year in this deal (§24.3 R8)');
+      }
       return {
         ...assumptions,
         operations: {
@@ -123,6 +143,9 @@ export function applyAxis(
         },
       };
     case 'margin': // operating-side (absolute target)
+      if (assumptions.operations.lines?.ebitda) {
+        throw new RangeError('scenarios: the margin axis moves the EBITDA margin driver, but EBITDA/EBIT is entered by year in this deal (§24.3 R8)');
+      }
       return { ...assumptions, operations: { ...assumptions.operations, target_margin: value } };
   }
 }
@@ -158,7 +181,9 @@ export function buildSensitivityGrid(
         let entryPricing = baseAssumptions;
         if (ENTRY_SIDE_AXES.has(spec.row_axis)) entryPricing = applyAxis(facts, entryPricing, spec.row_axis, spec.row_values[r]);
         if (ENTRY_SIDE_AXES.has(spec.col_axis)) entryPricing = applyAxis(facts, entryPricing, spec.col_axis, spec.col_values[c]);
-        cellEv = deriveEntry(facts, entryPricing).enterprise_value;
+        // Entry axes never move an operating line, so forecast year-1 EBITDA (the §24.4 NTM
+        // valuation basis) is the BASE run's — read from it, never recomputed.
+        cellEv = deriveEntry(facts, entryPricing, base.operating[0].ebitda).enterprise_value;
       }
       const cell: DealAssumptions = { ...withBoth, entry: frozenEntry(withBoth, cellEv) };
       // §22.3(vi) [v1.7.0]: test the gate's condition BEFORE calling runModel for this
@@ -167,8 +192,10 @@ export function buildSensitivityGrid(
       // WHOLE grid. Same single condition (`stripPlugRejection`), same arithmetic path
       // (`buildSourcesUses`); the cell renders null — N/A semantics, never a sentinel.
       if (cell.sweet_equity) {
-        const cellEntry = deriveEntry(facts, cell);
-        const cellSized = sizeStructure(cell.structure, cellEntry.entry_ebitda_for_sizing);
+        // The cell's entry is FROZEN at cellEv (driver 'ev'), so the plug depends on EV only;
+        // the year-1 EBITDA argument affects the derived multiple, which the gate never reads.
+        const cellEntry = deriveEntry(facts, cell, base.operating[0].ebitda);
+        const cellSized = sizeStructure(cell.structure, facts.fy_ebitda);
         if (stripPlugRejection(buildSourcesUses(cellEntry, cellSized, cell), cell) !== null) {
           irrRow.push(null);
           moicRow.push(null);
@@ -176,6 +203,15 @@ export function buildSensitivityGrid(
         }
       }
       const run = runModel(facts, cell);
+      // a cell whose OWN run carries a BLOCK flag (a cash-floor breach with the revolver
+      // exhausted, a non-positive plug) is not economically meaningful: it renders null — the
+      // same N/A semantics as the strip-plug rejection above, never a plausible-looking number
+      // (adversarial review F1; the headline rule's one predicate, display.ts)
+      if (headlineNotMeaningful(run)) {
+        irrRow.push(null);
+        moicRow.push(null);
+        continue;
+      }
       irrRow.push(run.returns.sponsor_net.irr);
       moicRow.push(run.returns.sponsor_net.moic);
     }

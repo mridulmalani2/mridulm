@@ -12,8 +12,8 @@
  *   MIP = min(pool_pct × max(0, pre-MIP total proceeds − hurdle_moic × invested equity),
  *             exit equity available); rollover shares the post-MIP pot pari-passu
  *   (sponsor_share + rollover_share + mip_payout + management_ordinary_share +
- *   warrant_payout_net ≡ pre-MIP total — the §14.16 FIVE-term mirror [v1.7.0]; the two
- *   new terms are 0 whenever their instruments are null).
+ *   warrant_payout_net + selldown_buyer_share ≡ pre-MIP total — the §14.16 SIX-term
+ *   mirror [v2.2.0 — §23.5]; each added term is 0 whenever its instrument is null).
  *
  * No imports from lib/engine (boundary test).
  */
@@ -24,9 +24,11 @@ import type { DealAssumptions, EquityStripBlock, ExitBlock, RatchetTier } from '
 export function exitBasisValue(
   exitYearEbitdaAdj: number,
   basis: 'fy' | 'ntm',
-  lastGrowth: number,
+  lastGrowth: number | null,
 ): number {
-  return basis === 'fy' ? exitYearEbitdaAdj : exitYearEbitdaAdj * (1 + lastGrowth);
+  if (basis === 'fy') return exitYearEbitdaAdj;
+  if (lastGrowth === null) throw new RangeError('exit: an NTM exit needs the year N+1 growth rate (§24.3 R7)');
+  return exitYearEbitdaAdj * (1 + lastGrowth);
 }
 
 /**
@@ -102,8 +104,8 @@ export function validateSweetEquity(
 export interface ExitInputs {
   /** operating[N−1].ebitda_adj (§9 basis figure before any NTM proxy). */
   exit_year_ebitda_adj: number;
-  /** growth[N−1] — the year-N+1 proxy under NTM basis (§9). */
-  last_growth: number;
+  /** g_{N+1} (§24.5): growth[N−1] under §7 drivers, else the entered year N+1 growth; null ⇔ not stated (legal only under an FY exit). */
+  last_growth: number | null;
   /** Σ final term balances (par + accrued PIK) + drawn revolver (§9/C-8). */
   debt_payoff: number;
   /** waterfall[N−1].closing_cash — same cash definition as credit metrics (§9). */
@@ -128,6 +130,9 @@ export interface ExitInputs {
   /** §22.5 [v1.7.0] institutional value already banked before the ordinary split:
    *  Σ institution shares of paid[t] (§22.7's interim block); 0 with no distributions. */
   institutional_interim_value: number;
+  /** §23.5 [v2.2.0] the selldown fraction f (0 with no event): the buyer takes f of the
+   *  post-§10 / post-§22.6 sponsor split and the sponsor keeps (1 − f). */
+  selldown_fraction: number;
 }
 
 /** §22.4 [v1.7.0]: the MARGINAL bracket walk over the promote tiers on §10's own base.
@@ -158,8 +163,13 @@ export function buildExitWaterfall(
   const exitEv = assumptions.exit.multiple * basisValue;
   const exitFees = assumptions.exit.fees_pct * exitEv; // §9: base = exit EV
   const termination = monitoringTermination(assumptions.fees.monitoring);
-  const exitEquityPreMip =
+  // §9.1 [v2.3.0] LIMITED LIABILITY: equity is a residual claim that can be worth zero but
+  // never less — when the exit does not cover the debt the lenders take the shortfall and no
+  // equity holder pays in. The signed residual survives only as the shortfall it implies.
+  const exitEquityResidual =
     exitEv - inputs.debt_payoff + inputs.closing_cash - exitFees - termination;
+  const exitEquityPreMip = Math.max(0, exitEquityResidual);
+  const debtShortfall = Math.max(0, -exitEquityResidual);
 
   // ── §22.7 [v1.7.0]: the exit waterfall, ONE pipeline with null stages. `E` stays
   // SIGNED throughout — the clamp appears in exactly one place (a redemption cannot be
@@ -264,6 +274,12 @@ export function buildExitWaterfall(
     institutionOrdinary = sponsorShare; // warrant-only arm: ≡ sponsor_share (§22.7)
   }
 
+  // §23.5 the partition's EXIT leg: the buyer takes f of exactly the number the sponsor would
+  // otherwise have kept — AFTER the promote and the warrant (taking it before the promote
+  // would hand the buyer a share of the MIP — §23.4/§23.13(iii)). f = 0 ⇒ identity.
+  const buyerShare = inputs.selldown_fraction * sponsorShare;
+  sponsorShare -= buyerShare;
+
   const exit: ExitBlock = {
     exit_ebitda_basis_value: basisValue,
     exit_ev: exitEv,
@@ -276,9 +292,12 @@ export function buildExitWaterfall(
     mip_payout: mip,
     sponsor_share: sponsorShare,
     rollover_share: rolloverShare,
-    // §22.10 [v1.7.0]: unconditional carriers (§14.16's FIVE-term mirror).
+    // §22.10 [v1.7.0]: unconditional carriers (§14.16's mirror).
     management_ordinary_share: managementShare,
     warrant_payout_net: warrantNet,
+    // §23.10: the §14.16 mirror's SIXTH term (0.0 with no event — unconditional carrier).
+    selldown_buyer_share: buyerShare,
+    debt_shortfall_at_exit: debtShortfall,
   };
 
   // §22.10: null ⇔ both instruments null (the `fund` precedent).

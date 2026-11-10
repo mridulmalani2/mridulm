@@ -103,6 +103,7 @@
  "exit": {
   "cash_at_exit": 87.5,
   "debt_payoff_at_par_plus_pik": 0.0,
+  "debt_shortfall_at_exit": 0.0,
   "exit_ebitda_basis_value": 25.0,
   "exit_equity_pre_mip_total": 284.5,
   "exit_ev": 200.0,
@@ -111,6 +112,7 @@
   "mip_payout": 0.0,
   "monitoring_termination": 0.0,
   "rollover_share": 0.0,
+  "selldown_buyer_share": 0.0,
   "sponsor_share": 284.5,
   "unamortized_fees_written_off": 0.0,
   "warrant_payout_net": 0.0

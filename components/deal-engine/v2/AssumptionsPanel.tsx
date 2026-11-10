@@ -1,611 +1,693 @@
 /**
- * v2 AssumptionsPanel (PHASE_E §E1): Class B ONLY. The core-8 tier is always visible
- * (entry multiple + trading anchor line, leverage, blended rate, growth, target margin,
- * capex %, exit multiple, hold); Advanced groups collapse; every field wears its basis
- * badge; growth renders as (start, terminal) with an edit-by-year expander; derived
- * values are read-only and visually distinct. All display via lib/format; edits go
- * through the store's editAssumptions (path-marked YOU) and percent fields cross the
- * boundary EXACTLY once (fromPctInput).
+ * v2 AssumptionsPanel — v2.0.0 "blank until entered" (owner rule 2026-11-09).
+ *
+ * Every model input lives here, grouped like an LBO model's input sheet. Nothing is
+ * pre-filled: a blank field is UNSET (red edge) and gates Build; a choice is "choose…" until
+ * made; switching a feature on brings its fields in BLANK — no invented terms, ramps or
+ * defaults. Where the suggestion catalogue has a cited/fact/history proposal for a field, a
+ * one-click chip offers it with its basis. Every operating line can be a §7 driver OR entered
+ * exactly as the case states it (§24), and the §25 flow-to-equity valuation has its inputs here.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
-import { bps, fromPctInput, multiple, num, toPctInput } from '../../../lib/format';
-import BasisBadge from './BasisBadge';
-import type { DealAssumptions, CashPayTrancheAssumption, FundOverlayAssumption, PikNoteAssumption, RefinancingEvent } from '../../../lib/engine2/types';
-import { entryGrossLeverageFromAssumptions, rescaleTermTranchesToLeverage } from '../../../lib/engine2/sourcesUses';
+import { setPath } from '../../../lib/engine2/draft';
+import type {
+  CashPayTrancheAssumption, DealAssumptions, ForecastLines, FundOverlayAssumption, LineSpec,
+  PikNoteAssumption, RefinancingEvent, RevolverAssumption, TrancheAssumption, TranchePricing,
+} from '../../../lib/engine2/types';
+import { ChoiceField, Label, labelStyle, mono, NumBox, NumField, Section, SmallButton, SuggestionChips, YearGrid, isSet } from './fields';
+import { entryGrossLeverageFromAssumptions } from '../../../lib/engine2/sourcesUses';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
+import { multiple, toPctInput } from '../../../lib/format';
 import { sizingBasisLabel } from '../../../lib/engine2/display';
 
-const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
-const inputStyle = { background: '#fff', border: '1px solid rgba(17,17,17,0.12)', color: '#111', fontFamily: mono, outline: 'none' } as const;
+const U = Number.NaN;
+const blanks = (n: number) => Array.from({ length: n }, () => U);
+const EMPTY_LINES: ForecastLines = { revenue: null, ebitda: null, da: null, capex: null, delta_nwc: null, year_n_plus_1_growth: null };
 
-interface RowProps {
-  label: string;
-  path: string;
-  children: React.ReactNode;
-}
-
-const Row: React.FC<RowProps> = ({ label, path, children }) => {
-  const basis = useEngine2Model((s) => s.basis[path]);
-  return (
-    <div className="flex items-center justify-between gap-2 mb-2">
-      <label className="text-[10px] tracking-wider uppercase shrink-0" style={labelStyle}>{label}</label>
-      <div className="flex items-center gap-1.5">
-        {basis && <BasisBadge kind={basis.kind} detail={basis.detail} />}
-        {children}
-      </div>
-    </div>
-  );
-};
-
-/** Numeric input crossing the format boundary once; commits on blur/Enter. */
-const NumInput: React.FC<{
-  value: string;
-  onCommit: (text: string) => void;
-  width?: string;
-  suffix?: string;
-  readOnly?: boolean;
-}> = ({ value, onCommit, width = 'w-20', suffix, readOnly }) => {
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <span className="flex items-center gap-1">
-      <input
-        value={draft ?? value}
-        readOnly={readOnly}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => { if (draft !== null && draft !== value) onCommit(draft); setDraft(null); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        className={`${width} px-1.5 py-1 text-[11px] text-right`}
-        style={readOnly ? { ...inputStyle, background: 'rgba(17,17,17,0.04)', color: 'rgba(17,17,17,0.55)' } : inputStyle}
-      />
-      {suffix && <span className="text-[10px]" style={labelStyle}>{suffix}</span>}
-    </span>
-  );
-};
+type LineKey = 'revenue' | 'ebitda' | 'da' | 'capex' | 'delta_nwc';
 
 const AssumptionsPanel: React.FC = () => {
   const facts = useEngine2Model((s) => s.facts);
   const a = useEngine2Model((s) => s.assumptions);
+  const pending = useEngine2Model((s) => s.pending);
   const edit = useEngine2Model((s) => s.editAssumptions);
-  const [byYear, setByYear] = useState(false);
-  if (!facts || !a) return null;
+  const editWithChoices = useEngine2Model((s) => s.editWithChoices);
+  const setHold = useEngine2Model((s) => s.setHoldYears);
+  if (!facts) return null;
 
+  if (!a) {
+    return (
+      <Section title="Start" note="The holding period sizes every per-year input, so it comes first.">
+        <div className="flex items-center justify-between gap-2">
+          <Label>Holding period</Label>
+          <NumBox value={null} unit="years" ariaLabel="Holding period" onCommit={(v) => setHold(v)} />
+        </div>
+      </Section>
+    );
+  }
+
+  const N = a.entry.hold_years;
+  const hasLtm = facts.fy_ebitda !== null && facts.fy_ebitda > 0;
   const set = (next: DealAssumptions, paths: string[]) => edit(next, paths);
-  const numCommit = (fn: (v: number) => [DealAssumptions, string[]]) => (text: string) => {
-    const v = Number(text.replace(/[,\s]/g, ''));
-    if (Number.isFinite(v)) set(...fn(v));
+  const at = (path: string, value: unknown) => setPath<DealAssumptions>(a, path, value);
+
+  // ── forecast-line helpers ───────────────────────────────────────────────────────────
+  const lines = a.operations.lines;
+  const setLine = (key: LineKey, spec: ForecastLines[LineKey]) => {
+    const next: ForecastLines = { ...(lines ?? EMPTY_LINES), [key]: spec } as ForecastLines;
+    const allDriver = (['revenue', 'ebitda', 'da', 'capex', 'delta_nwc'] as LineKey[]).every((k) => next[k] === null);
+    set({ ...a, operations: { ...a.operations, lines: allDriver ? null : next } }, [`operations.lines.${key}`]);
   };
-  const pctCommit = (fn: (v: number) => [DealAssumptions, string[]]) => (text: string) => {
-    const v = fromPctInput(text);
-    if (v !== null) set(...fn(v));
+  const spec = (mode: 'explicit' | 'grown'): LineSpec => (mode === 'explicit' ? { mode, values: blanks(N) } : { mode, year1: U, growth: blanks(N - 1) });
+  const LineValues: React.FC<{ k: LineKey; s: LineSpec; label: string }> = ({ k, s, label }) =>
+    s.mode === 'explicit' ? (
+      <YearGrid path={`operations.lines.${k}.values`} label={`${label} by year`} unit="money" values={s.values} />
+    ) : (
+      <>
+        <NumField path={`operations.lines.${k}.year1`} label={`${label}: year-1 amount`} unit="money" value={s.year1} />
+        {N > 1 && <YearGrid path={`operations.lines.${k}.growth`} label={`${label}: growth`} unit="pct" values={s.growth} from={2} />}
+      </>
+    );
+
+  // ── debt helpers ─────────────────────────────────────────────────────────────────────
+  const tranches = a.structure.tranches;
+  const termCount = tranches.filter((t) => t.type !== 'revolver').length;
+  const hasRevolver = tranches.some((t) => t.type === 'revolver');
+  const addTranche = (t: TrancheAssumption) => {
+    const i = tranches.length;
+    editWithChoices(
+      { ...a, structure: { ...a.structure, tranches: [...tranches, t] } },
+      ['structure.tranches'],
+      t.type === 'revolver' ? [] : [`structure.tranches.${i}.sweep.participates`],
+    );
+  };
+  const newTerm = (type: CashPayTrancheAssumption['type'], floating: boolean): CashPayTrancheAssumption => ({
+    name: `${type === 'senior' ? 'Term loan' : type === 'unitranche' ? 'Unitranche' : 'Mezzanine'} ${termCount + 1}`,
+    type, size: { amount: U },
+    pricing: floating ? { kind: 'floating', base_rate: U, spread: U, floor: U } : { kind: 'fixed', rate: U },
+    amort_pct_of_face: U, maturity_years: U, oid_pct: U, sweep: { participates: false, priority: U },
+  });
+  const removeTranche = (i: number) => {
+    const next = tranches.filter((_, j) => j !== i);
+    // re-key every tranche-indexed pending choice after the removed one (indices shift down)
+    const shifted = pending
+      .filter((p) => p.startsWith('structure.tranches.'))
+      .map((p) => {
+        const m = /^structure\.tranches\.(\d+)\.(.*)$/.exec(p);
+        if (!m) return p;
+        const j = Number(m[1]);
+        return j === i ? null : j > i ? `structure.tranches.${j - 1}.${m[2]}` : p;
+      })
+      .filter((p): p is string => p !== null);
+    editWithChoices({ ...a, structure: { ...a.structure, tranches: next, refinancing: (a.structure.refinancing ?? []).filter((r) => r.tranche_name !== tranches[i].name) || null } },
+      ['structure.tranches'], shifted, ['structure.tranches']);
+  };
+  const pricingFields = (base: string, p: TranchePricing, who: string) =>
+    p.kind === 'fixed' ? (
+      <NumField path={`${base}.rate`} label={`${who}: fixed rate`} unit="pct" value={p.rate} />
+    ) : (
+      <>
+        <NumField path={`${base}.base_rate`} label={`${who}: base rate`} unit="pct" value={p.base_rate} hint="e.g. term SOFR / EURIBOR for the deal date" />
+        <NumField path={`${base}.floor`} label={`${who}: base-rate floor`} unit="pct" value={p.floor} />
+        <NumField path={`${base}.spread`} label={`${who}: spread`} unit="pct" value={p.spread} />
+      </>
+    );
+  const sizeFields = (base: string, size: { x_ebitda?: number; amount?: number }, who: string, what = "size") => {
+    const isX = size.x_ebitda !== undefined;
+    return (
+      <>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <Label>{who}: {what} basis</Label>
+          <select aria-label={`${who} ${what} basis`} value={isX ? 'x' : 'amt'} className="px-1 py-1 text-[11px]"
+            style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+            onChange={(e) => set(at(base, e.target.value === 'x' ? { x_ebitda: U } : { amount: U }), [base])}>
+            <option value="amt">amount</option>
+            {hasLtm && <option value="x">× historical EBITDA</option>}
+          </select>
+        </div>
+        {isX
+          ? <NumField path={`${base}.x_ebitda`} label={`${who}: ${what} (× EBITDA)`} unit="mult" value={size.x_ebitda} />
+          : <NumField path={`${base}.amount`} label={`${who}: ${what} (amount)`} unit="money" value={size.amount} />}
+      </>
+    );
   };
 
-  const term = a.structure.tranches.find(
-    (t): t is CashPayTrancheAssumption => t.type === 'senior' || t.type === 'unitranche',
+  // ── feature toggles (each brings its fields in BLANK) ────────────────────────────────
+  const Toggle: React.FC<{ on: boolean; label: string; onOn: () => void; onOff: () => void; hint?: string }> = ({ on, label, onOn, onOff, hint }) => (
+    <label className="flex items-center justify-between gap-2 mb-2 cursor-pointer" title={hint}>
+      <Label>{label}</Label>
+      <input type="checkbox" aria-label={label} checked={on} onChange={(e) => (e.target.checked ? onOn() : onOff())} />
+    </label>
   );
-  // §11 [v1.1.2] GROSS entry leverage across ALL term tranches — the same quantity
-  // ModelOutput reports as `derived.entry_gross_leverage_fy`, read through the one shared
-  // definition rather than recomputed here. Previously this took `x_ebitda` off the FIRST
-  // senior/unitranche tranche only, so a deal with a PIK note or mezz (golden G3: senior
-  // 3.0x + PIK 1.5x) showed "3.0x" beside a 4.5x headline on the same screen.
-  const termLeverage = entryGrossLeverageFromAssumptions(facts, a);
-  // §4 all-in rate through the ONE engine primitive (debt.ts sizes interest with the same
-  // call) — never re-implemented here. Inlining `max(base,floor)+spread` was a second
-  // calculation path for an engine number: if §4's floor convention ever moved, this preview
-  // would silently disagree with the interest the engine actually charges.
-  const blendedRate = term ? allInRate(term.pricing) : null;
-  const g = a.operations.growth;
+
+  const fund = a.fund;
+  const v = a.valuation;
+  // which §7 drivers the facts can support (§24.3 R1–R3) — an unsupported driver is never offered
+  const revenueAvailable = lines?.revenue ? lines.revenue.mode !== 'not_modelled' : facts.fy_revenue !== null;
+  const marginDriverOk = facts.fy_ebitda_margin !== null && revenueAvailable;
+  const nwcDriverOk = facts.fy_revenue !== null && revenueAvailable;
 
   return (
-    <section>
-      {/* ── Core-8 tier (always visible) ── */}
-      <Row label="Entry EBITDA multiple" path="entry.entry_multiple">
-        <NumInput value={a.entry.entry_multiple === null ? '' : num(a.entry.entry_multiple, 1)} suffix="x"
-          onCommit={numCommit((v) => [{ ...a, entry: { ...a.entry, driver: 'multiple', entry_multiple: v, enterprise_value: null } }, ['entry.entry_multiple']])} />
-      </Row>
-      {facts.implied_trading_ev_ebitda !== null && (
-        <p className="text-[10px] mb-2 text-right" style={labelStyle}>
-          trades at ~{multiple(facts.implied_trading_ev_ebitda)} {sizingBasisLabel(facts.sizing_basis)} EBITDA (read-only anchor)
-        </p>
-      )}
-      <Row label={`Total leverage (gross, x ${sizingBasisLabel(facts.sizing_basis)} EBITDA)`} path="structure.tranches">
-        <NumInput value={termLeverage === null ? 'n/a' : num(termLeverage, 1)} suffix="x" readOnly={termLeverage === null}
-          onCommit={numCommit((v) => {
-            // Rescale every term tranche PROPORTIONALLY so the total becomes v × FY EBITDA —
-            // via the SAME implementation the §13 `leverage` sensitivity axis uses.
-            // Writing v onto each tranche (the previous behaviour) MULTIPLIED leverage:
-            // typing 4.0 on a two-tranche deal produced 8.0x under a field labelled "total".
-            return [rescaleTermTranchesToLeverage(facts, a, v), ['structure.tranches']];
-          })} />
-      </Row>
-      <Row label="Blended debt rate" path="structure.tranches">
-        <NumInput value={blendedRate === null ? 'n/a' : toPctInput(blendedRate)} suffix="%" readOnly
-          onCommit={() => undefined} />
-      </Row>
-      <Row label="Revenue growth" path="operations.growth">
-        <span className="text-[10px] mr-1" style={labelStyle}>
-          {toPctInput(g[0] ?? 0)}% → {toPctInput(g[g.length - 1] ?? 0)}%
-        </span>
-        <button onClick={() => setByYear((b) => !b)} className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
-          style={{ border: '1px solid rgba(17,17,17,0.15)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
-          {byYear ? 'hide years' : 'edit by year'}
-        </button>
-      </Row>
-      {byYear && (
-        <div className="flex gap-1 mb-2 justify-end">
-          {g.map((gy, i) => (
-            <NumInput key={i} width="w-14" value={toPctInput(gy)}
-              onCommit={pctCommit((v) => {
-                const growth = [...g]; growth[i] = v;
-                return [{ ...a, operations: { ...a.operations, growth } }, ['operations.growth']];
-              })} />
-          ))}
-        </div>
-      )}
-      <Row label="Target EBITDA margin" path="operations.target_margin">
-        <NumInput value={toPctInput(a.operations.target_margin)} suffix="%"
-          onCommit={pctCommit((v) => [{ ...a, operations: { ...a.operations, target_margin: v } }, ['operations.target_margin']])} />
-      </Row>
-      <Row label="Maintenance capex" path="operations.maint_capex_pct_revenue">
-        <NumInput value={toPctInput(a.operations.maint_capex_pct_revenue)} suffix="% rev"
-          onCommit={pctCommit((v) => [{ ...a, operations: { ...a.operations, maint_capex_pct_revenue: v } }, ['operations.maint_capex_pct_revenue']])} />
-      </Row>
-      <Row label="Exit multiple" path="exit.multiple">
-        <NumInput value={num(a.exit.multiple, 1)} suffix="x"
-          onCommit={numCommit((v) => [{ ...a, exit: { ...a.exit, multiple: v } }, ['exit.multiple']])} />
-      </Row>
-      <Row label="Holding period" path="entry.hold_years">
-        <NumInput value={String(a.entry.hold_years)} suffix="yrs" readOnly onCommit={() => undefined} />
-      </Row>
+    <div>
+      {/* ═══ 1. Transaction ═══ */}
+      <Section title="1 · Transaction">
+        <NumField path="entry.hold_years" label="Holding period" unit="years" value={N} onCommit={(x) => setHold(x)} />
+        <ChoiceField path="entry.driver" label="Entry priced by" value={a.entry.driver}
+          options={[{ value: 'multiple', label: 'multiple × EBITDA' }, { value: 'ev', label: 'purchase price (EV)' }]}
+          onChoose={(d) => set({ ...a, entry: { ...a.entry, driver: d, entry_multiple: d === 'multiple' ? U : null, enterprise_value: d === 'ev' ? U : null } }, ['entry.driver'])} />
+        {a.entry.driver === 'multiple'
+          ? <NumField path="entry.entry_multiple" label="Entry multiple" unit="mult" value={a.entry.entry_multiple} />
+          : <NumField path="entry.enterprise_value" label="Purchase price (enterprise value)" unit="money" value={a.entry.enterprise_value} />}
+        {facts.implied_trading_ev_ebitda !== null && (
+          <p className="text-[10px] mb-2 text-right" style={labelStyle}>
+            trades at ~{multiple(facts.implied_trading_ev_ebitda)} {sizingBasisLabel(facts.sizing_basis)} EBITDA (read-only anchor)
+          </p>
+        )}
+        <ChoiceField path="entry.basis" label="Entry multiple basis" value={a.entry.basis}
+          options={[...(hasLtm ? [{ value: 'fy' as const, label: `${facts.sizing_basis === 'LTM' ? 'LTM' : 'FY'} (historical)` }] : []), { value: 'ntm' as const, label: 'NTM (forecast year 1)' }]} />
+        <NumField path="exit.multiple" label="Exit multiple" unit="mult" value={a.exit.multiple} />
+        <ChoiceField path="exit.basis" label="Exit multiple basis" value={a.exit.basis}
+          options={[{ value: 'fy', label: 'exit-year EBITDA' }, { value: 'ntm', label: 'year N+1 EBITDA' }]} />
+        <NumField path="exit.fees_pct" label="Exit fees (% of exit EV)" unit="pct" value={a.exit.fees_pct} />
+        <NumField path="fees.transaction_pct_of_ev" label="Transaction costs (% of EV)" unit="pct" value={a.fees.transaction_pct_of_ev} />
+        {tranches.length > 0 && <NumField path="fees.financing_pct_of_commitments" label="Financing fees (% of commitments)" unit="pct" value={a.fees.financing_pct_of_commitments} />}
+        <NumField path="structure.min_cash" label="Minimum cash (funded at close)" unit="money" value={a.structure.min_cash} />
+        <NumField path="rollover_equity" label="Rollover equity (0 if none)" unit="money" value={a.rollover_equity} />
+      </Section>
 
-      {/* ── Advanced (collapsed) ── */}
-      <details className="mt-3">
-        <summary className="text-[10px] tracking-widest uppercase cursor-pointer" style={labelStyle}>
-          Advanced — tax · fees · sweep · MIP · distributions · fund · PIK · sweet equity · warrant
-        </summary>
-        <div className="mt-2">
-          <Row label="Tax rate" path="tax.rate">
-            <NumInput value={toPctInput(a.tax.rate)} suffix="%"
-              onCommit={pctCommit((v) => [{ ...a, tax: { ...a.tax, rate: v } }, ['tax.rate']])} />
-          </Row>
-          <Row label="Cash sweep" path="structure.sweep">
-            <NumInput value={toPctInput(a.structure.sweep.base_pct)} suffix="%"
-              onCommit={pctCommit((v) => [{ ...a, structure: { ...a.structure, sweep: { ...a.structure.sweep, base_pct: v } } }, ['structure.sweep']])} />
-          </Row>
-          <Row label="Transaction fees" path="fees">
-            <NumInput value={toPctInput(a.fees.transaction_pct_of_ev)} suffix="% EV"
-              onCommit={pctCommit((v) => [{ ...a, fees: { ...a.fees, transaction_pct_of_ev: v } }, ['fees']])} />
-          </Row>
-          <Row label="MIP pool" path="mip">
-            <NumInput value={a.mip ? toPctInput(a.mip.pool_pct) : ''} suffix="%"
-              onCommit={pctCommit((v) => [{
-                ...a,
-                mip: a.mip ? { ...a.mip, pool_pct: v } : { pool_pct: v, hurdle_moic: 2.0, ratchet: null },
-                // §22.3(i) BOTH ways (conformance): setting a promote drops the strip, exactly
-                // as setting a strip drops the promote — never a Build error the user must decode.
-                sweet_equity: v > 0 ? null : a.sweet_equity,
-              }, ['mip', ...(v > 0 && a.sweet_equity ? ['sweet_equity'] : [])]])} />
-          </Row>
-          {/* ── §22.4 [v1.7.0] MIP ratchet — Class B, Advanced tier ────────────────────
-              MARGINAL tier ABOVE the base hurdle on §10's own basis (one tier ≡ §10). The
-              suggestion layer proposes NONE (§16 — a negotiated term); fields start OFF and
-              wear YOU when touched. v1 UI edits ONE tier; the full array is on the
-              assumptions object for programmatic use (the §18 refi-editor precedent). */}
-          {a.mip && (
-            <Row label="MIP ratchet tier (hurdle ×)" path="mip.ratchet">
-              <NumInput value={a.mip.ratchet?.length ? num(a.mip.ratchet[0].hurdle_moic, 2) : ''} suffix="x"
-                onCommit={numCommit((v) => [{
-                  ...a,
-                  mip: {
-                    ...a.mip!,
-                    // §22.3(iii): the tier must sit STRICTLY above the base hurdle; a
-                    // non-positive or non-exceeding entry clears the ratchet (OFF).
-                    ratchet: v > a.mip!.hurdle_moic
-                      ? [{ hurdle_moic: v, share_pct: a.mip!.ratchet?.[0]?.share_pct ?? Math.max(a.mip!.pool_pct, 0.25) }]
-                      : null,
-                  },
-                }, ['mip.ratchet']])} />
-            </Row>
-          )}
-          {a.mip?.ratchet?.length ? (
-            <Row label="MIP ratchet share above tier" path="mip.ratchet">
-              <NumInput value={toPctInput(a.mip.ratchet[0].share_pct)} suffix="%"
-                onCommit={pctCommit((v) => [{
-                  ...a,
-                  mip: { ...a.mip!, ratchet: [{ ...a.mip!.ratchet![0], share_pct: v }] },
-                }, ['mip.ratchet']])} />
-            </Row>
-          ) : null}
-          {/* ── §22 [v1.7.0] sweet-equity strip — Class B, Advanced tier ───────────────
-              The UK/European management strip: institutional loan notes (EQUITY — outside
-              leverage, the waterfall and the §9 payoff, NO interest deduction) + ordinaries,
-              with management subscribing REAL money for a base ordinary share and an optional
-              MARGINAL ratchet on the INSTITUTION'S OWN realized MOIC (§22.5). The suggestion
-              layer proposes NO strip (§16 — a negotiated cap-table structure); the group
-              starts OFF (sweet_equity: null) and wears YOU when touched. Setting a strip
-              DROPS the promote — §22.3(i)'s DR-2 double-count rejection made structural in
-              the editor rather than surfaced as a Build error. */}
-          <Row label="Sweet equity (mgmt ordinary %)" path="sweet_equity">
-            <NumInput value={a.sweet_equity ? toPctInput(a.sweet_equity.management_ordinary_pct) : ''} suffix="%"
-              onCommit={pctCommit((v) => [{
-                ...a,
-                sweet_equity: v > 0
-                  ? {
-                      sponsor_ordinary_pct: a.sweet_equity?.sponsor_ordinary_pct ?? 0.10,
-                      loan_note_rate: a.sweet_equity?.loan_note_rate ?? 0.08,
-                      management_subscription: a.sweet_equity?.management_subscription ?? 0,
-                      management_ordinary_pct: v,
-                      ratchet: a.sweet_equity?.ratchet ?? null,
-                    }
-                  : null,
-                mip: v > 0 ? null : a.mip, // §22.3(i): a promote and a strip may not coexist
-              }, ['sweet_equity', ...(v > 0 && a.mip ? ['mip'] : [])]])} />
-          </Row>
-          {a.sweet_equity && (() => {
-            const sw = a.sweet_equity;
-            const withSweet = (over: Partial<NonNullable<DealAssumptions['sweet_equity']>>): [DealAssumptions, string[]] => [
-              { ...a, sweet_equity: { ...sw, ...over } },
-              ['sweet_equity'],
-            ];
-            return (
-              <>
-                <Row label="Strip ordinary share (institution)" path="sweet_equity">
-                  <NumInput value={toPctInput(sw.sponsor_ordinary_pct)} suffix="% of strip"
-                    onCommit={pctCommit((v) => withSweet({ sponsor_ordinary_pct: v }))} />
-                </Row>
-                <Row label="Loan-note rate (accruing)" path="sweet_equity">
-                  <NumInput value={toPctInput(sw.loan_note_rate)} suffix="%"
-                    onCommit={pctCommit((v) => withSweet({ loan_note_rate: v }))} />
-                </Row>
-                <Row label="Mgmt subscription" path="sweet_equity">
-                  <NumInput value={num(sw.management_subscription, 1)} suffix="m"
-                    onCommit={numCommit((v) => withSweet({ management_subscription: Math.max(0, v) }))} />
-                </Row>
-                <Row label="Sweet ratchet tier (hurdle ×)" path="sweet_equity.ratchet">
-                  <NumInput value={sw.ratchet?.length ? num(sw.ratchet[0].hurdle_moic, 2) : ''} suffix="x"
-                    onCommit={numCommit((v) => withSweet({
-                      ratchet: v > 0
-                        ? [{ hurdle_moic: v, share_pct: sw.ratchet?.[0]?.share_pct ?? Math.max(sw.management_ordinary_pct, 0.15) }]
-                        : null,
-                    }))} />
-                </Row>
-                {sw.ratchet?.length ? (
-                  <Row label="Sweet share above tier" path="sweet_equity.ratchet">
-                    <NumInput value={toPctInput(sw.ratchet[0].share_pct)} suffix="%"
-                      onCommit={pctCommit((v) => withSweet({ ratchet: [{ ...sw.ratchet![0], share_pct: v }] }))} />
-                  </Row>
-                ) : null}
-                <p className="text-[10px] text-right" style={labelStyle}>
-                  loan notes are EQUITY (§22.2) — outside leverage/ICR/FCCR/DSCR, no interest deduction; the ratchet
-                  is struck ONCE at exit on the institution&apos;s own realized MOIC (§22.5), marginal, never a cliff;
-                  a strip replaces the promote (§22.3) and needs a positive residual sponsor cheque
-                </p>
-              </>
-            );
-          })()}
-          {/* ── §22.6 [v1.7.0] warrant / equity kicker — Class B, Advanced tier ────────
-              SINGULAR by construction; settles at exit on FULL DILUTION with the strike paid
-              in; strict > at the money. The suggestion layer proposes NONE (§16); the label's
-              tranche association is a LABEL ONLY — no arithmetic depends on it (§22.11). */}
-          <Row label="Warrant (% of ordinary)" path="warrant">
-            <NumInput value={a.warrant ? toPctInput(a.warrant.pct_of_ordinary) : ''} suffix="%"
-              onCommit={pctCommit((v) => [{
-                ...a,
-                warrant: v > 0
-                  ? {
-                      holder_label: a.warrant?.holder_label ?? 'Warrant',
-                      pct_of_ordinary: v,
-                      strike_total: a.warrant?.strike_total ?? 0,
-                    }
-                  : null,
-              }, ['warrant']])} />
-          </Row>
-          {a.warrant && (
-            <Row label="Warrant strike (total)" path="warrant">
-              <NumInput value={num(a.warrant.strike_total, 1)} suffix="m"
-                onCommit={numCommit((v) => [{ ...a, warrant: { ...a.warrant!, strike_total: Math.max(0, v) } }, ['warrant']])} />
-            </Row>
-          )}
-          {/* ── §3 step 7 / §3.7 [v1.1.0] interim distributions ──────────────────────
-              Class B, Advanced tier. The suggestion layer proposes NEITHER field (§16): a
-              distribution policy is a sponsor decision with no history or convention basis,
-              so both start OFF and wear YOU the moment they are touched. */}
-          <Row label="Distributions / yr" path="structure.distributions">
-            <NumInput
-              value={a.structure.distributions === null ? '' : num(a.structure.distributions[0] ?? 0, 1)}
-              suffix={`× ${a.entry.hold_years}y`}
-              onCommit={numCommit((v) => [
-                {
-                  ...a,
-                  // §16 gate: length ≡ hold_years, entries ≥ 0. Zero clears the schedule
-                  // back to null so "off" stays a single representation.
-                  structure: {
-                    ...a.structure,
-                    distributions: v > 0 ? Array.from({ length: a.entry.hold_years }, () => v) : null,
-                  },
-                },
-                ['structure.distributions'],
-              ])} />
-          </Row>
-          <Row label="RP trap (net lev)" path="covenants.rp_trap">
-            <NumInput value={a.covenants.rp_trap === null ? '' : num(a.covenants.rp_trap.level, 2)} suffix="x"
-              onCommit={numCommit((v) => [
-                {
-                  ...a,
-                  covenants: { ...a.covenants, rp_trap: v > 0 ? { metric: 'net_leverage', level: v } : null },
-                },
-                ['covenants.rp_trap'],
-              ])} />
-          </Row>
-          {a.structure.distributions !== null && (
-            <p className="text-[10px] text-right" style={labelStyle}>
-              requested per year; what is PAID is capped by cash above the {num(a.structure.min_cash, 1)} floor
-              {a.covenants.rp_trap === null ? ' (no RP trap)' : ` and by the ${num(a.covenants.rp_trap.level, 2)}x pro-forma test`} — blocked capacity does not carry forward (§3.7)
-            </p>
-          )}
-          {term && term.pricing.kind === 'floating' && (
-            <p className="text-[10px] text-right" style={labelStyle}>
-              {term.name}: base {toPctInput(term.pricing.base_rate)}% + {bps(term.pricing.spread)} (floor {toPctInput(term.pricing.floor)}%)
-            </p>
-          )}
-          {/* ── §18 [v1.3.0] refinancing — Class B, Advanced tier ──────────────────────
-              A scheduled repricing of the primary cash-pay term tranche: new spread + a call
-              premium at year R, effective the whole of that year (§18.3). The suggestion layer
-              proposes NONE (§16) — a refi is a sponsor decision, so the fields start OFF and wear
-              YOU the moment touched. v1 UI models a repricing refi (par-for-par, new maturity
-              extended past the hold, no new OID/fees); the full event schema (new OID/fee) is on
-              the assumptions object for programmatic use. */}
-          {term && term.pricing.kind === 'floating' && (() => {
-            // THIS tranche's event only — a programmatic multi-tranche schedule (§18.11(vii))
-            // must survive edits here; commits below preserve events on OTHER tranches.
-            const refiEvents = a.structure.refinancing ?? [];
-            const refi = refiEvents.find((e) => e.tranche_name === term.name) ?? null;
-            const N = a.entry.hold_years;
-            const base = term.pricing;
-            const makeEvent = (over: Partial<RefinancingEvent>): RefinancingEvent => ({
-              tranche_name: term.name,
-              year: refi?.year ?? (N > 1 ? N - 1 : 1),
-              // new maturity defaults PAST the hold so §18.3's no-balloon gate always passes.
-              new_maturity_years: refi?.new_maturity_years ?? N + 1,
-              new_pricing: refi?.new_pricing ?? { kind: 'floating', base_rate: base.base_rate, spread: base.spread, floor: base.floor },
-              call_premium_pct: refi?.call_premium_pct ?? 0.01,
-              new_oid_pct: refi?.new_oid_pct ?? 0,
-              new_financing_fee_pct: refi?.new_financing_fee_pct ?? 0,
-              new_amort_pct_of_face: refi?.new_amort_pct_of_face ?? term.amort_pct_of_face,
-              ...over,
-            });
-            // Each commit fn RETURNS [next, paths] — the store's set() does the write (basis YOU).
-            const otherEvents = refiEvents.filter((e) => e.tranche_name !== term.name);
-            const withRefi = (over: Partial<RefinancingEvent>): [DealAssumptions, string[]] => [
-              { ...a, structure: { ...a.structure, refinancing: [...otherEvents, makeEvent(over)] } },
-              ['structure.refinancing'],
-            ];
-            const newSpread = refi && refi.new_pricing.kind === 'floating' ? refi.new_pricing.spread : base.spread;
-            return (
-              <>
-                <Row label={`Refinance ${term.name} (year)`} path="structure.refinancing">
-                  <NumInput value={refi === null ? '' : String(refi.year)} suffix={`of ${N}`}
-                    onCommit={numCommit((v) => {
-                      // §18.3 gate: 1 ≤ year ≤ hold−1. 0/blank/out-of-range clears the refi.
-                      const yr = Math.round(v);
-                      if (yr < 1 || yr > N - 1) return [{ ...a, structure: { ...a.structure, refinancing: otherEvents.length ? otherEvents : null } }, ['structure.refinancing']];
-                      return withRefi({ year: yr });
-                    })} />
-                </Row>
-                {refi !== null && (
-                  <>
-                    <Row label="↳ new spread" path="structure.refinancing">
-                      <NumInput value={toPctInput(newSpread)} suffix="%"
-                        onCommit={pctCommit((v) => withRefi({ new_pricing: { kind: 'floating', base_rate: base.base_rate, spread: v, floor: base.floor } }))} />
-                    </Row>
-                    <Row label="↳ call premium" path="structure.refinancing">
-                      <NumInput value={toPctInput(refi.call_premium_pct)} suffix="%"
-                        onCommit={pctCommit((v) => withRefi({ call_premium_pct: v }))} />
-                    </Row>
-                    <p className="text-[10px] text-right" style={labelStyle}>
-                      {term.name} reprices to base {toPctInput(base.base_rate)}% + {bps(newSpread)} at year {refi.year};
-                      a {toPctInput(refi.call_premium_pct)}% call premium is paid that year, the old unamortized
-                      OID and fees write off (tax deduction the following year), maturity extends past the hold (§18).
-                    </p>
-                  </>
-                )}
-              </>
-            );
-          })()}
-          {/* ── §20 [v1.5.0] PIK toggle — Class B, Advanced tier ──────────────────────
-              The per-year WHOLE-coupon election on a pik_note. Rendered ONLY when the deal
-              actually carries a PIK note: the v2 UI has no tranche BUILDER, and the D7
-              suggestion layer never proposes a pik_note, so today this surface appears for
-              programmatically-constructed deals (and templates, once wired) — conditional
-              render, exactly like the refi editor's floating-tranche gate. The suggestion
-              layer proposes NO elections (§19-preamble precedent): a schedule starts null
-              (the FIXED both-legs note) and wears YOU the moment it is touched. §20.2 gates
-              are enforced at Build (and the store surfaces the throw in the red banner). The
-              commits below guarantee the two SCHEDULE gates by construction — whole-coupon
-              values and length ≡ hold_years, which is read-only here — while the two RATE
-              gates (cash_coupon > 0, pik ≥ cash) are properties of the note itself that a
-              schedule cannot fix, so the toggle is DISABLED with its reason when they fail
-              [conformance note 3 — the earlier comment claimed more than it delivered]. */}
-          {(() => {
-            const note = a.structure.tranches.find(
-              (t): t is PikNoteAssumption => t.type === 'pik_note',
-            );
-            if (!note) return null;
-            const N = a.entry.hold_years;
-            const el = note.elections;
-            // Keyed on the NAME, not the type: this row edits the note it names, so on a
-            // multi-note deal the second note must NOT inherit a schedule the user never chose
-            // [conformance note 4]. Each tranche renders its own markers, so a type-wide write
-            // would be visible — but wrong is wrong.
-            const writeNote = (over: Partial<PikNoteAssumption>): [DealAssumptions, string[]] => [
-              {
-                ...a,
-                structure: {
-                  ...a.structure,
-                  tranches: a.structure.tranches.map((t) =>
-                    t.type === 'pik_note' && t.name === note.name ? { ...t, ...over } : t,
-                  ),
-                },
-              },
-              ['structure.tranches'],
-            ];
-            // §20.2(iii)/(iv) are properties of the note's RATES, not of the schedule, so the
-            // toggle itself cannot fix them — offering it on such a note would only commit a
-            // state Build rejects. Disable and say why [conformance note 3].
-            const rateBlock =
-              !(note.cash_coupon > 0)
-                ? 'needs a cash coupon > 0 (§20.2)'
-                : note.pik_coupon < note.cash_coupon
-                  ? 'needs pik ≥ cash coupon (§20.2)'
-                  : null;
-            return (
-              <>
-                <Row label={`PIK toggle — ${note.name}`} path="structure.tranches">
-                  {rateBlock && <span className="text-[10px] mr-1" style={labelStyle}>{rateBlock}</span>}
-                  <button
-                    disabled={rateBlock !== null}
-                    onClick={() =>
-                      set(
-                        ...writeNote(
-                          el === null
-                            ? // turning it ON starts every year at 'pik' (the accreting default the
-                              // FIXED note already behaves like); the user then elects cash per year
-                              { elections: Array.from({ length: N }, () => 'pik' as const) }
-                            : { elections: null },
-                        ),
-                      )
-                    }
-                    className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
-                    style={{
-                      border: '1px solid rgba(17,17,17,0.15)',
-                      color: rateBlock ? 'rgba(17,17,17,0.3)' : 'rgba(17,17,17,0.55)',
-                      fontFamily: mono,
-                    }}
-                  >
-                    {el === null ? 'fixed (both legs)' : 'per-year election'}
-                  </button>
-                </Row>
-                {el !== null && (
-                  <>
-                    <div className="flex gap-1 mb-2 justify-end">
-                      {el.map((e, i) => (
-                        <button
-                          key={i}
-                          onClick={() =>
-                            set(
-                              ...writeNote({
-                                elections: el.map((x, j) => (j === i ? (x === 'pik' ? 'cash' : 'pik') : x)),
-                              }),
-                            )
-                          }
-                          className="px-1.5 py-1 text-[9px] uppercase tracking-widest"
-                          style={{
-                            border: '1px solid rgba(17,17,17,0.15)',
-                            background: e === 'pik' ? 'rgba(17,17,17,0.06)' : '#fff',
-                            color: 'rgba(17,17,17,0.65)',
-                            fontFamily: mono,
-                          }}
-                        >
-                          Y{i + 1} {e}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-right" style={labelStyle}>
-                      each year serves the WHOLE coupon one way: cash pays {toPctInput(note.cash_coupon)}% on the
-                      beginning balance and accrues nothing; PIK accrues {toPctInput(note.pik_coupon)}% and pays
-                      nothing (SPEC §20). Elections are frozen across scenarios; PIK is deducted as accrued —
-                      AHYDO is not modelled (see the methodology page).
-                    </p>
-                  </>
-                )}
-              </>
-            );
-          })()}
-          {/* ── §19 [v1.4.0] fund/LP overlay — Class B, Advanced tier ──────────────────
-              A fund-of-one on the SPONSOR side (§19.1): LPs fund the equity check + annual
-              management fees; RoC → pref → catch-up → carry nets the LP stream into the
-              Returns tab's fourth row. The suggestion layer proposes NONE (§19 preamble —
-              an LP-agreement fact), so the group starts OFF (fund: null) and wears YOU once
-              touched; a 0/blank fee clears back to null ("off" stays a single
-              representation — the distributions precedent). Commits NORMALIZE into §19.2's
-              domains (catch-up {0} ∪ [carry, 1]) rather than construct a rejected state;
-              the committed-below-contributions gate needs run-time paid-in, so it surfaces
-              through the store's error banner. fee_offset_pct stays at the ILPA 1.0
-              convention (programmatic field — the refi new_oid precedent). */}
-          {(() => {
-            const fund = a.fund;
-            const mkFund = (over: Partial<FundOverlayAssumption>): FundOverlayAssumption => {
-              const f: FundOverlayAssumption = {
-                committed_capital: fund?.committed_capital ?? null,
-                mgmt_fee_pct: fund?.mgmt_fee_pct ?? 0.02,
-                fee_basis: fund?.fee_basis ?? 'invested',
-                carry_pct: fund?.carry_pct ?? 0.20,
-                pref_rate: fund?.pref_rate ?? 0.08,
-                catchup_pct: fund?.catchup_pct ?? 1.0,
-                waterfall: fund?.waterfall ?? 'european',
-                fee_offset_pct: fund?.fee_offset_pct ?? 1.0,
-                ...over,
-              };
-              // §19.2: catchup_pct ∈ {0} ∪ [carry_pct, 1] — normalize, never reject-at-run.
-              if (f.catchup_pct !== 0 && f.catchup_pct < f.carry_pct) f.catchup_pct = f.carry_pct;
-              if (f.catchup_pct > 1) f.catchup_pct = 1;
-              return f;
-            };
-            const withF = (over: Partial<FundOverlayAssumption>): [DealAssumptions, string[]] => [
-              { ...a, fund: mkFund(over) },
-              ['fund'],
-            ];
-            return (
-              <>
-                <Row label={`Fund overlay — mgmt fee (% of ${fund?.fee_basis ?? 'invested'})`} path="fund">
-                  <NumInput value={fund === null ? '' : toPctInput(fund.mgmt_fee_pct)} suffix="%"
-                    onCommit={pctCommit((v) => (v > 0 ? withF({ mgmt_fee_pct: v }) : [{ ...a, fund: null }, ['fund']]))} />
-                </Row>
-                {fund !== null && (
-                  <>
-                    {/* input clamps are TERNARY domain normalizers on the typed scalar —
-                        deliberately not Math.min/max, which the governance aggregation scan
-                        reserves for allowlisted presentational derivations over model values */}
-                    <Row label="↳ carried interest" path="fund">
-                      <NumInput value={toPctInput(fund.carry_pct)} suffix="%"
-                        onCommit={pctCommit((v) => withF({ carry_pct: v < 0 ? 0 : v > 0.99 ? 0.99 : v }))} />
-                    </Row>
-                    <Row label="↳ preferred return (compounded)" path="fund">
-                      <NumInput value={toPctInput(fund.pref_rate)} suffix="%"
-                        onCommit={pctCommit((v) => withF({ pref_rate: v < 0 ? 0 : v }))} />
-                    </Row>
-                    <Row label="↳ GP catch-up (0 = hard hurdle)" path="fund">
-                      <NumInput value={toPctInput(fund.catchup_pct)} suffix="%"
-                        onCommit={pctCommit((v) => withF({ catchup_pct: v <= 0 ? 0 : v > 1 ? 1 : v }))} />
-                    </Row>
-                    <Row label="↳ waterfall election" path="fund">
-                      <button onClick={() => set(...withF({ waterfall: fund.waterfall === 'european' ? 'american' : 'european' }))}
-                        className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
-                        style={{ border: '1px solid rgba(17,17,17,0.15)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
-                        {fund.waterfall}
-                      </button>
-                    </Row>
-                    <Row label="↳ committed capital (sets fee basis)" path="fund">
-                      <NumInput value={fund.committed_capital === null ? '' : num(fund.committed_capital, 1)} suffix="m"
-                        onCommit={numCommit((v) => (v > 0
-                          ? withF({ committed_capital: v, fee_basis: 'committed' })
-                          : withF({ committed_capital: null, fee_basis: 'invested' })))} />
-                    </Row>
-                    <p className="text-[10px] text-right" style={labelStyle}>
-                      {fund.waterfall === 'european'
-                        ? 'european: ALL contributions (equity + fee draws) in the hurdle and pref base'
-                        : 'american: INVESTED capital only — fees never enter the hurdle or accrue pref (no fee-recovery tier)'}
-                      ; pref compounds annually; monitoring-fee offset {toPctInput(fund.fee_offset_pct)}% (ILPA) — SPEC §19
-                    </p>
-                  </>
-                )}
-              </>
-            );
-          })()}
+      {/* ═══ 2. Debt ═══ */}
+      <Section title="2 · Debt" note="Add each tranche as the term sheet states it. Interest accrues on the opening balance; the sweep runs after mandatory amortization, by priority.">
+        {pending.includes('structure.tranches') && (
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px]" style={{ ...labelStyle, color: '#CC0000' }}>add tranches, or confirm an all-equity deal</span>
+            <SmallButton onClick={() => editWithChoices({ ...a, structure: { ...a.structure, tranches: [] } }, ['structure.tranches'], [])}>no debt</SmallButton>
+          </div>
+        )}
+        <SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} />
+        {tranches.map((t, i) => {
+          const base = `structure.tranches.${i}`;
+          return (
+            <div key={i} className="mb-3 p-2" style={{ border: '1px solid rgba(17,17,17,0.08)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <input aria-label={`tranche ${i + 1} name`} value={t.name} className="text-[11px] px-1 py-0.5" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.12)' }}
+                  onChange={(e) => set(at(`${base}.name`, e.target.value), [`${base}.name`])} />
+                <span className="flex gap-1 items-center">
+                  <span className="text-[9px]" style={labelStyle}>{t.type.replace('_', ' ')}</span>
+                  <SmallButton danger onClick={() => removeTranche(i)}>remove</SmallButton>
+                </span>
+              </div>
+              {t.type === 'revolver' ? (
+                <>
+                  {sizeFields(`${base}.commitment`, t.commitment, t.name, 'commitment')}
+                  {pricingFields(`${base}.pricing`, t.pricing, t.name)}
+                  <NumField path={`${base}.commitment_fee`} label={`${t.name}: commitment fee (undrawn)`} unit="pct" value={t.commitment_fee} />
+                  <NumField path={`${base}.maturity_years`} label={`${t.name}: maturity`} unit="years" value={t.maturity_years} />
+                </>
+              ) : (
+                <>
+                  {t.type !== 'pik_note' && (
+                    <ChoiceField path={`${base}.type`} label={`${t.name}: ranking`} value={t.type}
+                      options={[{ value: 'senior', label: 'senior' }, { value: 'unitranche', label: 'unitranche' }, { value: 'mezzanine', label: 'mezzanine' }]} />
+                  )}
+                  {sizeFields(`${base}.size`, t.size, t.name)}
+                  {t.type === 'pik_note' ? (
+                    <>
+                      <NumField path={`${base}.cash_coupon`} label={`${t.name}: cash coupon`} unit="pct" value={t.cash_coupon} />
+                      <NumField path={`${base}.pik_coupon`} label={`${t.name}: PIK coupon`} unit="pct" value={t.pik_coupon} />
+                    </>
+                  ) : pricingFields(`${base}.pricing`, t.pricing, t.name)}
+                  <NumField path={`${base}.amort_pct_of_face`} label={`${t.name}: mandatory amortization (% face / yr)`} unit="pct" value={t.amort_pct_of_face} />
+                  <NumField path={`${base}.oid_pct`} label={`${t.name}: OID (% of par)`} unit="pct" value={t.oid_pct} />
+                  <NumField path={`${base}.maturity_years`} label={`${t.name}: maturity (must exceed the hold)`} unit="years" value={t.maturity_years} />
+                  <ChoiceField path={`${base}.sweep.participates`} label={`${t.name}: takes the cash sweep?`} value={t.sweep.participates}
+                    options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
+                  {t.sweep.participates && <NumField path={`${base}.sweep.priority`} label={`${t.name}: sweep priority (1 = first)`} unit="ratio" value={t.sweep.priority} />}
+                </>
+              )}
+            </div>
+          );
+        })}
+        <div className="flex flex-wrap gap-1 justify-end mb-2">
+          <SmallButton onClick={() => addTranche(newTerm('senior', true))}>+ floating term loan</SmallButton>
+          <SmallButton onClick={() => addTranche(newTerm('senior', false))}>+ fixed-rate debt</SmallButton>
+          <SmallButton onClick={() => addTranche({
+            name: `PIK note ${termCount + 1}`, type: 'pik_note', size: { amount: U }, cash_coupon: U, pik_coupon: U,
+            amort_pct_of_face: U, maturity_years: U, oid_pct: U, sweep: { participates: false, priority: U }, elections: null,
+          } as PikNoteAssumption)}>+ PIK note</SmallButton>
+          {!hasRevolver && <SmallButton onClick={() => addTranche({
+            name: 'Revolver', type: 'revolver', commitment: { amount: U }, pricing: { kind: 'floating', base_rate: U, spread: U, floor: U },
+            commitment_fee: U, maturity_years: U, drawn_at_close: 0,
+          } as RevolverAssumption)}>+ revolver</SmallButton>}
         </div>
-      </details>
-    </section>
+        {termCount > 0 && (() => {
+          const grid = a.structure.sweep.grid;
+          return (
+            <>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <Label hint="Excess-cash sweeps commonly step down as leverage falls (e.g. 75% above 4.5×, 50% above 3.5×, 0% below).">Cash sweep</Label>
+                <select aria-label="Cash sweep basis" className="px-1 py-1 text-[11px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+                  value={grid ? 'grid' : 'flat'}
+                  onChange={(e) => set(at('structure.sweep.grid', e.target.value === 'grid' ? { tiers: [{ above_net_leverage: U, pct: U }], else_pct: U } : null), ['structure.sweep.grid'])}>
+                  <option value="flat">one % every year</option>
+                  <option value="grid">steps down with opening net leverage</option>
+                </select>
+              </div>
+              {!grid && <NumField path="structure.sweep.base_pct" label="Cash sweep (% of cash above the minimum)" unit="pct" value={a.structure.sweep.base_pct} />}
+              {grid && (
+                <>
+                  {grid.tiers.map((tier, j) => (
+                    <div key={j}>
+                      <NumField path={`structure.sweep.grid.tiers.${j}.above_net_leverage`} label={`Sweep step ${j + 1}: when opening net leverage is above`} unit="mult" value={tier.above_net_leverage} />
+                      <NumField path={`structure.sweep.grid.tiers.${j}.pct`} label={`Sweep step ${j + 1}: sweep %`} unit="pct" value={tier.pct} />
+                    </div>
+                  ))}
+                  <NumField path="structure.sweep.grid.else_pct" label="Sweep % below every threshold" unit="pct" value={grid.else_pct} />
+                  <div className="flex justify-end gap-1 mb-2">
+                    <SmallButton onClick={() => set(at('structure.sweep.grid.tiers', [...grid.tiers, { above_net_leverage: U, pct: U }]), ['structure.sweep.grid.tiers'])}>+ step</SmallButton>
+                    {grid.tiers.length > 1 && <SmallButton danger onClick={() => set(at('structure.sweep.grid.tiers', grid.tiers.slice(0, -1)), ['structure.sweep.grid.tiers'])}>− step</SmallButton>}
+                  </div>
+                </>
+              )}
+            </>
+          );
+        })()}
+        {(() => {
+          // §11 previews through the SAME pure helpers the engine uses (never re-derived here):
+          // GROSS total leverage across ALL term tranches, and each floating tranche's all-in rate.
+          const terms = tranches.filter((t): t is CashPayTrancheAssumption | PikNoteAssumption => t.type !== 'revolver');
+          const sizesSet = terms.every((t) => isSet(t.size.x_ebitda ?? t.size.amount));
+          const lev = hasLtm && terms.length > 0 && sizesSet ? entryGrossLeverageFromAssumptions(facts, a) : null;
+          return (
+            <>
+              {lev !== null && (
+                <p className="text-[10px] mb-1 text-right" style={labelStyle}>
+                  Total leverage (gross, x {sizingBasisLabel(facts.sizing_basis)} EBITDA): {multiple(lev)}
+                </p>
+              )}
+              {terms.map((t, i) => {
+                if (t.type === 'pik_note' || t.pricing.kind !== 'floating') return null;
+                const p = t.pricing;
+                if (!isSet(p.base_rate) || !isSet(p.floor) || !isSet(p.spread)) return null;
+                return <p key={i} className="text-[10px] mb-1 text-right" style={labelStyle}>{t.name}: all-in rate {toPctInput(allInRate(p))}%</p>;
+              })}
+            </>
+          );
+        })()}
+      </Section>
+
+      {/* ═══ 3. Operating forecast ═══ */}
+      <Section title="3 · Operating forecast" note="Each line is a driver, or entered exactly as the case states it (by year, or a year-1 amount plus growth).">
+        {/* Revenue */}
+        <LineMode label="Revenue" value={lines?.revenue ? lines.revenue.mode : 'driver'}
+          options={[...(facts.fy_revenue !== null ? [{ value: 'driver', label: 'grow historical revenue' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }, { value: 'not_modelled', label: 'not modelled' }]}
+          onChoose={(m) => setLine('revenue', m === 'driver' ? null : m === 'not_modelled' ? { mode: 'not_modelled' } : spec(m as 'explicit' | 'grown'))} />
+        {!lines?.revenue && facts.fy_revenue !== null && <YearGrid path="operations.growth" label="Revenue growth" unit="pct" values={a.operations.growth} />}
+        {lines?.revenue && lines.revenue.mode !== 'not_modelled' && <LineValues k="revenue" s={lines.revenue} label="Revenue" />}
+
+        {/* EBITDA */}
+        <LineMode label="EBITDA" value={lines?.ebitda ? `${lines.ebitda.measure}_${lines.ebitda.mode}` : 'driver'}
+          options={[...(marginDriverOk ? [{ value: 'driver', label: 'margin path on revenue' }] : []),
+            { value: 'ebitda_explicit', label: 'EBITDA by year' }, { value: 'ebitda_grown', label: 'EBITDA year 1 + growth' },
+            { value: 'ebit_explicit', label: 'EBIT by year (+ D&A)' }, { value: 'ebit_grown', label: 'EBIT year 1 + growth (+ D&A)' }]}
+          onChoose={(m) => {
+            if (m === 'driver') return setLine('ebitda', null);
+            const [measure, mode] = m.split('_') as ['ebitda' | 'ebit', 'explicit' | 'grown'];
+            setLine('ebitda', { ...spec(mode), measure });
+          }} />
+        {!lines?.ebitda && marginDriverOk && (
+          <>
+            <NumField path="operations.target_margin" label="Target EBITDA margin (final hold year)" unit="pct" value={a.operations.target_margin} />
+            <ChoiceField path="operations.margin_path" label="Margin path to target" value={a.operations.margin_path}
+              options={[{ value: 'linear', label: 'linear' }, { value: 'front_loaded', label: 'front-loaded (√t)' }, { value: 'back_loaded', label: 'back-loaded (t²)' }]} />
+          </>
+        )}
+        {lines?.ebitda && <LineValues k="ebitda" s={lines.ebitda} label={lines.ebitda.measure === 'ebit' ? 'EBIT' : 'EBITDA'} />}
+
+        {/* D&A */}
+        <LineMode label="D&A" value={lines?.da ? lines.da.mode : 'driver'}
+          options={[...(revenueAvailable ? [{ value: 'driver', label: '% of revenue' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }]}
+          onChoose={(m) => setLine('da', m === 'driver' ? null : spec(m as 'explicit' | 'grown'))} />
+        {!lines?.da ? revenueAvailable && <NumField path="operations.da_pct_revenue" label="D&A (% of revenue)" unit="pct" value={a.operations.da_pct_revenue} /> : <LineValues k="da" s={lines.da} label="D&A" />}
+
+        {/* Capex */}
+        <LineMode label="Capex" value={lines?.capex ? lines.capex.mode : 'driver'}
+          options={[...(revenueAvailable ? [{ value: 'driver', label: 'maintenance % + growth capex' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }, { value: 'pct_of_da', label: 'multiple of D&A' }]}
+          onChoose={(m) => setLine('capex', m === 'driver' ? null : m === 'pct_of_da' ? { mode: 'pct_of_da', pct: U } : spec(m as 'explicit' | 'grown'))} />
+        {!lines?.capex && revenueAvailable && (
+          <>
+            <NumField path="operations.maint_capex_pct_revenue" label="Maintenance capex (% of revenue)" unit="pct" value={a.operations.maint_capex_pct_revenue} />
+            <YearGrid path="operations.growth_capex" label="Growth capex" unit="money" values={a.operations.growth_capex} />
+          </>
+        )}
+        {lines?.capex && lines.capex.mode === 'pct_of_da' && <NumField path="operations.lines.capex.pct" label="Capex ÷ D&A (1.00 = equals depreciation)" unit="ratio" value={lines.capex.pct} />}
+        {lines?.capex && lines.capex.mode !== 'pct_of_da' && <LineValues k="capex" s={lines.capex} label="Capex" />}
+
+        {/* NWC */}
+        <LineMode label="Working capital" value={lines?.delta_nwc ? lines.delta_nwc.mode : 'driver'}
+          options={[...(nwcDriverOk ? [{ value: 'driver', label: 'balance (days or % revenue)' }] : []), { value: 'explicit', label: 'increase by year' }, { value: 'grown', label: 'increase: year 1 + growth' }]}
+          onChoose={(m) => setLine('delta_nwc', m === 'driver' ? null : spec(m as 'explicit' | 'grown'))} />
+        {!lines?.delta_nwc && nwcDriverOk && (
+          <>
+            <ChoiceField path="operations.nwc.method" label="NWC method" value={a.operations.nwc.method}
+              options={[{ value: 'pct', label: '% of revenue' }, { value: 'days', label: 'days (DSO / DIO / DPO)' }]}
+              onChoose={(mth) => set({ ...a, operations: { ...a.operations, nwc: mth === 'pct' ? { method: 'pct', pct_revenue: U } : { method: 'days', dso: U, dio: U, dpo: U } } }, ['operations.nwc.method', 'operations.nwc'])} />
+            <SuggestionChips path="operations.nwc" render={(x) => ((x as { method: string }).method === 'days' ? 'filing days' : 'filing % of revenue')} />
+            {a.operations.nwc.method === 'pct'
+              ? <NumField path="operations.nwc.pct_revenue" label="Operating NWC (% of revenue)" unit="pct" value={a.operations.nwc.pct_revenue} />
+              : <>
+                  <NumField path="operations.nwc.dso" label="DSO" unit="days" value={a.operations.nwc.dso} />
+                  <NumField path="operations.nwc.dio" label="DIO (on COGS proxy)" unit="days" value={a.operations.nwc.dio} />
+                  <NumField path="operations.nwc.dpo" label="DPO (on COGS proxy)" unit="days" value={a.operations.nwc.dpo} />
+                </>}
+          </>
+        )}
+        {lines?.delta_nwc && <LineValues k="delta_nwc" s={lines.delta_nwc} label="Increase in NWC" />}
+
+        {lines && (
+          <NumField path="operations.lines.year_n_plus_1_growth" label="Growth into year N+1 (NTM exit, terminal value)" unit="pct"
+            value={lines.year_n_plus_1_growth} hint="Every line in year N+1 = year N × (1 + this). Needed for an NTM exit and for the flow-to-equity terminal value." />
+        )}
+      </Section>
+
+      {/* ═══ 4. Tax ═══ */}
+      <Section title="4 · Tax">
+        <NumField path="tax.rate" label="Tax rate" unit="pct" value={a.tax.rate} />
+        <ChoiceField path="tax.interest_deductible" label="Interest tax-deductible?" value={a.tax.interest_deductible} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
+        {a.tax.interest_deductible && (
+          <ChoiceField path="tax.s163j.applies" label="Interest-deduction cap (e.g. US §163(j))?" value={a.tax.s163j.applies} options={[{ value: true, label: 'applies' }, { value: false, label: 'does not apply' }]} />
+        )}
+        <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />
+        {a.tax.interest_deductible && a.tax.s163j.applies && (
+          <>
+            <NumField path="tax.s163j.ati_pct" label="Cap (% of adjusted taxable income)" unit="pct" value={a.tax.s163j.ati_pct} />
+            <ChoiceField path="tax.s163j.ati_basis" label="ATI basis" value={a.tax.s163j.ati_basis} options={[{ value: 'ebitda', label: 'EBITDA' }, { value: 'ebit', label: 'EBIT' }]} />
+          </>
+        )}
+        <NumField path="tax.nol.acquired_opening" label="Acquired NOLs at close (0 if none)" unit="money" value={a.tax.nol.acquired_opening} />
+        {isSet(a.tax.nol.acquired_opening) && a.tax.nol.acquired_opening > 0 && (
+          <>
+            <ChoiceField path="tax.nol.acquired_usable" label="Acquired NOLs usable after the deal?" value={a.tax.nol.acquired_usable} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]}
+              onChoose={(u) => editWithChoices({ ...a, tax: { ...a.tax, nol: { ...a.tax.nol, acquired_usable: u } } }, ['tax.nol.acquired_usable'], u ? ['tax.nol.arose_pre_2018'] : [], u ? [] : ['tax.nol.arose_pre_2018'])} />
+            {a.tax.nol.acquired_usable && (
+              <>
+                <ChoiceField path="tax.nol.arose_pre_2018" label="Arose before 2018 (100% cap, not 80%)?" value={a.tax.nol.arose_pre_2018} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <Label>§382 annual limit</Label>
+                  <span className="flex items-center gap-1">
+                    <label className="text-[9px]" style={labelStyle}>
+                      <input type="checkbox" checked={a.tax.nol.s382_annual_limit === null}
+                        onChange={(e) => set(at('tax.nol.s382_annual_limit', e.target.checked ? null : U), ['tax.nol.s382_annual_limit'])} /> none
+                    </label>
+                    {a.tax.nol.s382_annual_limit !== null && (
+                      <NumBox value={a.tax.nol.s382_annual_limit} unit="money" ariaLabel="§382 annual limit" onCommit={(x) => set(at('tax.nol.s382_annual_limit', x), ['tax.nol.s382_annual_limit'])} />
+                    )}
+                  </span>
+                </div>
+              </>
+            )}
+          </>
+        )}
+        <NumField path="tax.minimum_rate" label="Minimum tax rate (0 = none)" unit="pct" value={a.tax.minimum_rate} />
+      </Section>
+
+      {/* ═══ 5. Valuation (flow to equity) ═══ */}
+      <Section title="5 · Valuation — flow to equity" note="Values the equity by discounting its own cash flows at a cost of equity re-levered every year (CAPM), and reconciles it with the LBO IRR.">
+        <Toggle on={v !== null} label="Value the equity (flow to equity)"
+          onOn={() => editWithChoices({ ...a, valuation: { risk_free: U, mrp: U, asset_beta: U, debt_beta: U, long_run_growth: U, leverage_timing: 'end_of_year' } }, ['valuation'], ['valuation.leverage_timing'])}
+          onOff={() => editWithChoices({ ...a, valuation: null }, ['valuation'], [], ['valuation'])} />
+        {v && (
+          <>
+            <NumField path="valuation.risk_free" label="Risk-free rate" unit="pct" value={v.risk_free} />
+            <NumField path="valuation.mrp" label="Market risk premium" unit="pct" value={v.mrp} />
+            <NumField path="valuation.asset_beta" label="Asset (unlevered) beta" unit="beta" value={v.asset_beta} />
+            <NumField path="valuation.debt_beta" label="Debt beta (0 = riskless debt)" unit="beta" value={v.debt_beta} />
+            <NumField path="valuation.long_run_growth" label="Long-run growth after exit" unit="pct" value={v.long_run_growth} />
+            <ChoiceField path="valuation.leverage_timing" label="Leverage for year t's cost of equity" value={v.leverage_timing}
+              options={[{ value: 'end_of_year', label: 'end of year t (no circularity)' }, { value: 'start_of_year', label: 'start of year t (closed form)' }]} />
+          </>
+        )}
+      </Section>
+
+      {/* ═══ 6. Management & equity instruments ═══ */}
+      <Section title="6 · Management & equity instruments">
+        <Toggle on={a.mip !== null} label="Management promote (MIP)"
+          onOn={() => set({ ...a, mip: { pool_pct: U, hurdle_moic: U, ratchet: null }, sweet_equity: null }, ['mip', ...(a.sweet_equity ? ['sweet_equity'] : [])])}
+          onOff={() => set({ ...a, mip: null }, ['mip'])} hint="A promote and a sweet-equity strip may not coexist (§22.3)." />
+        {a.mip && (
+          <>
+            <SuggestionChips path="mip" render={() => 'cited pool / hurdle'} />
+            <NumField path="mip.pool_pct" label="Promote pool (% above hurdle)" unit="pct" value={a.mip.pool_pct} />
+            <NumField path="mip.hurdle_moic" label="Hurdle (× invested equity)" unit="mult" value={a.mip.hurdle_moic} />
+            {(a.mip.ratchet ?? []).map((r, j) => (
+              <div key={j}>
+                <NumField path={`mip.ratchet.${j}.hurdle_moic`} label={`Ratchet tier ${j + 1}: hurdle`} unit="mult" value={r.hurdle_moic} />
+                <NumField path={`mip.ratchet.${j}.share_pct`} label={`Ratchet tier ${j + 1}: share above it`} unit="pct" value={r.share_pct} />
+              </div>
+            ))}
+            <div className="flex justify-end gap-1 mb-2">
+              <SmallButton onClick={() => set({ ...a, mip: { ...a.mip!, ratchet: [...(a.mip!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['mip.ratchet'])}>+ ratchet tier</SmallButton>
+              {(a.mip.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, mip: { ...a.mip!, ratchet: (a.mip!.ratchet ?? []).slice(0, -1).length ? (a.mip!.ratchet ?? []).slice(0, -1) : null } }, ['mip.ratchet'])}>− tier</SmallButton>}
+            </div>
+          </>
+        )}
+        <Toggle on={a.sweet_equity !== null} label="Sweet-equity strip (loan notes + ordinaries)"
+          onOn={() => set({ ...a, sweet_equity: { sponsor_ordinary_pct: U, loan_note_rate: U, management_subscription: U, management_ordinary_pct: U, ratchet: null }, mip: null }, ['sweet_equity', ...(a.mip ? ['mip'] : [])])}
+          onOff={() => set({ ...a, sweet_equity: null }, ['sweet_equity'])} hint="Replaces the promote; rollover must be 0 (§22.3)." />
+        {a.sweet_equity && (
+          <>
+            <NumField path="sweet_equity.sponsor_ordinary_pct" label="Institution's strip in ordinaries" unit="pct" value={a.sweet_equity.sponsor_ordinary_pct} />
+            <NumField path="sweet_equity.loan_note_rate" label="Loan-note rate (accruing)" unit="pct" value={a.sweet_equity.loan_note_rate} />
+            <NumField path="sweet_equity.management_subscription" label="Management subscription" unit="money" value={a.sweet_equity.management_subscription} />
+            <NumField path="sweet_equity.management_ordinary_pct" label="Management share of ordinaries" unit="pct" value={a.sweet_equity.management_ordinary_pct} />
+            {(a.sweet_equity.ratchet ?? []).map((r, j) => (
+              <div key={j}>
+                <NumField path={`sweet_equity.ratchet.${j}.hurdle_moic`} label={`Sweet ratchet tier ${j + 1}: institution MOIC above`} unit="mult" value={r.hurdle_moic} />
+                <NumField path={`sweet_equity.ratchet.${j}.share_pct`} label={`Sweet ratchet tier ${j + 1}: management share of ordinaries`} unit="pct" value={r.share_pct} />
+              </div>
+            ))}
+            <div className="flex justify-end gap-1 mb-2">
+              <SmallButton onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: [...(a.sweet_equity!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['sweet_equity.ratchet'])}>+ ratchet tier</SmallButton>
+              {(a.sweet_equity.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: (a.sweet_equity!.ratchet ?? []).slice(0, -1).length ? (a.sweet_equity!.ratchet ?? []).slice(0, -1) : null } }, ['sweet_equity.ratchet'])}>− tier</SmallButton>}
+            </div>
+          </>
+        )}
+        <Toggle on={a.warrant !== null} label="Warrant / equity kicker"
+          onOn={() => set({ ...a, warrant: { holder_label: 'Warrant', pct_of_ordinary: U, strike_total: U } }, ['warrant'])}
+          onOff={() => set({ ...a, warrant: null }, ['warrant'])} />
+        {a.warrant && (
+          <>
+            <NumField path="warrant.pct_of_ordinary" label="Warrant (% of ordinary, fully diluted)" unit="pct" value={a.warrant.pct_of_ordinary} />
+            <NumField path="warrant.strike_total" label="Total strike" unit="money" value={a.warrant.strike_total} />
+          </>
+        )}
+        {/* §23: a SECONDARY selldown — the sponsor sells part of its stake before the exit; the
+            company is untouched. Rejected beside a rollover or a strip (§23.3), so the toggle says
+            why it is unavailable instead of letting the Build fail. */}
+        {(() => {
+          const blockedBy = a.rollover_equity > 0 ? 'rollover equity' : a.sweet_equity ? 'a sweet-equity strip' : null;
+          const sd = a.structure.selldown;
+          return (
+            <>
+              <Toggle on={sd !== null} label="Partial exit before the final exit (secondary selldown)"
+                hint={blockedBy ? `Not available beside ${blockedBy} (SPEC §23.3) — how the buyer ranks is negotiated.` : 'The sponsor sells part of its stake at the end of a year before the exit, at a multiple of that year’s EBITDA less net debt. The company itself is unaffected.'}
+                onOn={() => { if (!blockedBy) set(at('structure.selldown', { year: U, fraction: U, event_multiple: U }), ['structure.selldown']); }}
+                onOff={() => set(at('structure.selldown', null), ['structure.selldown'])} />
+              {blockedBy && sd === null && (
+                <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>Unavailable while the deal has {blockedBy}.</p>
+              )}
+              {sd && (
+                <>
+                  <NumField path="structure.selldown.year" label={`Partial exit: year of the sale (1–${N - 1})`} unit="years" value={sd.year} />
+                  <NumField path="structure.selldown.fraction" label="Partial exit: share of the sponsor’s stake sold" unit="pct" value={sd.fraction} />
+                  <NumField path="structure.selldown.event_multiple" label="Partial exit: sale multiple (× that year’s EBITDA)" unit="mult" value={sd.event_multiple} />
+                </>
+              )}
+            </>
+          );
+        })()}
+      </Section>
+
+      {/* ═══ 7. Cash policy, covenants, fees ═══ */}
+      <Section title="7 · Distributions, covenants, monitoring fee">
+        {/* §3.8: ONE distribution policy per deal — none (cash builds), a requested schedule, or
+            the surplus-cash policy. Every policy pays only from cash above the minimum, after
+            debt service and the sweep, and is still subject to the restricted-payment trap. */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <Label>Distributions to equity during the hold</Label>
+          <select aria-label="Distribution policy" className="px-1 py-1 text-[11px]"
+            style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+            value={a.structure.surplus_distribution ? 'surplus' : a.structure.distributions ? 'scheduled' : 'none'}
+            onChange={(e) => {
+              const p = e.target.value;
+              const structure = {
+                ...a.structure,
+                distributions: p === 'scheduled' ? blanks(N) : null,
+                surplus_distribution: p === 'surplus' ? { payout_pct: 1, start: 'immediately' as const } : null,
+              };
+              set({ ...a, structure }, ['structure.distributions', 'structure.surplus_distribution']);
+            }}>
+            <option value="none">none — cash stays in the business</option>
+            <option value="scheduled">fixed amounts by year</option>
+            <option value="surplus">surplus cash (a % of cash above the minimum)</option>
+          </select>
+        </div>
+        {a.structure.distributions && <YearGrid path="structure.distributions" label="Requested distribution" unit="money" values={a.structure.distributions} />}
+        {a.structure.surplus_distribution && (
+          <>
+            <p className="text-[10px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>
+              Pre-filled with the common case — 100% of the surplus, every year. Change either setting to match your deal’s restricted-payments terms.
+            </p>
+            <NumField path="structure.surplus_distribution.payout_pct" label="Share of surplus cash paid out" unit="pct" value={a.structure.surplus_distribution.payout_pct}
+              hint="Cash above the minimum after interest, amortization, the revolver and the sweep. Below 100%, the rest stays on the balance sheet." />
+            <ChoiceField path="structure.surplus_distribution.start" label="Pay surplus out" value={a.structure.surplus_distribution.start}
+              options={[{ value: 'immediately', label: 'every year (what the sweep leaves)' }, { value: 'after_debt_repaid', label: 'only once all debt is repaid' }]} />
+          </>
+        )}
+        <Toggle on={a.covenants.rp_trap !== null} label="Restricted-payment cash trap"
+          onOn={() => set(at('covenants.rp_trap', { metric: 'net_leverage', level: U }), ['covenants.rp_trap'])}
+          onOff={() => set(at('covenants.rp_trap', null), ['covenants.rp_trap'])} />
+        {a.covenants.rp_trap && <NumField path="covenants.rp_trap.level" label="Distributions blocked above net leverage" unit="mult" value={a.covenants.rp_trap.level} />}
+        {(['leverage_max', 'dscr_min', 'fccr_min'] as const).map((k) => {
+          const val = a.covenants[k];
+          const label = k === 'leverage_max' ? 'Max net leverage covenant' : k === 'dscr_min' ? 'Min DSCR covenant' : 'Min FCCR covenant';
+          return (
+            <div key={k}>
+              <Toggle on={val !== null} label={label} onOn={() => set(at(`covenants.${k}`, U), [`covenants.${k}`])} onOff={() => set(at(`covenants.${k}`, null), [`covenants.${k}`])} />
+              {val !== null && (
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <Label hint="Leverage covenants usually step down over the life of the loan.">{label}: level</Label>
+                  <select aria-label={`${label} schedule`} className="px-1 py-1 text-[11px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
+                    value={Array.isArray(val) ? 'year' : 'flat'}
+                    onChange={(e) => set(at(`covenants.${k}`, e.target.value === 'year' ? blanks(N) : U), [`covenants.${k}`])}>
+                    <option value="flat">same every year</option>
+                    <option value="year">set by year</option>
+                  </select>
+                </div>
+              )}
+              {val !== null && !Array.isArray(val) && <NumField path={`covenants.${k}`} label={`${label} level`} unit="mult" value={val} />}
+              {val !== null && Array.isArray(val) && <YearGrid path={`covenants.${k}`} label={`${label} by year`} unit="mult" values={val} />}
+            </div>
+          );
+        })}
+        {hasRevolver && (
+          <>
+            <Toggle on={a.covenants.springing !== null} label="Springing leverage test (revolver)"
+              hint="Tested only in years when the revolver is drawn above the trigger — the usual covenant-lite revolver protection."
+              onOn={() => set(at('covenants.springing', { metric: 'leverage', max: U, revolver_draw_trigger_pct: U }), ['covenants.springing'])}
+              onOff={() => set(at('covenants.springing', null), ['covenants.springing'])} />
+            {a.covenants.springing && !Array.isArray(a.covenants.springing.max) && (
+              <NumField path="covenants.springing.max" label="Springing test: maximum net leverage" unit="mult" value={a.covenants.springing.max} />
+            )}
+            {a.covenants.springing && Array.isArray(a.covenants.springing.max) && (
+              <YearGrid path="covenants.springing.max" label="Springing test: maximum net leverage by year" unit="mult" values={a.covenants.springing.max} />
+            )}
+            {a.covenants.springing && (
+              <NumField path="covenants.springing.revolver_draw_trigger_pct" label="Springing test applies when drawn ÷ commitment exceeds" unit="pct" value={a.covenants.springing.revolver_draw_trigger_pct} />
+            )}
+          </>
+        )}
+        <Toggle on={a.fees.monitoring !== null} label="Sponsor monitoring fee"
+          onOn={() => set(at('fees.monitoring', { annual: U, termination_years: U, discount_rate: U }), ['fees.monitoring'])}
+          onOff={() => set(at('fees.monitoring', null), ['fees.monitoring'])} />
+        {a.fees.monitoring && (
+          <>
+            <NumField path="fees.monitoring.annual" label="Annual monitoring fee" unit="money" value={a.fees.monitoring.annual} />
+            <NumField path="fees.monitoring.termination_years" label="Termination: years accelerated" unit="years" value={a.fees.monitoring.termination_years} />
+            <NumField path="fees.monitoring.discount_rate" label="Termination discount rate" unit="pct" value={a.fees.monitoring.discount_rate} />
+          </>
+        )}
+      </Section>
+
+      {/* ═══ 8. Refinancing & PIK toggle ═══ */}
+      {tranches.some((t) => t.type !== 'revolver') && (
+        <Section title="8 · Refinancing & PIK elections">
+          {tranches.map((t, i) => {
+            if (t.type === 'revolver') return null;
+            if (t.type === 'pik_note') {
+              const el = t.elections;
+              return (
+                <div key={i}>
+                  <Toggle on={el !== null} label={`${t.name}: per-year cash / PIK election`}
+                    onOn={() => editWithChoices(at(`structure.tranches.${i}.elections`, Array.from({ length: N }, () => 'pik')), [`structure.tranches.${i}.elections`], Array.from({ length: N }, (_, y) => `structure.tranches.${i}.elections.${y}`))}
+                    onOff={() => editWithChoices(at(`structure.tranches.${i}.elections`, null), [`structure.tranches.${i}.elections`], [], [`structure.tranches.${i}.elections`])} />
+                  {el && el.map((e, y) => (
+                    <ChoiceField key={y} path={`structure.tranches.${i}.elections.${y}`} label={`${t.name}: year ${y + 1}`} value={e}
+                      options={[{ value: 'cash', label: 'pay cash' }, { value: 'pik', label: 'PIK' }]} />
+                  ))}
+                </div>
+              );
+            }
+            const refi = (a.structure.refinancing ?? []).find((r) => r.tranche_name === t.name) ?? null;
+            const ri = (a.structure.refinancing ?? []).findIndex((r) => r.tranche_name === t.name);
+            const blankRefi = (): RefinancingEvent => ({
+              tranche_name: t.name, year: U,
+              new_pricing: t.pricing.kind === 'fixed' ? { kind: 'fixed', rate: U } : { kind: 'floating', base_rate: U, spread: U, floor: U },
+              call_premium_pct: U, new_maturity_years: U, new_oid_pct: U, new_financing_fee_pct: U, new_amort_pct_of_face: U,
+            });
+            return (
+              <div key={i}>
+                <Toggle on={refi !== null} label={`Refinance ${t.name}`}
+                  onOn={() => set(at('structure.refinancing', [...(a.structure.refinancing ?? []), blankRefi()]), ['structure.refinancing'])}
+                  onOff={() => { const rest = (a.structure.refinancing ?? []).filter((r) => r.tranche_name !== t.name); set(at('structure.refinancing', rest.length ? rest : null), ['structure.refinancing']); }} />
+                {refi && (
+                  <>
+                    <NumField path={`structure.refinancing.${ri}.year`} label={`${t.name}: refinancing year (1…${N - 1})`} unit="years" value={refi.year} />
+                    {pricingFields(`structure.refinancing.${ri}.new_pricing`, refi.new_pricing, `${t.name} new`)}
+                    <NumField path={`structure.refinancing.${ri}.call_premium_pct`} label="Call premium (% of balance)" unit="pct" value={refi.call_premium_pct} />
+                    <NumField path={`structure.refinancing.${ri}.new_maturity_years`} label="New maturity (from the refi year)" unit="years" value={refi.new_maturity_years} />
+                    <NumField path={`structure.refinancing.${ri}.new_oid_pct`} label="New OID (%)" unit="pct" value={refi.new_oid_pct} />
+                    <NumField path={`structure.refinancing.${ri}.new_financing_fee_pct`} label="New financing fee (%)" unit="pct" value={refi.new_financing_fee_pct} />
+                    <NumField path={`structure.refinancing.${ri}.new_amort_pct_of_face`} label="New amortization (% of new face / yr)" unit="pct" value={refi.new_amort_pct_of_face} />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </Section>
+      )}
+
+      {/* ═══ 9. Fund overlay ═══ */}
+      <Section title="9 · Fund / LP overlay">
+        <Toggle on={fund !== null} label="Net-to-LP returns (fees and carry)"
+          onOn={() => editWithChoices({ ...a, fund: { committed_capital: U, mgmt_fee_pct: U, fee_basis: 'invested', carry_pct: U, pref_rate: U, catchup_pct: U, waterfall: 'european', fee_offset_pct: U } as FundOverlayAssumption }, ['fund'], ['fund.fee_basis', 'fund.waterfall'])}
+          onOff={() => editWithChoices({ ...a, fund: null }, ['fund'], [], ['fund'])} />
+        {fund && (
+          <>
+            <NumField path="fund.committed_capital" label="Committed capital" unit="money" value={fund.committed_capital} />
+            <NumField path="fund.mgmt_fee_pct" label="Management fee" unit="pct" value={fund.mgmt_fee_pct} />
+            <ChoiceField path="fund.fee_basis" label="Fee basis" value={fund.fee_basis} options={[{ value: 'committed', label: 'committed' }, { value: 'invested', label: 'invested' }]} />
+            <NumField path="fund.carry_pct" label="Carried interest" unit="pct" value={fund.carry_pct} />
+            <NumField path="fund.pref_rate" label="Preferred return (compounded)" unit="pct" value={fund.pref_rate} />
+            <NumField path="fund.catchup_pct" label="GP catch-up (0 = hard hurdle)" unit="pct" value={fund.catchup_pct} />
+            <ChoiceField path="fund.waterfall" label="Waterfall" value={fund.waterfall} options={[{ value: 'european', label: 'European (whole fund)' }, { value: 'american', label: 'American (deal by deal)' }]} />
+            <NumField path="fund.fee_offset_pct" label="Fee offset (% of deal fees)" unit="pct" value={fund.fee_offset_pct} />
+          </>
+        )}
+      </Section>
+
+      {/* ═══ Display ═══ */}
+      <Section title="Display">
+        <Toggle on={a.mid_year_irr} label="Headline the mid-year IRR (both are always computed)"
+          onOn={() => set({ ...a, mid_year_irr: true }, ['mid_year_irr'])} onOff={() => set({ ...a, mid_year_irr: false }, ['mid_year_irr'])} />
+      </Section>
+    </div>
+  );
+};
+
+/** The mode selector for one forecast line. */
+const LineMode: React.FC<{ label: string; value: string; options: { value: string; label: string }[]; onChoose: (m: string) => void }> = ({ label, value, options, onChoose }) => {
+  // a driver the facts cannot support is never displayed as if chosen — "choose…" until a valid mode is picked
+  const valid = options.some((o) => o.value === value);
+  return (
+    <div className="flex items-center justify-between gap-2 mb-1.5 mt-2">
+      <span className="text-[10px] tracking-wider uppercase font-semibold" style={{ ...labelStyle, color: '#111' }}>{label}</span>
+      <select aria-label={`${label} input mode`} value={valid ? value : ''} onChange={(e) => e.target.value && onChoose(e.target.value)} className="px-1 py-1 text-[11px]"
+        style={{ fontFamily: mono, border: valid ? '1px solid rgba(17,17,17,0.14)' : '1px solid rgba(204,0,0,0.55)', background: valid ? '#fff' : 'rgba(204,0,0,0.03)' }}>
+        {!valid && <option value="">choose…</option>}
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
   );
 };
 

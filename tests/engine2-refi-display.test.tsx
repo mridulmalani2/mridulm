@@ -76,12 +76,15 @@ describe('§18 refi display surface — Debt tab', () => {
 });
 
 describe('§18.8 — the v1 refi simplifications are LISTED on the methodology page (SPEC §15)', () => {
-  it('the Disclosures table carries the Refinancing row with the §18.5 deferral wording (label mutation-tested)', () => {
+  it('the Disclosures table carries the Refinancing row with the §18.5 tax wording (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
     expect(html).toContain('Refinancing (§18)');
     // the load-bearing clauses of the §15 sentence — a paraphrase drift reddens here
     expect(html).toContain('par-for-par');
-    expect(html).toContain('deducted UNCAPPED the FOLLOWING year');
+    expect(html).toContain('deducted IN the refi year by tax character (§7.1)');
+    // §7.1 [v2.4.0] the character/timing row for debt retired or refinanced
+    expect(html).toContain('Debt retired or refinanced (§7.1)');
+    expect(html).toContain('a sweep-driven early retirement deducts the FOLLOWING year');
     expect(html).toContain('no forward-curve or covenant-cure trigger');
   });
 });

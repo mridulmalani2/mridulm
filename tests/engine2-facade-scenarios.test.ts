@@ -161,7 +161,7 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
 
     // §8 [v1.0.5] negative goodwill: asset-heavy at a low multiple ⇒ the SIGNED plug goes
     // negative and the WARN fires — never clamped, never silent. Trigger = sign of the plug.
-    const assetHeavy = runModel({ ...facts, net_ppe: facts.fy_ebitda * 10 }, assumptions);
+    const assetHeavy = runModel({ ...facts, net_ppe: facts.fy_ebitda! * 10 }, assumptions);
     expect(assetHeavy.balance_sheet[0].goodwill).toBeLessThan(0);
     expect(assetHeavy.balance_sheet[0].goodwill).toBe(assetHeavy.balance_sheet[5].goodwill); // t=0 plug, never amortized
     const ngw = assetHeavy.coherence.find((f) => f.code === 'negative_goodwill');
@@ -282,7 +282,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
       operations: { ...GOLDEN_DEALS.G1.assumptions.operations, growth: [0.05, 0.05, 0.05, 0.05, 0.05] },
       structure: {
         min_cash: 0,
-        sweep: { base_pct: 0, grid: null }, distributions: null, refinancing: null,
+        sweep: { base_pct: 0, grid: null }, distributions: null, surplus_distribution: null, refinancing: null, selldown: null,
         tranches: [
           {
             name: 'Bullet', type: 'senior', size: { x_ebitda: 1 }, pricing: { kind: 'fixed', rate: 0.03 },
@@ -322,7 +322,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
 
     // (a) leverage × growth — leverage row fixed at the base total (4.0× FY on G2)
     const baseLeverage =
-      base.derived.total_debt_at_par / facts.fy_ebitda;
+      base.derived.total_debt_at_par / facts.fy_ebitda!;
     const levGrid = buildSensitivityGrid(facts, ntmAssumptions, base, {
       row_axis: 'leverage',
       col_axis: 'growth',
@@ -377,7 +377,8 @@ describe('entry leverage: one definition across the input and output surfaces (�
       const panel = entryGrossLeverageFromAssumptions(facts, assumptions);
       const model = runModel(facts, assumptions).derived.entry_gross_leverage_fy;
       expect(panel).not.toBeNull();
-      expect(panel!).toBeCloseTo(model, 12);
+      expect(model).not.toBeNull();
+      expect(panel!).toBeCloseTo(model!, 12);
     });
   }
 
@@ -652,7 +653,7 @@ describe('entryMultipleDisplay — §11 "shows both, LTM canonical"', () => {
     expect(em.valuation).toBeCloseTo(o.derived.entry_multiple, 12);
     expect(em.fy_canonical).toBeNull(); // FY ⇒ the two coincide ⇒ only one line shown
     // and the canonical formula, if it were computed, equals the valuation for an FY deal
-    expect(o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing).toBeCloseTo(o.derived.entry_multiple, 12);
+    expect(o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing!).toBeCloseTo(o.derived.entry_multiple, 12);
   });
 
   it('NTM entry: label NTM, valuation on NTM EBITDA, fy_canonical = EV ÷ FY EBITDA, genuinely different', () => {
@@ -704,14 +705,20 @@ describe('G-2 fixture (viii) — the NTM base on a STITCHED LTM fact [B1, engine
   const ntm: DealAssumptions = { ...GOLDEN_DEALS.G2.assumptions,
     entry: { ...GOLDEN_DEALS.G2.assumptions.entry, basis: 'ntm' } };
 
-  it('EV = entry_multiple × (LTM × (1+growth[0])); sizing EBITDA is the LTM, not a stale FY', () => {
+  it('[v2.0.0 §24.4] EV = entry_multiple × forecast year-1 EBITDA (grown off the LTM); sizing EBITDA is the LTM, not a stale FY', () => {
     const o = runModel(factsLtm, ntm);
     const g0 = ntm.operations.growth[0];
-    const ntmBase = LTM_EBITDA * (1 + g0);
+    // year 1 = LTM revenue × (1+g0) × the year-1 margin on the §7 linear path (NOT the flat LTM margin)
+    const m1 = (LTM_EBITDA / LTM_REVENUE) + (ntm.operations.target_margin - LTM_EBITDA / LTM_REVENUE) * (1 / 5);
+    const ntmBase = LTM_REVENUE * (1 + g0) * m1;
+    expect(o.operating[0].ebitda).toBeCloseTo(ntmBase, 9);
+    expect(o.derived.entry_ebitda_for_valuation).toBeCloseTo(ntmBase, 9);
     expect(o.derived.enterprise_value).toBeCloseTo(o.derived.entry_multiple * ntmBase, 6);
     // leverage / FY-canonical size on the LTM fact itself (the §11 "FY(LTM)" basis)
     expect(o.derived.entry_ebitda_for_sizing).toBeCloseTo(LTM_EBITDA, 6);
     // mutation guard: sizing the NTM base off a stale FY (e.g. 250) would move EV materially
     expect(o.derived.enterprise_value).not.toBeCloseTo(o.derived.entry_multiple * 250 * (1 + g0), 2);
+    // and NOT the v1 proxy LTM × (1+g0) when the margin moves in year 1
+    expect(o.derived.enterprise_value).not.toBeCloseTo(o.derived.entry_multiple * LTM_EBITDA * (1 + g0), 2);
   });
 });

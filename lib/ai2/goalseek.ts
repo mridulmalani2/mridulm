@@ -9,6 +9,7 @@
 
 import { runModel } from '../engine2/facade';
 import { applyAxis } from '../engine2/scenarios';
+import { headlineNotMeaningful } from '../engine2/display';
 import type { DealAssumptions, DealFacts } from '../engine2/types';
 
 export type GoalSeekLever = 'entry_multiple' | 'exit_multiple' | 'leverage' | 'growth_shift';
@@ -33,7 +34,11 @@ function irrAt(facts: DealFacts, base: DealAssumptions, lever: GoalSeekLever, v:
   const axis = lever === 'growth_shift' ? 'growth' : lever;
   const withLever = applyAxis(facts, base, axis, v);
   try {
-    return runModel(facts, withLever).returns.sponsor_net.irr;
+    const run = runModel(facts, withLever);
+    // a structure the engine calls not meaningful (a cash-floor breach with the revolver
+    // exhausted, a non-positive plug) is UNREACHABLE — the same as an insolvent entry — so the
+    // search walks to the feasibility boundary instead of answering with it (adversarial review F1)
+    return headlineNotMeaningful(run) ? null : run.returns.sponsor_net.irr;
   } catch {
     return null; // e.g. insolvent entry at extreme leverage — treated as unreachable
   }

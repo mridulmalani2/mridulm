@@ -16,7 +16,7 @@
 
 import { covenantBreachYear } from './credit';
 import { RETIRED_TOL } from './debt';
-import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, EquityStripBlock, SourcesUses, TrancheYear, WaterfallYear } from './types';
+import type { BalanceSheetYear, CoherenceFlag, CovenantAssumption, CreditYear, DealAssumptions, DealFacts, EquityStripBlock, SourcesUses, TrancheYear, WaterfallYear, SelldownBlock, ExitBlock } from './types';
 
 export interface CoherenceInputs {
   facts: Pick<DealFacts, 'implied_trading_ev_ebitda'>;
@@ -33,6 +33,10 @@ export interface CoherenceInputs {
   tranches: TrancheYear[][];
   /** §14.23(g) [v1.7.0]: read for the loan_notes_unredeemed WARN; null when no strip/warrant. */
   equity_strip: EquityStripBlock | null;
+  /** §14.24(f) [v2.2.0]: read for the selldown_below_cost WARN; null with no event. */
+  selldown: SelldownBlock | null;
+  /** §9.1 [v2.3.0]: read for the exit_debt_shortfall WARN. */
+  exit: Pick<ExitBlock, 'debt_shortfall_at_exit'>;
 }
 
 /** Entry multiple further above the trading anchor than this ⇒ warn (DR-4 Cat.7 discipline). */
@@ -59,6 +63,29 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
       code: 'loan_notes_unredeemed',
       severity: 'warn',
       message: `Exit equity does not cover the accreted loan notes: $${b.toFixed(2)}m accrued vs $${r.toFixed(2)}m redeemed at exit. The ordinary pot is zero-or-negative to that extent and management's sweet equity is worthless on this run (SPEC §22.2/§14.23(g)).`,
+    });
+  }
+
+  // §14.24(f) [v2.2.0]: fires EXACTLY on `selldown_proceeds < fraction × sponsor_equity −
+  // $0.005m` — the sold slice fetched less than its pro-rata share of the entry check (COST,
+  // un-accreted: an IRR-bearing comparator would need a mark the engine refuses to invent).
+  // WARN, never a block: an underwater secondary is a legal, if unhappy, outcome.
+  if (x.selldown && x.selldown.selldown_proceeds < x.selldown.fraction * x.sources_uses.sponsor_equity - 0.005) {
+    const s = x.selldown;
+    flags.push({
+      code: 'selldown_below_cost',
+      severity: 'warn',
+      message: `The year-${s.year} selldown of ${(s.fraction * 100).toFixed(1)}% fetches $${s.selldown_proceeds.toFixed(2)}m — below that slice's share of the sponsor's entry cheque ($${(s.fraction * x.sources_uses.sponsor_equity).toFixed(2)}m) (SPEC §23/§14.24(f)).`,
+    });
+  }
+
+  // §9.1 [v2.3.0]: the exit does not cover the debt — limited liability floors equity at zero
+  // and the lenders take the loss. WARN: the run is coherent, the deal is not.
+  if (x.exit.debt_shortfall_at_exit > 0.005) {
+    flags.push({
+      code: 'exit_debt_shortfall',
+      severity: 'warn',
+      message: `The exit does not cover the debt: lenders recover $${x.exit.debt_shortfall_at_exit.toFixed(2)}m less than they are owed. Equity is worth zero at exit (limited liability — no equity holder pays in) (SPEC §9.1).`,
     });
   }
 

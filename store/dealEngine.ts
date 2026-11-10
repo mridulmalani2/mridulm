@@ -50,7 +50,7 @@ function feedEngine2FromImport(
   raw: RawHistoricals,
   quote?: { ticker?: string; factsPayload: CompanyFacts; latestAnnualForm?: string },
 ): void {
-  useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });
+  useEngine2Model.getState().importFromRaw(raw);
   if (!quote?.ticker) return;
   void fetchTradingAnchor(quote.ticker, quote.factsPayload, raw.net_debt?.value ?? null, raw.fy_ebitda?.value ?? null, {
     reportingCurrency: raw.currency_unsupported ?? raw.currency,
@@ -58,9 +58,8 @@ function feedEngine2FromImport(
   })
     .then((a) => {
       if (!a) return;
-      if (useEngine2Model.getState().importUntouched(raw.entityName)) {
-        useEngine2Model.getState().importFromRaw(raw, { trading_anchor: a.ev_ebitda });
-      }
+      // v2.0.0: the anchor is a FACT update in place — never a re-import (nothing to clobber).
+      useEngine2Model.getState().setTradingAnchor(raw.entityName, a.ev_ebitda);
     })
     .catch(() => undefined);
 }

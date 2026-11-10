@@ -73,6 +73,12 @@ export interface BridgeInputs {
   management_ordinary_share: number;
   /** §12/§22.8 [v1.7.0]: the warrant's net take — the second new leakage term; 0 when null. */
   warrant_payout_net: number;
+  /** §23.8 [v2.2.0] the buyer's exit share and the proceeds the sponsor took for it (0, 0
+   *  with no event). The company never sees the money, so the four bars are untouched. */
+  selldown_buyer_share: number;
+  selldown_proceeds: number;
+  /** §9.1 [v2.3.0] the lenders' unrecovered debt at exit (0 when the exit covers the debt). */
+  debt_shortfall_at_exit: number;
 }
 
 export function buildBridge(i: BridgeInputs): ValueBridge {
@@ -86,15 +92,19 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
 
   // §12 [v1.1.0]: the sponsor's TOTAL delta — exit inflow PLUS cumulative sponsor-share
   // distributions, less the outflow. Degenerates to the exit-only delta when none was paid.
+  // [v2.2.0 — §23.8] + the selldown proceeds: sponsor cash, received outside the company.
   const sponsorNetDelta =
-    i.sponsor_share + i.interim_distributions_sponsor - i.sponsor_equity;
+    i.sponsor_share + i.interim_distributions_sponsor + i.selldown_proceeds - i.sponsor_equity;
+  // §14.9 [v2.2.0]: ONE walk-down term — the buyer Δ. A second "+ proceeds" line would
+  // double-count by exactly the proceeds (and residual (b) would read the proceeds).
+  const selldownBuyerDelta = i.selldown_buyer_share - i.selldown_proceeds;
   const rolloverDelta = i.rollover_share - i.rollover_equity;
   // §14.9(a): bars ≡ pre-promote equity Δ grossed back for the two friction blocks.
   // Unchanged by distributions: ND₁ is measured on the ACTUAL path, so a payment shrinks
   // the paydown bar and exit equity by the same amount and the identity is preserved.
   const residualA =
     barSum -
-    (i.exit_equity_pre_mip_total - i.entry_equity_pre_promote_total + i.entry_costs + i.exit_costs);
+    (i.exit_equity_pre_mip_total - i.debt_shortfall_at_exit - i.entry_equity_pre_promote_total + i.entry_costs + i.exit_costs);
   // §14.9(b) [v1.7.0]: the walk-down lands exactly on the sponsor. Adding the sponsor slice
   // back is EXACT by the same §9 algebra — barSum − costs ≡ exit equity total − entry equity
   // total, and exit equity total = sponsor_share + rollover_share + mip_payout +
@@ -109,7 +119,9 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
     i.mip_payout -
     rolloverDelta -
     sweetEquityDelta -
-    i.warrant_payout_net +
+    i.warrant_payout_net -
+    selldownBuyerDelta +
+    i.debt_shortfall_at_exit +
     i.interim_distributions_sponsor -
     sponsorNetDelta;
 
@@ -129,6 +141,8 @@ export function buildBridge(i: BridgeInputs): ValueBridge {
       interim_distributions_sponsor: i.interim_distributions_sponsor,
       sweet_equity_delta: sweetEquityDelta,
       warrant_payout_net: i.warrant_payout_net,
+      selldown_buyer_delta: selldownBuyerDelta,
+      debt_shortfall_at_exit: i.debt_shortfall_at_exit,
       sponsor_net_delta: sponsorNetDelta,
     },
     reconciliation_residual: Math.max(Math.abs(residualA), Math.abs(residualB)),

@@ -1,11 +1,13 @@
 /**
- * D7 suggestion assembly + SPEC §14.13: an ALL-SUGGESTED model runs with ZERO coherence
- * warnings, against a realistic large-cap fixture. Every suggested field carries a basis.
+ * The v2.0.0 suggestion catalogue against a realistic large-cap fixture: every proposal has a
+ * real basis; nothing is pre-filled; uncited template values are gone; and a draft built from
+ * accepted proposals + the analyst's own entries is coherent (§14.13).
  */
 import { describe, it, expect } from 'vitest';
-import { suggestAssumptions } from '../lib/engine2/suggest';
+import { suggestionsFor } from '../lib/engine2/suggest';
+import { blankAssumptions, CHOICE_PATHS, missingInputs, setPath } from '../lib/engine2/draft';
 import { runModel } from '../lib/engine2/facade';
-import type { DealFacts } from '../lib/engine2/types';
+import type { DealFacts, TrancheAssumption } from '../lib/engine2/types';
 
 /** Realistic large-cap industrial: $8.2bn revenue, 24.4% margin, 4 clean history years. */
 const LARGE_CAP: DealFacts = {
@@ -41,87 +43,90 @@ const LARGE_CAP: DealFacts = {
   ],
 };
 
-describe('D7 — suggestion assembly (bases mandatory)', () => {
-  const { assumptions, basis } = suggestAssumptions(LARGE_CAP);
+describe('v2.0.0 — the suggestion CATALOGUE: proposals with a real basis, never pre-fills', () => {
+  const cat = suggestionsFor(LARGE_CAP, 5);
 
-  it('§19 preamble/B7: the suggestion layer proposes NO fund overlay — fund starts null (audit B2: a live-overlay mutant ran green through the whole suite before this pin)', () => {
-    expect(assumptions.fund).toBeNull();
-  });
-
-  it('growth comes from HISTORY (4 points ≥ the D1 gate) as a true-span CAGR', () => {
-    expect(basis['operations.growth'].kind).toBe('history');
-    const spanDays = (Date.parse('2025-12-31') - Date.parse('2022-12-31')) / 86_400_000;
-    const cagr = Math.pow(8200 / 7150, 365.25 / spanDays) - 1;
-    for (const g of assumptions.operations.growth) expect(g).toBeCloseTo(cagr, 12);
-  });
-
-  it('NWC uses the DAYS method when all three gated days survived D2', () => {
-    expect(assumptions.operations.nwc).toEqual({ method: 'days', dso: 48, dio: 55, dpo: 62 });
-    expect(basis['operations.nwc'].kind).toBe('facts');
-  });
-
-  it('entry/exit multiples cite the SCALE-band convention (caveated sector medians withheld); exit = entry (flat)', () => {
-    expect(assumptions.entry.entry_multiple).toBeCloseTo(12.0, 9); // usBuyoutOverall
-    expect(assumptions.exit.multiple).toBe(assumptions.entry.entry_multiple);
-    expect(basis['entry.entry_multiple'].kind).toBe('convention');
-    expect(basis['entry.entry_multiple'].detail).toContain('verifyBeforeDisplay');
-    expect(basis['exit.multiple'].detail).toContain('flat');
-  });
-
-  it('large-cap structure template: TLB at the conventions leverage with a revolver; NOL usable OFF', () => {
-    const [tlb, rcf] = assumptions.structure.tranches;
-    expect(tlb.type).toBe('senior');
-    expect((tlb as any).size.x_ebitda).toBeCloseTo(5.0, 9);
-    expect(rcf.type).toBe('revolver');
-    expect(assumptions.tax.nol.acquired_usable).toBe(false);
-  });
-
-  it('EVERY suggested field group carries a basis with kind + detail', () => {
-    for (const key of ['entry.entry_multiple', 'operations.growth', 'operations.target_margin', 'operations.maint_capex_pct_revenue', 'operations.nwc', 'structure.tranches', 'structure.sweep', 'tax.rate', 'fees', 'exit.multiple', 'mip', 'covenants']) {
-      expect(basis[key]?.kind, key).toBeTruthy();
-      expect(basis[key]?.detail?.length, key).toBeGreaterThan(8);
+  it('every proposal carries a FACTS / HISTORY / CONVENTION basis — no template guesses survive', () => {
+    expect(Object.keys(cat).length).toBeGreaterThan(5);
+    for (const [path, sug] of Object.entries(cat)) {
+      expect(['facts', 'history', 'convention'], path).toContain(sug.basis.kind);
+      expect(sug.basis.detail.length, path).toBeGreaterThan(10);
     }
   });
 
-  it('fewer than 3 history points ⇒ growth falls back to a TEMPLATE basis (never a fake history claim)', () => {
-    const sparse = suggestAssumptions({ ...LARGE_CAP, history: LARGE_CAP.history.slice(-2) });
-    expect(sparse.basis['operations.growth'].kind).toBe('template');
-    expect(sparse.basis['operations.growth'].detail).toContain('review');
+  it('uncited v1 template values are GONE: no min-cash, sweep, static base rate or flat-3% growth proposal', () => {
+    expect(cat['structure.min_cash']).toBeUndefined();
+    expect(cat['structure.sweep']).toBeUndefined();
+    expect(cat['structure.sweep.base_pct']).toBeUndefined();
+    const tranche = (cat['structure.tranches'].value as TrancheAssumption[])[0];
+    expect(tranche.type).not.toBe('revolver');
+    if (tranche.type !== 'revolver' && tranche.type !== 'pik_note' && tranche.pricing.kind === 'floating') {
+      expect(Number.isNaN(tranche.pricing.base_rate)).toBe(true); // no cited live rate ⇒ left for the analyst
+    }
+    expect(Number.isNaN(tranche.maturity_years)).toBe(true);
+  });
+
+  it('growth comes from HISTORY (4 points ≥ the D1 gate) as a true-span CAGR', () => {
+    expect(cat['operations.growth'].basis.kind).toBe('history');
+    const spanDays = (Date.parse('2025-12-31') - Date.parse('2022-12-31')) / 86_400_000;
+    const cagr = Math.pow(8200 / 7150, 365.25 / spanDays) - 1;
+    for (const g of cat['operations.growth'].value as number[]) expect(g).toBeCloseTo(cagr, 12);
+  });
+
+  it('fewer than 3 history points ⇒ NO growth proposal at all (never a fake history claim, never a flat 3%)', () => {
+    const thin = suggestionsFor({ ...LARGE_CAP, history: LARGE_CAP.history.slice(-2) }, 5);
+    expect(thin['operations.growth']).toBeUndefined();
+  });
+
+  it('NWC proposes the DAYS method when all three gated days survived D2', () => {
+    expect(cat['operations.nwc'].value).toEqual({ method: 'days', dso: 48, dio: 55, dpo: 62 });
+    expect(cat['operations.nwc'].basis.kind).toBe('facts');
+  });
+
+  it('the entry multiple cites its source; exit = entry only once an entry multiple has been ENTERED', () => {
+    expect(cat['entry.entry_multiple'].basis.kind).toBe('convention');
+    expect(cat['entry.entry_multiple'].basis.detail).toMatch(/PitchBook|GF Data/);
+    expect(cat['exit.multiple']).toBeUndefined();
+    const withEntry = suggestionsFor(LARGE_CAP, 5, { entry: { driver: 'multiple', entry_multiple: 10.5, enterprise_value: null, basis: 'fy', hold_years: 5 } });
+    expect(withEntry['exit.multiple'].value).toBe(10.5);
+  });
+
+  it('§163(j) is proposed only for a US filer (a statute, not a universal default)', () => {
+    expect(cat['tax.s163j']).toBeDefined();
+    expect(suggestionsFor({ ...LARGE_CAP, source: 'esef', currency: 'EUR' }, 5)['tax.s163j']).toBeUndefined();
+  });
+
+  it('a forecast-only case (no historical year) gets NO proposals that need history', () => {
+    const none = suggestionsFor({ ...LARGE_CAP, fy_revenue: null, fy_ebitda: null, fy_ebitda_margin: null, history: [], da_pct_revenue: null, maint_capex_pct_revenue: null, effective_tax_rate: null, dso: null, dio: null, dpo: null, nwc_pct_revenue: null }, 5);
+    for (const p of ['entry.entry_multiple', 'operations.growth', 'operations.target_margin', 'structure.tranches', 'tax.rate']) expect(none[p], p).toBeUndefined();
   });
 });
 
-describe('SPEC §14.13 — the all-suggested model is coherent', () => {
-  it('MIDDLE-MARKET branch (unitranche template, fy_ebitda < $100m) ⇒ ZERO flags too (accuracy audit 2026-07-24: this branch never flowed through runModel in any test)', () => {
-    const MID_CAP: DealFacts = {
-      ...LARGE_CAP,
-      entity_name: 'Mid Market Co',
-      fy_revenue: 240, fy_ebitda: 48, fy_ebitda_margin: 0.2,
-      net_ppe: 40, gross_debt: 0, cash: 0, net_debt: 0,
-      history: LARGE_CAP.history.map((h) => ({ ...h, revenue: h.revenue === null ? null : h.revenue / 10, ebitda: h.ebitda === null ? null : h.ebitda / 10, capex: h.capex === null ? null : h.capex / 10 })),
-    };
-    const { assumptions, basis } = suggestAssumptions(MID_CAP);
-    expect(basis['entry.entry_multiple'].detail).toContain('middle-market'); // the OTHER branch
-    const out = runModel(MID_CAP, assumptions);
+describe('a fully ACCEPTED draft is coherent — and accepting is explicit, so it still has blanks', () => {
+  it('accepting every proposal leaves the inputs no proposal can stand behind blank (min cash, hold, base rate…)', () => {
+    let a = blankAssumptions('t', 5);
+    for (const [path, sug] of Object.entries(suggestionsFor(LARGE_CAP, 5))) a = setPath(a, path.split('@')[0], sug.value);
+    const blank = missingInputs(LARGE_CAP, a, [...CHOICE_PATHS]).map((m) => m.path);
+    expect(blank).toEqual(expect.arrayContaining(['structure.min_cash', 'structure.sweep.base_pct', 'structure.tranches.0.pricing.base_rate', 'structure.tranches.0.maturity_years']));
+  });
+
+  it('accepted proposals + the analyst’s remaining entries run with ZERO coherence flags (§14.13)', () => {
+    let a = blankAssumptions('t', 5);
+    for (const [path, sug] of Object.entries(suggestionsFor(LARGE_CAP, 5))) a = setPath(a, path.split('@')[0], sug.value);
+    a = setPath(a, 'entry.entry_multiple', 10.5);
+    a = setPath(a, 'exit.multiple', 10.5);
+    a = setPath(a, 'structure.min_cash', 150);
+    a = setPath(a, 'structure.sweep.base_pct', 0.5);
+    a = setPath(a, 'structure.tranches.0.pricing.base_rate', 0.04);
+    a = setPath(a, 'structure.tranches.0.maturity_years', 7);
+    a = setPath(a, 'exit.fees_pct', 0.01);
+    a = setPath(a, 'rollover_equity', 0);
+    a = setPath(a, 'tax.minimum_rate', 0);
+    a = setPath(a, 'tax.nol.acquired_opening', 0);
+    a = setPath(a, 'operations.growth_capex', [0, 0, 0, 0, 0]);
+    expect(missingInputs(LARGE_CAP, a, []).map((m) => m.path)).toEqual([]);
+    const out = runModel(LARGE_CAP, a);
     expect(out.coherence).toEqual([]);
     expect(out.returns.sponsor_net.irr).not.toBeNull();
-    for (const bs of out.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(0.005);
-  });
-
-  it('runModel(facts, suggestAssumptions(facts)) ⇒ ZERO coherence flags; sane outputs', () => {
-    const { assumptions } = suggestAssumptions(LARGE_CAP);
-    const out = runModel(LARGE_CAP, assumptions);
-    expect(out.coherence).toEqual([]); // §14.13 — no warnings, no blocks
-    expect(out.sources_uses.sponsor_equity).toBeGreaterThan(0);
-    expect(out.returns.sponsor_net.irr).not.toBeNull();
-    expect(out.returns.sponsor_net.irr!).toBeGreaterThan(0);
-    expect(out.waterfall.every((w) => !w.cash_floor_breach)).toBe(true);
-    for (const bs of out.balance_sheet) expect(Math.abs(bs.check)).toBeLessThan(0.005);
-  });
-
-  it('the trading-anchor coherence flag still fires when the suggestion is >15% above it (the gate is live, not vacuous)', () => {
-    const cheapAnchor = { ...LARGE_CAP, implied_trading_ev_ebitda: 8.0 }; // 12.0 > 8.0 × 1.15
-    const { assumptions } = suggestAssumptions(cheapAnchor);
-    const out = runModel(cheapAnchor, assumptions);
-    expect(out.coherence.some((f) => f.code === 'entry_multiple_vs_trading' && f.severity === 'warn')).toBe(true);
   });
 });

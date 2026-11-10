@@ -42,8 +42,11 @@ AND was outside the fence]:
 >   surface may not IMPORT it to recompute either — the import-scan fences it alongside `factsAdapter`
 >   [round-4 (4)].
 > - **DISPLAY-SURFACE SET** (renders numbers to a human) = `components/deal-engine/**` +
->   `lib/format/**` + `lib/engine2/display.ts` + `lib/engine2/excelExport.ts` + `lib/ai2/memo.ts`. (Explicitly includes
->   the Excel export, the downloaded memo, and the display-derivation module — the exact surfaces
+>   `lib/format/**` + `lib/engine2/display.ts` + `lib/ai2/memo.ts`. [v2.0.0: the values-only Excel exporter
+>   was DELETED; its successor, lib/engine2/workbook.ts, is NOT a display surface — it is the SPEC §26
+>   formula projection, a deliberate second expression of the spec held to the engine by the §14.26
+>   recalculation-parity suite (tests/engine2-workbook-parity.test.ts), not by these guards.] (Explicitly includes
+>   the downloaded memo, and the display-derivation module — the exact surfaces
 >   that carried v1.1.2, plus the ONE home where a display-only derived number (the entry/exit
 >   multiple) is computed and which every render surface IMPORTS rather than reconstructs.) The
 >   committed guard DERIVES its scan set by WALKING these roots

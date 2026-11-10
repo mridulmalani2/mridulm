@@ -12,6 +12,7 @@ import AssumptionsPanel from './AssumptionsPanel';
 import HistoryTable from './HistoryTable';
 import BasisBadge from './BasisBadge';
 import OutputTabs from './OutputTabs';
+import { headlineNotMeaningful } from '../../../lib/engine2/display';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
@@ -144,13 +145,16 @@ const Workbench: React.FC = () => {
   const sourceCurrency = useEngine2Model((s) => s.sourceCurrency);
   const factNotes = useEngine2Model((s) => s.factNotes);
   const build = useEngine2Model((s) => s.buildWithExhibits);
-  const resuggest = useEngine2Model((s) => s.resuggest);
   const reset = useEngine2Model((s) => s.reset);
+  // the Build gate (v2.0.0): every input the model will read must be entered
+  useEngine2Model((s) => s.assumptions);
+  useEngine2Model((s) => s.pending);
+  const blankInputs = useEngine2Model.getState().missing();
   if (!facts) {
     return <p className="text-[11px] p-6" style={labelStyle}>Import a company first (Screen 1) — the v2 workbench reads the engine2 store.</p>;
   }
   const ccy = facts.currency as Engine2Currency;
-  const blocked = missing.length > 0;
+  const blocked = missing.length > 0 || blankInputs.length > 0 || useEngine2Model.getState().assumptions === null;
   return (
     // the v2 tree inks in near-black; it must supply its own paper (the site shell is
     // dark — verified visually in the browser pane, 2026-07-24)
@@ -164,10 +168,6 @@ const Workbench: React.FC = () => {
           <button onClick={reset} className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
             style={{ border: '1px solid rgba(17,17,17,0.2)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
             ← New import
-          </button>
-          <button onClick={resuggest} className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
-            style={{ border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono }}>
-            Suggest everything
           </button>
         </span>
       </div>
@@ -184,12 +184,23 @@ const Workbench: React.FC = () => {
       </div>
       <MissingBar />
       <AssumptionsPanel />
+      {blankInputs.length > 0 && (
+        <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(204,0,0,0.25)', background: 'rgba(204,0,0,0.03)' }}>
+          <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: '#CC0000', fontFamily: mono }}>
+            {blankInputs.length} input{blankInputs.length === 1 ? '' : 's'} still blank — nothing is assumed for you
+          </p>
+          {blankInputs.slice(0, 12).map((m) => (
+            <p key={m.path} className="text-[10px]" style={labelStyle}>◦ {m.label}</p>
+          ))}
+          {blankInputs.length > 12 && <p className="text-[10px]" style={labelStyle}>◦ … and {blankInputs.length - 12} more</p>}
+        </div>
+      )}
       {error && <p className="text-[11px] mt-3" style={{ color: '#b91c1c', fontFamily: mono }}>{error}</p>}
       <div className="mt-4 flex items-center justify-between">
         <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
           {output ? (
             <>
-              Sponsor IRR {pct(output.returns.sponsor_net.irr)} · MOIC {multiple(output.returns.sponsor_net.moic)} ·
+              Sponsor IRR {headlineNotMeaningful(output) ? 'N/M' : pct(output.returns.sponsor_net.irr)} · MOIC {headlineNotMeaningful(output) ? 'N/M' : multiple(output.returns.sponsor_net.moic)} ·
               Equity {money(output.sources_uses.sponsor_equity, ccy, 0)}
             </>
           ) : (
@@ -206,12 +217,18 @@ const Workbench: React.FC = () => {
         <div className="mt-2 flex items-center justify-between">
           <button
             onClick={async () => {
-              const { buildEngine2Workbook } = await import('../../../lib/engine2/excelExport');
-              const buf = await buildEngine2Workbook(output, ccy).xlsx.writeBuffer();
+              // SPEC §26: a live formula model. Unsupported features BLOCK the export by name.
+              const { buildFormulaWorkbook, formulaCoverageBlockers } = await import('../../../lib/engine2/workbook');
+              const blockers = formulaCoverageBlockers(output);
+              if (blockers.length) {
+                alert(`The Excel model does not yet implement: ${blockers.join(', ')}. Export is blocked rather than exporting pasted values.`);
+                return;
+              }
+              const buf = await buildFormulaWorkbook(output, { cachedResults: true }).wb.xlsx.writeBuffer();
               const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
               const a = document.createElement('a');
               a.href = url;
-              a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_engine2.xlsx`;
+              a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_LBO_model.xlsx`;
               a.click();
               URL.revokeObjectURL(url);
             }}
@@ -224,7 +241,6 @@ const Workbench: React.FC = () => {
         </div>
       )}
       <AiResults />
-      {output && <OutputTabs output={output} currency={ccy} />}
       {output && output.coherence.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
           {output.coherence.map((f) => (
@@ -234,6 +250,7 @@ const Workbench: React.FC = () => {
           ))}
         </div>
       )}
+      {output && <OutputTabs output={output} currency={ccy} />}
     </div>
     </div>
   );

@@ -44,11 +44,11 @@ function makeAssumptions(p: {
   return {
     deal_name: 'golden',
     entry: { driver: 'multiple', entry_multiple: p.multiple, enterprise_value: null, basis: 'fy', hold_years: 5 },
-    structure: { tranches: p.tranches, min_cash: p.min_cash, sweep: { base_pct: p.sweep_pct, grid: null }, distributions: p.distributions ?? null, refinancing: p.refinancing ?? null },
+    structure: { tranches: p.tranches, min_cash: p.min_cash, sweep: { base_pct: p.sweep_pct, grid: null }, distributions: p.distributions ?? null, surplus_distribution: null, refinancing: p.refinancing ?? null, selldown: null },
     operations: {
       growth: p.growth, target_margin: p.target_margin, margin_path: 'linear',
       da_pct_revenue: p.da_pct, maint_capex_pct_revenue: p.maint_pct,
-      growth_capex: p.growth_capex, nwc: p.nwc,
+      growth_capex: p.growth_capex, nwc: p.nwc, lines: null,
     },
     tax: p.tax ?? GOLDEN_BASE_TAX,
     fees: { transaction_pct_of_ev: 0.02, financing_pct_of_commitments: 0.015, monitoring: null },
@@ -60,6 +60,7 @@ function makeAssumptions(p: {
     covenants: { leverage_max: null, dscr_min: null, fccr_min: null, springing: null, rp_trap: p.rp_trap ?? null },
     mid_year_irr: false,
     fund: null,
+    valuation: null,
   };
 }
 
@@ -258,5 +259,35 @@ GOLDEN_DEALS.G10RATCHET = {
   assumptions: {
     ...GOLDEN_DEALS.G3.assumptions,
     mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: [{ hurdle_moic: 1.75, share_pct: 0.25 }] },
+  },
+};
+
+// §3.8 [v2.1.0]: the surplus-cash policy goldens (scripts/goldens/spec_calc.py g13_surplus) —
+// G5 with the senior cut to 1.5× (so the sweep retires it inside the hold), plus the policy.
+function g13(start: 'immediately' | 'after_debt_repaid', payout: number, trapLevel: number | null): { facts: DealFacts; assumptions: DealAssumptions } {
+  const base = GOLDEN_DEALS.G5.assumptions;
+  return {
+    facts: GOLDEN_DEALS.G5.facts,
+    assumptions: {
+      ...base,
+      structure: {
+        ...base.structure,
+        tranches: base.structure.tranches.map((t) => (t.name === 'Senior' && t.type !== 'revolver' ? { ...t, size: { x_ebitda: 1.5 } } : t)),
+        surplus_distribution: { payout_pct: payout, start },
+      },
+      covenants: { ...base.covenants, rp_trap: trapLevel === null ? null : { metric: 'net_leverage', level: trapLevel } },
+    },
+  };
+}
+GOLDEN_DEALS.G13SURPLUS = g13('immediately', 0.75, 0.5);
+GOLDEN_DEALS.G13SURPLUSGATED = g13('after_debt_repaid', 1.0, null);
+
+// §23.12 [v2.2.0]: G11-SELL = G2-DIST + exactly one secondary selldown (scripts/goldens/
+// spec_calc.py g11_sell; both blind adjudication passes SIGNED — tests/goldens/DERIVATION.md).
+GOLDEN_DEALS.G11SELL = {
+  facts: GOLDEN_DEALS.G2DIST.facts,
+  assumptions: {
+    ...GOLDEN_DEALS.G2DIST.assumptions,
+    structure: { ...GOLDEN_DEALS.G2DIST.assumptions.structure, selldown: { year: 3, fraction: 0.25, event_multiple: 8.5 } },
   },
 };

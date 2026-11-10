@@ -15,7 +15,8 @@ import { createStore } from 'zustand/vanilla';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { runModel, type Engine2ModelOutput } from '../lib/engine2/facade';
 import { runModelWithScenarios } from '../lib/engine2/scenarios';
-import { suggestAssumptions, type SuggestionBasis } from '../lib/engine2/suggest';
+import { suggestionsFor, type SuggestionBasis, type SuggestionCatalogue } from '../lib/engine2/suggest';
+import { blankAssumptions, CHOICE_PATHS, missingInputs, resizeHold, setPath, type MissingInput } from '../lib/engine2/draft';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
 
@@ -31,8 +32,14 @@ export interface Engine2ModelStore {
   missingFacts: string[];
   /** Honest-degradation notes from extraction (days gating, FPI history, currency). */
   factNotes: string[];
+  /** The DRAFT deal (v2.0.0 "blank until entered"): unset numbers are NaN and unset choices
+   *  are listed in `pending`; `missingInputs` is the Build gate (lib/engine2/draft.ts). */
   assumptions: DealAssumptions | null;
-  /** fieldPath → basis badge (suggestion bases; 'user' after an edit). */
+  /** Modelling choices not yet made (entry/exit basis, toggles, methods, the debt stack). */
+  pending: string[];
+  /** One-click proposals with their basis — NEVER applied unless the analyst accepts one. */
+  suggestions: SuggestionCatalogue;
+  /** fieldPath → basis badge ('user' after an edit; the suggestion's basis after an accept). */
   basis: Record<string, FieldBasis>;
   output: Engine2ModelOutput | null;
   error: string | null;
@@ -40,9 +47,26 @@ export interface Engine2ModelStore {
   /** Screen 1 → 2: adapt extraction, then AUTO-suggest (one-click re-suggest = same call).
    *  opts.trading_anchor: the D5 EV/EBITDA anchor when the quote resolved (null = no key/
    *  ticker/implausible — the coherence gate suppresses on null). */
+  /** Screen 1 → 2. With no `hold_years` the draft does not exist yet: the holding period is
+   *  the FIRST input (it sizes every per-year array — no default N). */
   importFromRaw: (raw: RawHistoricals, opts?: { hold_years?: number; trading_anchor?: number | null }) => void;
-  /** Re-run the D7 suggestion pass over current facts (overwrites non-user bases only). */
+  /** The D5 trading anchor resolved in the background: update the fact in place (never a
+   *  re-import — nothing the analyst entered is touched). */
+  setTradingAnchor: (entityName: string, anchor: number | null) => void;
+  /** Start a forecast-only case (no historical year — §24.2): facts carry the name and
+   *  currency only; every line is entered directly. */
+  startForecastOnly: (p: { entity_name: string; currency: DealFacts['currency']; hold_years: number }) => void;
+  /** Recompute the suggestion catalogue (never touches the assumptions). */
   resuggest: () => void;
+  /** Apply ONE proposal from the catalogue: the value lands with the proposal's basis badge. */
+  acceptSuggestion: (path: string) => void;
+  /** Change the holding period: kept years keep values, new years are unset. */
+  setHoldYears: (n: number) => void;
+  /** The inputs still blank — Build is disabled while this is non-empty. */
+  missing: () => MissingInput[];
+  /** Apply a whole-object edit AND register choices it brings into scope (e.g. a new tranche's
+   *  sweep election) — each stays pending, gating Build, until the analyst makes it. */
+  editWithChoices: (next: DealAssumptions, editedPaths: string[], newChoices: string[], clearedPrefixes?: string[]) => void;
   /** Confirm a MISSING fact with a user-entered value (flips it out of the Build gate). */
   confirmFact: (path: string, value: number) => void;
   /** True while the CURRENT import for `entityName` sits untouched — no build, no user
@@ -62,7 +86,7 @@ export interface Engine2ModelStore {
   aiBusy: boolean;
   redlineItems: import('../lib/ai2/redline').RedlineItem[] | null;
   aiNotes: string[];
-  /** AI-suggest: Class-B refinements only, clamped to the suggestion rails, AI badges. */
+  /** AI-suggest: Class-B PROPOSALS only (catalogue keys '<path>@ai'); out-of-rail values dropped, never clamped; nothing applied. */
   aiSuggest: () => Promise<void>;
   /** Redline: hostile challenges over assumptions + bases + coherence; edits nothing. */
   runRedlineAction: () => Promise<void>;
@@ -80,54 +104,88 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   output: null,
   error: null,
 
+  pending: [],
+  suggestions: {},
+
   importFromRaw: (raw, opts) => {
     const adapted = adaptRawHistoricals(raw);
     const facts = { ...adapted.facts, implied_trading_ev_ebitda: opts?.trading_anchor ?? null };
-    const { assumptions, basis } = suggestAssumptions(facts, opts);
-    // Badge honesty (review 2026-07-24): a suggestion whose FACT input was a placeholder or
-    // statutory default must not wear a "from the filing" badge. Two sources of truth:
-    // the adapter's templateBases (defaulted inputs) and the missing list (placeholder
-    // inputs — Build is gated, but the badge must still tell the truth while it shows).
-    const MISSING_TO_ASSUMPTION: Record<string, string> = {
-      maint_capex_pct_revenue: 'operations.maint_capex_pct_revenue',
-      da_pct_revenue: 'operations.da_pct_revenue',
-      fy_ebitda: 'operations.target_margin',
-      nwc_pct_revenue: 'operations.nwc',
-    };
-    const honest: Record<string, FieldBasis> = { ...basis };
-    for (const [path, detail] of Object.entries(adapted.templateBases)) {
-      honest[path] = { kind: 'template', detail };
-    }
-    for (const m of adapted.missing) {
-      const path = MISSING_TO_ASSUMPTION[m];
-      if (path) honest[path] = { kind: 'template', detail: `the filing lacked ${m} — confirm it above (Build stays gated)` };
-    }
+    const N = opts?.hold_years ?? null;
     set({
       facts,
       sourceCurrency: raw.currency_unsupported ?? raw.currency,
-      missingFacts: adapted.missing, factNotes: adapted.notes, assumptions, basis: honest,
+      missingFacts: adapted.missing, factNotes: adapted.notes,
+      // v2.0.0: NOTHING pre-filled — a blank draft plus a catalogue of proposals.
+      assumptions: N === null ? null : blankAssumptions(`${facts.entity_name} LBO`, N),
+      pending: [...CHOICE_PATHS],
+      suggestions: N === null ? {} : suggestionsFor(facts, N),
+      basis: {},
       output: null, error: null,
       // AI notes/redlines describe assumptions that no longer exist after ANY re-import
       aiNotes: [], redlineItems: null,
     });
   },
 
-  resuggest: () => {
-    const { facts, basis: prior } = get();
-    if (!facts) return;
-    const { assumptions, basis } = suggestAssumptions(facts);
-    // user-owned fields keep their YOU badge AND their values are NOT overwritten:
-    // suggestions never clobber an explicit decision (re-suggest is additive).
-    const merged: Record<string, FieldBasis> = { ...basis };
-    for (const [path, b] of Object.entries(prior)) if (b.kind === 'user') merged[path] = b;
-    const current = get().assumptions;
+  startForecastOnly: ({ entity_name, currency, hold_years }) => {
+    const facts: DealFacts = {
+      entity_name, source: 'manual', sector: 'Other', currency,
+      fiscal_year: null, period_end: null,
+      fy_revenue: null, fy_ebitda: null, fy_ebitda_margin: null,
+      da_pct_revenue: null, maint_capex_pct_revenue: null, net_ppe: null,
+      operating_nwc: null, nwc_pct_revenue: null, dso: null, dio: null, dpo: null,
+      gross_debt: null, cash: null, net_debt: null, effective_tax_rate: null,
+      nol_carryforward_floor: null, implied_cost_of_debt: null, implied_trading_ev_ebitda: null,
+      sic_code: null, sector_comps: null, history: [],
+    };
     set({
-      assumptions: current
-        ? { ...assumptions, ...pickUserOwned(current, prior) }
-        : assumptions,
-      basis: merged,
+      facts, sourceCurrency: currency, missingFacts: [], factNotes: [],
+      assumptions: blankAssumptions(`${entity_name} LBO`, hold_years),
+      pending: [...CHOICE_PATHS], suggestions: {}, basis: {},
+      output: null, error: null, aiNotes: [], redlineItems: null,
+    });
+  },
+
+  resuggest: () => {
+    const { facts, assumptions } = get();
+    if (!facts || !assumptions) return;
+    set({ suggestions: suggestionsFor(facts, assumptions.entry.hold_years, assumptions) });
+  },
+
+  acceptSuggestion: (key) => {
+    const { assumptions, suggestions, basis, pending } = get();
+    const sug = suggestions[key];
+    if (!assumptions || !sug) return;
+    // catalogue keys may carry a variant (`entry.entry_multiple@ai`) — the target is the path
+    const path = key.split('@')[0];
+    let next = setPath(assumptions, path, sug.value);
+    if (path === 'entry.entry_multiple') next = { ...next, entry: { ...next.entry, driver: 'multiple', enterprise_value: null } };
+    set({
+      assumptions: next,
+      basis: { ...basis, [path]: sug.basis },
+      pending: pending.filter((p) => p !== path && !p.startsWith(`${path}.`)),
       output: null,
     });
+  },
+
+  setTradingAnchor: (entityName, anchor) => {
+    const { facts, assumptions } = get();
+    if (!facts || facts.entity_name !== entityName) return;
+    const next = { ...facts, implied_trading_ev_ebitda: anchor };
+    set({ facts: next, suggestions: assumptions ? suggestionsFor(next, assumptions.entry.hold_years, assumptions) : get().suggestions });
+  },
+
+  setHoldYears: (n) => {
+    const { assumptions, facts } = get();
+    if (!facts) return;
+    if (!Number.isInteger(n) || n < 1) { set({ error: 'Holding period must be a whole number of years ≥ 1.' }); return; }
+    const next = assumptions ? resizeHold(assumptions, n) : blankAssumptions(`${facts.entity_name} LBO`, n);
+    set({ assumptions: next, suggestions: suggestionsFor(facts, n, next), output: null, error: null });
+  },
+
+  missing: () => {
+    const { facts, assumptions, pending } = get();
+    if (!facts || !assumptions) return [];
+    return missingInputs(facts, assumptions, pending);
   },
 
   importUntouched: (entityName) => {
@@ -148,7 +206,10 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     if (path in nextFacts) (nextFacts as Record<string, unknown>)[path] = value;
     // derived margin stays consistent when revenue/EBITDA are confirmed
     if (path === 'fy_revenue' || path === 'fy_ebitda') {
-      nextFacts.fy_ebitda_margin = nextFacts.fy_revenue > 0 ? nextFacts.fy_ebitda / nextFacts.fy_revenue : 0;
+      // null, never a 0 sentinel, when either side is absent or revenue is non-positive (§15)
+      const rev = nextFacts.fy_revenue;
+      const ebitda = nextFacts.fy_ebitda;
+      nextFacts.fy_ebitda_margin = rev !== null && ebitda !== null && rev > 0 ? ebitda / rev : null;
     }
     set({
       facts: nextFacts,
@@ -159,10 +220,25 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     });
   },
 
+  editWithChoices: (next, editedPaths, newChoices, clearedPrefixes = []) => {
+    const keep = get().pending.filter((p) => !clearedPrefixes.some((c) => p === c || p.startsWith(`${c}.`)));
+    set({ pending: [...new Set([...keep, ...newChoices])] });
+    get().editAssumptions(next, editedPaths);
+    // editAssumptions removed edited paths from pending; re-add the brand-new choices
+    set({ pending: [...new Set([...get().pending, ...newChoices.filter((c) => !editedPaths.includes(c))])] });
+  },
+
   editAssumptions: (next, editedPaths) => {
     const marked = { ...get().basis };
-    for (const p of editedPaths) marked[p] = { kind: 'user', detail: 'edited by you' };
-    set({ assumptions: next, basis: marked, output: null });
+    for (const p of editedPaths) marked[p] = { kind: 'user', detail: 'entered by you' };
+    // an edit IS the choice: the path (and anything under it) leaves `pending`
+    const pending = get().pending.filter((p) => !editedPaths.some((e) => p === e || p.startsWith(`${e}.`)));
+    const { facts } = get();
+    set({
+      assumptions: next, basis: marked, pending, output: null,
+      // proposals that follow other inputs (exit = entry) track what was entered
+      suggestions: facts ? suggestionsFor(facts, next.entry.hold_years, next) : get().suggestions,
+    });
   },
 
   build: () => {
@@ -176,6 +252,11 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       });
       return;
     }
+    const blank = get().missing();
+    if (blank.length) {
+      set({ error: `${blank.length} input(s) still blank: ${blank.slice(0, 6).map((m) => m.label).join('; ')}${blank.length > 6 ? '; …' : ''}`, output: null });
+      return;
+    }
     try {
       const output = runModel(facts, assumptions); // the ONE call — §16 single path
       set({ output, error: null });
@@ -187,21 +268,29 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   buildWithExhibits: () => {
     const { facts, assumptions, missingFacts } = get();
     if (!facts || !assumptions) return;
-    if (missingFacts.length) {
+    if (missingFacts.length || get().missing().length) {
       get().build(); // reuse the gate + message path
       return;
     }
     try {
-      const m = assumptions.entry.entry_multiple ?? assumptions.exit.multiple;
+      // Center the entry axis on the DERIVED entry multiple of the base run — under an EV
+      // driver `entry_multiple` is null, and centering on the exit multiple (the old
+      // fallback) labelled the base cell with a multiple the deal was never priced at.
+      const m = runModel(facts, assumptions).derived.entry_multiple;
       const step = 0.5;
       const around = (center: number) => [center - 2 * step, center - step, center, center + step, center + 2 * step];
       const g = assumptions.operations.growth;
+      const lines = assumptions.operations.lines;
+      // §24.3 R8: a stress on a driver the deal does not use would silently move nothing —
+      // only offer the rows whose driver is live.
+      const growthLive = !lines?.revenue;
+      const marginLive = !lines?.ebitda;
       const output = runModelWithScenarios(facts, assumptions, {
         scenarios: [
           // §13 committed downside + single-factor stress rows (entry frozen for all)
-          { name: 'Downside (growth −200bps, exit −0.5x)', deltas: { operations: { growth: g.map((x) => x - 0.02) }, exit_multiple: assumptions.exit.multiple - 0.5 } },
-          { name: 'Growth stress (−200bps)', deltas: { operations: { growth: g.map((x) => x - 0.02) } } },
-          { name: 'Margin stress (−200bps target)', deltas: { operations: { target_margin: assumptions.operations.target_margin - 0.02 } } },
+          ...(growthLive ? [{ name: 'Downside (growth −200bps, exit −0.5x)', deltas: { operations: { growth: g.map((x) => x - 0.02) }, exit_multiple: assumptions.exit.multiple - 0.5 } }] : []),
+          ...(growthLive ? [{ name: 'Growth stress (−200bps)', deltas: { operations: { growth: g.map((x) => x - 0.02) } } }] : []),
+          ...(marginLive ? [{ name: 'Margin stress (−200bps target)', deltas: { operations: { target_margin: assumptions.operations.target_margin - 0.02 } } }] : []),
           { name: 'Exit stress (−1.0x)', deltas: { exit_multiple: assumptions.exit.multiple - 1.0 } },
         ],
         sensitivity: [{
@@ -230,14 +319,15 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       const cfg = savedAiConfig();
       if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use AI-suggest.', aiBusy: false }); return; }
       const result = await aiRefineAssumptions(facts, assumptions, missingFacts, makeAiText(cfg.provider, cfg.apiKey));
+      // v2.0.0: AI values are PROPOSALS (catalogue keys `<path>@ai`), never applied.
+      const proposals: SuggestionCatalogue = {};
+      for (const a of result.applied) proposals[`${a.path}@ai`] = { value: a.value, basis: { kind: 'ai', detail: a.basis } };
       set({
-        assumptions: result.assumptions,
-        basis: { ...get().basis, ...result.aiBasis },
+        suggestions: { ...get().suggestions, ...proposals },
         aiNotes: [
           ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value} — ${a.basis}`),
           ...result.dropped.map((d) => `dropped: ${d}`),
         ],
-        output: null, // assumptions moved — outputs never survive an edit
         aiBusy: false,
       });
     } catch (e: unknown) {
@@ -261,7 +351,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
   },
 
-  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
+  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, pending: [], suggestions: {}, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
 }));
 
 /**
@@ -280,18 +370,3 @@ export function useEngine2Model<T>(selector: (s: Engine2ModelStore) => T): T {
 useEngine2Model.getState = engine2Store.getState;
 useEngine2Model.setState = engine2Store.setState;
 useEngine2Model.subscribe = engine2Store.subscribe;
-
-/** The assumption groups a YOU badge protects from re-suggest overwrite. */
-function pickUserOwned(current: DealAssumptions, basis: Record<string, FieldBasis>): Partial<DealAssumptions> {
-  const owned: Partial<DealAssumptions> = {};
-  const has = (prefix: string) => Object.entries(basis).some(([p, b]) => b.kind === 'user' && p.startsWith(prefix));
-  if (has('entry.')) owned.entry = current.entry;
-  if (has('structure.')) owned.structure = current.structure;
-  if (has('operations.')) owned.operations = current.operations;
-  if (has('tax.')) owned.tax = current.tax;
-  if (has('fees')) owned.fees = current.fees;
-  if (has('exit.')) owned.exit = current.exit;
-  if (has('mip')) owned.mip = current.mip;
-  if (has('covenants')) owned.covenants = current.covenants;
-  return owned;
-}

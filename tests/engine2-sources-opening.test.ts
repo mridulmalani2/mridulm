@@ -93,20 +93,23 @@ const SPECS: Record<string, GoldenSpec> = {
   },
 };
 
+/** An FY-basis entry never reads forecast year-1 EBITDA (§24.4); NaN would poison any read. */
+const FY_BASIS_IGNORES_YEAR1 = Number.NaN;
+
 function derive(spec: GoldenSpec) {
   const entry = deriveEntry(
     { fy_ebitda: spec.fy_ebitda },
     {
       entry: { driver: 'multiple', entry_multiple: spec.entry_multiple, enterprise_value: null, basis: 'fy', hold_years: 5 },
-      operations: { growth: [spec.growth0, 0, 0, 0, 0] } as OperationsAssumption,
     },
+    FY_BASIS_IGNORES_YEAR1,
   );
   const structure: DealAssumptions['structure'] = {
     tranches: spec.tranches,
     min_cash: spec.min_cash,
     sweep: { base_pct: 0.5, grid: null },
     distributions: null,
-    refinancing: null,
+    surplus_distribution: null, refinancing: null, selldown: null,
   };
   const sized = sizeStructure(structure, spec.fy_ebitda);
   const su = buildSourcesUses(entry, sized, {
@@ -238,15 +241,15 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       { fy_ebitda: r.ebitda },
       {
         entry: { driver: 'multiple', entry_multiple: r.multiple, enterprise_value: null, basis: 'fy', hold_years: 5 },
-        operations: { growth: [0.05, 0, 0, 0, 0] } as OperationsAssumption,
       },
+      FY_BASIS_IGNORES_YEAR1,
     );
     const structure: DealAssumptions['structure'] = {
       tranches: r.tranches,
       min_cash: r.minCash,
       sweep: { base_pct: 0.5, grid: null },
       distributions: null,
-      refinancing: null,
+      surplus_distribution: null, refinancing: null, selldown: null,
     };
     const sized = sizeStructure(structure, r.ebitda);
     const su = buildSourcesUses(entry, sized, {
@@ -305,15 +308,15 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
           { fy_ebitda: ebitda },
           {
             entry: { driver: 'multiple', entry_multiple: multiple, enterprise_value: null, basis: 'fy', hold_years: 5 },
-            operations: { growth: [0, 0, 0, 0, 0] } as OperationsAssumption,
           },
+          FY_BASIS_IGNORES_YEAR1,
         );
         const byEv = deriveEntry(
           { fy_ebitda: ebitda },
           {
             entry: { driver: 'ev', entry_multiple: null, enterprise_value: byMultiple.enterprise_value, basis: 'fy', hold_years: 5 },
-            operations: { growth: [0, 0, 0, 0, 0] } as OperationsAssumption,
           },
+          FY_BASIS_IGNORES_YEAR1,
         );
         expect(byEv.entry_multiple).toBeCloseTo(multiple, 9);
         expect(trancheSize({ amount: 123.4 }, ebitda)).toBe(123.4);
@@ -322,25 +325,32 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
     );
   });
 
-  it('[v1.0.3] entry-NTM basis (C2 review F2): valuation EBITDA = fy × (1 + growth[0]); sizing stays FY under NTM', () => {
+  it('[v2.0.0 §24.4] entry-NTM basis: valuation EBITDA = FORECAST year-1 EBITDA (no longer the fy × (1+growth[0]) proxy); sizing stays FY under NTM', () => {
     const facts = { fy_ebitda: 100 };
-    const ops = { growth: [0.08, 0.05, 0.05, 0.05, 0.05] } as OperationsAssumption;
+    const year1 = 111.5; // forecast year-1 EBITDA from the operating build (margin moved too)
     const ntm = deriveEntry(facts, {
       entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'ntm', hold_years: 5 },
-      operations: ops,
-    });
-    // §9 [v1.0.3] symmetry: growth[0], NOT growth[N−1]
-    expect(ntm.entry_ebitda_for_valuation).toBeCloseTo(108, 12);
-    expect(ntm.enterprise_value).toBeCloseTo(9 * 108, 12);
+    }, year1);
+    expect(ntm.entry_ebitda_for_valuation).toBe(year1);
+    expect(ntm.enterprise_value).toBeCloseTo(9 * year1, 12);
+    // mutation guard: the v1 proxy (fy × 1.08 = 108) must NOT be what prices the deal
+    expect(ntm.enterprise_value).not.toBeCloseTo(9 * 108, 6);
     // §11: sizing ALWAYS uses FY even when the valuation basis is NTM
     expect(ntm.entry_ebitda_for_sizing).toBe(100);
     // EV-driver round-trip under NTM: implied multiple divides by the NTM EBITDA
     const byEv = deriveEntry(facts, {
-      entry: { driver: 'ev', entry_multiple: null, enterprise_value: 972, basis: 'ntm', hold_years: 5 },
-      operations: ops,
-    });
+      entry: { driver: 'ev', entry_multiple: null, enterprise_value: 9 * year1, basis: 'ntm', hold_years: 5 },
+    }, year1);
     expect(byEv.entry_multiple).toBeCloseTo(9, 12);
     expect(byEv.entry_ebitda_for_sizing).toBe(100);
+    // §24.3 R4: an NTM entry with non-positive year-1 EBITDA is rejected, never priced
+    expect(() => deriveEntry(facts, { entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'ntm', hold_years: 5 } }, 0)).toThrow(/R4/);
+    // §24.3 R4: an FY entry with no historical EBITDA is rejected
+    expect(() => deriveEntry({ fy_ebitda: null }, { entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'fy', hold_years: 5 } }, year1)).toThrow(/R4/);
+    // a forecast-only case CAN price on NTM, and has no sizing EBITDA (null, never 0)
+    const noHistory = deriveEntry({ fy_ebitda: null }, { entry: { driver: 'ev', entry_multiple: null, enterprise_value: 1100, basis: 'ntm', hold_years: 5 } }, 145);
+    expect(noHistory.entry_multiple).toBeCloseTo(1100 / 145, 12);
+    expect(noHistory.entry_ebitda_for_sizing).toBeNull();
   });
 
   it('v1 input gates (C2 review F1/F4): drawn_at_close ≠ 0 and negative revolver commitment are rejected', () => {
@@ -349,10 +359,10 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       commitment_fee: 0.005, maturity_years: 6, drawn_at_close: drawn,
     });
     // §2 has no drawn-revolver source line — proceeds would vanish into the goodwill plug
-    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100)).toThrow(/drawn_at_close/);
-    expect(() => sizeStructure({ tranches: [rcf(0, -3)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100)).toThrow(/commitment/);
+    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).toThrow(/drawn_at_close/);
+    expect(() => sizeStructure({ tranches: [rcf(0, -3)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).toThrow(/commitment/);
     // drawn_at_close = 0 stays valid
-    expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100)).not.toThrow();
+    expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).not.toThrow();
   });
 
   it('v1 input gate (C5 review): duplicate tranche names are rejected — they key the write-off schedules and retirement reporting', () => {
@@ -361,10 +371,10 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.01, sweep: { participates: true, priority: 1 },
     });
     expect(() =>
-      sizeStructure({ tranches: [term('TL'), term('TL')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100),
+      sizeStructure({ tranches: [term('TL'), term('TL')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100),
     ).toThrow(/duplicate tranche name/);
     expect(() =>
-      sizeStructure({ tranches: [term('TLA'), term('TLB')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100),
+      sizeStructure({ tranches: [term('TLA'), term('TLB')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100),
     ).not.toThrow();
   });
 
@@ -373,18 +383,16 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       name, type: 'revolver', commitment: { amount: 10 }, pricing: { kind: 'fixed', rate: 0.07 },
       commitment_fee: 0.005, maturity_years: 5, drawn_at_close: 0,
     });
-    expect(() => sizeStructure({ tranches: [rcf('A'), rcf('B')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, refinancing: null }, 100)).toThrow(RangeError);
+    expect(() => sizeStructure({ tranches: [rcf('A'), rcf('B')], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).toThrow(RangeError);
     expect(() =>
       deriveEntry({ fy_ebitda: 0 }, {
         entry: { driver: 'multiple', entry_multiple: 8, enterprise_value: null, basis: 'fy', hold_years: 5 },
-        operations: { growth: [0] } as unknown as OperationsAssumption,
-      }),
+      }, FY_BASIS_IGNORES_YEAR1),
     ).toThrow(RangeError);
     expect(() =>
       deriveEntry({ fy_ebitda: 100 }, {
         entry: { driver: 'multiple', entry_multiple: null, enterprise_value: null, basis: 'fy', hold_years: 5 },
-        operations: { growth: [0] } as unknown as OperationsAssumption,
-      }),
+      }, FY_BASIS_IGNORES_YEAR1),
     ).toThrow(RangeError);
   });
 });

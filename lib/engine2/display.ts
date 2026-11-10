@@ -48,7 +48,8 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
     // the leverage / FY-canonical figures size on entry_ebitda_for_sizing = the §1.1 sizing basis
     sizing_label: sizingBasisLabel(o.facts.sizing_basis),
     valuation: o.derived.entry_multiple,
-    fy_canonical: ntm ? o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing : null,
+    // §24.2: a forecast-only case has no FY/LTM EBITDA, so no canonical figure — null, never a sentinel.
+    fy_canonical: ntm && o.derived.entry_ebitda_for_sizing !== null ? o.derived.enterprise_value / o.derived.entry_ebitda_for_sizing : null,
   };
 }
 
@@ -63,4 +64,14 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
  */
 export function exitMultipleDisplay(o: Pick<Engine2ModelOutput, 'exit'>): number {
   return o.exit.exit_ev / o.exit.exit_ebitda_basis_value;
+}
+
+/**
+ * A run carrying a BLOCK-severity coherence flag (a cash-floor breach with the revolver
+ * exhausted, a non-positive sponsor plug) is not economically meaningful (§3 step 6, §2): every
+ * HEADLINE return surface (the Summary tiles, the Build line, the IC memo) withholds its figures
+ * as "N/M" and points at the warning; the detail tabs keep every number for diagnosis.
+ */
+export function headlineNotMeaningful(o: Pick<Engine2ModelOutput, 'coherence'>): boolean {
+  return o.coherence.some((f) => f.severity === 'block');
 }

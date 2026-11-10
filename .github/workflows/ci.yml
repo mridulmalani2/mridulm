@@ -19,6 +19,11 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      # SPEC §26 / invariant §14.26: the exported workbook is recalculated by an independent
+      # spreadsheet engine and must equal the engine cell by cell. The suite FAILS in CI
+      # without LibreOffice (it only skips locally, loudly).
+      - name: LibreOffice (formula-workbook parity)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-calc
       - name: Unit tests
         run: npx vitest run
       - name: Type check + production build

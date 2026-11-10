@@ -15,7 +15,7 @@ import { Summary, Methodology } from '../components/deal-engine/v2/OutputTabs';
 import { runModel } from '../lib/engine2/facade';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { manualHistoricals } from '../lib/edgar/buildModel';
-import { suggestAssumptions } from '../lib/engine2/suggest';
+import { analystDeal } from './fixtures/entered-deal';
 
 const build = (sector: string) => {
   const { facts } = adaptRawHistoricals(manualHistoricals({
@@ -23,7 +23,7 @@ const build = (sector: string) => {
     years: [{ end: '2025-12-31', revenue: 1000, ebitda: 250, da: 40, capex: 30 }],
     nwc: 100, grossDebt: 0, cash: 0, netDebt: 0, netPpe: 200, taxRate: 0.25, nol: null,
   }));
-  const { assumptions } = suggestAssumptions(facts);
+  const assumptions = analystDeal(facts);
   return renderToStaticMarkup(React.createElement(Summary, { o: runModel(facts, assumptions), ccy: 'USD' as const }));
 };
 

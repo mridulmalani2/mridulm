@@ -81,50 +81,34 @@ there. A spec review that has stopped moving numbers has stopped protecting accu
 
 ## 2. STATE (update this section as you go — it is the resume point)
 
-- **Repo** `mridulmalani2/mridulm` (GitHub). Everything needed is on origin — do not depend on
-  any local path. Locally the checkout is `~/Desktop/mridulm` with worktrees under
-  `.claude/worktrees/`; in a cloud session it is a fresh clone.
-- **main** @ `881b38b` (= 64625fe + PR #122, the bounded criterion + this runbook), SPEC
-  v1.6.0 on main, vitest **686/686**.
-- **#8 MERGED 2026-08-14 — PR #121, main @ `353e52a`, SPEC v1.7.0, vitest 731 passed +
-  3 live-skipped (53 files).** The full bounded Tier-A ritual ran end-to-end in one day:
-  spec SIGNED r11 (3 lenses, 0 blocking; fingerprint 0398fb3) → goldens G9-SWEET/G10-RATCHET
-  with TWO blind adjudication passes (zero mismatches; DERIVATION.md §22) → engine (both
-  goldens reproduced; §22.13 fixtures; 19 mutants RED/reverted; accuracy audit's 2 blocking
-  fixed in-step) → UI (both §15 surfaces; M10 Excel; 8 display mutants) → conformance
-  (TIER_A_CORRECT; 1 blocking closed: the M10 row on the S&U WORKSHEET, footing asserted)
-  + live three-issuer walkthrough GREEN regression-free (G10_SWEET_WALKTHROUGH.md) →
-  ledger pass EMPTY (G10_LEDGER.md). The live E-gate harness is committed opt-in at
-  `tests/walkthrough-g10.live.test.ts` (LIVE_WALKTHROUGH=1) — reuse it for future features.
-- **IN FLIGHT: #7 partial exits / IPO selldown — step 1 (spec §23), CLAIMED by the local
-  session 2026-08-14 ~16:40 IST on branch `claude/partial-exits-spec`.** A concurrently
-  running cloud-routine session (fired 10:47 UTC from a pre-merge clone) may have pushed
-  stale step-5 work to the already-merged #8 branch — IGNORE that branch; #8 is closed.
-  Any session resuming from this STATE: if `claude/partial-exits-spec` exists on origin,
-  continue it; do not restart #7 from scratch.
-
-### Backlog — 12 items, 6 merged
-
-| # | Tier | Feature | State |
-|---|---|---|---|
-| 1 | A | Interim distributions + cash trap | ✅ merged |
-| 3 | A | Fund/LP overlay §19 | ✅ merged |
-| 4 | B | Sector comps §21 | ✅ merged (PR #120) |
-| 5 | A | Refinancing §18 | ✅ merged |
-| 6 | A | PIK toggle §20 | ✅ merged |
-| 8 | A | Sweet equity + ratchets + warrants §22 | ✅ merged (PR #121) |
-| **7** | **A** | **Partial exits / IPO selldown** | 🔄 **step 1 (spec)** |
-| **9** | **A** | **Add-on acquisitions** | then |
-| 2 | B | Quarter-stitched LTM | then |
-| 10 | B/A | Market-data suggestions | then |
-| 11 | B | Covenant step-downs | then |
-| 12 | C | Trace mode v2 | last |
-
-**Order (owner decision 2026-08-12): finish #8, then #7, #9 — the hard Tier-A arithmetic while
-budget lasts — then #2, #10, #11, #12.** #9 is called "the old engine's deepest wound"; do not
-leave it for a session with no budget.
-
----
+- **Repo** `mridulmalani2/mridulm`. The engine line of work owns `lib/engine2/**`,
+  `tests/engine2-*`, `tests/goldens/**`, `scripts/goldens/**`, `rebuild/**`; a parallel
+  session owns the site surface.
+- **2026-11-09: PR #126 (`claude/engine-hardening-formula-excel`) carries SPEC v2.0.0 →
+  v2.3.0**, awaiting the owner's merge:
+  - v2.0.0 case-driven forecasts, §25 flow-to-equity valuation, §26 formula workbook,
+    blank-until-entered inputs;
+  - every engine feature formula-covered in the workbook (`formulaCoverageBlockers` empty),
+    Summary / Sensitivity / Methodology sheets, seeded IRRs;
+  - v2.1.0 §3.8 surplus-cash distribution policy;
+  - v2.2.0 §23 partial exits — the #7 branch merged and implemented (ledger
+    `rebuild/G11_LEDGER.md` EMPTY);
+  - v2.3.0 §9.1 limited liability — exit equity and selldown proceeds floored at zero, the
+    lenders' shortfall reported.
+  - v2.3.1 adversarial review (rebuild/ADVERSARIAL_REVIEW_2026-11-10.md) — BLOCK-flagged runs
+    no longer headlined;
+  - v2.4.0 §7.1 tax character and timing of retired / refinanced debt — OID and call premium
+    capped as §163(j) interest, debt-issuance costs uncapped, exit and refinancing same-year,
+    sweep retirement lagged a year (circularity); 7 goldens re-derived.
+- **Backlog:** `rebuild/V2_BACKLOG.md` is the live tracker. Items 1–4 DONE. **NEXT: item 5,
+  the 10-K reconciliation bridges** (EBITDA bridge + net-debt bridge, formula-linked on the
+  workbook's Inputs sheet) — the owner scheduled it last, after #126 merges.
+- **Owner decisions in force:** the professor's worked example is ONE check, not the design —
+  every policy is an analyst control; finish features at the "signed golden + directed
+  fixtures + mutants + LibreOffice parity" bar rather than further blind prose rounds; ask via
+  AskUserQuestion when a call is genuinely the owner's, then build.
+- **Gates at last commit:** tsc clean, vitest 891 passed + 3 live-skipped (61 files),
+  `npm run build` green, LibreOffice parity across 39 deals.
 
 ## 3. PER-FEATURE LOOP
 

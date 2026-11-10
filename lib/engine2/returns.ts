@@ -72,6 +72,11 @@ export interface ReturnsInputs {
    * module never re-derives it (one number, one path). DPI and payback read THIS array.
    */
   sponsor_interim_shares: number[];
+  /** §23.6 [v2.2.0] the selldown, when configured: its proceeds are IN sponsor_net at `year`
+   *  (merged into that period's one flow), EXCLUDED from pre_promote (the buyer's exit share
+   *  is already inside exit_equity_pre_mip_total) and from unlevered; and they COUNT toward
+   *  DPI/payback (the realized basis — owner question Q-A). */
+  selldown: { year: number; proceeds: number } | null;
 }
 
 /**
@@ -105,6 +110,9 @@ export function buildReturns(
     ...sponsorPaid.slice(0, -1),
     inputs.exit.sponsor_share + (sponsorPaid[N - 1] ?? 0),
   ];
+  // §23.6: the proceeds merge into the year-t flow (year ≤ N−1, so never the exit slot).
+  const sd = inputs.selldown;
+  if (sd) sponsorCfs[sd.year] += sd.proceeds;
   // §9 [v1.7.0]: pre_promote — the TOTAL pre-incentive equity stream — takes the
   // management subscription into its t=0 outflow and invested base (byte-identical when
   // the strip is null; management's sweet share settles INSIDE exit_equity_pre_mip_total).
@@ -122,13 +130,16 @@ export function buildReturns(
     (inputs.unlevered_fcf[N - 1] ?? 0) + inputs.exit.exit_ev - inputs.exit.exit_fees,
   ];
 
-  // §9 [v1.1.0] DPI and payback — on DISTRIBUTIONS ALONE. Exit proceeds never count toward
-  // payback: that is exactly what made the old headline degenerate (ledger L-10).
+  // §9 [v1.1.0] DPI and payback — on cash REALIZED before the exit: the sponsor's share of
+  // distributions plus [v2.2.0 — §23.6] any selldown proceeds (SIGNED). The FINAL exit never
+  // counts: that is exactly what made the old headline degenerate (ledger L-10). Payback is
+  // the FIRST crossing — a later dip below the check never clears it (§14.24(h)).
   const dpi: number[] = [];
   let payback: number | null = null;
   let cumulative = 0;
   for (let t = 0; t < N; t++) {
     cumulative += sponsorPaid[t] ?? 0;
+    if (sd && sd.year === t + 1) cumulative += sd.proceeds;
     dpi.push(inputs.sponsor_equity > 0 ? cumulative / inputs.sponsor_equity : 0);
     if (payback === null && inputs.sponsor_equity > 0 && cumulative >= inputs.sponsor_equity) {
       payback = t + 1;

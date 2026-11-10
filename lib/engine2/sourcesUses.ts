@@ -12,8 +12,13 @@
 import type { DealAssumptions, DealFacts, RevolverAssumption, SourcesUses, TermTrancheAssumption, TrancheSize } from './types';
 
 /** §16 single-driver sizing: x_ebitda × the §1.1 FY(LTM) sizing EBITDA (never NTM — §11) or amount. */
-export function trancheSize(size: TrancheSize, fyEbitda: number): number {
-  if (size.x_ebitda !== undefined) return size.x_ebitda * fyEbitda;
+export function trancheSize(size: TrancheSize, fyEbitda: number | null): number {
+  if (size.x_ebitda !== undefined) {
+    if (fyEbitda === null || !(fyEbitda > 0)) {
+      throw new RangeError('sourcesUses: a tranche sized as a multiple of EBITDA needs historical (LTM/FY) EBITDA > 0 — size it as an amount instead (§24.3 R5)');
+    }
+    return size.x_ebitda * fyEbitda;
+  }
   return size.amount;
 }
 
@@ -44,7 +49,7 @@ export function entryGrossLeverageFromAssumptions(
   facts: Pick<DealFacts, 'fy_ebitda'>,
   assumptions: Pick<DealAssumptions, 'structure'>,
 ): number | null {
-  if (!(facts.fy_ebitda > 0)) return null;
+  if (facts.fy_ebitda === null || !(facts.fy_ebitda > 0)) return null;
   return totalTermParFromAssumptions(facts, assumptions) / facts.fy_ebitda;
 }
 
@@ -61,6 +66,9 @@ export function rescaleTermTranchesToLeverage<A extends Pick<DealAssumptions, 's
   assumptions: A,
   targetLeverage: number,
 ): A {
+  if (facts.fy_ebitda === null || !(facts.fy_ebitda > 0)) {
+    throw new RangeError('sourcesUses: total leverage is a multiple of historical EBITDA, which this case does not have — size the tranches as amounts (§24.3 R5)');
+  }
   const currentTotal = totalTermParFromAssumptions(facts, assumptions);
   if (currentTotal <= 0) {
     throw new RangeError('sourcesUses: rescaling total leverage needs at least one term tranche to scale');
@@ -79,25 +87,34 @@ export function rescaleTermTranchesToLeverage<A extends Pick<DealAssumptions, 's
 export interface EntryDerivation {
   enterprise_value: number;
   entry_multiple: number;
-  /** the §1.1 FY(LTM) sizing basis (FY, or the LTM stitch) — never NTM; read facts.sizing_basis, not the "fy_" name (SPEC §11, §1.1, C-14) [G-2/M2]. */
-  entry_ebitda_for_sizing: number;
-  /** The valuation-basis EBITDA the multiple applies to (FY, or the §9-symmetric NTM proxy). */
+  /** the §1.1 FY(LTM) sizing basis (FY, or the LTM stitch) — never NTM; read facts.sizing_basis, not the "fy_" name (SPEC §11, §1.1, C-14) [G-2/M2]. null ⇔ the case has no historical year (§24.2). */
+  entry_ebitda_for_sizing: number | null;
+  /** The valuation-basis EBITDA the multiple applies to: FY/LTM, or forecast year-1 EBITDA under NTM (§24.4). */
   entry_ebitda_for_valuation: number;
 }
 
 /**
- * §2/§16 entry: single-driver rule — the other side is derived. NTM valuation basis uses
- * the §9 proxy pattern (fy_ebitda × (1 + growth[0])); goldens are FY (NTM golden-uncovered,
- * flagged in SPEC §9).
+ * §2/§16 entry: single-driver rule — the other side is derived. §24.4 [v2.0.0]: the NTM
+ * valuation basis is FORECAST year-1 EBITDA (`year1Ebitda` = operating[0].ebitda,
+ * pre-monitoring-fee), no longer the v1 `fy × (1 + growth[0])` proxy.
  */
 export function deriveEntry(
   facts: Pick<DealFacts, 'fy_ebitda'>,
-  assumptions: Pick<DealAssumptions, 'entry' | 'operations'>,
+  assumptions: Pick<DealAssumptions, 'entry'>,
+  year1Ebitda: number,
 ): EntryDerivation {
   const { entry } = assumptions;
   const fy = facts.fy_ebitda;
-  if (fy <= 0) throw new RangeError('sourcesUses: fy_ebitda must be > 0 to derive entry');
-  const valuationEbitda = entry.basis === 'fy' ? fy : fy * (1 + assumptions.operations.growth[0]);
+  let valuationEbitda: number;
+  if (entry.basis === 'fy') {
+    if (fy === null || !(fy > 0)) {
+      throw new RangeError('sourcesUses: an FY/LTM entry multiple needs historical EBITDA > 0 — use the NTM basis or enter the price (§24.3 R4)');
+    }
+    valuationEbitda = fy;
+  } else {
+    if (!(year1Ebitda > 0)) throw new RangeError('sourcesUses: an NTM entry multiple needs forecast year-1 EBITDA > 0 (§24.3 R4)');
+    valuationEbitda = year1Ebitda;
+  }
   let ev: number;
   let multiple: number;
   if (entry.driver === 'multiple') {
@@ -112,7 +129,7 @@ export function deriveEntry(
   return {
     enterprise_value: ev,
     entry_multiple: multiple,
-    entry_ebitda_for_sizing: fy,
+    entry_ebitda_for_sizing: fy !== null && fy > 0 ? fy : null,
     entry_ebitda_for_valuation: valuationEbitda,
   };
 }
@@ -129,7 +146,7 @@ export interface SizedStructure {
 
 export function sizeStructure(
   structure: DealAssumptions['structure'],
-  fyEbitda: number,
+  fyEbitda: number | null,
 ): SizedStructure {
   const revolvers = structure.tranches.filter((t): t is RevolverAssumption => t.type === 'revolver');
   if (revolvers.length > 1) throw new RangeError('sourcesUses: at most ONE revolver per deal (§16)');

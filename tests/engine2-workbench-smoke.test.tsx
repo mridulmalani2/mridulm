@@ -9,6 +9,7 @@ import Workbench from '../components/deal-engine/v2/Workbench';
 import { useEngine2Model } from '../store/engine2Model';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
+import { enterDeal, enteredAssumptions } from './fixtures/entered-deal';
 
 const M = 1e6;
 const fy = (start: string, end: string, val: number, filed = '2026-02-15') => ({
@@ -48,25 +49,40 @@ const importFixture = (mutate?: (f: CompanyFacts) => void, anchor?: number | nul
 beforeEach(() => useEngine2Model.getState().reset());
 
 describe('v2 Workbench — SSR smoke on the real store', () => {
-  it('renders the imported state: entity, history table, badges, Suggest CTA; Build enabled', () => {
+  it('imported state: facts and history render; the HOLD comes first; nothing is pre-filled and Build is disabled', () => {
     importFixture(undefined, 8.2);
-    const html = renderToStaticMarkup(<Workbench />);
+    let html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('Workbench Corp');
     expect(html).toContain('Filing history');
     expect(html).toContain('2025-12-31');
-    expect(html).toContain('SUGGESTED · HISTORY'); // growth basis badge
-    expect(html).toContain('SUGGESTED · CONVENTION');
-    expect(html).toContain('Suggest everything');
+    expect(html).toContain('The holding period sizes every per-year input');
+    expect(html).toContain('disabled'); // no draft yet ⇒ Build gated
+    useEngine2Model.getState().setHoldYears(5);
+    html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('still blank — nothing is assumed for you');
+    expect(html).toContain('use '); // one-click proposals are OFFERED…
+    expect(html).toContain('· history'); // …with their basis (growth: the filed CAGR)
+    expect(html).toContain('· convention'); // (entry multiple: a cited median)
+    expect(html).not.toContain('SUGGESTED · HISTORY'); // …and NOT applied (no badge on a blank field)
     expect(html).toContain('trades at ~8.2x'); // the D5 read-only anchor line
-    expect(html).not.toContain('disabled'); // no missing facts ⇒ Build live
-    // §11 [v1.1.2]: the input field states its basis. It reads GROSS total leverage across
-    // ALL term tranches — the same number the Summary tile reports — so an unqualified
-    // "Total leverage" label is what let it disagree with the headline unnoticed.
-    expect(html).toContain('Total leverage (gross, x FY EBITDA)');
+    expect(html).toContain('disabled');
+    expect(html).not.toContain('Suggest everything'); // the bulk pre-fill button is gone
+  });
+
+  it('once every input is entered the blank list disappears, Build is live, and the gross-leverage preview states its basis', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).not.toContain('still blank');
+    expect(html).not.toContain('disabled');
+    // §11 [v1.1.2]: the preview reads GROSS total leverage across ALL term tranches and says so
+    expect(html).toContain('Total leverage (gross, x FY EBITDA): 4.0x');
+    expect(html).toContain('YOU'); // entered values wear the YOU badge
   });
 
   it('after build: hero IRR/MOIC render FORMATTED (no raw engine floats in the DOM)', () => {
     importFixture();
+    enterDeal(enteredAssumptions());
     useEngine2Model.getState().build();
     const html = renderToStaticMarkup(<Workbench />);
     expect(html).toMatch(/Sponsor IRR \d+\.\d%/); // exactly 1dp — the §15 boundary
@@ -78,6 +94,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
 
   it('MISSING facts gate the button and render the confirm bar; confirming unblocks', () => {
     importFixture((f) => { delete (f as any).facts['us-gaap'].LongTermDebtNoncurrent; });
+    enterDeal(enteredAssumptions());
     let html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('confirm to build');
     expect(html).toContain('REQUIRED');
@@ -109,6 +126,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
 
   it('a cheap trading anchor produces the coherence banner after build (warn glyph, message)', () => {
     importFixture(undefined, 6.0);
+    enterDeal(enteredAssumptions(5, { entry: { driver: 'multiple', entry_multiple: 12, enterprise_value: null, basis: 'fy', hold_years: 5 } }));
     useEngine2Model.getState().build();
     const html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('▲'); // warn severity glyph
@@ -117,6 +135,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
 
   it('E2a — output tabs render after build: summary hero, bridge rows, deleveraging footer text present; no sentinels', () => {
     importFixture();
+    enterDeal(enteredAssumptions());
     useEngine2Model.getState().build();
     const html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('Summary');
@@ -140,6 +159,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
 
   it('E2b — buildWithExhibits populates scenarios (4 presets, entry frozen) + the 5×5 centered sensitivity; all three new tabs render', () => {
     importFixture();
+    enterDeal(enteredAssumptions());
     useEngine2Model.getState().buildWithExhibits();
     const out = useEngine2Model.getState().output!;
     expect(out.scenarios).toHaveLength(4);
@@ -173,6 +193,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
 describe('interim distributions — the v1.1.0 UI surfaces', () => {
   const withSchedule = (dists: number[] | null, trap: number | null) => {
     importFixture();
+    enterDeal(enteredAssumptions());
     const st = useEngine2Model.getState();
     const a = st.assumptions!;
     st.editAssumptions(
@@ -189,7 +210,7 @@ describe('interim distributions — the v1.1.0 UI surfaces', () => {
 
   it('OFF by default: no distributions table, no DPI/payback headline (a pre-v1.1.0 deal is unchanged)', () => {
     const html = withSchedule(null, null);
-    expect(html).not.toContain('Interim distributions');
+    expect(html).not.toContain('Requested distribution'); // the per-year schedule appears only when switched on
     expect(html).not.toContain('DPI');
     expect(html).not.toContain('Payback');
   });
@@ -212,14 +233,16 @@ describe('interim distributions — the v1.1.0 UI surfaces', () => {
     expect(out.returns.dpi[out.returns.dpi.length - 1]).toBeGreaterThan(0);
   });
 
-  it('the inputs live in Advanced and start empty — the suggestion layer proposes NEITHER (§16)', () => {
+  it('the inputs exist and start OFF — the suggestion layer proposes NEITHER (§16)', () => {
     importFixture();
+    useEngine2Model.getState().setHoldYears(5);
     const html = renderToStaticMarkup(<Workbench />);
-    expect(html).toContain('Advanced — tax · fees · sweep · MIP · distributions');
-    expect(html).toContain('Distributions / yr');
-    expect(html).toContain('RP trap (net lev)');
+    expect(html).toContain('Distributions to equity during the hold');
+    expect(html).toContain('surplus cash (a % of cash above the minimum)'); // §3.8 policy offered
+    expect(html).toContain('Restricted-payment cash trap');
     const a = useEngine2Model.getState().assumptions!;
     expect(a.structure.distributions).toBeNull();
+    expect(a.structure.surplus_distribution).toBeNull();
     expect(a.covenants.rp_trap).toBeNull();
   });
 
@@ -234,6 +257,118 @@ describe('interim distributions — the v1.1.0 UI surfaces', () => {
     expect(flag!.severity).toBe('warn');
     // the banner is tab-independent, so this part IS observable in the default render
     expect(html).toContain('Restricted-payment trap blocks distributions');
-    expect(html).toContain('does not carry forward');
+    expect(html).toMatch(/does not carry forward/i);
+  });
+});
+
+describe('every engine feature is enterable in the panel (sweep grid, covenant schedules, springing test, sweet ratchet, surplus policy)', () => {
+  const draft = () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    return useEngine2Model.getState();
+  };
+
+  it('a sweep step-down grid replaces the flat % — the flat % is no longer demanded, every grid cell is', () => {
+    const st = draft();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, structure: { ...a.structure, sweep: { base_pct: Number.NaN, grid: { tiers: [{ above_net_leverage: 4.5, pct: 0.75 }, { above_net_leverage: Number.NaN, pct: 0.5 }], else_pct: 0 } } } }, ['structure.sweep.grid']);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Sweep step 2: when opening net leverage is above');
+    expect(html).not.toContain('Cash sweep (% of cash above the minimum)');
+    const missing = useEngine2Model.getState().missing().map((m) => m.path);
+    expect(missing).toContain('structure.sweep.grid.tiers.1.above_net_leverage');
+    expect(missing).not.toContain('structure.sweep.base_pct');
+  });
+
+  it('covenant levels by year, the springing test (with a revolver) and sweet ratchet tiers render as inputs', () => {
+    const st = draft();
+    const a = st.assumptions!;
+    st.editAssumptions({
+      ...a,
+      mip: null,
+      rollover_equity: 0,
+      sweet_equity: { sponsor_ordinary_pct: 0.1, loan_note_rate: 0.08, management_subscription: 2, management_ordinary_pct: 0.1, ratchet: [{ hurdle_moic: 1.5, share_pct: 0.15 }] },
+      covenants: { ...a.covenants, leverage_max: [5, 4.5, 4, 3.5, 3.5], springing: { metric: 'leverage', max: 5, revolver_draw_trigger_pct: 0.35 } },
+    }, ['sweet_equity', 'covenants.leverage_max', 'covenants.springing']);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Max net leverage covenant by year');
+    expect(html).toContain('Sweet ratchet tier 1: institution MOIC above');
+    expect(a.structure.tranches.some((t) => t.type === 'revolver')).toBe(true); // the fixture carries an RCF
+    expect(html).toContain('Springing test applies when drawn ÷ commitment exceeds');
+  });
+
+  it('the surplus policy shows its pre-filled, editable settings and the model builds on them', () => {
+    const st = draft();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, structure: { ...a.structure, distributions: null, surplus_distribution: { payout_pct: 1, start: 'immediately' } } }, ['structure.surplus_distribution']);
+    let html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Pre-filled with the common case');
+    expect(html).toContain('Share of surplus cash paid out');
+    useEngine2Model.getState().build();
+    const out = useEngine2Model.getState().output!;
+    expect(out).toBeTruthy();
+    expect(out.waterfall.every((w) => w.distribution_requested >= 0)).toBe(true);
+    html = renderToStaticMarkup(<Workbench />);
+    expect(html).not.toContain('NaN');
+  });
+});
+
+describe('§23 partial exit — the panel input', () => {
+  it('offers the selldown, brings its three fields in BLANK, and Build is gated until they are entered', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    const st = useEngine2Model.getState();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, rollover_equity: 0, structure: { ...a.structure, selldown: { year: Number.NaN, fraction: Number.NaN, event_multiple: Number.NaN } } }, ['rollover_equity', 'structure.selldown']);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Partial exit before the final exit (secondary selldown)');
+    expect(html).toContain('Partial exit: sale multiple');
+    const missing = useEngine2Model.getState().missing().map((m) => m.path);
+    expect(missing).toEqual(expect.arrayContaining(['structure.selldown.year', 'structure.selldown.fraction', 'structure.selldown.event_multiple']));
+  });
+  it('says why it is unavailable beside rollover equity instead of failing the Build', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    const st = useEngine2Model.getState();
+    const a = st.assumptions!;
+    st.editAssumptions({ ...a, rollover_equity: 25 }, ['rollover_equity']);
+    expect(renderToStaticMarkup(<Workbench />)).toContain('Unavailable while the deal has rollover equity.');
+  });
+});
+
+describe('a run the engine calls not meaningful never headlines a return (adversarial review F1)', () => {
+  // a deal that cannot service its debt: 8× senior at 12%, no revolver, a falling business
+  const breaching = () => enteredAssumptions(5, {
+    structure: {
+      ...enteredAssumptions().structure,
+      tranches: [{ name: 'TLB', type: 'senior', size: { x_ebitda: 8 }, pricing: { kind: 'fixed', rate: 0.12 }, amort_pct_of_face: 0.05, maturity_years: 7, oid_pct: 0, sweep: { participates: true, priority: 1 } }],
+    },
+    operations: { ...enteredAssumptions().operations, growth: [-0.1, -0.05, 0, 0, 0] },
+  });
+
+  it('a cash-floor breach: the headline IRR/MOIC read N/M and the ■ warning sits ABOVE the output tabs', () => {
+    importFixture();
+    enterDeal(breaching());
+    useEngine2Model.getState().build();
+    const out = useEngine2Model.getState().output!;
+    expect(out.coherence.some((f) => f.severity === 'block')).toBe(true); // the premise
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).toContain('Sponsor IRR N/M');
+    expect(html).toContain('not meaningful — see the ■ warning above');
+    expect(html).not.toContain(`Sponsor IRR ${(out.returns.sponsor_net.irr! * 100).toFixed(1)}%`);
+    const warn = html.indexOf('■ Cash floor breached');
+    expect(warn).toBeGreaterThan(-1);
+    expect(warn).toBeLessThan(html.indexOf('Value bridge')); // above the tabs, beside the headline
+  });
+
+  it('a healthy run still headlines its returns (the gate is the block flag, nothing broader)', () => {
+    importFixture();
+    enterDeal(enteredAssumptions());
+    useEngine2Model.getState().build();
+    const out = useEngine2Model.getState().output!;
+    expect(out.coherence.some((f) => f.severity === 'block')).toBe(false);
+    const html = renderToStaticMarkup(<Workbench />);
+    expect(html).not.toContain('N/M');
+    expect(html).toContain(`Sponsor IRR ${(out.returns.sponsor_net.irr! * 100).toFixed(1)}%`);
   });
 });
