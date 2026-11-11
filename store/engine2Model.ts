@@ -158,7 +158,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const a = prev.assumptions;
     set({
       facts, missingFacts: missing, factNotes: adapted.notes,
-      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a) : {},
+      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a, prev.pending) : {},
       output: null, error: null,
     });
   },
@@ -185,7 +185,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   resuggest: () => {
     const { facts, assumptions } = get();
     if (!facts || !assumptions) return;
-    set({ suggestions: suggestionsFor(facts, assumptions.entry.hold_years, assumptions) });
+    set({ suggestions: suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending) });
   },
 
   acceptSuggestion: (key) => {
@@ -208,7 +208,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const { facts, assumptions } = get();
     if (!facts || facts.entity_name !== entityName) return;
     const next = { ...facts, implied_trading_ev_ebitda: anchor };
-    set({ facts: next, suggestions: assumptions ? suggestionsFor(next, assumptions.entry.hold_years, assumptions) : get().suggestions });
+    set({ facts: next, suggestions: assumptions ? suggestionsFor(next, assumptions.entry.hold_years, assumptions, get().pending) : get().suggestions });
   },
 
   setHoldYears: (n) => {
@@ -216,7 +216,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     if (!facts) return;
     if (!Number.isInteger(n) || n < 1) { set({ error: 'Holding period must be a whole number of years ≥ 1.' }); return; }
     const next = assumptions ? resizeHold(assumptions, n) : blankAssumptions(`${facts.entity_name} LBO`, n);
-    set({ assumptions: next, suggestions: suggestionsFor(facts, n, next), output: null, error: null });
+    set({ assumptions: next, suggestions: suggestionsFor(facts, n, next, get().pending), output: null, error: null });
   },
 
   missing: () => {
@@ -274,7 +274,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     set({
       assumptions: next, basis: marked, pending, output: null,
       // proposals that follow other inputs (exit = entry) track what was entered
-      suggestions: facts ? suggestionsFor(facts, next.entry.hold_years, next) : get().suggestions,
+      suggestions: facts ? suggestionsFor(facts, next.entry.hold_years, next, pending) : get().suggestions,
     });
   },
 

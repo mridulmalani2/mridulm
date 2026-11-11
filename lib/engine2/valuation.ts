@@ -45,6 +45,43 @@ export function validateValuation(v: ValuationAssumption): void {
   if (v.mrp < 0) throw new RangeError('valuation: market risk premium must be ≥ 0 (§25.1)');
   if (v.asset_beta < 0) throw new RangeError('valuation: asset beta must be ≥ 0 (§25.1)');
   if (v.debt_beta < 0) throw new RangeError('valuation: debt beta must be ≥ 0 (§25.1)');
+  const t = v.terminal ?? null;
+  if (t !== null) {
+    if (!Number.isFinite(t.capex_pct_of_da) || t.capex_pct_of_da < 0) {
+      throw new RangeError('valuation: terminal capex ÷ D&A must be a finite number ≥ 0 (§28.1)');
+    }
+    if (!Number.isFinite(t.delta_nwc_before_growth)) {
+      throw new RangeError('valuation: the terminal increase in NWC must be a finite number (§28.1)');
+    }
+  }
+}
+
+/**
+ * §28.2 [v2.6.0]: the year-N-terms lines the terminal cash flow is built on. With no terminal
+ * statement they are year N's own (v2.0.0). With one, capex is `capex_pct_of_da × D&A_N` and
+ * ΔNWC is the stated amount; EBITDA and D&A are never touched. The ONE place this is decided —
+ * `terminalUfcf`, the steady-state WARN and the workbook all read the result.
+ */
+export function resolveTerminalYear(
+  yearN: { ebitda: number; da: number; capex: number; delta_nwc: number },
+  terminal: ValuationAssumption['terminal'],
+): { ebitda: number; da: number; capex: number; delta_nwc: number; normalised: boolean } {
+  const t = terminal ?? null;
+  if (t === null) return { ...yearN, normalised: false };
+  return { ebitda: yearN.ebitda, da: yearN.da, capex: t.capex_pct_of_da * yearN.da, delta_nwc: t.delta_nwc_before_growth, normalised: true };
+}
+
+/**
+ * §24.5 / §28.4: what in the terminal year cannot last for ever — capex below D&A (the asset
+ * base is run down in perpetuity) and a working-capital INFLOW (released for ever). Empty when
+ * the terminal year is a steady state. Tolerance: a relative 1e-9, so capex ≡ D&A never trips.
+ */
+export function terminalSteadyStateIssues(t: { da: number; capex: number; delta_nwc: number }): string[] {
+  const issues: string[] = [];
+  const eps = 1e-9 * Math.max(1, Math.abs(t.da));
+  if (t.capex < t.da - eps) issues.push(`capex (${t.capex.toFixed(1)}) is below D&A (${t.da.toFixed(1)}) for ever`);
+  if (t.delta_nwc < -eps) issues.push(`working capital releases cash (${t.delta_nwc.toFixed(1)}) for ever`);
+  return issues;
 }
 
 /** §25.2 rU = rf + βA × MRP. */
@@ -53,8 +90,9 @@ export function unleveredCost(v: Pick<ValuationAssumption, 'risk_free' | 'asset_
 }
 
 /**
- * §25.2 terminal unlevered FCF: year N lines grown by g_{N+1}, EBIT taxed at the statutory
- * rate (a perpetuity carries no NOL/§163(j) state). EBITDA is pre-monitoring-fee.
+ * §25.2 terminal unlevered FCF: the year-N-terms lines (as resolved by `resolveTerminalYear`,
+ * §28.2) grown by g_{N+1}, EBIT taxed at the statutory rate (a perpetuity carries no NOL /
+ * §163(j) state). EBITDA is pre-monitoring-fee.
  */
 export function terminalUfcf(
   yearN: { ebitda: number; da: number; capex: number; delta_nwc: number },

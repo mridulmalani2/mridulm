@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v2.5.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v2.6.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -4046,7 +4046,9 @@ N+1 is year N × (1 + `year_n_plus_1_growth`) — one stated growth rate for the
 post-hold year, entered by the analyst (R7). Steady-state disclosure: when the §25
 valuation is ON the engine emits a coherence WARN if capex_N < D&A_N or ΔNWC_N < 0 is being
 perpetuated (a terminal cash flow that cannot last forever — the course check "capex against
-D&A, and working capital").
+D&A, and working capital"). [v2.6.0] The WARN is `terminal_not_steady_state` (§28.4), and the
+analyst may instead STATE the terminal year's capex and ΔNWC (§28) — the WARN then reads the
+stated lines.
 
 ## §25 Flow-to-equity valuation & reconciliation with the LBO IRR [v2.0.0 — DECIDED 2026-11-09]
 
@@ -4069,7 +4071,9 @@ equity beta).
 `rU = rf + βA × MRP` (CAPM; the tax shields are assumed as risky as the business — stated,
 §25.8 iii). Terminal unlevered FCF:
 `UFCF_{N+1} = (1 + g_{N+1}) × [ (EBITDA_N − D&A_N) × (1 − tax.rate) + D&A_N − capex_N − ΔNWC_N ]`
-with `g_{N+1}` per §24.5 and `EBITDA_N` pre-monitoring-fee. The tax here is the statutory
+with `g_{N+1}` per §24.5 and `EBITDA_N` pre-monitoring-fee. [v2.6.0] When `valuation.terminal`
+is non-null, `capex_N` and `ΔNWC_N` in this formula are replaced by the stated terminal lines
+(§28.2); with it null the formula is exactly as written here. The tax here is the statutory
 rate on unlevered EBIT — a perpetuity has no NOL or §163(j) state. Gordon exit EV:
 `EV_b = UFCF_{N+1} / (rU − g)` — defined only when `rU > g` (else `fundamentals` is null
 with reason `rU ≤ g`). Implied multiple `EV_b / exit_ebitda_basis_value` (the §9 basis).
@@ -4268,11 +4272,79 @@ Parity deal `CLEAN_CONTINUES` holds both links (§14.26).
 (adapter ignores the base; the base adds instead of subtracts; the workbook margin on the price
 basis) each run RED.
 
+## §28 The terminal year stated in steady state [v2.6.0 — implemented 2026-11-11 on the owner's instruction; **NOT yet through an independent sign-off round**; Tier A, engine arithmetic — the §25 fundamentals exit only]
+
+**Why.** The §25 fundamentals exit capitalises ONE year's unlevered cash flow for ever. §24.5
+builds that year by growing every line of year N. A forecast year is rarely a steady state: a
+deal-team forecast can run capex below D&A, or release working capital every year, and neither
+can last for ever. Growing such a year into perpetuity overstates the terminal value. Found
+out of sample (the Electronic Arts course model, `tests/goldens-ea-oos.test.ts`): the workbook
+resets terminal capex to 1.0 × D&A where the forecast runs 0.5 ×; carrying year N gave a
+year-6 FCF of 4,253.85 and an equity NPV of +313.16, the workbook 3,995.10 and −2,322.55 —
+the opposite verdict.
+
+### §28.1 Input — `valuation.terminal: TerminalYearAssumption | null` (optional; null or absent ≡ OFF)
+
+`{ capex_pct_of_da, delta_nwc_before_growth }`. Gates (Build rejections, never clamps):
+`capex_pct_of_da` finite and ≥ 0; `delta_nwc_before_growth` finite (any sign — a negative
+value is an inflow). null or absent ≡ the v2.0.0 construction; every pre-v2.6.0 deal and
+golden is numerically identical. The input surface treats carried-vs-stated as an OPEN CHOICE
+when the valuation is switched on, and both fields as blank until entered (the v2.0.0 rule):
+nothing is assumed for the analyst.
+
+### §28.2 The terminal cash flow
+
+Both stated lines are in YEAR-N TERMS and are grown into year N+1 with every other line:
+
+`capex_T = capex_pct_of_da × D&A_N` (else `capex_N`); `ΔNWC_T = delta_nwc_before_growth` (else `ΔNWC_N`)
+
+`UFCF_{N+1} = (1 + g_{N+1}) × [ (EBITDA_N − D&A_N) × (1 − tax.rate) + D&A_N − capex_T − ΔNWC_T ]`
+
+One formula; §25.2's is the case `capex_T = capex_N`, `ΔNWC_T = ΔNWC_N`. EBITDA, D&A, the tax
+rate and `g_{N+1}` are never restated. Works identically whether the forecast is driver-built
+(`lines` null) or case-stated (§24).
+
+### §28.3 What it does NOT touch
+
+Nothing before the exit: the operating build, the debt schedule, tax, the §9 exit at the
+assumed multiple and the sponsor returns are unchanged — `valuation.assumed` (case a) is
+identical with and without a terminal statement. The NTM exit basis (§9) reads year N+1
+EBITDA, which §28 does not restate. Only `ufcf_n_plus_1`, `gordon_ev`, the implied multiple,
+`valuation.fundamentals` (case b) and the two case-(b) break-evens move.
+
+### §28.4 Disclosure — `terminal_not_steady_state` (WARN)
+
+With the valuation ON, the engine WARNs when the RESOLVED terminal year (§28.2) has
+`capex_T < D&A_N` or `ΔNWC_T < 0` (relative tolerance 1e-9 on D&A, so capex ≡ D&A never
+trips). It names each condition with its figures. Stating a steady state is what clears it;
+the engine never corrects the year itself. This implements the WARN §24.5 has prescribed
+since v2.0.0, which no code emitted until v2.6.0.
+
+### §28.5 Simplifications (mirrored in `disclosures.ts`)
+
+No fade period between the forecast and the perpetuity; the terminal margin and tax rate are
+year N's; D&A is not restated (so a terminal capex ratio is applied to year-N D&A); one
+terminal year, not a multi-stage terminal value.
+
+### §28.6 Workbook (§26)
+
+Inputs gain `Terminal capex ÷ D&A` and `Terminal increase in NWC` when stated; the Model
+sheet's year N+1 FCF formula reads them in place of the year-N capex and ΔNWC cells. Held to
+the engine by the parity test (cases `EA_OOS`, `G2_VAL_TERMINAL`).
+
+### §28.7 Tests
+
+`tests/goldens-ea-oos.test.ts` (the out-of-sample workbook, cell for cell: FCF, Gordon EV,
+both flow-to-equity recursions, NPV, required return; identity of everything before the exit
+with and without the statement; the WARN; the gates), the parity cases above, and
+`tests/deal-engine-flow.test.ts` (open choice → blank inputs → Build gate).
+
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
 | v2.5.0 | 2026-11-10 | **NORMALISED FIGURES AND THE TWO EBITDA BASES (§27).** Deals now reach the engine through the Clean step (`lib/cleaning/`, a pure layer in front of `factsAdapter`; no engine arithmetic changed, every golden byte-identical). `fy_ebitda` is adjusted EBITDA (price and leverage basis); `fy_ebitda_margin` is formed on adjusted EBITDA LESS the add-backs the analyst marks `continues`, so a cost that keeps being paid never becomes forecast cash flow. Required per-row choice, no default. `DealFacts.normalisation` added (display only — the workbook's Normalisation sheet and the results screen; a boundary test forbids engine reads). Data-layer rules tightened: the effective tax rate is the true ratio or null (no clamp, no statutory stand-in); net debt needs both legs; alias chains resolve per period; the US size band and financing conventions are proposed for USD deals only. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-10; `rebuild/CLEANING_AND_SUITE_PLAN.md` §4.4 |
+| v2.6.0 | 2026-11-11 | **THE TERMINAL YEAR STATED IN STEADY STATE (§28).** `valuation.terminal` (optional; null ≡ v2.0.0, every golden numerically identical) lets the analyst state terminal capex as a multiple of D&A and a terminal increase in NWC; the §25.2 year N+1 cash flow reads them in place of year N's own. Only the fundamentals exit (case b) and its break-evens move. New WARN `terminal_not_steady_state` — prescribed by §24.5 since v2.0.0 but never emitted until now. Workbook formulas mirror it (parity cases EA_OOS, G2_VAL_TERMINAL). Found by an OUT-OF-SAMPLE workbook the engine was never built against, which also now stands as a golden. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-11; `tests/goldens-ea-oos.test.ts` |
 | v2.4.0 | 2026-11-10 | **TAX CHARACTER AND TIMING OF DEBT RETIRED OR REFINANCED (§7.1).** Researched against the standard and applied as a rule, not a setting (owner direction 2026-11-10: "nothing should be hardcoded — if there's a standard, use that, else make it a setting"). Unamortized OID and any call premium are repurchase premium (Treas. Reg. §1.163-7(c)) — §163(j) INTEREST, the capped pool; unamortized debt-issuance costs are not interest under the final §163(j) regulations — uncapped. The exit and a scheduled refinancing deduct in their own year (§18.5 no longer defers to R+1); a sweep-driven early retirement keeps the one-year lag, now split by character, because a same-year deduction would make its year circular (§5). Replaces the v1.0.3/v1.3.0 treatment (everything uncapped, refinancing deferred), which over-deducted where §163(j) binds. Goldens re-derived by `spec_calc.py` first: G3, G3-DIST, G4, G6-REFI, G8-PIKT, G9-SWEET, G10-RATCHET move (sponsor IRR within ±0.74bp), every other golden byte-identical — measured leaf-by-leaf in DERIVATION.md. Workbook: the write-off rows split by character; parity extended to a refi-with-OID under a binding cap and an OID-bearing sweep retirement. | owner direction 2026-11-10; Treas. Reg. §1.163-7(c), §1.163(j)-1(b)(22), §1.446-5, §1.1001-3 |
 | v2.3.1 | 2026-11-10 | **ADVERSARIAL REVIEW — one presentation defect, closed on every surface.** A run carrying a BLOCK flag (cash-floor breach / non-positive plug) was still headlined: the Summary and Build line showed its IRR with the warning BELOW the tabs; the IC memo, the §13 grid and goal-seek presented or targeted such runs silently. Now one predicate governs all four (§3 step 6 note). No engine arithmetic changed; every golden byte-identical. The review itself — the professor's workbook with randomized inputs (40 deals), an independent first-principles challenger workbook (315 deals, ~52k values), the exported workbook edited input by input in Excel (245 workbooks, 177k cells), an every-input-matters sweep and a source literal scan — found no arithmetic defect; it is recorded in rebuild/ADVERSARIAL_REVIEW_2026-11-10.md. | owner-requested adversarial review 2026-11-10 |
 | v2.3.0 | 2026-11-09 | **LIMITED LIABILITY (§9.1).** Exit equity and selldown proceeds are floored at zero; the lenders' unrecovered debt is reported (`exit.debt_shortfall_at_exit`, a §12 walk-down term, the `exit_debt_shortfall` WARN). Replaces the signed convention (the sponsor modelled as paying in at exit). §22/§23's governed §15 blocks restated. Every golden value unchanged (none is underwater); one zero column added. | owner direction 2026-11-09; equity-as-call (Merton) and modelling practice (MAX(0, …) on equity proceeds) |

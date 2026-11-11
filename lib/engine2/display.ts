@@ -54,6 +54,51 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
 }
 
 /**
+ * The operating chart's series, decided by the DATA of the deal in front of it: revenue is drawn
+ * whenever the deal carries any revenue figure (a sourced historical year, or a forecast revenue
+ * line of any kind), and left out only when it has none at all (SPEC §24: a case may state EBIT /
+ * EBITDA without revenue). One rule for every deal; nothing is keyed to a particular case.
+ */
+export function operatingChartSeries(o: Pick<Engine2ModelOutput, 'facts' | 'operating'>): {
+  rows: { period: string; Revenue: number | null; EBITDA: number | null }[];
+  has_revenue: boolean;
+  has_history: boolean;
+  title: 'Revenue and EBITDA' | 'EBITDA';
+  note: string;
+} {
+  const history = o.facts.history.map((h) => ({ period: `FY${h.fiscal_year}`, Revenue: h.revenue, EBITDA: h.ebitda }));
+  const forecast = o.operating.map((y, i) => ({ period: `Year ${i + 1}`, Revenue: y.revenue, EBITDA: y.ebitda }));
+  const rows = [...history, ...forecast];
+  const has_revenue = rows.some((r) => r.Revenue !== null && r.Revenue !== undefined);
+  const has_history = history.length > 0;
+  const span = has_history ? 'history as adjusted, then the forecast' : 'the forecast';
+  return {
+    rows, has_revenue, has_history,
+    title: has_revenue ? 'Revenue and EBITDA' : 'EBITDA',
+    note: has_revenue ? span : `${span} · revenue is not modelled in this deal`,
+  };
+}
+
+/**
+ * Entry GROSS leverage for the headline tiles. The §11 figure is debt at par ÷ the FY/LTM sizing
+ * EBITDA (`derived.entry_gross_leverage_fy`). A forecast-only case (§24.2) has no historical
+ * EBITDA, so that figure is null; such a case is necessarily priced on forecast year-1 EBITDA
+ * (§24.3 R4), and the same debt over THAT EBITDA is shown instead, labelled as such. Both
+ * operands are existing `derived` fields: no second calculation path, and never a sentinel.
+ */
+export function entryLeverageDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'assumptions' | 'facts'>): {
+  value: number | null;
+  basis_label: 'FY' | 'LTM' | 'forecast year-1';
+} {
+  const fy = o.derived.entry_gross_leverage_fy;
+  if (fy !== null) return { value: fy, basis_label: sizingBasisLabel(o.facts.sizing_basis) };
+  if (o.assumptions.entry.basis === 'ntm' && o.derived.entry_ebitda_for_valuation > 0) {
+    return { value: o.derived.total_debt_at_par / o.derived.entry_ebitda_for_valuation, basis_label: 'forecast year-1' };
+  }
+  return { value: null, basis_label: sizingBasisLabel(o.facts.sizing_basis) };
+}
+
+/**
  * §9 display helper — the exit EV/EBITDA multiple, single-sourced. `exit_ev` is built as
  * `assumptions.exit.multiple × exit_ebitda_basis_value` (exit.ts), so this ratio recovers the
  * exit multiple exactly; expressing it once here — rather than inline in OutputTabs, excelExport

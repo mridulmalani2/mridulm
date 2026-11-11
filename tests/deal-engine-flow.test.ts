@@ -250,3 +250,76 @@ describe('a deal survives a reload (store/session) — inputs are saved, everyth
     expect(model().facts).toBeNull();
   });
 });
+
+describe('a case entered directly (forecast-only, SPEC §24.2) survives a reload too', () => {
+  it('round trip: name, currency, every entered input and open choice come back; the output does not', async () => {
+    const { restoreSession, serialiseSession } = await import('../store/session');
+    const { G12_ASSUMPTIONS } = await import('./fixtures/g12-prof');
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    useEngine2Model.getState().startForecastOnly({ entity_name: 'Worked example', currency: 'USD', hold_years: 5 });
+    const blankExit = { ...G12_ASSUMPTIONS, exit: { ...G12_ASSUMPTIONS.exit, multiple: Number.NaN } };
+    useEngine2Model.getState().editAssumptions(blankExit, ['entry.driver', 'entry.basis']);
+    const before = useEngine2Model.getState();
+    const text = serialiseSession();
+    expect(text).not.toBeNull();
+    expect(text!).not.toContain('"output"');
+
+    useEngine2Model.getState().reset();
+    expect(restoreSession(text)).toBe(true);
+    const after = useEngine2Model.getState();
+    expect(after.facts).toEqual(before.facts);
+    expect(after.assumptions).toEqual(before.assumptions);
+    expect(Number.isNaN(after.assumptions!.exit.multiple)).toBe(true);
+    expect(after.pending).toEqual(before.pending);
+    expect(after.basis).toEqual(before.basis);
+    expect(after.output).toBeNull();
+    // the proposals are rebuilt, including exit = the multiple the purchase price implies
+    expect(after.suggestions['exit.multiple'].value).toBe(1100 / 145);
+    useEngine2Model.getState().reset();
+  });
+
+  it('a forecast-only save with sourced-looking facts is refused (facts are never trusted from storage)', async () => {
+    const { restoreSession } = await import('../store/session');
+    const bad = JSON.stringify({ v: 1, cleaning: null, forecastFacts: { source: 'edgar', history: [] }, assumptions: {}, pending: [], basis: {} });
+    expect(restoreSession(bad)).toBe(false);
+    expect(useEngine2Model.getState().facts).toBeNull();
+  });
+});
+
+describe('the terminal year is the analyst\'s choice (SPEC §28) — an open choice, then blank inputs, never assumed', () => {
+  it('switching the valuation on leaves the terminal year open; "stated" brings two blank inputs that gate Build', async () => {
+    const { EA_ASSUMPTIONS } = await import('./fixtures/ea-oos');
+    const { suggestionsFor } = await import('../lib/engine2/suggest');
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    const st = useEngine2Model.getState();
+    st.startForecastOnly({ entity_name: 'Electronic Arts', currency: 'USD', hold_years: 5 });
+    // everything entered except the terminal-year choice
+    useEngine2Model.getState().editWithChoices({ ...EA_ASSUMPTIONS, valuation: { ...EA_ASSUMPTIONS.valuation!, terminal: null } },
+      ['entry.basis', 'exit.basis', 'structure.tranches', 'tax.interest_deductible', 'tax.s163j.applies', 'valuation'], ['valuation.terminal']);
+    const paths = () => useEngine2Model.getState().missing().map((m) => m.path);
+    expect(paths()).toEqual(['valuation.terminal']);
+    useEngine2Model.getState().build();
+    expect(useEngine2Model.getState().output).toBeNull();
+
+    // "stated for a steady state": both inputs arrive blank
+    const a = useEngine2Model.getState().assumptions!;
+    useEngine2Model.getState().editAssumptions({ ...a, valuation: { ...a.valuation!, terminal: { capex_pct_of_da: Number.NaN, delta_nwc_before_growth: Number.NaN } } }, ['valuation.terminal']);
+    expect(paths().sort()).toEqual(['valuation.terminal.capex_pct_of_da', 'valuation.terminal.delta_nwc_before_growth']);
+    // the capex convention is PROPOSED with its reasoning, not applied
+    const sug = suggestionsFor(useEngine2Model.getState().facts!, 5, useEngine2Model.getState().assumptions!);
+    expect(sug['valuation.terminal.capex_pct_of_da'].value).toBe(1);
+    expect(Number.isNaN(useEngine2Model.getState().assumptions!.valuation!.terminal!.capex_pct_of_da)).toBe(true);
+
+    // entered as the workbook states it → builds, and reproduces the workbook's NPV
+    const b = useEngine2Model.getState().assumptions!;
+    useEngine2Model.getState().editAssumptions({ ...b, valuation: { ...b.valuation!, terminal: { capex_pct_of_da: 1, delta_nwc_before_growth: -60 } } },
+      ['valuation.terminal.capex_pct_of_da', 'valuation.terminal.delta_nwc_before_growth']);
+    expect(paths()).toEqual([]);
+    useEngine2Model.getState().build();
+    const npv = useEngine2Model.getState().output!.valuation!.fundamentals!.npv!;
+    expect(Math.abs(npv - -2322.54539530639)).toBeLessThan(1e-6);
+    useEngine2Model.getState().reset();
+  });
+});

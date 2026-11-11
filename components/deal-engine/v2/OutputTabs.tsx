@@ -13,7 +13,7 @@
 import { DISCLOSURES } from '../../../lib/engine2/disclosures';
 import React, { useState } from 'react';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
-import { entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, sizingBasisLabel } from '../../../lib/engine2/display';
+import { entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, sizingBasisLabel } from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -88,8 +88,8 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         )}</div>
       {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
           per-year credit metrics on the other tabs are NET. */}
-      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_gross_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
+      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Entry gross leverage ({entryLeverageDisplay(o).basis_label}) · Y1 DSCR</p>
+        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(entryLeverageDisplay(o).value)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
     </div>
     <Table head={['Value bridge', money(0, ccy) === '' ? '' : '']}>
       {[

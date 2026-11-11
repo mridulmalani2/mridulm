@@ -279,7 +279,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <Field label="Net Debt" unit={`${csym}m`} value={pt.netDebt} onChange={setP('netDebt')} placeholder="or enter gross + cash" />
             )}
             <Field label="Net PP&E" unit={`${csym}m`} value={pt.netPpe} onChange={setP('netPpe')} placeholder="blank = gap" />
-            <Field label="Effective Tax Rate" unit="%" value={pt.taxRate} onChange={setP('taxRate')} placeholder="blank = statutory default" />
+            <Field label="Effective Tax Rate" unit="%" value={pt.taxRate} onChange={setP('taxRate')} placeholder="blank = gap" />
             <Field label="NOL Carryforward" unit={`${csym}m`} value={pt.nol} onChange={setP('nol')} placeholder="0 / blank = none" />
           </div>
 

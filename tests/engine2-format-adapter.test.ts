@@ -187,3 +187,19 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     expect(out.coherence.some((f) => f.message.includes('PP&E seeded at 0'))).toBe(false);
   });
 });
+
+describe('a floating-point residue never prints as a negative zero', () => {
+  it('−7e-15 of closing cash is "$0.0m" / "0.0" / "0.0%" / "0.0x", on every formatter', async () => {
+    const f = await import('../lib/format');
+    const r = -7.105427357601002e-15;
+    expect(f.money(r, 'USD')).toBe('$0.0m');
+    expect(f.moneyIso(r, 'SEK')).toBe('SEK 0.0m');
+    expect(f.num(r)).toBe('0.0');
+    expect(f.pct(r)).toBe('0.0%');
+    expect(f.multiple(r)).toBe('0.0x');
+    expect(f.headroom(r)).toBe('0.00x');
+    // a real negative still shows its sign
+    expect(f.money(-0.06, 'USD')).toBe('−$0.1m');
+    expect(f.num(-0.04)).toBe('0.0');
+  });
+});

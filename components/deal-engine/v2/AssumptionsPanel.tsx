@@ -60,7 +60,9 @@ const AssumptionsPanel: React.FC = () => {
     set({ ...a, operations: { ...a.operations, lines: allDriver ? null : next } }, [`operations.lines.${key}`]);
   };
   const spec = (mode: 'explicit' | 'grown'): LineSpec => (mode === 'explicit' ? { mode, values: blanks(N) } : { mode, year1: U, growth: blanks(N - 1) });
-  const LineValues: React.FC<{ k: LineKey; s: LineSpec; label: string }> = ({ k, s, label }) =>
+  // A plain render helper, NOT a component: a component declared inside this render gets a new
+  // identity on every store edit, which remounts its inputs and drops focus mid-entry.
+  const lineValues = (k: LineKey, s: LineSpec, label: string) =>
     s.mode === 'explicit' ? (
       <YearGrid path={`operations.lines.${k}.values`} label={`${label} by year`} unit="money" values={s.values} />
     ) : (
@@ -132,14 +134,6 @@ const AssumptionsPanel: React.FC = () => {
       </>
     );
   };
-
-  // ── feature toggles (each brings its fields in BLANK) ────────────────────────────────
-  const Toggle: React.FC<{ on: boolean; label: string; onOn: () => void; onOff: () => void; hint?: string }> = ({ on, label, onOn, onOff, hint }) => (
-    <label className="flex items-center justify-between gap-2 mb-2 cursor-pointer" title={hint}>
-      <Label>{label}</Label>
-      <input type="checkbox" aria-label={label} checked={on} onChange={(e) => (e.target.checked ? onOn() : onOff())} />
-    </label>
-  );
 
   const fund = a.fund;
   const v = a.valuation;
@@ -303,7 +297,7 @@ const AssumptionsPanel: React.FC = () => {
           options={[...(facts.fy_revenue !== null ? [{ value: 'driver', label: 'grow historical revenue' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }, { value: 'not_modelled', label: 'not modelled' }]}
           onChoose={(m) => setLine('revenue', m === 'driver' ? null : m === 'not_modelled' ? { mode: 'not_modelled' } : spec(m as 'explicit' | 'grown'))} />
         {!lines?.revenue && facts.fy_revenue !== null && <YearGrid path="operations.growth" label="Revenue growth" unit="pct" values={a.operations.growth} />}
-        {lines?.revenue && lines.revenue.mode !== 'not_modelled' && <LineValues k="revenue" s={lines.revenue} label="Revenue" />}
+        {lines?.revenue && lines.revenue.mode !== 'not_modelled' && lineValues('revenue', lines.revenue, 'Revenue')}
 
         {/* EBITDA */}
         <LineMode label="EBITDA" value={lines?.ebitda ? `${lines.ebitda.measure}_${lines.ebitda.mode}` : 'driver'}
@@ -322,13 +316,13 @@ const AssumptionsPanel: React.FC = () => {
               options={[{ value: 'linear', label: 'linear' }, { value: 'front_loaded', label: 'front-loaded (√t)' }, { value: 'back_loaded', label: 'back-loaded (t²)' }]} />
           </>
         )}
-        {lines?.ebitda && <LineValues k="ebitda" s={lines.ebitda} label={lines.ebitda.measure === 'ebit' ? 'EBIT' : 'EBITDA'} />}
+        {lines?.ebitda && lineValues('ebitda', lines.ebitda, lines.ebitda.measure === 'ebit' ? 'EBIT' : 'EBITDA')}
 
         {/* D&A */}
         <LineMode label="D&A" value={lines?.da ? lines.da.mode : 'driver'}
           options={[...(revenueAvailable ? [{ value: 'driver', label: '% of revenue' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }]}
           onChoose={(m) => setLine('da', m === 'driver' ? null : spec(m as 'explicit' | 'grown'))} />
-        {!lines?.da ? revenueAvailable && <NumField path="operations.da_pct_revenue" label="D&A (% of revenue)" unit="pct" value={a.operations.da_pct_revenue} /> : <LineValues k="da" s={lines.da} label="D&A" />}
+        {!lines?.da ? revenueAvailable && <NumField path="operations.da_pct_revenue" label="D&A (% of revenue)" unit="pct" value={a.operations.da_pct_revenue} /> : lineValues('da', lines.da, 'D&A')}
 
         {/* Capex */}
         <LineMode label="Capex" value={lines?.capex ? lines.capex.mode : 'driver'}
@@ -341,7 +335,7 @@ const AssumptionsPanel: React.FC = () => {
           </>
         )}
         {lines?.capex && lines.capex.mode === 'pct_of_da' && <NumField path="operations.lines.capex.pct" label="Capex ÷ D&A (1.00 = equals depreciation)" unit="ratio" value={lines.capex.pct} />}
-        {lines?.capex && lines.capex.mode !== 'pct_of_da' && <LineValues k="capex" s={lines.capex} label="Capex" />}
+        {lines?.capex && lines.capex.mode !== 'pct_of_da' && lineValues('capex', lines.capex, 'Capex')}
 
         {/* NWC */}
         <LineMode label="Working capital" value={lines?.delta_nwc ? lines.delta_nwc.mode : 'driver'}
@@ -362,7 +356,7 @@ const AssumptionsPanel: React.FC = () => {
                 </>}
           </>
         )}
-        {lines?.delta_nwc && <LineValues k="delta_nwc" s={lines.delta_nwc} label="Increase in NWC" />}
+        {lines?.delta_nwc && lineValues('delta_nwc', lines.delta_nwc, 'Increase in NWC')}
 
         {lines && (
           <NumField path="operations.lines.year_n_plus_1_growth" label="Growth into year N+1 (NTM exit, terminal value)" unit="pct"
@@ -373,9 +367,16 @@ const AssumptionsPanel: React.FC = () => {
       {/* ═══ 4. Tax ═══ */}
       <Section title="4 · Tax">
         <NumField path="tax.rate" label="Tax rate" unit="pct" value={a.tax.rate} />
-        <ChoiceField path="tax.interest_deductible" label="Interest tax-deductible?" value={a.tax.interest_deductible} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
+        <ChoiceField path="tax.interest_deductible" label="Interest tax-deductible?" value={a.tax.interest_deductible} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]}
+          onChoose={(d) => (d
+            ? set(at('tax.interest_deductible', true), ['tax.interest_deductible'])
+            // not deductible ⇒ the cap question is moot: clear it, and ask again if this is switched back
+            : editWithChoices({ ...a, tax: { ...a.tax, interest_deductible: false, s163j: { applies: false, ati_basis: 'ebitda', ati_pct: U } } },
+              ['tax.interest_deductible'], ['tax.s163j.applies'], ['tax.s163j']))} />
         {a.tax.interest_deductible && (
-          <ChoiceField path="tax.s163j.applies" label="Interest-deduction cap (e.g. US §163(j))?" value={a.tax.s163j.applies} options={[{ value: true, label: 'applies' }, { value: false, label: 'does not apply' }]} />
+          <ChoiceField path="tax.s163j.applies" label="Interest-deduction cap (e.g. US §163(j))?" value={a.tax.s163j.applies} options={[{ value: true, label: 'applies' }, { value: false, label: 'does not apply' }]}
+            // the ATI basis is the analyst's choice too: it stays open (gating Build) until made, never a silent EBITDA
+            onChoose={(ap) => editWithChoices(at('tax.s163j.applies', ap), ['tax.s163j.applies'], ap ? ['tax.s163j.ati_basis'] : [], ['tax.s163j.ati_basis'])} />
         )}
         <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />
         {a.tax.interest_deductible && a.tax.s163j.applies && (
@@ -414,7 +415,7 @@ const AssumptionsPanel: React.FC = () => {
       {/* ═══ 5. Valuation (flow to equity) ═══ */}
       <Section title="5 · Valuation — flow to equity" note="Values the equity by discounting its own cash flows at a cost of equity re-levered every year (CAPM), and reconciles it with the LBO IRR.">
         <Toggle on={v !== null} label="Value the equity (flow to equity)"
-          onOn={() => editWithChoices({ ...a, valuation: { risk_free: U, mrp: U, asset_beta: U, debt_beta: U, long_run_growth: U, leverage_timing: 'end_of_year' } }, ['valuation'], ['valuation.leverage_timing'])}
+          onOn={() => editWithChoices({ ...a, valuation: { risk_free: U, mrp: U, asset_beta: U, debt_beta: U, long_run_growth: U, leverage_timing: 'end_of_year', terminal: null } }, ['valuation'], ['valuation.leverage_timing', 'valuation.terminal'])}
           onOff={() => editWithChoices({ ...a, valuation: null }, ['valuation'], [], ['valuation'])} />
         {v && (
           <>
@@ -425,6 +426,19 @@ const AssumptionsPanel: React.FC = () => {
             <NumField path="valuation.long_run_growth" label="Long-run growth after exit" unit="pct" value={v.long_run_growth} />
             <ChoiceField path="valuation.leverage_timing" label="Leverage for year t's cost of equity" value={v.leverage_timing}
               options={[{ value: 'end_of_year', label: 'end of year t (no circularity)' }, { value: 'start_of_year', label: 'start of year t (closed form)' }]} />
+            {/* §28: the terminal value capitalises year N+1 for ever, so the analyst says what that year is —
+                the final forecast year carried forward, or a stated steady state. An open choice until made. */}
+            <ChoiceField path="valuation.terminal" label="Terminal year (N+1) capex and working capital" value={v.terminal ? 'stated' : 'carried'}
+              hint="The fundamentals exit values year N+1's cash flow in perpetuity. A forecast year often runs capex below D&A or releases working capital, which cannot last for ever."
+              options={[{ value: 'carried', label: 'as in the final forecast year' }, { value: 'stated', label: 'stated for a steady state' }]}
+              onChoose={(c) => set(at('valuation.terminal', c === 'stated' ? { capex_pct_of_da: U, delta_nwc_before_growth: U } : null), ['valuation.terminal'])} />
+            {v.terminal && (
+              <>
+                <NumField path="valuation.terminal.capex_pct_of_da" label="Terminal capex ÷ D&A (1.00 = spend what wears out)" unit="ratio" value={v.terminal.capex_pct_of_da} />
+                <NumField path="valuation.terminal.delta_nwc_before_growth" label="Terminal increase in NWC, before growth (negative = inflow)" unit="money" value={v.terminal.delta_nwc_before_growth}
+                  hint="In final-forecast-year terms; it is grown into year N+1 with every other line." />
+              </>
+            )}
           </>
         )}
       </Section>
@@ -523,9 +537,12 @@ const AssumptionsPanel: React.FC = () => {
               const structure = {
                 ...a.structure,
                 distributions: p === 'scheduled' ? blanks(N) : null,
-                surplus_distribution: p === 'surplus' ? { payout_pct: 1, start: 'immediately' as const } : null,
+                // blank until entered, like every other input: the payout share is unset and the
+                // timing is an open choice (both gate Build) — no "common case" is assumed
+                surplus_distribution: p === 'surplus' ? { payout_pct: U, start: 'immediately' as const } : null,
               };
-              set({ ...a, structure }, ['structure.distributions', 'structure.surplus_distribution']);
+              editWithChoices({ ...a, structure }, ['structure.distributions', 'structure.surplus_distribution'],
+                p === 'surplus' ? ['structure.surplus_distribution.start'] : [], ['structure.surplus_distribution']);
             }}>
             <option value="none">none — cash stays in the business</option>
             <option value="scheduled">fixed amounts by year</option>
@@ -535,9 +552,6 @@ const AssumptionsPanel: React.FC = () => {
         {a.structure.distributions && <YearGrid path="structure.distributions" label="Requested distribution" unit="money" values={a.structure.distributions} />}
         {a.structure.surplus_distribution && (
           <>
-            <p className="text-[12px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>
-              Pre-filled with the common case — 100% of the surplus, every year. Change either setting to match your deal’s restricted-payments terms.
-            </p>
             <NumField path="structure.surplus_distribution.payout_pct" label="Share of surplus cash paid out" unit="pct" value={a.structure.surplus_distribution.payout_pct}
               hint="Cash above the minimum after interest, amortization, the revolver and the sweep. Below 100%, the rest stays on the balance sheet." />
             <ChoiceField path="structure.surplus_distribution.start" label="Pay surplus out" value={a.structure.surplus_distribution.start}
@@ -674,6 +688,14 @@ const AssumptionsPanel: React.FC = () => {
     </div>
   );
 };
+
+/** A feature switch. Module-level so its checkbox keeps its identity across store edits. */
+const Toggle: React.FC<{ on: boolean; label: string; onOn: () => void; onOff: () => void; hint?: string }> = ({ on, label, onOn, onOff, hint }) => (
+  <label className="flex items-center justify-between gap-2 mb-2 cursor-pointer" title={hint}>
+    <Label>{label}</Label>
+    <input type="checkbox" aria-label={label} checked={on} onChange={(e) => (e.target.checked ? onOn() : onOff())} />
+  </label>
+);
 
 /** The mode selector for one forecast line. */
 const LineMode: React.FC<{ label: string; value: string; options: { value: string; label: string }[]; onChoose: (m: string) => void }> = ({ label, value, options, onChoose }) => {

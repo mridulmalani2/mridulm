@@ -130,3 +130,67 @@ describe('a fully ACCEPTED draft is coherent — and accepting is explicit, so i
     expect(out.returns.sponsor_net.irr).not.toBeNull();
   });
 });
+
+describe('exit = entry under a purchase-price entry (the multiple the price implies, from the engine)', () => {
+  it('the worked example: 1,100 ÷ forecast year-1 EBITDA 145, at full precision, and it reproduces the reference IRR', async () => {
+    const { G12_ASSUMPTIONS, G12_FACTS } = await import('./fixtures/g12-prof');
+    const { runModel } = await import('../lib/engine2/facade');
+    const blankExit = { ...G12_ASSUMPTIONS, exit: { ...G12_ASSUMPTIONS.exit, multiple: Number.NaN } };
+    const sug = suggestionsFor(G12_FACTS, 5, blankExit)['exit.multiple'];
+    expect(sug.value).toBe(1100 / 145);
+    const o = runModel(G12_FACTS, { ...blankExit, exit: { ...blankExit.exit, multiple: sug.value as number } });
+    expect(o.derived.entry_multiple).toBe(sug.value);
+    expect(Math.abs(o.returns.sponsor_net.irr! - 0.211968257836157)).toBeLessThan(1e-12);
+  });
+
+  it('is withheld until the derivation has what it reads: basis chosen, price entered, year-1 EBITDA entered', async () => {
+    const { G12_ASSUMPTIONS, G12_FACTS } = await import('./fixtures/g12-prof');
+    expect(suggestionsFor(G12_FACTS, 5, G12_ASSUMPTIONS, ['entry.basis'])['exit.multiple']).toBeUndefined();
+    expect(suggestionsFor(G12_FACTS, 5, { ...G12_ASSUMPTIONS, entry: { ...G12_ASSUMPTIONS.entry, enterprise_value: Number.NaN } })['exit.multiple']).toBeUndefined();
+    const lines = G12_ASSUMPTIONS.operations.lines!;
+    const noEbit = { ...G12_ASSUMPTIONS, operations: { ...G12_ASSUMPTIONS.operations, lines: { ...lines, ebitda: { ...lines.ebitda!, year1: Number.NaN } } } };
+    expect(suggestionsFor(G12_FACTS, 5, noEbit as typeof G12_ASSUMPTIONS)['exit.multiple']).toBeUndefined();
+  });
+});
+
+describe('entry leverage tile (display): FY/LTM when the case has history, else on forecast year-1 EBITDA', () => {
+  it('the worked example has no historical EBITDA: 900 ÷ 145 = 6.21x, labelled forecast year-1 (the reference workbook cell D43)', async () => {
+    const { G12_ASSUMPTIONS, G12_FACTS } = await import('./fixtures/g12-prof');
+    const { runModel } = await import('../lib/engine2/facade');
+    const { entryLeverageDisplay } = await import('../lib/engine2/display');
+    const o = runModel(G12_FACTS, G12_ASSUMPTIONS);
+    expect(o.derived.entry_gross_leverage_fy).toBeNull(); // the §11 figure stays null — never a sentinel
+    const d = entryLeverageDisplay(o);
+    expect(d.basis_label).toBe('forecast year-1');
+    expect(Math.abs(d.value! - 6.20689655172414)).toBeLessThan(1e-12);
+  });
+});
+
+describe('operating chart series (display): decided by the deal\'s data, for every deal', () => {
+  it('a deal with sourced history and a driver forecast draws Revenue AND EBITDA, history first', async () => {
+    const { analystDeal } = await import('./fixtures/entered-deal');
+    const { runModel } = await import('../lib/engine2/facade');
+    const { operatingChartSeries } = await import('../lib/engine2/display');
+    const c = operatingChartSeries(runModel(LARGE_CAP, analystDeal(LARGE_CAP)));
+    expect(c.title).toBe('Revenue and EBITDA');
+    expect(c.has_revenue).toBe(true);
+    expect(c.rows.slice(-5).every((r) => typeof r.Revenue === 'number' && r.Revenue > 0)).toBe(true);
+    expect(c.rows[0].period).toMatch(/^FY/);
+    expect(c.note).toBe('history as adjusted, then the forecast');
+  });
+
+  it('a forecast-only deal WITH a revenue line still draws revenue; only a deal with no revenue anywhere drops the series', async () => {
+    const { G12_ASSUMPTIONS, G12_FACTS } = await import('./fixtures/g12-prof');
+    const { runModel } = await import('../lib/engine2/facade');
+    const { operatingChartSeries } = await import('../lib/engine2/display');
+    const none = operatingChartSeries(runModel(G12_FACTS, G12_ASSUMPTIONS));
+    expect(none.title).toBe('EBITDA');
+    expect(none.has_revenue).toBe(false);
+    const lines = G12_ASSUMPTIONS.operations.lines!;
+    const withRev = { ...G12_ASSUMPTIONS, operations: { ...G12_ASSUMPTIONS.operations, lines: { ...lines, revenue: { mode: 'grown' as const, year1: 1000, growth: [0.03, 0.03, 0.03, 0.03] } } } };
+    const some = operatingChartSeries(runModel(G12_FACTS, withRev));
+    expect(some.title).toBe('Revenue and EBITDA');
+    expect(some.rows.map((r) => r.Revenue)[0]).toBe(1000);
+    expect(some.note).toBe('the forecast');
+  });
+});

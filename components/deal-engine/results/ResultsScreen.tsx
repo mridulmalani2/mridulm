@@ -10,7 +10,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { useEngine2Model } from '../../../store/engine2Model';
 import { money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
-import { entryMultipleDisplay, headlineNotMeaningful, impliedEquityDisplay } from '../../../lib/engine2/display';
+import { entryLeverageDisplay, entryMultipleDisplay, operatingChartSeries, headlineNotMeaningful, impliedEquityDisplay } from '../../../lib/engine2/display';
 import type { Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { ebitdaWaterfall, netDebtWaterfall, waterfall } from '../../../lib/cleaning/view';
 import OutputTabs from '../v2/OutputTabs';
@@ -24,19 +24,18 @@ const AXIS = { fontSize: 11, fill: 'var(--de-ink-3)', fontFamily: 'JetBrains Mon
 const tick = (v: number) => num(v, 0);
 
 const OperatingChart: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
-  const history = o.facts.history.map((h) => ({ period: `FY${h.fiscal_year}`, Revenue: h.revenue, EBITDA: h.ebitda }));
-  const forecast = o.operating.map((y, i) => ({ period: `Year ${i + 1}`, Revenue: y.revenue, EBITDA: y.ebitda }));
+  const c = operatingChartSeries(o); // which series exist is decided by the deal's data (lib/engine2/display)
   return (
-    <Card title="Revenue and EBITDA" aside={<span className="font-sans text-[12px] text-[color:var(--de-ink-3)]">history as adjusted, then the forecast</span>}>
+    <Card title={c.title} aside={<span className="font-sans text-[12px] text-[color:var(--de-ink-3)]">{c.note}</span>}>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={[...history, ...forecast]} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+          <BarChart data={c.rows} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <CartesianGrid vertical={false} stroke="var(--de-rule)" />
             <XAxis dataKey="period" tick={AXIS} tickLine={false} axisLine={{ stroke: 'var(--de-rule-strong)' }} />
             <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={tick} width={56} />
             <Tooltip formatter={(v) => (typeof v === 'number' ? num(v, 1) : String(v))} cursor={{ fill: 'var(--de-sunken)' }} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="Revenue" fill="var(--de-ink-3)" isAnimationActive={false} />
+            {c.has_revenue && <Bar dataKey="Revenue" fill="var(--de-ink-3)" isAnimationActive={false} />}
             <Bar dataKey="EBITDA" fill="var(--de-ink)" isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
@@ -156,7 +155,7 @@ const NormalisationCards: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       <Card title="What the sellers receive">
         <Row label="Purchase price (enterprise value)" value={money(eq.enterprise_value, ccy)} />
         <Row label={n && !n.as_reported ? 'Less adjusted net debt' : 'Less net debt'} value={eq.net_debt === null ? 'not in the source' : money(eq.net_debt, ccy)} />
-        <Row strong label="Implied equity value" value={eq.equity_value === null ? '–' : money(eq.equity_value, ccy)} />
+        <Row strong label="Equity value to the sellers" value={eq.equity_value === null ? 'needs the target’s net debt' : money(eq.equity_value, ccy)} />
         {eq.per_share !== null && <Row label="Per share" value={num(eq.per_share, 2)} note="on the share count in the latest filing" />}
         {eq.premium_to_market !== null && <Row label="Premium to the current market value" value={pct(eq.premium_to_market)} />}
         {o.facts.implied_trading_ev_ebitda !== null && (
@@ -180,6 +179,7 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
   const ccy = facts.currency as Engine2Currency;
   const nm = headlineNotMeaningful(output);
   const entry = entryMultipleDisplay(output);
+  const lev = entryLeverageDisplay(output);
   const blocks = output.coherence.filter((f) => f.severity === 'block');
   const warns = output.coherence.filter((f) => f.severity !== 'block');
 
@@ -234,7 +234,7 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
         <Kpi label="Sponsor IRR" value={nm ? 'N/M' : pct(output.returns.sponsor_net.irr)} tone={nm ? 'warn' : 'neutral'} sub="net of fees and the management promote" />
         <Kpi label="Money multiple" value={nm ? 'N/M' : multiple(output.returns.sponsor_net.moic)} sub="sponsor, net" />
         <Kpi label="Equity cheque" value={money(output.sources_uses.sponsor_equity, ccy, 0)} sub={`of ${money(output.sources_uses.total_uses, ccy, 0)} total uses`} />
-        <Kpi label="Entry leverage" value={multiple(output.derived.entry_gross_leverage_fy)} sub={`gross debt ÷ ${entry.sizing_label} EBITDA`} />
+        <Kpi label="Entry leverage" value={multiple(lev.value)} sub={`gross debt ÷ ${lev.basis_label} EBITDA`} />
         <Kpi label="Purchase price" value={money(output.derived.enterprise_value, ccy, 0)} sub={`${multiple(entry.valuation)} ${entry.basis_label} EBITDA`} />
       </div>
 

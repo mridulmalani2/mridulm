@@ -319,6 +319,22 @@ export interface ValuationAssumption {
   /** Gordon perpetuity growth after the exit (fundamentals exit, §25.2). */
   long_run_growth: number;
   leverage_timing: 'end_of_year' | 'start_of_year';
+  /**
+   * §28 [v2.6.0]: the terminal year (N+1) stated in STEADY STATE. null / absent ≡ year N's own
+   * capex and ΔNWC are carried into year N+1 (the v2.0.0 construction — byte-identical).
+   */
+  terminal?: TerminalYearAssumption | null;
+}
+
+/**
+ * §28 [v2.6.0]: the two year-N+1 lines a forecast year rarely states in steady state. Both are
+ * in YEAR-N TERMS and are then grown by g_{N+1} with every other line (§28.2).
+ */
+export interface TerminalYearAssumption {
+  /** Terminal capex as a multiple of D&A (1 = spend what wears out). ≥ 0. */
+  capex_pct_of_da: number;
+  /** Terminal increase in NWC, before growth into year N+1 (negative = an inflow). */
+  delta_nwc_before_growth: number;
 }
 
 export interface TaxAssumption {
@@ -841,6 +857,8 @@ export interface CoherenceFlag {
     | 'distribution_blocked'
     /** §18.8 [v1.3.1]: a scheduled refi hit an already-retired balance — stamped no-op, flagged. */
     | 'refi_noop'
+    /** §24.5 / §28.4 [v2.6.0]: the terminal year perpetuates capex below D&A or an NWC inflow. */
+    | 'terminal_not_steady_state'
     /** §20.6(e) [v1.5.0]: a pik_note whose STRUCTURE fits the AHYDO shape (maturity > 5y + an
      *  accruing year). Structural legs only — the §163(i) yield leg is untested (needs the
      *  monthly AFR) and the significant-OID leg is proxied; see §20.8. */

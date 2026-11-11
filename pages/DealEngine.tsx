@@ -86,6 +86,12 @@ const DealEngine: React.FC = () => {
     if (sourced && sourced !== lastSourced.current) { setManualEntry(false); navigate(stepPath('clean')); }
     lastSourced.current = sourced;
   }, [sourced, navigate]);
+  // a case entered directly (no sourced figures) has nothing to clean: it lands on Assumptions
+  const hadFacts = useRef(facts !== null);
+  useEffect(() => {
+    if (facts && !hadFacts.current && sourced === null) { setManualEntry(false); navigate(stepPath('assumptions')); }
+    hadFacts.current = facts !== null;
+  }, [facts, sourced, navigate]);
   const hadOutput = useRef(output !== null);
   useEffect(() => {
     if (output && !hadOutput.current && step === 'assumptions') navigate(stepPath('results'));

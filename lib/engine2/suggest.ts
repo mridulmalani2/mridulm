@@ -18,6 +18,8 @@
 
 import conventionsJson from './suggestions/conventions.json';
 import type { DealAssumptions, DealFacts, TrancheAssumption } from './types';
+import { buildOperating } from './operating';
+import { deriveEntry } from './sourcesUses';
 
 export interface SuggestionBasis {
   kind: 'history' | 'convention' | 'facts' | 'template' | 'ai';
@@ -58,7 +60,9 @@ const pctText = (x: number) => `${(x * 100).toFixed(1)}%`;
 export function suggestionsFor(
   facts: DealFacts,
   hold_years: number,
-  current?: Pick<DealAssumptions, 'entry'>,
+  current?: Pick<DealAssumptions, 'entry'> & Partial<Pick<DealAssumptions, 'operations' | 'fees' | 'valuation'>>,
+  /** Choices not yet made (the draft's `pending`): a proposal never reads an unchosen basis. */
+  pending: readonly string[] = [],
 ): SuggestionCatalogue {
   const out: SuggestionCatalogue = {};
   const put = (path: string, value: unknown, kind: SuggestionBasis['kind'], detail: string) => {
@@ -146,9 +150,21 @@ export function suggestionsFor(
   }
 
   // ── Exit = entry: the "no multiple expansion" convention, following what was entered ──
-  const entryMultiple = current?.entry.entry_multiple ?? null;
-  if (entryMultiple !== null && Number.isFinite(entryMultiple)) {
-    put('exit.multiple', entryMultiple, 'convention', 'exit at the entry multiple — multiple expansion is usually unjustifiable (DR-4 Cat.7)');
+  // Priced by a multiple: that multiple. Priced by a purchase price: the multiple the price
+  // IMPLIES, taken from the engine's own entry derivation (deriveEntry over buildOperating) at
+  // full precision, so "exit at the entry multiple" never depends on a hand-typed rounding of
+  // EV ÷ EBITDA. Offered only once every input that derivation reads has been entered.
+  const entryMultiple = impliedEntryMultiple(facts, current, pending);
+  if (entryMultiple !== null) {
+    const priced = current?.entry.driver === 'ev';
+    put('exit.multiple', entryMultiple, 'convention',
+      `exit at the entry multiple${priced ? ` (${entryMultiple.toFixed(4)}x = purchase price ÷ ${current?.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA)` : ''} — multiple expansion is usually unjustifiable (DR-4 Cat.7)`);
+  }
+
+  // ── Terminal year (§28): offered only once the analyst has chosen to state one ──
+  if (current?.valuation?.terminal) {
+    put('valuation.terminal.capex_pct_of_da', 1, 'convention',
+      'steady state: capex replaces what depreciates, so capex = D&A. Below 1.00 the asset base is run down for ever; above it, the business is still investing for growth beyond g');
   }
 
   // ── MIP terms (offered only when the analyst switches a MIP on) ──
@@ -159,4 +175,35 @@ export function suggestionsFor(
   }
 
   return out;
+}
+
+/**
+ * The entry multiple as the engine will derive it, or null while it cannot be derived yet.
+ * Never a second definition: the same `deriveEntry(buildOperating(...).years[0].ebitda)` the
+ * build sequence runs (SPEC §2, §24.4).
+ */
+function impliedEntryMultiple(
+  facts: DealFacts,
+  current: (Pick<DealAssumptions, 'entry'> & Partial<Pick<DealAssumptions, 'operations' | 'fees'>>) | undefined,
+  pending: readonly string[],
+): number | null {
+  if (!current) return null;
+  const { entry } = current;
+  if (entry.driver === 'multiple') {
+    return entry.entry_multiple !== null && Number.isFinite(entry.entry_multiple) ? entry.entry_multiple : null;
+  }
+  if (entry.enterprise_value === null || !Number.isFinite(entry.enterprise_value)) return null;
+  if (pending.includes('entry.basis')) return null; // the price implies no multiple until its basis is chosen
+  try {
+    let year1Ebitda = Number.NaN;
+    if (entry.basis === 'ntm') {
+      if (!current.operations || !current.fees) return null;
+      year1Ebitda = buildOperating(facts, { entry, operations: current.operations, fees: current.fees }, []).years[0].ebitda;
+      if (!Number.isFinite(year1Ebitda)) return null;
+    }
+    const m = deriveEntry(facts, { entry }, year1Ebitda).entry_multiple;
+    return Number.isFinite(m) && m > 0 ? m : null;
+  } catch {
+    return null; // an input the derivation needs is still blank or invalid
+  }
 }

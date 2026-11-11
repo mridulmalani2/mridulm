@@ -18,6 +18,7 @@ import { buildFormulaWorkbook, formulaCoverageBlockers, type ParityCell } from '
 import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import { G12_ASSUMPTIONS, G12_FACTS } from './fixtures/g12-prof';
+import { EA_ASSUMPTIONS, EA_FACTS } from './fixtures/ea-oos';
 import { cleaningCases } from './fixtures/cleaning-deals';
 
 function findSoffice(): string | null {
@@ -40,6 +41,10 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
   G4: GOLDEN_DEALS.G4,
   G5: GOLDEN_DEALS.G5,
   G12PROF: { facts: G12_FACTS, assumptions: G12_ASSUMPTIONS },
+  // §28 [v2.6.0] terminal year stated: the out-of-sample EA case (lines by year, capex reset to D&A)
+  EA_OOS: { facts: EA_FACTS, assumptions: EA_ASSUMPTIONS },
+  // …and on a full driver-built LBO (revenue-driven lines, fees, floating debt, revolver)
+  G2_VAL_TERMINAL: { facts: GOLDEN_DEALS.G2.facts, assumptions: { ...GOLDEN_DEALS.G2.assumptions, valuation: { ...VALUATION, terminal: { capex_pct_of_da: 1.1, delta_nwc_before_growth: 3 } } } },
   // the valuation layer on a full LBO (fees, OID, floating debt, revolver, min cash)
   G2_VAL: { facts: GOLDEN_DEALS.G2.facts, assumptions: { ...GOLDEN_DEALS.G2.assumptions, valuation: VALUATION } },
   // PIK + MIP + start-of-year leverage

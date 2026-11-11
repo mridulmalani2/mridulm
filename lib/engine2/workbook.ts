@@ -603,6 +603,11 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     I.line('beta_a', 'Asset beta', { 0: { input: v.asset_beta, fmt: '0.000' } });
     I.line('beta_d', 'Debt beta (0 = riskless debt)', { 0: { input: v.debt_beta, fmt: '0.000' } });
     I.line('g_lr', 'Long-run growth after the exit', { 0: { input: v.long_run_growth, fmt: FMT_PCT } });
+    // §28 [v2.6.0]: the terminal year stated in steady state — live inputs the year N+1 FCF reads.
+    if (v.terminal) {
+      I.line('term_capex', 'Terminal capex ÷ D&A (1.00 = spend what wears out)', { 0: { input: v.terminal.capex_pct_of_da, fmt: '0.000' } });
+      I.line('term_nwc', 'Terminal increase in NWC, before growth into year N+1 (negative = an inflow)', { 0: { input: v.terminal.delta_nwc_before_growth } });
+    }
     I.line('timing', 'Leverage timing for the cost of equity (structural)', { 0: { input: v.leverage_timing === 'end_of_year' ? 'end of year' : 'start of year', fmt: '@' } });
     I.section('8. Break-evens (engine-solved; Goal Seek targets after you change inputs)');
     const be = val.break_evens;
@@ -1247,8 +1252,13 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   if (v && val) {
     M.section('9. Flow to equity — what the equity is worth (CAPM; the cost of equity re-levered every year)');
     M.line('ru', 'Unlevered cost of capital  rU  =  rf + βA × MRP', { 0: { f: `${iv('rf')}+${iv('beta_a')}*${iv('mrp')}`, v: val.r_unlevered, fmt: FMT_PCT } });
-    M.line('ufcf6', 'Year N+1 unlevered FCF  =  (1+g) × [EBIT(1−t) + D&A − capex − ΔNWC]', {
-      0: { f: `(1+${gN1Ref})*((${m('ebitda', N)}-${m('da', N)})*(1-${iv('tax_rate')})+${m('da', N)}-${m('capex', N)}-${m('dnwc', N)})`, v: val.ufcf_n_plus_1 },
+    // §28.2 [v2.6.0]: capex and ΔNWC are year N's own, or the stated steady-state terminal lines
+    const termCapex = v.terminal ? `${iv('term_capex')}*${m('da', N)}` : m('capex', N);
+    const termNwc = v.terminal ? iv('term_nwc') : m('dnwc', N);
+    M.line('ufcf6', v.terminal
+      ? 'Year N+1 unlevered FCF  =  (1+g) × [EBIT(1−t) + D&A − terminal capex − terminal ΔNWC]'
+      : 'Year N+1 unlevered FCF  =  (1+g) × [EBIT(1−t) + D&A − capex − ΔNWC]', {
+      0: { f: `(1+${gN1Ref})*((${m('ebitda', N)}-${m('da', N)})*(1-${iv('tax_rate')})+${m('da', N)}-${termCapex}-${termNwc})`, v: val.ufcf_n_plus_1 },
     }, { note: 'Every line of this cash flow must be able to continue for ever at g — check capex against D&A, and the working-capital build.' });
     M.line('ev_b', 'Exit EV from fundamentals  =  UFCF(N+1) ÷ (rU − g)', { 0: { f: `IF(${m('ru', 0)}>${iv('g_lr')},${m('ufcf6', 0)}/(${m('ru', 0)}-${iv('g_lr')}),"N/A")`, v: val.gordon_ev } }, { bold: true });
     M.line('mult_b', '   as a multiple of the exit-basis EBITDA', { 0: { f: `IF(ISNUMBER(${m('ev_b', 0)}),${m('ev_b', 0)}/${m('exit_basis_ebitda', 0)},"N/A")`, v: val.gordon_implied_multiple, fmt: FMT_MULT } });

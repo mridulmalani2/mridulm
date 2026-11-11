@@ -18,17 +18,20 @@ const CSYM: Record<Engine2Currency, string> = { USD: '$', EUR: '€', GBP: '£',
 export const currencySymbol = (c: Engine2Currency): string => CSYM[c];
 
 const clean = (v: number): number => (Object.is(v, -0) ? 0 : v); // "−0.0" must never render
+/** A value that ROUNDS to zero at the displayed precision is shown as an unsigned zero: a
+ *  floating-point residue such as −7e-15 of closing cash must never print as "−0.0". */
+const settle = (v: number, dp: number): number => (Math.abs(v) < 0.5 * 10 ** -dp ? 0 : clean(v));
 
 /** Thousands-separated fixed-decimal: 2026472.04 → "2,026,472.0". */
 export function num(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  return clean(v).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  return settle(v, dp).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
 /** Money in millions of deal currency, 1dp (§15): 1234.567 → "$1,234.6m". */
 export function money(v: number | null | undefined, currency: Engine2Currency, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  const sign = v < 0 ? '−' : '';
+  const sign = settle(v, dp) < 0 ? '−' : '';
   return `${sign}${CSYM[currency]}${num(Math.abs(v), dp)}m`;
 }
 
@@ -37,20 +40,20 @@ export function money(v: number | null | undefined, currency: Engine2Currency, d
  *  symbols via money(); an unsupported filing must never wear another currency's symbol. */
 export function moneyIso(v: number | null | undefined, isoCode: string, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  const sign = v < 0 ? '−' : '';
+  const sign = settle(v, dp) < 0 ? '−' : '';
   return `${sign}${isoCode} ${num(Math.abs(v), dp)}m`;
 }
 
 /** Rate/IRR as a percentage, 1dp (§15): 0.1596 → "16.0%"; null → "N/A" (never 9999). */
 export function pct(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  return `${(clean(v) * 100).toFixed(dp)}%`;
+  return `${settle(v * 100, dp).toFixed(dp)}%`;
 }
 
 /** Multiple, 1dp + "x" (§15): 2.104 → "2.1x"; null → "N/A". */
 export function multiple(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  return `${clean(v).toFixed(dp)}x`;
+  return `${settle(v, dp).toFixed(dp)}x`;
 }
 
 /** Basis points for spreads: 0.0375 → "375bps". */
@@ -62,7 +65,7 @@ export function bps(v: number | null | undefined): string {
 /** Signed covenant headroom: negative = breach (§11). null → "N/A" (not tested / undefined). */
 export function headroom(v: number | null | undefined, dp = 2): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  const c = clean(v);
+  const c = settle(v, dp);
   return `${c > 0 ? '+' : c < 0 ? '−' : ''}${Math.abs(c).toFixed(dp)}x`;
 }
 

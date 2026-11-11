@@ -297,13 +297,22 @@ describe('every engine feature is enterable in the panel (sweep grid, covenant s
     expect(html).toContain('Springing test applies when drawn ÷ commitment exceeds');
   });
 
-  it('the surplus policy shows its pre-filled, editable settings and the model builds on them', () => {
+  it('the surplus policy arrives BLANK (payout share unset, timing an open choice) and gates Build until entered; then the model builds on it', () => {
     const st = draft();
     const a = st.assumptions!;
-    st.editAssumptions({ ...a, structure: { ...a.structure, distributions: null, surplus_distribution: { payout_pct: 1, start: 'immediately' } } }, ['structure.surplus_distribution']);
+    // what choosing "surplus cash" in the panel does: nothing assumed for the analyst
+    st.editWithChoices({ ...a, structure: { ...a.structure, distributions: null, surplus_distribution: { payout_pct: Number.NaN, start: 'immediately' } } },
+      ['structure.distributions', 'structure.surplus_distribution'], ['structure.surplus_distribution.start'], ['structure.surplus_distribution']);
+    const blank = useEngine2Model.getState().missing().map((m) => m.path);
+    expect(blank).toContain('structure.surplus_distribution.payout_pct');
+    expect(blank).toContain('structure.surplus_distribution.start');
     let html = renderToStaticMarkup(<Workbench />);
-    expect(html).toContain('Pre-filled with the common case');
+    expect(html).not.toContain('Pre-filled');
     expect(html).toContain('Share of surplus cash paid out');
+    const b = useEngine2Model.getState().assumptions!;
+    useEngine2Model.getState().editAssumptions({ ...b, structure: { ...b.structure, surplus_distribution: { payout_pct: 1, start: 'immediately' } } },
+      ['structure.surplus_distribution.payout_pct', 'structure.surplus_distribution.start']);
+    expect(useEngine2Model.getState().missing().map((m) => m.path).filter((x) => x.startsWith('structure.surplus_distribution'))).toEqual([]);
     useEngine2Model.getState().build();
     const out = useEngine2Model.getState().output!;
     expect(out).toBeTruthy();

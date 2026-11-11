@@ -25,7 +25,7 @@ import { buildGpFeeIncome, buildReturns, sponsorShareOfDistributions } from './r
 import { yearNPlus1Growth } from './operating';
 import { runCore, stripInterimSplit, type EngineCore, type StripInterimSplit } from './sequence';
 import type { CreditYear, DealAssumptions, DealFacts, EquityStripBlock, ExitBlock, FteCase, ModelOutput, ReturnStreams, SelldownBlock, ValuationAssumption, ValuationBlock } from './types';
-import { fteRecursion, gordonEv, solveRoot, terminalUfcf, unleveredCost, validateValuation } from './valuation';
+import { fteRecursion, gordonEv, resolveTerminalYear, solveRoot, terminalSteadyStateIssues, terminalUfcf, unleveredCost, validateValuation } from './valuation';
 
 export type Engine2ModelOutput = Omit<ModelOutput, 'bridge'> & { bridge: Engine2ValueBridge };
 
@@ -213,6 +213,15 @@ export function bridgeFromCore(
   });
 }
 
+/** §28.2 [v2.6.0]: the terminal year in year-N terms, from the SAME core the valuation reads. */
+function terminalYearFromCore(core: EngineCore, assumptions: DealAssumptions) {
+  const lastOp = core.operating[assumptions.entry.hold_years - 1];
+  return resolveTerminalYear(
+    { ebitda: lastOp.ebitda, da: lastOp.da, capex: lastOp.maint_capex + lastOp.growth_capex, delta_nwc: lastOp.delta_nwc },
+    assumptions.valuation?.terminal,
+  );
+}
+
 /** §25.5 closing debt (par + accrued PIK, terms + drawn revolver) and cash, index 0..N. */
 function debtAndCashPaths(core: EngineCore): { debt: number[]; cash: number[] } {
   const N = core.waterfall.length;
@@ -244,11 +253,9 @@ export function buildValuation(
   const lastOp = core.operating[N - 1];
   const gN1 = yearNPlus1Growth(assumptions.operations, N);
   if (gN1 === null) throw new RangeError('valuation: year N+1 growth is required (§24.3 R7)');
-  const ufcf = terminalUfcf(
-    { ebitda: lastOp.ebitda, da: lastOp.da, capex: lastOp.maint_capex + lastOp.growth_capex, delta_nwc: lastOp.delta_nwc },
-    assumptions.tax.rate,
-    gN1,
-  );
+  // §28.2 [v2.6.0]: year N's lines, or the stated steady-state capex and ΔNWC — resolved ONCE.
+  const terminalYear = terminalYearFromCore(core, assumptions);
+  const ufcf = terminalUfcf(terminalYear, assumptions.tax.rate, gN1);
 
   const caseAt = (multiple: number, val: ValuationAssumption): FteCase => {
     const a: DealAssumptions = { ...assumptions, exit: { ...assumptions.exit, multiple }, valuation: val };
@@ -375,6 +382,20 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
     selldown: selldownFromCore(core, assumptions), // §14.24(f) [v2.2.0] selldown_below_cost WARN
     exit, // §9.1 [v2.3.0] exit_debt_shortfall WARN
   });
+
+  // §24.5 / §28.4 [v2.6.0]: with the valuation ON, a terminal year that is not a steady state is
+  // disclosed — the Gordon value capitalises it for ever. Reads the RESOLVED terminal year, so
+  // stating a steady state (§28) is what clears it.
+  if (assumptions.valuation) {
+    const issues = terminalSteadyStateIssues(terminalYearFromCore(core, assumptions));
+    if (issues.length) {
+      coherence.push({
+        code: 'terminal_not_steady_state',
+        severity: 'warn',
+        message: `Terminal value capitalises a year that is not a steady state: ${issues.join('; ')}. State the terminal year (capex ÷ D&A, increase in NWC) in the valuation inputs (§28)`,
+      });
+    }
+  }
 
   const output: Engine2ModelOutput = {
     facts,
