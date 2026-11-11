@@ -18,7 +18,7 @@ import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const label = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
+const label = { color: 'rgba(17,17,17,0.62)', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' } as const;
 const th = 'text-right font-normal px-2 py-1';
 const td = 'text-right px-2 py-1';
 const rowB = { borderTop: '1px solid rgba(17,17,17,0.08)' } as const;
@@ -40,7 +40,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, children }) => (
   <div style={{ overflowX: 'auto' }}>
-    <table className="w-full text-[11px]" style={{ fontFamily: mono, borderCollapse: 'collapse', color: '#111' }}>
+    <table className="w-full text-[13px]" style={{ fontFamily: mono, borderCollapse: 'collapse', color: '#111' }}>
       <thead><tr style={{ color: 'rgba(17,17,17,0.45)' }}>{head.map((h, i) => <th key={i} className={i === 0 ? 'text-left font-normal px-2 py-1' : th}>{h}</th>)}</tr></thead>
       <tbody>{children}</tbody>
     </table>
@@ -55,15 +55,15 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
   return (
   <div>
     <div className="flex gap-8 mb-4">
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Sponsor IRR</p>
+      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Sponsor IRR</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : pct(o.returns.sponsor_net.irr)}</p>
-        {headlineNotMeaningful(o) && <p className="text-[10px]" style={{ color: '#b91c1c' }}>not meaningful — see the ■ warning above</p>}</div>
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>MOIC</p>
+        {headlineNotMeaningful(o) && <p className="text-[12px]" style={{ color: '#b91c1c' }}>not meaningful — see the ■ warning above</p>}</div>
+      <div><p className="text-[12px] uppercase tracking-widest" style={label}>MOIC</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : multiple(o.returns.sponsor_net.moic)}</p></div>
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
+      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}</p>
         {em.fy_canonical !== null && (
-          <p className="text-[10px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
+          <p className="text-[12px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
         )}
         {/* §21 [v1.6.0]: the sector comps band, beside the entry multiple because that is the
             number a reader compares it against. Every part of the label is load-bearing — the
@@ -72,7 +72,7 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
             stand behind it, and asserts NO ordering against the entry multiple. Reads the named
             fact; no arithmetic here. */}
         {o.facts.sector_comps !== null ? (
-          <p className="text-[10px]" style={label}>
+          <p className="text-[12px]" style={label}>
             {o.facts.sector_comps.basis === 'sector'
               ? `${o.facts.sector_comps.bucket} peers trade`
               : 'Whole market (ex-financials) trades'}{' '}
@@ -84,11 +84,11 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
               : ` · ${o.facts.sector_comps.firms} firms`}
           </p>
         ) : (
-          <p className="text-[10px]" style={label}>Sector comps unavailable — no sector source for this deal (§21)</p>
+          <p className="text-[12px]" style={label}>Sector comps unavailable — no sector source for this deal (§21)</p>
         )}</div>
       {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
           per-year credit metrics on the other tabs are NET. */}
-      <div><p className="text-[10px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
+      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
         <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_gross_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
     </div>
     <Table head={['Value bridge', money(0, ccy) === '' ? '' : '']}>
@@ -106,13 +106,13 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         construction — showing them would be the degenerate headline §9 removed (L-10). */}
     {(o.waterfall.some((w) => w.distribution_paid > 0) || o.selldown !== null) && (
       <div className="flex gap-8 mb-4">
-        <div><p className="text-[10px] uppercase tracking-widest" style={label}>{o.selldown ? 'DPI (distributions + selldown ÷ check)' : 'DPI (distributions ÷ check)'}</p>
+        <div><p className="text-[12px] uppercase tracking-widest" style={label}>{o.selldown ? 'DPI (distributions + selldown ÷ check)' : 'DPI (distributions ÷ check)'}</p>
           <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.dpi[o.returns.dpi.length - 1] ?? null)}</p></div>
-        <div><p className="text-[10px] uppercase tracking-widest" style={label}>{o.selldown ? 'Payback (cash realized before the exit)' : 'Payback (distributions alone)'}</p>
+        <div><p className="text-[12px] uppercase tracking-widest" style={label}>{o.selldown ? 'Payback (cash realized before the exit)' : 'Payback (distributions alone)'}</p>
           <p className="text-2xl" style={{ fontFamily: mono }}>{o.returns.payback_year === null ? 'N/A' : `Y${o.returns.payback_year}`}</p></div>
       </div>
     )}
-    <p className="text-[10px] mt-2" style={label}>
+    <p className="text-[12px] mt-2" style={label}>
       FCF conversion by year: {o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.fcf_conversion))).join(' · ')}
     </p>
   </div>
@@ -153,7 +153,7 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         )}
       </Table>
       {f && (
-        <p className="text-[10px] mt-2" style={label}>
+        <p className="text-[12px] mt-2" style={label}>
           less: fund fees & carry → net to LP (SPEC §19). Paid-in {money(f.paid_in_total, ccy)} (equity
           check + annual fee draws; committed {money(f.committed_capital, ccy)}); the LP multiple is
           TVPI (= DPI — fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
@@ -187,7 +187,7 @@ export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }>
   ];
   return (
     <div className="mt-4">
-      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Partial exit — secondary selldown (SPEC §23)</p>
+      <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Partial exit — secondary selldown (SPEC §23)</p>
       <Table head={['', '']}>
         {rows.map(([l, v]) => (
           <tr key={l} style={rowB}>
@@ -196,7 +196,7 @@ export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }>
           </tr>
         ))}
       </Table>
-      <p className="text-[10px] mt-1" style={label}>
+      <p className="text-[12px] mt-1" style={label}>
         A secondary sale of the sponsor’s own stake: the company’s cash, debt and balance sheet are
         unchanged. The proceeds are in the sponsor’s cash flows and count toward DPI and payback; the
         promote hurdle and the value bridge bars do not include them. From the year after the sale the
@@ -250,7 +250,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
   ];
   return (
     <div className="mt-4">
-      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>
+      <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>
         {sw ? 'Sweet equity strip' : 'Warrant'} (SPEC §22)
       </p>
       <Table head={['', '']}>
@@ -261,7 +261,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
           </tr>
         ))}
       </Table>
-      <p className="text-[10px] mt-1" style={label}>
+      <p className="text-[12px] mt-1" style={label}>
         Loan notes are EQUITY (§22.2) — outside §11 leverage/ICR/FCCR/DSCR and the §3 waterfall, accruing
         only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC. ' : ''}
         {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value (§22.6). ' : ''}
@@ -333,7 +333,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
         const elections = trancheAssumption && trancheAssumption.type === 'pik_note' ? trancheAssumption.elections : null;
         return (
         <div key={k} className="mb-3">
-          <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>{rows[0]?.name ?? `Tranche ${k + 1}`}</p>
+          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>{rows[0]?.name ?? `Tranche ${k + 1}`}</p>
           <Table head={['Year', 'Beginning', 'Interest', 'PIK', 'Amort', 'Sweep', 'Ending']}>
             {rows.map((r, i) => (
               <tr key={i} style={rowB}>
@@ -350,7 +350,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
             ))}
           </Table>
           {elections && (
-            <p className="text-[10px] mt-1" style={label}>
+            <p className="text-[12px] mt-1" style={label}>
               PIK toggle (§20): each year the issuer elects the WHOLE coupon — “cash” pays the cash
               coupon on the beginning balance and accrues nothing; “PIK” accrues the PIK coupon and
               pays nothing. Never both legs in one year. Elections are frozen across scenarios.
@@ -361,7 +361,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
       })}
       {o.revolver && (
         <div className="mb-3">
-          <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Revolver</p>
+          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Revolver</p>
           <Table head={['Year', 'Drawn (beg)', 'Draw', 'Repay', 'Interest', 'Fee', 'Drawn (end)']}>
             {o.revolver.map((r, i) => (
               <tr key={i} style={rowB}>
@@ -383,7 +383,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           aggregation, no engine import). Rendered only when a refi exists. */}
       {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
         <div className="mb-3">
-          <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Refinancing events (§18)</p>
+          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Refinancing events (§18)</p>
           <Table head={['Tranche', 'Year', 'Cash cost (premium + new OID + fees)', 'Old OID + fees written off']}>
             {o.tranches.flatMap((rows) =>
               rows
@@ -399,7 +399,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
                 )),
             )}
           </Table>
-          <p className="text-[10px] mt-1" style={label}>
+          <p className="text-[12px] mt-1" style={label}>
             Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off (old
             unamortized OID + financing fees) is a NON-cash book charge that year, and it is deducted
             for tax the same year with the call premium: the old OID and the premium as interest
@@ -413,7 +413,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           would be noise. */}
       {o.waterfall.some((w) => w.distribution_requested > 0) && (
         <div className="mb-3">
-          <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>Interim distributions</p>
+          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Interim distributions</p>
           <Table head={['Year', 'Requested', 'Cash above floor', 'RP capacity', 'Paid', 'Trap']}>
             {o.waterfall.map((w, i) => (
               <tr key={i} style={rowB}>
@@ -426,13 +426,13 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
               </tr>
             ))}
           </Table>
-          <p className="text-[10px] mt-1" style={label}>
+          <p className="text-[12px] mt-1" style={label}>
             RP capacity is N/A when no trap is set (§3.7). Blocked capacity does NOT carry forward.
           </p>
         </div>
       )}
       {/* SPEC §11 deleveraging footer — first-class, never buried */}
-      <p className="text-[10px] mt-1" style={label}>
+      <p className="text-[12px] mt-1" style={label}>
         Cumulative paydown: {last?.cumulative_paydown_pct_of_entry_debt == null ? 'N/A' : pct(last.cumulative_paydown_pct_of_entry_debt)} of entry debt
         {' · '}FCF conversion (final year): {last?.fcf_conversion == null ? 'N/A' : pct(last.fcf_conversion)}
         {' · '}Closing cash: {money(o.waterfall[o.waterfall.length - 1]?.closing_cash ?? null, ccy)}
@@ -478,7 +478,7 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
   </Table>
   {/* §11 [v1.1.2]: these are NET of cash; the Summary tab's entry figure is GROSS. Stated
       on screen, because reading the two as one deleveraging series overstates it. */}
-  <p className="text-[10px] mt-2" style={label}>
+  <p className="text-[12px] mt-2" style={label}>
     Leverage here is NET of cash (SPEC §11). The Summary tab&apos;s entry leverage is GROSS
     (debt at par ÷ {sizingBasisLabel(o.facts.sizing_basis)} EBITDA — the quoted sizing basis), so the two are not a single series.
   </p>
@@ -487,13 +487,13 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
 
 const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
   const grid = o.sensitivity?.[0];
-  if (!grid) return <p className="text-[11px]" style={label}>Run “Build” to compute the sensitivity exhibits.</p>;
+  if (!grid) return <p className="text-[13px]" style={label}>Run “Build” to compute the sensitivity exhibits.</p>;
   const cell = (c: number, v: number | null, isBase: boolean, fmt: (x: number | null) => string) => (
     <td key={c} className={td} style={isBase ? { background: 'rgba(21,93,252,0.10)', fontWeight: 600 } : undefined}>{fmt(v)}</td>
   );
   const block = (title: string, m: (number | null)[][], fmt: (x: number | null) => string) => (
     <div className="mb-4">
-      <p className="text-[10px] uppercase tracking-widest mb-1" style={label}>{title} — {grid.row_axis} (rows) × {grid.col_axis} (cols)</p>
+      <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>{title} — {grid.row_axis} (rows) × {grid.col_axis} (cols)</p>
       <Table head={['', ...grid.col_values.map((v) => num(v, 1))]}>
         {m.map((row, r) => (
           <tr key={r} style={rowB}>
@@ -508,13 +508,13 @@ const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
     <div>
       {block('Sponsor IRR', grid.irr, (x) => pct(x))}
       {block('Sponsor MOIC', grid.moic, (x) => multiple(x))}
-      <p className="text-[10px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
+      <p className="text-[12px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
     </div>
   );
 };
 
 const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
-  if (!o.scenarios?.length) return <p className="text-[11px]" style={label}>Run “Build” to compute the scenario exhibits.</p>;
+  if (!o.scenarios?.length) return <p className="text-[13px]" style={label}>Run “Build” to compute the scenario exhibits.</p>;
   return (
     <div>
       <Table head={['Scenario', 'IRR', 'Δ vs base', 'MOIC', 'Min closing cash', 'Distributions paid', 'Blocked', 'Breach year', 'Floor breach']}>
@@ -541,7 +541,7 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
           );
         })}
       </Table>
-      <p className="text-[10px] mt-2" style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (SPEC §13 — a downside never silently re-prices entry).</p>
+      <p className="text-[12px] mt-2" style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (SPEC §13 — a downside never silently re-prices entry).</p>
     </div>
   );
 };
@@ -550,7 +550,7 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
 
 export const Methodology: React.FC = () => (
   <div>
-    <p className="text-[10px] uppercase tracking-widest mb-2" style={label}>Assumptions & methodology (SPEC §15) — a model is a range, not a point</p>
+    <p className="text-[12px] uppercase tracking-widest mb-2" style={label}>Assumptions & methodology (SPEC §15) — a model is a range, not a point</p>
     <Table head={['Simplification', 'Why it is immaterial or conservative']}>
       {DISCLOSURES.map(([a, b]) => (
         <tr key={a} style={rowB}><td className="px-2 py-1">{a}</td><td className="px-2 py-1 text-left" style={{ color: 'rgba(17,17,17,0.65)' }}>{b}</td></tr>
@@ -566,7 +566,7 @@ export const Methodology: React.FC = () => (
 export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
   const v = o.valuation;
   if (!v) {
-    return <p className="text-[11px]" style={label}>Valuation is off — switch on "Value the equity (flow to equity)" in section 5 of the inputs.</p>;
+    return <p className="text-[13px]" style={label}>Valuation is off — switch on "Value the equity (flow to equity)" in section 5 of the inputs.</p>;
   }
   const N = o.assumptions.entry.hold_years;
   const cases = [
@@ -575,7 +575,7 @@ export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }
   ];
   const be = v.break_evens;
   return (
-    <div className="text-[11px]" style={{ fontFamily: mono }}>
+    <div className="text-[13px]" style={{ fontFamily: mono }}>
       <p className="mb-2" style={label}>
         rU = {pct(v.r_unlevered)} · year N+1 unlevered FCF {money(v.ufcf_n_plus_1, ccy)} ·
         fundamentals exit EV {v.gordon_ev === null ? `N/A (${v.gordon_null_reason})` : `${money(v.gordon_ev, ccy)} = ${multiple(v.gordon_implied_multiple)}`}
@@ -633,7 +633,7 @@ const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Curren
       <div className="flex gap-0.5 mb-3 flex-wrap">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
+            className="px-2.5 py-1 text-[12px] uppercase tracking-widest"
             style={{ background: tab === t.id ? '#111' : 'transparent', color: tab === t.id ? '#fff' : 'rgba(17,17,17,0.5)', fontFamily: mono, border: '1px solid rgba(17,17,17,0.12)' }}>
             {t.label}
           </button>

@@ -18,6 +18,7 @@ import { buildFormulaWorkbook, formulaCoverageBlockers, type ParityCell } from '
 import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 import { G12_ASSUMPTIONS, G12_FACTS } from './fixtures/g12-prof';
+import { cleaningCases } from './fixtures/cleaning-deals';
 
 function findSoffice(): string | null {
   for (const p of ['/opt/homebrew/bin/soffice', '/usr/bin/soffice', '/usr/local/bin/soffice', '/Applications/LibreOffice.app/Contents/MacOS/soffice']) {
@@ -316,6 +317,10 @@ const CASES: Record<string, { facts: DealFacts; assumptions: DealAssumptions }> 
   },
 };
 
+// Deals that came through the Clean step: the Normalisation sheet, and the Inputs cells that
+// reference it (rebuild/CLEANING_AND_SUITE_PLAN.md §7).
+Object.assign(CASES, cleaningCases());
+
 const soffice = findSoffice();
 const describeIfLo = soffice ? describe : describe.skip;
 if (!soffice) {
@@ -398,6 +403,103 @@ describeIfLo('§26 formula workbook — LibreOffice recalculation equals the eng
       const totalCell = parityMaps.get(name)!.find((p) => p.sheet === 'Checks' && p.label.startsWith('Total'))!;
       expect(recalculated.get(name)!('Checks', totalCell.addr), `${name} checks total`).toBe(0);
     }
+  });
+});
+
+describeIfLo('Normalisation sheet — the model is DRIVEN by the bridge, not pasted beside it', () => {
+  const deal = CASES.CLEAN_ADJUSTED;
+  const base = runModel(deal.facts, deal.assumptions);
+  const sizingCol = 'F'; // FY2021 → D, FY2022 → E, FY2023 (the sizing year) → F
+  let cell: Recalc;
+  let parity: ParityCell[];
+
+  beforeAll(async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wb-norm-'));
+    const built = buildFormulaWorkbook(base, { cachedResults: false });
+    parity = built.parity;
+    // an analyst adds 10.0 to the restructuring add-back IN EXCEL
+    const ws = built.wb.getWorksheet('Normalisation')!;
+    let hit = 0;
+    ws.eachRow((r, n) => {
+      if (String(r.getCell(2).value ?? '').includes('Restructuring charges') && n > 0 && hit === 0) {
+        const c = ws.getCell(`${sizingCol}${n}`);
+        expect(c.value).toBe(20);
+        c.value = 30;
+        hit = n;
+      }
+    });
+    expect(hit).toBeGreaterThan(0);
+    const path = join(dir, 'edited.xlsx');
+    writeFileSync(path, Buffer.from(await built.wb.xlsx.writeBuffer()));
+    execFileSync(soffice!, [`-env:UserInstallation=file://${join(dir, 'profile')}`, '--headless', '--calc', '--convert-to', 'xlsx', '--outdir', join(dir, 'out'), path], { stdio: 'pipe', timeout: 180_000 });
+    cell = readRecalculated(join(dir, 'out', 'edited.xlsx'));
+  }, 240_000);
+
+  it('the fixture is what it claims: 190.0 + 62.5 + 20 + 12 − 5 = 279.5 on revenue of 1,200.0', () => {
+    expect(deal.facts.fy_ebitda).toBe(279.5);
+    expect(deal.facts.fy_revenue).toBe(1200);
+    expect(deal.facts.net_debt).toBe(383); // 335 + 35 + 60 + 25 − (80 − 8)
+    const n = deal.facts.normalisation!;
+    expect(n.ebitda.find((b) => b.period === '2022-12-31')!.adjusted).toBeNull(); // SBC not entered for FY2022
+  });
+
+  it('adding 10.0 to an add-back in Excel moves price, leverage and IRR exactly as the engine does', () => {
+    const moved = runModel(
+      { ...deal.facts, fy_ebitda: 289.5, fy_ebitda_margin: 289.5 / 1200 },
+      deal.assumptions,
+    );
+    const at = (label: string) => parity.find((p) => p.sheet === 'Summary' && p.label.startsWith(label))!.addr;
+    expect(cell('Summary', at('Purchase price'))).toBeCloseTo(moved.derived.enterprise_value, 6);
+    expect(cell('Summary', at('Sponsor IRR'))).toBeCloseTo(moved.returns.sponsor_net.irr!, 8);
+    expect(cell('Summary', at('Sponsor equity'))).toBeCloseTo(moved.sources_uses.sponsor_equity, 6);
+    // and it is a real move, not the base case echoed back
+    expect(Math.abs(moved.returns.sponsor_net.irr! - base.returns.sponsor_net.irr!)).toBeGreaterThan(1e-5);
+    expect(moved.derived.enterprise_value - base.derived.enterprise_value).toBeCloseTo(90, 9); // 9.0x × 10.0
+  });
+
+  it('a period with an amount not entered reads "n/a" — a blank is never summed as zero', () => {
+    const adj = parity.find((p) => p.sheet === 'Normalisation' && p.label.startsWith('Adjusted ebitda') && p.expected === null)!;
+    expect(adj).toBeDefined();
+    expect(cell('Normalisation', adj.addr)).toBe('n/a');
+  });
+
+  it('the Checks sheet still totals zero after the edit (the link is intact)', () => {
+    const total = parity.find((p) => p.sheet === 'Checks' && p.label.startsWith('Total'))!;
+    expect(cell('Checks', total.addr)).toBe(0);
+  });
+});
+
+describe('Normalisation sheet — structure', () => {
+  it('CLEAN_CONTINUES carries two EBITDA bases: priced on 282.0, forecast margin 270 ÷ 1,250, and the Inputs sheet links both', () => {
+    const o = runModel(CASES.CLEAN_CONTINUES.facts, CASES.CLEAN_CONTINUES.assumptions);
+    expect(o.facts.fy_ebitda).toBe(282);
+    expect(o.facts.fy_ebitda_margin).toBeCloseTo(0.216, 12);
+    expect(o.facts.normalisation!.forecast_ebitda).toBe(270);
+    const { parity } = buildFormulaWorkbook(o, { cachedResults: true });
+    expect(parity.some((p) => p.sheet === 'Inputs' && p.label.includes('forecast margin') && p.expected === 270)).toBe(true);
+    expect(parity.some((p) => p.sheet === 'Normalisation' && p.label.startsWith('EBITDA base for the forecast margin'))).toBe(true);
+  });
+  it('a deal that did not come through the Clean step has no Normalisation sheet and plain inputs', () => {
+    const o = runModel(CASES.G2.facts, CASES.G2.assumptions);
+    const { wb } = buildFormulaWorkbook(o, { cachedResults: true });
+    expect(wb.getWorksheet('Normalisation')).toBeUndefined();
+  });
+  it('the sheet sits between Inputs and Model; "as reported" is stated on it and in the methodology', () => {
+    const o = runModel(CASES.CLEAN_AS_REPORTED.facts, CASES.CLEAN_AS_REPORTED.assumptions);
+    const { wb } = buildFormulaWorkbook(o, { cachedResults: true });
+    expect(wb.worksheets.map((w) => w.name).slice(0, 4)).toEqual(['Summary', 'Inputs', 'Normalisation', 'Model']);
+    expect(o.facts.fy_ebitda).toBe(250); // the ignored row really is ignored
+    const text = (name: string) => { const out: string[] = []; wb.getWorksheet(name)!.eachRow((r) => r.eachCell((c) => out.push(String(c.value)))); return out.join('\n'); };
+    expect(text('Normalisation')).toContain('AS REPORTED');
+    expect(text('Methodology')).toContain('modelled on the figures as reported');
+  });
+  it('the sizing EBITDA on Inputs is a formula on the Normalisation sheet, not a typed number', () => {
+    const o = runModel(CASES.CLEAN_LTM.facts, CASES.CLEAN_LTM.assumptions);
+    expect(o.facts.fy_ebitda).toBe(285); // LTM 270.0 + 15.0
+    const { wb } = buildFormulaWorkbook(o, { cachedResults: true });
+    let formula = '';
+    wb.getWorksheet('Inputs')!.eachRow((r) => { if (String(r.getCell(2).value ?? '').startsWith('LTM EBITDA')) formula = (r.getCell(4).value as { formula: string }).formula; });
+    expect(formula).toMatch(/^'Normalisation'!\$[A-Z]+\$\d+$/);
   });
 });
 

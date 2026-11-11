@@ -102,6 +102,61 @@ export interface DealFacts {
   sector_comps: SectorCompsBand | null;
 
   history: HistoricalYear[];
+
+  /** How the sourced figures were normalised on the Clean step (rebuild/CLEANING_AND_SUITE_PLAN.md
+   *  §4.2). DISPLAY ONLY: read by the workbook builder and the results screen so the bridges are
+   *  shown beside the model. NO engine arithmetic reads it (tests/engine2-boundary). The figures
+   *  the engine reads are the ADJUSTED ones, already in `fy_revenue` / `fy_ebitda` / `net_debt`.
+   *  Absent or null ⇔ the deal did not come through the Clean step. */
+  normalisation?: NormalisationFacts | null;
+}
+
+/** One bridge row: a label and a signed amount (null ⇔ not entered for that period). */
+export interface NormalisationRow {
+  label: string;
+  category: string;
+  amount: number | null;
+  note: string;
+  /** §27, EBITDA rows: 'continues' ⇔ in the price basis but NOT in the forecast margin base. */
+  forecast?: 'gone' | 'continues' | null;
+}
+/** One line in one period: sourced → restated (cell overrides) → adjusted (+ itemised rows). */
+export interface NormalisationLine {
+  period: string;
+  reported: number | null;
+  restated: number | null;
+  rows: NormalisationRow[];
+  adjusted: number | null;
+}
+export interface NormalisationFacts {
+  /** true ⇔ the analyst explicitly chose to model the figures as reported. */
+  as_reported: boolean;
+  /** Period keys: a fiscal-year end date, or 'LTM'. `sizing` is the period the deal is priced on. */
+  sizing: string | null;
+  anchor: string | null;
+  periods: { key: string; label: string }[];
+  revenue: NormalisationLine[];
+  ebitda: NormalisationLine[];
+  net_debt: {
+    reported: number | null;
+    borrowings: number | null;
+    lease_choice: 'none' | 'finance' | 'all' | null;
+    leases: { label: string; amount: number; included: boolean }[];
+    debt_like: NormalisationRow[];
+    cash: number | null;
+    cash_like: NormalisationRow[];
+    gross: number | null;
+    adjusted: number | null;
+  } | null;
+  /** §27: the EBITDA the forecast margin starts from when an add-back continues (sizing period);
+   *  null ⇔ it is the adjusted EBITDA itself. */
+  forecast_ebitda: number | null;
+  /** The trading multiple on the figures AS REPORTED, shown beside the adjusted-basis anchor in
+   *  `implied_trading_ev_ebitda`. null ⇔ no verified quote. */
+  trading_ev_ebitda_reported: number | null;
+  /** Market capitalisation behind the anchor (millions), for the implied-equity display. */
+  market_cap: number | null;
+  shares_millions: number | null;
 }
 
 /** §21.5 [v1.6.0] — one adjudicated band from `data/comps/bands.json` (the gospel; two blind

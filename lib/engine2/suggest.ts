@@ -69,7 +69,11 @@ export function suggestionsFor(
 
   // ── Entry multiple: the cited SCALE-band median (sector medians are withheld:
   //    verifyBeforeDisplay — citation honesty). Needs historical EBITDA for the band.
-  if (facts.fy_ebitda !== null && facts.fy_ebitda > 0) {
+  // The size band and every cited figure here are US-DOLLAR market data ($10–500m, US buyout
+  // medians, TLB/unitranche terms). They are proposed for USD deals only: ¥100m of EBITDA is not
+  // a large-cap US buyout. Other currencies get no proposal until a cited regional source exists.
+  const usd = facts.currency === 'USD';
+  if (usd && facts.fy_ebitda !== null && facts.fy_ebitda > 0) {
     const largeCap = facts.fy_ebitda >= 100;
     const c = cited(['entryMultiples', largeCap ? 'usBuyoutOverall' : 'middleMarket10to500']);
     if (c) put('entry.entry_multiple', c.value, 'convention', `${largeCap ? 'US buyout overall' : 'middle-market $10–500m'} median EV/EBITDA — ${c.citation}`);
@@ -119,7 +123,7 @@ export function suggestionsFor(
   // Debt structure template: cited leverage/spread/OID/amortization; the BASE RATE and the
   // MATURITY are left blank (NaN) on purpose — no cited live value exists in the repo, so the
   // analyst enters them and `draft.ts` keeps Build gated until they do.
-  if (facts.fy_ebitda !== null && facts.fy_ebitda > 0) {
+  if (usd && facts.fy_ebitda !== null && facts.fy_ebitda > 0) {
     const largeCap = facts.fy_ebitda >= 100;
     const lev = cited(['leverage', largeCap ? 'largeCap' : 'middleMarket', 'totalDebtToEbitda']);
     const spread = cited(['pricing', largeCap ? 'tlbSpreadBps' : 'unitrancheSpreadBps']);

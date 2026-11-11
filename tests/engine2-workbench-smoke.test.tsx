@@ -98,7 +98,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     let html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('confirm to build');
     expect(html).toContain('REQUIRED');
-    expect(html).toContain('net_debt');
+    expect(html).toContain('Net debt at entry'); // a plain-language name — never the raw field path
     expect(html).toContain('disabled');
     useEngine2Model.getState().confirmFact('net_debt', 210);
     html = renderToStaticMarkup(<Workbench />);

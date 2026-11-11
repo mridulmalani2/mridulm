@@ -247,19 +247,18 @@ describe('mapIfrsReport — adversarial-review regressions', () => {
 });
 
 describe('mapIfrsReport — realistic ESEF sparsity (notes often untagged)', () => {
-  it('surfaces gaps for D&A / EBITDA / net debt / NWC and falls back on statutory tax', () => {
+  it('surfaces gaps for D&A / EBITDA / net debt / NWC and leaves an underivable tax rate null', () => {
     const sparse: XbrlJsonReport = {
       facts: {
         rev: { value: '900000000', dimensions: { concept: 'ifrs-full:Revenue', period: '2023-01-01T00:00:00/2024-01-01T00:00:00', unit: 'iso4217:EUR' } },
         op: { value: '120000000', dimensions: { concept: 'ifrs-full:ProfitLossFromOperatingActivities', period: '2023-01-01T00:00:00/2024-01-01T00:00:00', unit: 'iso4217:EUR' } },
       },
     };
-    const r = mapIfrsReport(sparse, { statutoryTaxRate: 0.25 });
+    const r = mapIfrsReport(sparse);
     expect(r.fy_revenue?.value).toBeCloseTo(900, 6);
     expect(r.fy_ebitda).toBeNull();                        // no D&A → EBITDA is a gap, not a guess
     expect(r.net_debt).toBeNull();
     expect(r.gaps).toEqual(expect.arrayContaining(['FY EBITDA', 'D&A %', 'Net debt at entry', 'NWC %']));
-    expect(r.effective_tax_rate?.value).toBeCloseTo(0.25, 9);
-    expect(r.effective_tax_rate?.provenance.source).toBe('default');
+    expect(r.effective_tax_rate).toBeNull(); // never a statutory stand-in
   });
 });

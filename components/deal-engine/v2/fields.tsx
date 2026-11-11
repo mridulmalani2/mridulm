@@ -17,7 +17,9 @@ import type { DealAssumptions } from '../../../lib/engine2/types';
 import BasisBadge from './BasisBadge';
 
 export const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-export const labelStyle = { color: 'rgba(17,17,17,0.5)', fontFamily: mono } as const;
+/** Prose and labels are set in the proportional face; `mono` is for figures only. */
+export const sans = "Inter, ui-sans-serif, system-ui, sans-serif";
+export const labelStyle = { color: 'rgba(17,17,17,0.62)', fontFamily: sans } as const;
 const inputBase = { background: '#fff', border: '1px solid rgba(17,17,17,0.14)', color: '#111', fontFamily: mono, outline: 'none' } as const;
 const inputBlank = { ...inputBase, border: '1px solid rgba(204,0,0,0.55)', background: 'rgba(204,0,0,0.03)' } as const;
 
@@ -54,7 +56,7 @@ export function useSetField() {
 }
 
 export const Label: React.FC<{ children: React.ReactNode; hint?: string }> = ({ children, hint }) => (
-  <span className="text-[10px] tracking-wider uppercase shrink-0" style={labelStyle} title={hint}>{children}</span>
+  <span className="text-[13px] shrink-0" style={{ ...labelStyle, color: 'rgba(17,17,17,0.82)' }} title={hint}>{children}</span>
 );
 
 /** The one-click suggestion chips for a path (the plain proposal and any variants, e.g. @ai). */
@@ -74,8 +76,8 @@ export const SuggestionChips: React.FC<{ path: string; unit?: Unit; render?: (v:
             : 'template';
         return (
           <button key={k} type="button" onClick={() => accept(k)} title={s.basis.detail}
-            className="px-1.5 py-0.5 text-[9px] tracking-wide"
-            style={{ border: '1px dashed rgba(17,17,17,0.3)', color: 'rgba(17,17,17,0.7)', fontFamily: mono, background: 'rgba(17,17,17,0.02)' }}>
+            className="px-2 py-0.5 text-[12px] hover:bg-[rgba(29,63,191,0.12)]"
+            style={{ border: '1px dashed rgba(29,63,191,0.5)', color: '#1D3FBF', fontFamily: sans, background: 'rgba(29,63,191,0.05)' }}>
             use {text} · {s.basis.kind}
           </button>
         );
@@ -91,7 +93,7 @@ export const NumBox: React.FC<{
   onCommit: (v: number) => void;
   width?: string;
   ariaLabel: string;
-}> = ({ value, unit, onCommit, width = 'w-20', ariaLabel }) => {
+}> = ({ value, unit, onCommit, width = 'w-24', ariaLabel }) => {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = show(value, unit);
   return (
@@ -108,10 +110,10 @@ export const NumBox: React.FC<{
           setDraft(null);
         }}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        className={`${width} px-1.5 py-1 text-[11px] text-right`}
+        className={`${width} px-2 py-1.5 text-[13px] text-right`}
         style={isSet(value) ? inputBase : inputBlank}
       />
-      <span className="text-[9px] w-4" style={labelStyle}>{SUFFIX[unit]}</span>
+      <span className="text-[12px] w-6" style={labelStyle}>{SUFFIX[unit]}</span>
     </span>
   );
 };
@@ -128,8 +130,8 @@ export const NumField: React.FC<{
   const basis = useEngine2Model((s) => s.basis[path]);
   const setField = useSetField();
   return (
-    <div className="mb-2">
-      <div className="flex items-center justify-between gap-2">
+    <div className="mb-2.5">
+      <div className="flex items-center justify-between gap-3">
         <Label hint={hint}>{label}</Label>
         <span className="flex items-center gap-1.5">
           {basis && isSet(value) && <BasisBadge kind={basis.kind} detail={basis.detail} />}
@@ -153,7 +155,7 @@ export function ChoiceField<T extends string | boolean>({ path, label, value, op
   const pending = useEngine2Model((s) => s.pending.includes(path));
   const setField = useSetField();
   return (
-    <div className="flex items-center justify-between gap-2 mb-2">
+    <div className="flex items-center justify-between gap-3 mb-2.5">
       <Label hint={hint}>{label}</Label>
       <select
         aria-label={label}
@@ -162,8 +164,8 @@ export function ChoiceField<T extends string | boolean>({ path, label, value, op
           const opt = options.find((o) => String(o.value) === e.target.value);
           if (opt) (onChoose ? onChoose(opt.value) : setField(path, opt.value));
         }}
-        className="px-1 py-1 text-[11px]"
-        style={pending ? inputBlank : inputBase}
+        className="px-2 py-1.5 text-[13px]"
+        style={{ ...(pending ? inputBlank : inputBase), fontFamily: sans }}
       >
         {pending && <option value="">choose…</option>}
         {options.map((o) => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
@@ -193,8 +195,8 @@ export const YearGrid: React.FC<{
       <div className="flex gap-1 justify-end flex-wrap">
         {values.map((v, i) => (
           <span key={i} className="flex flex-col items-end">
-            <span className="text-[8px]" style={labelStyle}>Y{i + from}</span>
-            <NumBox value={v} unit={unit} width="w-14" ariaLabel={`${label} year ${i + from}`}
+            <span className="text-[13px]" style={labelStyle}>Year {i + from}</span>
+            <NumBox value={v} unit={unit} width="w-[4.5rem]" ariaLabel={`${label} year ${i + from}`}
               onCommit={(x) => {
                 const next = [...values];
                 next[i] = x;
@@ -209,17 +211,19 @@ export const YearGrid: React.FC<{
 };
 
 export const Section: React.FC<{ title: string; children: React.ReactNode; note?: string }> = ({ title, children, note }) => (
-  <section className="mb-4">
-    <h4 className="text-[10px] tracking-[0.2em] uppercase mb-2 pb-1" style={{ ...labelStyle, color: '#111', borderBottom: '1px solid rgba(17,17,17,0.1)' }}>{title}</h4>
-    {note && <p className="text-[10px] mb-2" style={labelStyle}>{note}</p>}
-    {children}
+  <section className="mb-4" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.12)' }}>
+    <header className="px-5 py-3" style={{ borderBottom: '1px solid rgba(17,17,17,0.12)' }}>
+      <h4 className="text-[15px] font-semibold" style={{ fontFamily: sans, color: '#111' }}>{title}</h4>
+      {note && <p className="text-[13px] mt-0.5" style={labelStyle}>{note}</p>}
+    </header>
+    <div className="px-5 py-4">{children}</div>
   </section>
 );
 
 export const SmallButton: React.FC<{ onClick: () => void; children: React.ReactNode; danger?: boolean; title?: string }> = ({ onClick, children, danger, title }) => (
   <button type="button" onClick={onClick} title={title}
-    className="px-1.5 py-0.5 text-[9px] uppercase tracking-widest"
-    style={{ border: `1px solid ${danger ? 'rgba(204,0,0,0.4)' : 'rgba(17,17,17,0.2)'}`, color: danger ? '#CC0000' : 'rgba(17,17,17,0.7)', fontFamily: mono }}>
+    className="px-2.5 py-1 text-[12px] font-medium"
+    style={{ border: `1px solid ${danger ? 'rgba(204,0,0,0.4)' : 'rgba(17,17,17,0.2)'}`, color: danger ? '#CC0000' : 'rgba(17,17,17,0.82)', fontFamily: sans, background: '#fff' }}>
     {children}
   </button>
 );

@@ -67,7 +67,7 @@ Methodology row, live Excel formulas. Open prose item only: ledger L4 (§23 is ~
 - ☑ 423e2d5 — the panel exposes every engine feature (it lacked the sweep step-down grid,
   per-year covenant levels, the springing test and sweet-equity ratchet tiers).
 
-## 5. 10-K reconciliation bridges  ☐ (NEXT — the owner's last item)
+## 5. 10-K reconciliation bridges  ◐ (built as the Clean step — see `rebuild/CLEANING_AND_SUITE_PLAN.md` "Status" for what is left)
 
 - **EBITDA bridge:** reported EBITDA built visibly from the filing (operating income + D&A) →
   itemised analyst adjustments per historical year (label, amount, category — one-off /

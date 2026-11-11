@@ -7,7 +7,6 @@
 import React from 'react';
 import type { FieldBasis } from '../../../store/engine2Model';
 
-const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
 
 export type BadgeKind = FieldBasis['kind'] | 'fact' | 'required' | 'ai';
 
@@ -27,8 +26,8 @@ const BasisBadge: React.FC<{ kind: BadgeKind; detail?: string }> = ({ kind, deta
   return (
     <span
       title={detail}
-      className="px-1.5 py-0.5 text-[8px] tracking-widest uppercase whitespace-nowrap"
-      style={{ background: s.bg, color: s.fg, fontFamily: mono, letterSpacing: '0.1em' }}
+      className="px-1.5 py-0.5 text-[11px] font-medium uppercase whitespace-nowrap"
+      style={{ background: s.bg, color: s.fg, fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif', letterSpacing: '0.04em' }}
     >
       {s.label}
     </span>

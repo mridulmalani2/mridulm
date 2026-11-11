@@ -88,14 +88,14 @@ describe('manualHistoricals — sparse entry: blanks stay gaps, NEVER fabricated
     expect(raw.gaps).toEqual(['D&A %', 'Capex %', 'NWC %', 'Net debt at entry']);
   });
 
-  it('gross debt WITHOUT cash never becomes net debt (no silent −0); tax stays null for the honest statutory downgrade', () => {
+  it('gross debt WITHOUT cash never becomes net debt (no silent −0); tax stays null (no statutory stand-in)', () => {
     expect(raw.gross_debt?.value).toBe(80);
     expect(raw.cash).toBeNull();
     expect(raw.net_debt).toBeNull(); // a missing leg is a gap, not gross − 0
     expect(raw.effective_tax_rate).toBeNull();
     const adapted = adaptRawHistoricals(raw);
     expect(adapted.missing).toContain('net_debt');
-    expect(adapted.templateBases['tax.rate']).toContain('statutory default');
+    expect(adapted.facts.effective_tax_rate).toBeNull(); // never a statutory stand-in
   });
 
   it('a single history point yields NO growth proposal (D1 ≥3 gate) — never a template guess', () => {

@@ -13,34 +13,35 @@ import HistoryTable from './HistoryTable';
 import BasisBadge from './BasisBadge';
 import OutputTabs from './OutputTabs';
 import { headlineNotMeaningful } from '../../../lib/engine2/display';
+import { factLabel } from '../ui/labels';
 
 const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const labelStyle = { color: 'rgba(17,17,17,0.45)', fontFamily: mono } as const;
+const labelStyle = { color: 'rgba(17,17,17,0.62)', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' } as const;
 
-const MissingBar: React.FC = () => {
+export const MissingBar: React.FC = () => {
   const missing = useEngine2Model((s) => s.missingFacts);
   const confirm = useEngine2Model((s) => s.confirmFact);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   if (!missing.length) return null;
   return (
     <div className="p-3 mb-4" style={{ border: '1px solid rgba(204,0,0,0.35)', background: 'rgba(204,0,0,0.04)' }}>
-      <p className="text-[10px] tracking-widest uppercase mb-2" style={{ color: '#b91c1c', fontFamily: mono }}>
+      <p className="text-[12px] tracking-widest uppercase mb-2" style={{ color: '#b91c1c', fontFamily: mono }}>
         The filing lacks these facts — confirm to build
       </p>
       {missing.filter((p) => p !== 'currency_unsupported').map((path) => (
         <div key={path} className="flex items-center gap-2 mb-1.5">
           <BasisBadge kind="required" />
-          <span className="text-[11px]" style={{ fontFamily: mono, color: '#111' }}>{path}</span>
+          <span className="text-[13px]" style={{ fontFamily: mono, color: '#111' }}>{factLabel(path)}</span>
           <input
             value={drafts[path] ?? ''}
             onChange={(e) => setDrafts((d) => ({ ...d, [path]: e.target.value }))}
             placeholder="enter to confirm"
-            className="w-28 px-1.5 py-1 text-[11px] text-right ml-auto"
+            className="w-28 px-1.5 py-1 text-[13px] text-right ml-auto"
             style={{ background: '#fff', border: '1px solid rgba(204,0,0,0.35)', fontFamily: mono, outline: 'none' }}
           />
           <button
             onClick={() => { const v = Number((drafts[path] ?? '').replace(/[,\s]/g, '')); if (Number.isFinite(v)) confirm(path, v); }}
-            className="px-2 py-1 text-[9px] uppercase tracking-widest"
+            className="px-2 py-1 text-[12px] uppercase tracking-widest"
             style={{ background: '#111', color: '#fff', fontFamily: mono }}
           >
             Confirm
@@ -48,7 +49,7 @@ const MissingBar: React.FC = () => {
         </div>
       ))}
       {missing.includes('currency_unsupported') && (
-        <p className="text-[11px]" style={{ color: '#b91c1c', fontFamily: mono }}>
+        <p className="text-[13px]" style={{ color: '#b91c1c', fontFamily: mono }}>
           Reporting currency not supported — the engine models USD, EUR, GBP, JPY, INR.
         </p>
       )}
@@ -58,7 +59,7 @@ const MissingBar: React.FC = () => {
 
 /** E4 toolbar: AI-suggest, Redline, Memo download, and the PURE goal-seek. When no key
  *  is saved the AI buttons stay visibly OFF (the phase rule) — goal-seek always works. */
-const AiToolbar: React.FC = () => {
+export const AiToolbar: React.FC = () => {
   const facts = useEngine2Model((s) => s.facts);
   const assumptions = useEngine2Model((s) => s.assumptions);
   const output = useEngine2Model((s) => s.output);
@@ -93,43 +94,43 @@ const AiToolbar: React.FC = () => {
   return (
     <span className="flex items-center gap-1.5 flex-wrap justify-end">
       <select value={lever} onChange={(e) => setLever(e.target.value as typeof lever)}
-        className="px-1 py-1 text-[9px] uppercase" style={btn}>
+        className="px-1 py-1 text-[12px] uppercase" style={btn}>
         <option value="entry_multiple">entry ×</option>
         <option value="exit_multiple">exit ×</option>
         <option value="leverage">leverage</option>
         <option value="growth_shift">growth Δ</option>
       </select>
-      <input value={target} onChange={(e) => setTarget(e.target.value)} className="w-10 px-1 py-1 text-[10px] text-right" style={btn} />
-      <span className="text-[9px]" style={labelStyle}>%</span>
-      <button onClick={runSeek} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>Goal-seek</button>
-      {seek && <span className="text-[9px]" style={labelStyle}>{seek}</span>}
-      {output && <button onClick={downloadMemo} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>Memo ↓</button>}
+      <input value={target} onChange={(e) => setTarget(e.target.value)} className="w-10 px-1 py-1 text-[12px] text-right" style={btn} />
+      <span className="text-[12px]" style={labelStyle}>%</span>
+      <button onClick={runSeek} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>Goal-seek</button>
+      {seek && <span className="text-[12px]" style={labelStyle}>{seek}</span>}
+      {output && <button onClick={downloadMemo} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>Memo ↓</button>}
       {hasKey ? (
         <>
-          <button onClick={aiSuggest} disabled={aiBusy} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>
+          <button onClick={aiSuggest} disabled={aiBusy} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>
             {aiBusy ? 'AI…' : 'AI suggest'}
           </button>
-          <button onClick={runRedlineAction} disabled={aiBusy} className="px-2 py-1 text-[9px] uppercase tracking-widest" style={btn}>Redline</button>
+          <button onClick={runRedlineAction} disabled={aiBusy} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>Redline</button>
         </>
       ) : (
-        <span className="text-[9px] uppercase tracking-widest" style={labelStyle}>AI suggest · redline — OFF (no API key)</span>
+        <span className="text-[12px] uppercase tracking-widest" style={labelStyle}>AI suggest · redline — OFF (no API key)</span>
       )}
     </span>
   );
 };
 
 /** AI outcomes strip: what AI-suggest applied/dropped (auditable) + redline challenges. */
-const AiResults: React.FC = () => {
+export const AiResults: React.FC = () => {
   const aiNotes = useEngine2Model((s) => s.aiNotes);
   const redlineItems = useEngine2Model((s) => s.redlineItems);
   if (!aiNotes.length && !redlineItems) return null;
   return (
     <div className="mt-2 p-2.5" style={{ border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.04)' }}>
       {aiNotes.map((n, i) => (
-        <p key={`n${i}`} className="text-[10px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>{n}</p>
+        <p key={`n${i}`} className="text-[12px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>{n}</p>
       ))}
       {redlineItems?.map((r, i) => (
-        <p key={`r${i}`} className="text-[10px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>
+        <p key={`r${i}`} className="text-[12px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>
           ✎ {r.path}: {r.challenge}
         </p>
       ))}
@@ -137,7 +138,12 @@ const AiResults: React.FC = () => {
   );
 };
 
-const Workbench: React.FC = () => {
+/**
+ * `view="assumptions"` is step 3 of the flow (inputs and the Build button only — results live on
+ * their own screen); the default renders inputs and outputs together.
+ */
+const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' }) => {
+  const inputsOnly = view === 'assumptions';
   const facts = useEngine2Model((s) => s.facts);
   const output = useEngine2Model((s) => s.output);
   const error = useEngine2Model((s) => s.error);
@@ -151,24 +157,34 @@ const Workbench: React.FC = () => {
   useEngine2Model((s) => s.pending);
   const blankInputs = useEngine2Model.getState().missing();
   if (!facts) {
-    return <p className="text-[11px] p-6" style={labelStyle}>Import a company first (Screen 1) — the v2 workbench reads the engine2 store.</p>;
+    return <p className="text-[13px] p-6" style={labelStyle}>Import a company first (Screen 1) — the v2 workbench reads the engine2 store.</p>;
   }
   const ccy = facts.currency as Engine2Currency;
   const blocked = missing.length > 0 || blankInputs.length > 0 || useEngine2Model.getState().assumptions === null;
   return (
     // the v2 tree inks in near-black; it must supply its own paper (the site shell is
     // dark — verified visually in the browser pane, 2026-07-24)
-    <div className="min-h-screen overflow-y-auto" style={{ background: '#F9F9F7' }}>
-    <div className="max-w-3xl mx-auto p-6">
+    <div className={inputsOnly ? 'min-h-screen' : 'min-h-screen overflow-y-auto'} style={{ background: '#F9F9F7' }}>
+    <div className={`${inputsOnly ? 'max-w-4xl' : 'max-w-3xl'} mx-auto p-6`}>
+      {inputsOnly && (
+        <div className="mb-5">
+          <h1 className="font-playfair text-[30px] font-bold leading-tight" style={{ color: '#111' }}>Assumptions</h1>
+          <p className="text-[14px] mt-2 leading-relaxed" style={{ ...labelStyle, color: 'rgba(17,17,17,0.72)' }}>
+            Every input starts blank — nothing is assumed for you. Where the filing or a cited market source supports a value, a blue “use” chip offers it with its basis; it is applied only when you click it.
+          </p>
+        </div>
+      )}
       <div className="flex items-baseline justify-between mb-1">
-        <h2 className="text-sm tracking-widest uppercase" style={{ fontFamily: mono, color: '#111' }}>{facts.entity_name}</h2>
+        <h2 className="text-sm tracking-widest uppercase" style={{ fontFamily: mono, color: '#111' }}>{inputsOnly ? 'Figures the model reads' : facts.entity_name}</h2>
         <span className="flex items-center gap-1.5">
           {/* F2: the workbench is the default screen — this is the way back to Screen 1
               (engine2 reset only; the page re-renders the source screen on empty facts). */}
-          <button onClick={reset} className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
-            style={{ border: '1px solid rgba(17,17,17,0.2)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
-            ← New import
-          </button>
+          {!inputsOnly && (
+            <button onClick={reset} className="px-2.5 py-1 text-[12px] uppercase tracking-widest"
+              style={{ border: '1px solid rgba(17,17,17,0.2)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
+              ← New import
+            </button>
+          )}
         </span>
       </div>
       <div className="mb-4">
@@ -179,25 +195,26 @@ const Workbench: React.FC = () => {
         {/* honest-degradation notes from extraction (currency, days gating, ROU inclusion,
             FPI history) — computed since D2/D6 but only now SHOWN (review 2026-07-24) */}
         {factNotes.map((n) => (
-          <p key={n} className="text-[9px] mt-1" style={labelStyle}>◦ {n}</p>
+          <p key={n} className="text-[12px] mt-1" style={labelStyle}>◦ {n}</p>
         ))}
       </div>
       <MissingBar />
       <AssumptionsPanel />
       {blankInputs.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(204,0,0,0.25)', background: 'rgba(204,0,0,0.03)' }}>
-          <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: '#CC0000', fontFamily: mono }}>
+          <p className="text-[12px] uppercase tracking-widest mb-1" style={{ color: '#CC0000', fontFamily: mono }}>
             {blankInputs.length} input{blankInputs.length === 1 ? '' : 's'} still blank — nothing is assumed for you
           </p>
           {blankInputs.slice(0, 12).map((m) => (
-            <p key={m.path} className="text-[10px]" style={labelStyle}>◦ {m.label}</p>
+            <p key={m.path} className="text-[12px]" style={labelStyle}>◦ {m.label}</p>
           ))}
-          {blankInputs.length > 12 && <p className="text-[10px]" style={labelStyle}>◦ … and {blankInputs.length - 12} more</p>}
+          {blankInputs.length > 12 && <p className="text-[12px]" style={labelStyle}>◦ … and {blankInputs.length - 12} more</p>}
         </div>
       )}
-      {error && <p className="text-[11px] mt-3" style={{ color: '#b91c1c', fontFamily: mono }}>{error}</p>}
-      <div className="mt-4 flex items-center justify-between">
-        <div className="text-[11px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
+      {error && <p className="text-[13px] mt-3" style={{ color: '#b91c1c', fontFamily: mono }}>{error}</p>}
+      <div className={inputsOnly ? 'sticky bottom-0 -mx-6 px-6 py-3 mt-4 flex items-center justify-between' : 'mt-4 flex items-center justify-between'}
+        style={inputsOnly ? { background: '#fff', borderTop: '1px solid rgba(17,17,17,0.82)' } : undefined}>
+        <div className="text-[13px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
           {output ? (
             <>
               Sponsor IRR {headlineNotMeaningful(output) ? 'N/M' : pct(output.returns.sponsor_net.irr)} · MOIC {headlineNotMeaningful(output) ? 'N/M' : multiple(output.returns.sponsor_net.moic)} ·
@@ -213,7 +230,7 @@ const Workbench: React.FC = () => {
           Build →
         </button>
       </div>
-      {output && (
+      {output && !inputsOnly && (
         <div className="mt-2 flex items-center justify-between">
           <button
             onClick={async () => {
@@ -232,7 +249,7 @@ const Workbench: React.FC = () => {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            className="px-2.5 py-1 text-[9px] uppercase tracking-widest"
+            className="px-2.5 py-1 text-[12px] uppercase tracking-widest"
             style={{ border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono }}
           >
             Export Excel
@@ -240,17 +257,17 @@ const Workbench: React.FC = () => {
           <AiToolbar />
         </div>
       )}
-      <AiResults />
-      {output && output.coherence.length > 0 && (
+      {!inputsOnly && <AiResults />}
+      {output && !inputsOnly && output.coherence.length > 0 && (
         <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
           {output.coherence.map((f) => (
-            <p key={f.code + f.message} className="text-[10px] mb-0.5" style={{ color: f.severity === 'block' ? '#b91c1c' : '#92600a', fontFamily: mono }}>
+            <p key={f.code + f.message} className="text-[12px] mb-0.5" style={{ color: f.severity === 'block' ? '#b91c1c' : '#92600a', fontFamily: mono }}>
               {f.severity === 'block' ? '■' : '▲'} {f.message}
             </p>
           ))}
         </div>
       )}
-      {output && <OutputTabs output={output} currency={ccy} />}
+      {output && !inputsOnly && <OutputTabs output={output} currency={ccy} />}
     </div>
     </div>
   );
