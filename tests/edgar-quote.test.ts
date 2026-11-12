@@ -10,7 +10,7 @@ import { useEngine2Model } from '../store/engine2Model';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
 
-describe('D5 — computeTradingAnchor (pure)', () => {
+describe('D5: computeTradingAnchor (pure)', () => {
   it('EV/EBITDA = (price × shares + net debt) ÷ FY EBITDA', () => {
     // 150 × 500m shares = 75,000m mcap + 5,000m net debt = 80,000m ÷ 8,000m = 10.0x
     const a = computeTradingAnchor(150, 500e6, 5000, 8000, false)!;
@@ -26,7 +26,7 @@ describe('D5 — computeTradingAnchor (pure)', () => {
     expect(a.detail).toContain('MULTI-CLASS');
   });
 
-  it('nulls on nonsense — zero/negative price, shares, EBITDA, or an implausible multiple', () => {
+  it('nulls on nonsense: zero/negative price, shares, EBITDA, or an implausible multiple', () => {
     expect(computeTradingAnchor(0, 100e6, 0, 1000, false)).toBeNull();
     expect(computeTradingAnchor(100, 0, 0, 1000, false)).toBeNull();
     expect(computeTradingAnchor(100, 100e6, 0, 0, false)).toBeNull();
@@ -35,7 +35,7 @@ describe('D5 — computeTradingAnchor (pure)', () => {
   });
 });
 
-describe('D5 — the honest-anchor gate: domestic 10-K + USD only (FX/ADR contamination guard)', () => {
+describe('D5: the honest-anchor gate: domestic 10-K + USD only (FX/ADR contamination guard)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('anchorComputable: USD 10-K (incl. amendments) computes; FPIs and non-USD filers never do', () => {
@@ -62,7 +62,7 @@ describe('D5 — the honest-anchor gate: domestic 10-K + USD only (FX/ADR contam
   });
 });
 
-describe('D5 — sharesOutstanding (dei)', () => {
+describe('D5: sharesOutstanding (dei)', () => {
   const facts = (sharesFacts: object[]): CompanyFacts => ({
     cik: 50, entityName: 'Sharey', facts: { dei: { EntityCommonStockSharesOutstanding: { units: { shares: sharesFacts } } }, 'us-gaap': {} },
   }) as unknown as CompanyFacts;
@@ -91,7 +91,7 @@ describe('D5 — sharesOutstanding (dei)', () => {
   });
 });
 
-describe('D5 — store wiring: the anchor reaches DealFacts and the coherence gate', () => {
+describe('D5: store wiring: the anchor reaches DealFacts and the coherence gate', () => {
   const M = 1e6;
   const fy = (start: string, end: string, val: number) => ({ start, end, val: val * M, fy: 2025, fp: 'FY', form: '10-K', filed: '2026-02-15', accn: 'a' });
   const inst = (end: string, val: number) => ({ end, val: val * M, fy: 2025, fp: 'FY', form: '10-K', filed: '2026-02-15', accn: 'a' });
@@ -124,7 +124,7 @@ describe('D5 — store wiring: the anchor reaches DealFacts and the coherence ga
     expect(useEngine2Model.getState().output!.coherence.some((f) => f.code === 'entry_multiple_vs_trading')).toBe(true);
   });
 
-  it('null anchor (unconfigured key) suppresses the gate — nothing renders, nothing warns', () => {
+  it('null anchor (unconfigured key) suppresses the gate: nothing renders, nothing warns', () => {
     useEngine2Model.getState().reset();
     const raw = mapCompanyFacts(FIXTURE, { sicCode: '3711' });
     useEngine2Model.getState().importFromRaw(raw, { trading_anchor: null });

@@ -98,7 +98,7 @@ describe('§22 engine vs the adjudicated goldens (G9-SWEET / G10-RATCHET)', () =
   });
 });
 
-describe('§22.13 directed fixtures — golden-uncovered by design', () => {
+describe('§22.13 directed fixtures: golden-uncovered by design', () => {
   it('(i) mip.ratchet [] ≡ null ≡ v1 §10; a length-1 UNREACHED tier is also v1-identical', () => {
     const g3 = GOLDEN_DEALS.G3;
     const base = runModel(g3.facts, g3.assumptions);
@@ -144,7 +144,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     expect(exit.management_ordinary_share).toBeCloseTo(5.0, 12);
   });
 
-  it('(iv) the cliff counterexample produces the MARGINAL answer — no cliff branch smuggled in', () => {
+  it('(iv) the cliff counterexample produces the MARGINAL answer: no cliff branch smuggled in', () => {
     // §22.5's no-fixed-point inputs: V₀ = 100, T = 120, P = 25, 20% below / 36% at-or-above.
     // A cliff has NO solution here; the marginal rule answers M = 5.0, count 0, continuously.
     const { equity_strip } = buildExitWaterfall(
@@ -319,7 +319,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     expect(Math.abs(wd.sweet_equity_delta + wd.warrant_payout_net)).toBeLessThan(29.5);
   });
 
-  it('(x) §11 NON-contamination: with vs without the strip — credit/tranches/waterfall/tax/goodwill byte-identical', () => {
+  it('(x) §11 NON-contamination: with vs without the strip; credit/tranches/waterfall/tax/goodwill byte-identical', () => {
     const withStrip = runModel(GOLDEN_DEALS.G9SWEET.facts, GOLDEN_DEALS.G9SWEET.assumptions);
     const without = runModel(GOLDEN_DEALS.G9SWEET.facts, {
       ...GOLDEN_DEALS.G9SWEET.assumptions,

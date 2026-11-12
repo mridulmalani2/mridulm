@@ -456,7 +456,7 @@ const CleanScreen: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
           sub={impact.margin.reported !== null && impact.margin.adjusted !== null && impact.margin.adjusted !== impact.margin.reported ? `reported ${pct(impact.margin.reported)}` : 'as reported'} />
         <Kpi label="Net debt" value={acct(impact.net_debt.adjusted)}
           tone={changed(impact.net_debt.delta) ? 'pos' : 'neutral'}
-          sub={cleaned.bridges.net_debt && cleaned.bridges.net_debt.adjusted === null && impact.net_debt.adjusted !== null ? 'as sourced: the lease treatment is not chosen yet' : impact.net_debt.adjusted === null ? (impact.net_debt.reported === null ? 'not in the source' : 'not known yet — an item is open') : changed(impact.net_debt.delta) ? `${delta(impact.net_debt.delta)} vs reported ${acct(impact.net_debt.reported)}` : impact.leverage.adjusted !== null ? `${multiple(impact.leverage.adjusted)} EBITDA` : 'as reported'} />
+          sub={cleaned.bridges.net_debt && cleaned.bridges.net_debt.adjusted === null && impact.net_debt.adjusted !== null ? 'as sourced: the lease treatment is not chosen yet' : impact.net_debt.adjusted === null ? (impact.net_debt.reported === null ? 'not in the source' : 'not known yet: an item is open') : changed(impact.net_debt.delta) ? `${delta(impact.net_debt.delta)} vs reported ${acct(impact.net_debt.reported)}` : impact.leverage.adjusted !== null ? `${multiple(impact.leverage.adjusted)} EBITDA` : 'as reported'} />
         <Kpi label="Open items" value={String(open.length)} tone={open.length ? 'accent' : 'neutral'}
           sub={open.length ? 'to finish before continuing with adjusted figures' : empty ? 'no adjustments made' : 'ready to continue'} />
       </div>

@@ -176,12 +176,12 @@
  "modal_currency": "USD",
  "notes": [
   "duplicate us-gaap:UnrecognizedTaxBenefits @ 2024-12-31: kept most precise",
-  "inconsistent duplicate us-gaap:AccountsPayableCurrent @ 2024-12-31: 100000000.0 vs 150000000.0 — dropped to gap",
-  "unresolved contextRef/unitRef on us-gaap:Assets — fact dropped",
-  "unsupported date transform ixt-sec:datequarterend on uk-bus:EndDateForPeriodCoveredByReport — identity read skipped",
-  "unsupported transform ixt-sec:numwordsen on us-gaap:ConcentrationRiskPercentage1 — fact dropped",
-  "unsupported transform ixt:fixed-empty on t1:EmptyThing — fact dropped",
-  "untransformable text on t1:SignedUnderTransform — fact dropped"
+  "inconsistent duplicate us-gaap:AccountsPayableCurrent @ 2024-12-31: 100000000.0 vs 150000000.0, dropped to gap",
+  "unresolved contextRef/unitRef on us-gaap:Assets, fact dropped",
+  "unsupported date transform ixt-sec:datequarterend on uk-bus:EndDateForPeriodCoveredByReport, identity read skipped",
+  "unsupported transform ixt-sec:numwordsen on us-gaap:ConcentrationRiskPercentage1, fact dropped",
+  "unsupported transform ixt:fixed-empty on t1:EmptyThing, fact dropped",
+  "untransformable text on t1:SignedUnderTransform, fact dropped"
  ],
  "routing": "us-gaap"
 }

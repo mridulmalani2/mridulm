@@ -220,7 +220,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
   const currency_unsupported = detectedCcy && !KNOWN_CURRENCIES.has(detectedCcy) ? detectedCcy : undefined;
 
   const prov = (tag: string, period?: string): Provenance => ({
-    source: 'esef', detail: `${IFRS}${tag} · FY${anchorFy ?? '—'} · ESEF`, url,
+    source: 'esef', detail: `${IFRS}${tag} · FY${anchorFy ?? '–'} · ESEF`, url,
     tag: `${IFRS}${tag}`, taxonomy: 'ifrs-full', fy: anchorFy ?? undefined, period,
   });
   const derivedProv = (detail: string): Provenance => ({ source: 'esef', detail: `${detail} (derived)`, fy: anchorFy ?? undefined, url });
@@ -401,7 +401,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     } else if (borrowingsAmbiguous && leaseCandidate > 0) {
       // Borrowings from an issuer-extension total; lease liabilities exist separately but are NOT
       // added because the extension total may already include them — flag for the analyst.
-      gross_debt = sv(borrowings.value, { source: 'esef', detail: `${borrowings.method}; ${round1(leaseCandidate)} lease liabilities NOT added (issuer-extension total — verify IFRS-16 inclusion)`, url, taxonomy: borrowings.prefix, tag: borrowings.concept, fy: anchorFy ?? undefined });
+      gross_debt = sv(borrowings.value, { source: 'esef', detail: `${borrowings.method}; ${round1(leaseCandidate)} lease liabilities NOT added (issuer-extension total: verify IFRS-16 inclusion)`, url, taxonomy: borrowings.prefix, tag: borrowings.concept, fy: anchorFy ?? undefined });
     } else {
       gross_debt = sv(total, provHit(borrowings));
     }
@@ -419,7 +419,7 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     // ride on IT (not only gross_debt) — otherwise the analyst sees a confident, possibly
     // lease-understated leverage figure with no flag at the point of use.
     const ambigNote = borrowingsAmbiguous && leaseCandidate > 0
-      ? ` — ${round1(leaseCandidate)} lease liabilities excluded (issuer-extension total; may understate IFRS-16 leverage — verify)`
+      ? `, ${round1(leaseCandidate)} lease liabilities excluded (issuer-extension total; may understate IFRS-16 leverage: verify)`
       : '';
     net_debt = sv(gross_debt.value - cash.value, derivedProv(
       `Gross debt (${round1(gross_debt.value)})${leaseNote} − cash (${round1(cash.value)})${ambigNote}`));
@@ -476,6 +476,6 @@ export function mapIfrsReport(report: XbrlJsonReport, opts: MapIfrsOptions = {})
     dio: null,
     dpo: null,
     cogs: null,
-    days_notes: ['working-capital days not derived from ESEF (IFRS component chains pending) — % method available'],
+    days_notes: ['working-capital days not derived from ESEF (IFRS component chains pending): % method available'],
   };
 }

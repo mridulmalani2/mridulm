@@ -143,7 +143,7 @@ export function labelFor(path: string): string {
   const year = /\.(\d+)$/.exec(path);
   if (year) {
     const parent = path.slice(0, year.index);
-    return `${labelFor(parent)} — year ${Number(year[1]) + 1}`;
+    return `${labelFor(parent)}, year ${Number(year[1]) + 1}`;
   }
   const parts = path.split('.');
   for (let k = parts.length - 1; k > 0; k--) {
@@ -152,7 +152,7 @@ export function labelFor(path: string): string {
       // a list item reads as "<label> 2 — share pct", 1-based, never "<label> — 1 share_pct"
       const rest = parts.slice(k);
       const idx = /^\d+$/.test(rest[0]) ? ` ${Number(rest.shift()) + 1}` : '';
-      return `${LABELS[p]}${idx}${rest.length ? ` — ${rest.join(' ').replace(/_/g, ' ')}` : ''}`;
+      return `${LABELS[p]}${idx}${rest.length ? `, ${rest.join(' ').replace(/_/g, ' ')}` : ''}`;
     }
   }
   return path;

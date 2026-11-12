@@ -36,7 +36,7 @@ function tolOf(x: number): number {
 
 const rows = expected.leverage_table;
 
-describe('G12 leverage table — the surplus-cash policy reproduces the reference at every debt level', () => {
+describe('G12 leverage table: the surplus-cash policy reproduces the reference at every debt level', () => {
   for (const start of ['immediately', 'after_debt_repaid'] as const) {
     for (const r of rows) {
       it(`$${r.debt}m of debt (surplus paid out ${start === 'immediately' ? 'every year' : 'once the debt is repaid'})`, () => {

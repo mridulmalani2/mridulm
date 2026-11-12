@@ -33,8 +33,8 @@ const base = (over: Record<string, object> = {}, unit = 'USD'): CompanyFacts => 
   },
 }) as unknown as CompanyFacts;
 
-describe('D4 — implied cost of existing debt', () => {
-  it('rate = gross interest ÷ AVERAGE(beginning, ending) gross debt — same assembly both ends', () => {
+describe('D4: implied cost of existing debt', () => {
+  it('rate = gross interest ÷ AVERAGE(beginning, ending) gross debt: same assembly both ends', () => {
     const r = mapCompanyFacts(base(), { sicCode: '3711' });
     // avg((380+20), (420+20)) = 420; 25.2/420 = 6.0%
     expect(r.implied_cost_of_debt?.value).toBeCloseTo(0.06, 10);
@@ -42,7 +42,7 @@ describe('D4 — implied cost of existing debt', () => {
     expect(r.implied_cost_of_debt?.provenance.detail).toContain('approximate');
   });
 
-  it('never computed from a NET interest line — absence of a gross concept ⇒ null', () => {
+  it('never computed from a NET interest line: absence of a gross concept ⇒ null', () => {
     const noGross = base();
     delete (noGross as any).facts['us-gaap'].InterestExpenseDebt;
     (noGross as any).facts['us-gaap'].InterestIncomeExpenseNet = { units: { USD: [fy('2023-01-01', '2023-12-31', -12)] } };
@@ -67,8 +67,8 @@ describe('D4 — implied cost of existing debt', () => {
   });
 });
 
-describe('D6 — currency honesty + NOL floor', () => {
-  it('a SEK filer surfaces currency_unsupported — never a silent USD fallback', () => {
+describe('D6: currency honesty + NOL floor', () => {
+  it('a SEK filer surfaces currency_unsupported, never a silent USD fallback', () => {
     const r = mapCompanyFacts(base({}, 'SEK'), {});
     expect(r.currency_unsupported).toBe('SEK');
   });

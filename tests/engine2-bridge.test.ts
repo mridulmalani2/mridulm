@@ -60,7 +60,7 @@ function bridgeInputs(core: EngineCore, exit: ExitBlock, assumptions: DealAssump
   };
 }
 
-describe('bridge.ts — §14.9 exact reconciliation on every golden (C8 gate)', () => {
+describe('bridge.ts: §14.9 exact reconciliation on every golden (C8 gate)', () => {
   const cases: [string, DealAssumptions][] = [
     ...(['G1', 'G2', 'G3', 'G4', 'G5'] as const).map(
       (g): [string, DealAssumptions] => [g, GOLDEN_DEALS[g].assumptions],

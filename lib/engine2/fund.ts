@@ -42,7 +42,7 @@ export interface FundOverlayInputs {
 export function validateFund(fund: FundOverlayAssumption): void {
   const bad = (msg: string): never => { throw new RangeError(`fund: ${msg} (SPEC §19.2/§16)`); };
   if (fund.committed_capital === null && fund.fee_basis === 'committed') {
-    bad("committed_capital = null with fee_basis 'committed' is circular — the fee would depend on committed which depends on fees drawn");
+    bad("committed_capital = null with fee_basis 'committed' is circular: the fee would depend on committed which depends on fees drawn");
   }
   // audit 2026-08-08 M3: NaN slipped BOTH committed gates (NaN < paidIn − 5e-3 is false) and
   // emitted an all-NaN block; out-of-union strings took the committed branch. Fail closed,
@@ -56,7 +56,7 @@ export function validateFund(fund: FundOverlayAssumption): void {
   if (!(fund.carry_pct >= 0 && fund.carry_pct < 1)) bad('carry_pct must be in [0, 1)');
   if (!(fund.pref_rate >= 0)) bad('pref_rate must be ≥ 0');
   if (!(fund.catchup_pct === 0 || (fund.catchup_pct >= fund.carry_pct && fund.catchup_pct <= 1))) {
-    bad('catchup_pct must be 0 (hard hurdle) or in [carry_pct, 1] — a share below carry_pct strands the waterfall below the hard-hurdle case');
+    bad('catchup_pct must be 0 (hard hurdle) or in [carry_pct, 1]: a share below carry_pct strands the waterfall below the hard-hurdle case');
   }
   if (!(fund.fee_offset_pct >= 0 && fund.fee_offset_pct <= 1)) bad('fee_offset_pct must be in [0, 1]');
 }

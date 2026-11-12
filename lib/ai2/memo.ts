@@ -34,14 +34,14 @@ export function memoSkeleton(o: Engine2ModelOutput, ccy: Engine2Currency): strin
     ? `${multiple(em.valuation)} NTM EBITDA (${money(o.derived.entry_ebitda_for_valuation, ccy)}; the case states no historical year)`
     : em.fy_canonical === null
     ? `${multiple(em.valuation)} ${em.sizing_label} EBITDA (${money(fyEbitda, ccy)})`
-    : `${multiple(em.valuation)} NTM EBITDA — ${multiple(em.fy_canonical)} on ${em.sizing_label} EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
+    : `${multiple(em.valuation)} NTM EBITDA, ${multiple(em.fy_canonical)} on ${em.sizing_label} EBITDA (${money(o.facts.fy_ebitda, ccy)}), the canonical sizing basis`;
   const totalDebt = o.derived.total_debt_at_par;
   const capTotal = totalDebt + su.rollover_equity + su.sponsor_equity;
   const capRow = (name: string, amt: number) =>
     `| ${name} | ${money(amt, ccy)} | ${fyEbitda !== null && fyEbitda > 0 ? multiple(amt / fyEbitda, 2) : 'N/A'} | ${capTotal > 0 ? pct(amt / capTotal) : 'N/A'} |`;
   const lastCredit = o.credit[o.credit.length - 1];
 
-  return `# ${o.facts.entity_name} — LBO summary (engine2)
+  return `# ${o.facts.entity_name}: LBO summary (engine2)
 
 ## Purchase price & multiples
 Entry EV ${money(o.derived.enterprise_value, ccy)} at ${entryMultipleClause}; exit at ${multiple(exitMult)} in year ${o.assumptions.entry.hold_years}.
@@ -57,7 +57,7 @@ Entry EV ${money(o.derived.enterprise_value, ccy)} at ${entryMultipleClause}; ex
 
 ## Returns
 ${headlineNotMeaningful(o)
-    ? `**Not meaningful on this run** — a BLOCK condition (see Caveats) means the projected returns do not describe a deal that can be financed as structured. Unlevered ${pct(o.returns.unlevered.irr)} (capital-structure-blind) is unaffected.`
+    ? `**Not meaningful on this run**: a BLOCK condition (see Caveats) means the projected returns do not describe a deal that can be financed as structured. Unlevered ${pct(o.returns.unlevered.irr)} (capital-structure-blind) is unaffected.`
     : `Sponsor net ${pct(o.returns.sponsor_net.irr)} IRR / ${multiple(o.returns.sponsor_net.moic)} MOIC; pre-promote ${pct(o.returns.pre_promote.irr)}; unlevered ${pct(o.returns.unlevered.irr)}.`}
 Bridge: EBITDA growth ${money(o.bridge.ebitda_growth_at_entry_multiple, ccy)}, multiple ${money(o.bridge.multiple_change_bar, ccy)}, interaction ${money(o.bridge.interaction, ccy)}, paydown ${money(o.bridge.net_debt_paydown, ccy)}.
 
@@ -76,7 +76,7 @@ FCF conversion: ${o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.
 
 ## Caveats
 ${o.coherence.length ? o.coherence.map((f) => `- ${f.severity === 'block' ? 'BLOCK' : 'WARN'}: ${f.message}`).join('\n') : '- No coherence flags on this run.'}
-- Entry leverage is GROSS (debt at par ÷ ${em.sizing_label} EBITDA — the quoted sizing basis, SPEC §11); the per-year credit statistics are NET of cash. The two are different bases, so entry and final-year leverage are not a single deleveraging series.
-- A model is a range, not a point — see the Sensitivity and Scenarios exhibits (SPEC §15).
+- Entry leverage is GROSS (debt at par ÷ ${em.sizing_label} EBITDA: the quoted sizing basis, SPEC §11); the per-year credit statistics are NET of cash. The two are different bases, so entry and final-year leverage are not a single deleveraging series.
+- A model is a range, not a point: see the Sensitivity and Scenarios exhibits (SPEC §15).
 `;
 }

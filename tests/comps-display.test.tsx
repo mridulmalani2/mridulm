@@ -27,7 +27,7 @@ const build = (sector: string) => {
   return renderToStaticMarkup(React.createElement(Summary, { o: runModel(facts, assumptions), ccy: 'USD' as const }));
 };
 
-describe('§21 comps display — the band renders with its basis, region, vintage and constituents', () => {
+describe('§21 comps display: the band renders with its basis, region, vintage and constituents', () => {
   it('a Healthcare deal shows the band AND every load-bearing qualifier', () => {
     const html = build('Healthcare');
     expect(html).toContain('Healthcare peers trade');
@@ -60,7 +60,7 @@ describe('§21 comps display — the band renders with its basis, region, vintag
   });
 });
 
-describe('§21.9 — the disclosure row is on the Methodology surface (label mutation-tested)', () => {
+describe('§21.9: the disclosure row is on the Methodology surface (label mutation-tested)', () => {
   it('carries the load-bearing clauses', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
     expect(html).toContain('Sector comps band (§21)');

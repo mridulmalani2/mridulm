@@ -20,7 +20,7 @@ const render = (golden: keyof typeof GOLDEN_DEALS) => {
   return { o, html: renderToStaticMarkup(React.createElement(Debt, { o, ccy: 'USD' as const })) };
 };
 
-describe('§18 refi display surface — Debt tab', () => {
+describe('§18 refi display surface: Debt tab', () => {
   it('G6-REFI: the "Refinancing events" table renders with the SPEC-labelled columns and named-field values', () => {
     const { o, html } = render('G6REFI');
     // labels present (mutating any of these strings reddens this assertion — gate (c))
@@ -75,7 +75,7 @@ describe('§18 refi display surface — Debt tab', () => {
   });
 });
 
-describe('§18.8 — the v1 refi simplifications are LISTED on the methodology page (SPEC §15)', () => {
+describe('§18.8: the v1 refi simplifications are LISTED on the methodology page (SPEC §15)', () => {
   it('the Disclosures table carries the Refinancing row with the §18.5 tax wording (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
     expect(html).toContain('Refinancing (§18)');
@@ -89,7 +89,7 @@ describe('§18.8 — the v1 refi simplifications are LISTED on the methodology p
   });
 });
 
-describe('§15 — the v1.1.0 interim-distributions simplifications are LISTED on the methodology page', () => {
+describe('§15: the v1.1.0 interim-distributions simplifications are LISTED on the methodology page', () => {
   // Same class as the §18.8 row above (hostile review 2026-08-07): the §15 SPEC sentence has
   // carried these clauses since v1.1.0 while neither methodology surface listed them.
   it('the Disclosures table carries the Interim distributions row (label mutation-tested)', () => {

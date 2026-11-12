@@ -15,7 +15,7 @@ import type { DealAssumptions, DealFacts, RevolverAssumption, SourcesUses, TermT
 export function trancheSize(size: TrancheSize, fyEbitda: number | null): number {
   if (size.x_ebitda !== undefined) {
     if (fyEbitda === null || !(fyEbitda > 0)) {
-      throw new RangeError('sourcesUses: a tranche sized as a multiple of EBITDA needs historical (LTM/FY) EBITDA > 0 — size it as an amount instead (§24.3 R5)');
+      throw new RangeError('sourcesUses: a tranche sized as a multiple of EBITDA needs historical (LTM/FY) EBITDA > 0: size it as an amount instead (§24.3 R5)');
     }
     return size.x_ebitda * fyEbitda;
   }
@@ -67,7 +67,7 @@ export function rescaleTermTranchesToLeverage<A extends Pick<DealAssumptions, 's
   targetLeverage: number,
 ): A {
   if (facts.fy_ebitda === null || !(facts.fy_ebitda > 0)) {
-    throw new RangeError('sourcesUses: total leverage is a multiple of historical EBITDA, which this case does not have — size the tranches as amounts (§24.3 R5)');
+    throw new RangeError('sourcesUses: total leverage is a multiple of historical EBITDA, which this case does not have; size the tranches as amounts (§24.3 R5)');
   }
   const currentTotal = totalTermParFromAssumptions(facts, assumptions);
   if (currentTotal <= 0) {
@@ -108,7 +108,7 @@ export function deriveEntry(
   let valuationEbitda: number;
   if (entry.basis === 'fy') {
     if (fy === null || !(fy > 0)) {
-      throw new RangeError('sourcesUses: an FY/LTM entry multiple needs historical EBITDA > 0 — use the NTM basis or enter the price (§24.3 R4)');
+      throw new RangeError('sourcesUses: an FY/LTM entry multiple needs historical EBITDA > 0: use the NTM basis or enter the price (§24.3 R4)');
     }
     valuationEbitda = fy;
   } else {
@@ -157,7 +157,7 @@ export function sizeStructure(
   const names = new Set<string>();
   for (const t of structure.tranches) {
     if (names.has(t.name)) {
-      throw new RangeError(`sourcesUses: duplicate tranche name "${t.name}" — names key the §7 write-off schedules and retirement reporting`);
+      throw new RangeError(`sourcesUses: duplicate tranche name "${t.name}": names key the §7 write-off schedules and retirement reporting`);
     }
     names.add(t.name);
   }
@@ -246,7 +246,7 @@ export function stripPlugRejection(
   assumptions: Pick<DealAssumptions, 'sweet_equity'>,
 ): string | null {
   if (assumptions.sweet_equity && !(su.sponsor_equity > 0)) {
-    return `sourcesUses: the management subscription leaves a non-positive sponsor plug (${su.sponsor_equity.toFixed(4)}) — rejected at Build (SPEC §22.3(vi))`;
+    return `sourcesUses: the management subscription leaves a non-positive sponsor plug (${su.sponsor_equity.toFixed(4)}); rejected at Build (SPEC §22.3(vi))`;
   }
   return null;
 }

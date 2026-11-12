@@ -43,10 +43,10 @@ const LARGE_CAP: DealFacts = {
   ],
 };
 
-describe('v2.0.0 — the suggestion CATALOGUE: proposals with a real basis, never pre-fills', () => {
+describe('v2.0.0: the suggestion CATALOGUE: proposals with a real basis, never pre-fills', () => {
   const cat = suggestionsFor(LARGE_CAP, 5);
 
-  it('every proposal carries a FACTS / HISTORY / CONVENTION basis — no template guesses survive', () => {
+  it('every proposal carries a FACTS / HISTORY / CONVENTION basis: no template guesses survive', () => {
     expect(Object.keys(cat).length).toBeGreaterThan(5);
     for (const [path, sug] of Object.entries(cat)) {
       expect(['facts', 'history', 'convention'], path).toContain(sug.basis.kind);
@@ -124,7 +124,7 @@ describe('v2.0.0 — the suggestion CATALOGUE: proposals with a real basis, neve
   });
 });
 
-describe('a fully ACCEPTED draft is coherent — and accepting is explicit, so it still has blanks', () => {
+describe('a fully ACCEPTED draft is coherent, and accepting is explicit, so it still has blanks', () => {
   it('accepting every proposal leaves the inputs no proposal can stand behind blank (min cash, hold, base rate…)', () => {
     let a = blankAssumptions('t', 5);
     for (const [path, sug] of Object.entries(suggestionsFor(LARGE_CAP, 5))) a = setPath(a, path.split('@')[0], sug.value);

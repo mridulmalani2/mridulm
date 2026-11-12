@@ -168,7 +168,7 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
              §19.5 label rides the footnote. Fee-only years make the LP stream multi-sign;
              kernel/irr's policy applies and a null renders N/A, never a fabricated rate. */
           <tr style={rowB}>
-            <td className="">Net to LP — after fund fees & carry (fund-of-one overlay)</td>
+            <td className="">Net to LP, after fund fees & carry (fund-of-one overlay)</td>
             <td className={td}>{money(-f.lp_contributions[0], ccy)}</td>
             <td className={td}>{money(f.lp_distributions[N - 1] - f.mgmt_fees_net[N - 1], ccy)}</td>
             <td className={td}>{pct(f.fund_lp_net.irr)}</td>
@@ -180,7 +180,7 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         <p className={NOTE} style={label}>
           less: fund fees & carry → net to LP (SPEC §19). Paid-in {money(f.paid_in_total, ccy)} (equity
           check + annual fee draws; committed {money(f.committed_capital, ccy)}); the LP multiple is
-          TVPI (= DPI — fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
+          TVPI (= DPI, fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
           {f.fund_lp_net.payback_year === null ? 'N/A' : `Y${f.fund_lp_net.payback_year}`} (interim
           distributions only; the exit year never counts). Outflow shows the t=0 equity draw; fee
           draws continue annually.
@@ -211,7 +211,7 @@ export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }>
   ];
   return (
     <div className="mt-4">
-      <p className={H}>Partial exit — secondary selldown (SPEC §23)</p>
+      <p className={H}>Partial exit: secondary selldown (SPEC §23)</p>
       <Table head={['', '']}>
         {rows.map(([l, v]) => (
           <tr key={l} style={rowB}>

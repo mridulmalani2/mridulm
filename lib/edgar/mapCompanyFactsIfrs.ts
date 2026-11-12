@@ -140,7 +140,7 @@ export function mapCompanyFactsIfrs(
   let nwc: SourcedValue | null = null;
   if (ca && cl && cashRaw) {
     nwc = sv(ca.value - cashRaw.value - (cl.value - (borrowCur?.value ?? 0) - (leaseCur?.value ?? 0)), {
-      source: 'edgar', detail: '(CurrentAssets − cash) − (CurrentLiabilities − current borrowings − current leases) — OPERATING NWC (derived)', tag: 'derived:OperatingNWC', taxonomy: T, period: anchorEnd, fy: anchorFy, url: ca.prov.url,
+      source: 'edgar', detail: '(CurrentAssets − cash) − (CurrentLiabilities − current borrowings − current leases): OPERATING NWC (derived)', tag: 'derived:OperatingNWC', taxonomy: T, period: anchorEnd, fy: anchorFy, url: ca.prov.url,
     });
   } else gaps.push('NWC %');
 
@@ -152,7 +152,7 @@ export function mapCompanyFactsIfrs(
   const leaseSplit = [instantAt(LEASE_NONCURRENT, anchorEnd), leaseCur].filter(Boolean) as { value: number; prov: Provenance; tag: string }[];
   let gross_debt: SourcedValue | null = null;
   if (bundled) {
-    gross_debt = sv(bundled.value, { ...bundled.prov, detail: `${bundled.tag} (lease-inclusive — no separate lease add)` });
+    gross_debt = sv(bundled.value, { ...bundled.prov, detail: `${bundled.tag} (lease-inclusive: no separate lease add)` });
   } else {
     const base = borrowTotal ? [borrowTotal] : borrowSplit;
     if (base.length) {
@@ -238,7 +238,7 @@ export function mapCompanyFactsIfrs(
     dio: null,
     dpo: null,
     cogs: null,
-    days_notes: ['working-capital days not derived for IFRS companyfacts (component chains are the D6 follow-up) — % method available; FPI history is FY-only (no 10-Qs)'],
+    days_notes: ['working-capital days not derived for IFRS companyfacts (component chains are the D6 follow-up): % method available; FPI history is FY-only (no 10-Qs)'],
     implied_cost_of_debt: null,
   };
 }

@@ -67,7 +67,7 @@ const withRow = (l: CleaningLedger, label: string, amounts: Record<string, numbe
   return updateAdjustment(next, next.adjustments[next.adjustments.length - 1].id, { label, amounts, forecast: target === 'ebitda' ? 'gone' : null });
 };
 
-describe('StatementPack — what the Clean step is given', () => {
+describe('StatementPack: what the Clean step is given', () => {
   it('the cells the model reads are the SAME figures as the RawHistoricals (one source, not two)', () => {
     const { raw, pack } = sourced();
     expect(pack.anchor).toBe(FY);
@@ -83,7 +83,7 @@ describe('StatementPack — what the Clean step is given', () => {
     expect(cellAt(pack, 'revenue', FY)!.provenance.url).toContain('sec.gov/Archives/edgar/data/1000000/');
   });
 
-  it('a line the filing does not tag is ABSENT — never zero', () => {
+  it('a line the filing does not tag is ABSENT, never zero', () => {
     const { pack } = sourced();
     expect(cellAt(pack, 'goodwill', FY)).toBeNull();
     expect(cellAt(pack, 'sga', FY)).toBeNull();
@@ -123,7 +123,7 @@ describe('StatementPack — what the Clean step is given', () => {
   });
 });
 
-describe('applyCleaning — identity (an empty ledger changes nothing)', () => {
+describe('applyCleaning: identity (an empty ledger changes nothing)', () => {
   const manual = manualHistoricals({
     dealName: 'Manual Co', sector: 'Industrials', currency: 'EUR', basis: 'LTM', ltm: { asOf: '2024-06-30', revenue: 1300, ebitda: 270 },
     years: [{ end: PRIOR, revenue: 1150, ebitda: 224.25, da: 57.5, capex: 46 }, { end: FY, revenue: 1250, ebitda: 250, da: 62.5, capex: 50 }],
@@ -160,7 +160,7 @@ describe('applyCleaning — identity (an empty ledger changes nothing)', () => {
   });
 });
 
-describe('applyCleaning — the EBITDA bridge (hand-worked)', () => {
+describe('applyCleaning: the EBITDA bridge (hand-worked)', () => {
   it('reported 250.0 + restructuring 20.0 + SBC 12.0 − disposal gain 5.0 = 277.0; margin 277 ÷ 1,250', () => {
     const { raw, pack } = sourced(richFacts());
     let l = emptyLedger();
@@ -211,7 +211,7 @@ describe('applyCleaning — the EBITDA bridge (hand-worked)', () => {
     expect(applyCleaning(raw, pack, back).raw).toEqual(raw);
   });
 
-  it('EBITDA itself cannot be restated where it is operating income + D&A — the components are', () => {
+  it('EBITDA itself cannot be restated where it is operating income + D&A: the components are', () => {
     const { raw, pack } = sourced();
     expect(restatableAt(pack, 'ebitda', FY)).toBe(false);
     expect(restatableAt(pack, 'operating_income', FY)).toBe(true);
@@ -242,7 +242,7 @@ describe('applyCleaning — the EBITDA bridge (hand-worked)', () => {
   });
 });
 
-describe('applyCleaning — LTM sizing', () => {
+describe('applyCleaning: LTM sizing', () => {
   const raw = manualHistoricals({
     dealName: 'Manual Co', sector: 'Industrials', currency: 'EUR', basis: 'LTM', ltm: { asOf: '2024-06-30', revenue: 1300, ebitda: 270 },
     years: [{ end: PRIOR, revenue: 1150, ebitda: 224.25, da: 57.5, capex: 46 }, { end: FY, revenue: 1250, ebitda: 250, da: 62.5, capex: 50 }],
@@ -276,7 +276,7 @@ describe('applyCleaning — LTM sizing', () => {
   });
 });
 
-describe('applyCleaning — the net-debt bridge (hand-worked)', () => {
+describe('applyCleaning: the net-debt bridge (hand-worked)', () => {
   const { raw, pack } = sourced(richFacts());
   const pension = pack.candidates.find((c) => c.category === 'pension')!;
   const restricted = pack.candidates.find((c) => c.category === 'restricted_cash')!;
@@ -326,7 +326,7 @@ describe('applyCleaning — the net-debt bridge (hand-worked)', () => {
   });
 });
 
-describe('applyCleaning — properties', () => {
+describe('applyCleaning: properties', () => {
   const { raw, pack } = sourced();
   const amount = fc.integer({ min: -5000, max: 5000 }).map((n) => n / 10);
   const rows = fc.array(fc.record({ amount, included: fc.boolean() }), { maxLength: 6 });
@@ -375,7 +375,7 @@ describe('applyCleaning — properties', () => {
   });
 });
 
-describe('cleaningChecks — shown, never judged by a threshold', () => {
+describe('cleaningChecks: shown, never judged by a threshold', () => {
   const { raw, pack } = sourced(richFacts());
   const run = (l: CleaningLedger) => cleaningChecks(pack, l, applyCleaning(raw, pack, l));
 
@@ -402,7 +402,7 @@ describe('cleaningChecks — shown, never judged by a threshold', () => {
   });
 });
 
-describe('D3 — the size band and the US financing conventions are US-dollar data', () => {
+describe('D3: the size band and the US financing conventions are US-dollar data', () => {
   const { raw } = sourced();
   const usd = adaptRawHistoricals(raw).facts;
   it('a USD deal is offered the cited entry multiple and debt template', () => {
@@ -410,7 +410,7 @@ describe('D3 — the size band and the US financing conventions are US-dollar da
     expect(s['entry.entry_multiple']).toBeDefined();
     expect(s['structure.tranches']).toBeDefined();
   });
-  it('the same figures in JPY are offered neither — ¥250m of EBITDA is not a large-cap US buyout', () => {
+  it('the same figures in JPY are offered neither: ¥250m of EBITDA is not a large-cap US buyout', () => {
     const s = suggestionsFor({ ...usd, currency: 'JPY' }, 5);
     expect(s['entry.entry_multiple']).toBeUndefined();
     expect(s['structure.tranches']).toBeUndefined();
@@ -418,7 +418,7 @@ describe('D3 — the size band and the US financing conventions are US-dollar da
   });
 });
 
-describe('SPEC §27 — an add-back either STOPS or CONTINUES (hand-worked)', () => {
+describe('SPEC §27: an add-back either STOPS or CONTINUES (hand-worked)', () => {
   const { raw, pack } = sourced(richFacts());
   const build = (sbc: 'gone' | 'continues' | null) => {
     let l = acceptCandidate(emptyLedger(), pack.candidates.find((c) => c.tag === 'RestructuringCharges')!);
@@ -434,14 +434,14 @@ describe('SPEC §27 — an add-back either STOPS or CONTINUES (hand-worked)', ()
     expect(open[0].message).toContain('Share-based compensation');
   });
 
-  it('both STOP: price basis 250 + 20 + 12 = 282.0 and the forecast margin is 282 ÷ 1,250 — no second base exists', () => {
+  it('both STOP: price basis 250 + 20 + 12 = 282.0 and the forecast margin is 282 ÷ 1,250; no second base exists', () => {
     const out = applyCleaning(raw, pack, build('gone')).raw;
     expect(out.fy_ebitda!.value).toBe(282);
     expect(out.forecast_ebitda).toBeUndefined();
     expect(adaptRawHistoricals(out).facts.fy_ebitda_margin).toBeCloseTo(282 / 1250, 12);
   });
 
-  it('share-based pay CONTINUES: still priced on 282.0, but the forecast starts from 270.0 — margin 21.6%, not 22.56%', () => {
+  it('share-based pay CONTINUES: still priced on 282.0, but the forecast starts from 270.0; margin 21.6%, not 22.56%', () => {
     const l = build('continues');
     const cleaned = applyCleaning(raw, pack, l);
     expect(cleaned.raw.fy_ebitda!.value).toBe(282); // the price and leverage basis is unchanged
@@ -473,7 +473,7 @@ describe('SPEC §27 — an add-back either STOPS or CONTINUES (hand-worked)', ()
   });
 });
 
-describe('C7 — a restated figure the filing’s own lines contradict is flagged, never blocked', () => {
+describe('C7: a restated figure the filing’s own lines contradict is flagged, never blocked', () => {
   const f = richFacts();
   const yr = (end: string, v: number) => ({ start: `${end.slice(0, 4)}-01-01`, end, val: v * 1e6, accn: '0001000000-24-000010', fy: Number(end.slice(0, 4)), fp: 'FY', form: '10-K', filed: '2024-02-15' });
   f.facts['us-gaap'].CostOfRevenue = { units: { USD: [yr(FY, 800)] } };

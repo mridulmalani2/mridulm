@@ -286,7 +286,7 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
     );
   });
 
-  it('§14.2: the opening BS closes EXACTLY for any structure — goodwill is the plug. Domain: any valid v1 structure', () => {
+  it('§14.2: the opening BS closes EXACTLY for any structure; goodwill is the plug. Domain: any valid v1 structure', () => {
     fc.assert(
       fc.property(structureArb, (r) => {
         const { su } = build(r);
@@ -365,7 +365,7 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
     expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).not.toThrow();
   });
 
-  it('v1 input gate (C5 review): duplicate tranche names are rejected — they key the write-off schedules and retirement reporting', () => {
+  it('v1 input gate (C5 review): duplicate tranche names are rejected; they key the write-off schedules and retirement reporting', () => {
     const term = (name: string): TrancheAssumption => ({
       name, type: 'senior', size: { amount: 50 }, pricing: { kind: 'fixed', rate: 0.08 },
       amort_pct_of_face: 0, maturity_years: 8, oid_pct: 0.01, sweep: { participates: true, priority: 1 },

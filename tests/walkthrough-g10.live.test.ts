@@ -55,7 +55,7 @@ async function importAndBuild(
   const confirmed: [string, number][] = [];
   for (const path of [...e2.missingFacts]) {
     const v = confirmValues[path];
-    if (v === undefined) throw new Error(`unexpected gap ${path} — walkthrough must record it, not invent it`);
+    if (v === undefined) throw new Error(`unexpected gap ${path}: walkthrough must record it, not invent it`);
     engine2Store.getState().confirmFact(path, v);
     confirmed.push([path, v]);
   }
@@ -82,7 +82,7 @@ function assertSection22Silence(o: Engine2ModelOutput) {
   expect(o.coherence.map((f: { code: string }) => f.code)).not.toContain('loan_notes_unredeemed');
 }
 
-describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE — production proxy)', () => {
+describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE: production proxy)', () => {
   it('Apple (CIK 320193): imports, builds, §22 silent; then the strip+warrant leg computes on live data', async () => {
     const { o } = await importAndBuild(
       () => dealEngineStore.getState().importFromEdgar('CIK0000320193'),
@@ -177,7 +177,7 @@ describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE — productio
 });
 
 describe.skipIf(LIVE)('walkthrough harness placeholder (CI)', () => {
-  it('is opt-in via LIVE_WALKTHROUGH=1 — skipped in CI by design', () => {
+  it('is opt-in via LIVE_WALKTHROUGH=1: skipped in CI by design', () => {
     expect(true).toBe(true);
   });
 });

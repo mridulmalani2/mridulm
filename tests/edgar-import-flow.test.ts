@@ -17,7 +17,7 @@ const raw = () => mapCompanyFacts(sample as unknown as CompanyFacts, { sicDescri
 beforeEach(() => useEngine2Model.getState().reset());
 
 describe('import routes feed the engine2 store (the single modeling path)', () => {
-  it('an EDGAR-shaped extraction lands as engine2 FACTS only — no assumption is pre-filled', () => {
+  it('an EDGAR-shaped extraction lands as engine2 FACTS only: no assumption is pre-filled', () => {
     useDealEngineStore.getState().loadFromHistoricals(raw());
     const s = useEngine2Model.getState();
     expect(s.facts?.entity_name).toBe('Northwind Industries Inc.');
@@ -28,7 +28,7 @@ describe('import routes feed the engine2 store (the single modeling path)', () =
     expect(s.output).toBeNull();          // never builds uninvited
   });
 
-  it('manual entry (private target) flows through the SAME feeder — sector pick included', () => {
+  it('manual entry (private target) flows through the SAME feeder: sector pick included', () => {
     useDealEngineStore.getState().loadFromHistoricals(manualHistoricals({
       dealName: 'Handmade Co', sector: 'Industrials', currency: 'EUR', basis: 'FY', ltm: null,
       years: [{ end: '2025-12-31', revenue: 300, ebitda: 66, da: 9, capex: 9 }],

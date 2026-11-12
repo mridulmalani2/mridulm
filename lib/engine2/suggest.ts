@@ -115,7 +115,7 @@ export function suggestionsFor(
   if (usd && facts.fy_ebitda !== null && facts.fy_ebitda > 0) {
     const largeCap = facts.fy_ebitda >= 100;
     const c = cited(['entryMultiples', largeCap ? 'usBuyoutOverall' : 'middleMarket10to500']);
-    if (c) put('entry.entry_multiple', c.value, 'convention', `${largeCap ? 'US buyout overall' : 'middle-market $10–500m'} median EV/EBITDA — ${c.citation}`);
+    if (c) put('entry.entry_multiple', c.value, 'convention', `${largeCap ? 'US buyout overall' : 'middle-market $10–500m'} median EV/EBITDA, ${c.citation}`);
   }
 
   // ── Growth: the history CAGR over the TRUE span (≥3 full-year revenue points) ──
@@ -133,7 +133,7 @@ export function suggestionsFor(
 
   // ── Filing ratios (each a forecast assumption — proposed, never pre-filled) ──
   if (facts.fy_ebitda_margin !== null) {
-    put('operations.target_margin', facts.fy_ebitda_margin, 'facts', `${fy} EBITDA margin ${pctText(facts.fy_ebitda_margin)} held flat — expansion needs an explicit thesis`);
+    put('operations.target_margin', facts.fy_ebitda_margin, 'facts', `${fy} EBITDA margin ${pctText(facts.fy_ebitda_margin)} held flat: expansion needs an explicit thesis`);
   }
   if (facts.da_pct_revenue !== null) put('operations.da_pct_revenue', facts.da_pct_revenue, 'facts', `${fy} D&A ÷ revenue from the filing`);
   if (facts.maint_capex_pct_revenue !== null) put('operations.maint_capex_pct_revenue', facts.maint_capex_pct_revenue, 'facts', `${fy} capex ÷ revenue from the filing`);
@@ -145,7 +145,7 @@ export function suggestionsFor(
   }
   if (facts.effective_tax_rate !== null) put('tax.rate', facts.effective_tax_rate, 'facts', `${fy} effective tax rate from the filing`);
   if (facts.nol_carryforward_floor !== null) {
-    put('tax.nol.acquired_opening', facts.nol_carryforward_floor, 'facts', `${fy} NOL carryforward (a FLOOR — companyfacts is non-dimensional)`);
+    put('tax.nol.acquired_opening', facts.nol_carryforward_floor, 'facts', `${fy} NOL carryforward (a FLOOR: companyfacts is non-dimensional)`);
   }
 
   // ── Statute: IRC §163(j) applies to US filers only ──
@@ -155,9 +155,9 @@ export function suggestionsFor(
 
   // ── Cited financing conventions ──
   const fee = cited(['fees', 'buySideAdvisoryPctOfEv']);
-  if (fee) put('fees.transaction_pct_of_ev', fee.value, 'convention', `buy-side fees ${pctText(fee.value)} of EV — ${fee.citation}`);
+  if (fee) put('fees.transaction_pct_of_ev', fee.value, 'convention', `buy-side fees ${pctText(fee.value)} of EV, ${fee.citation}`);
   const fin = cited(['fees', 'financingFeePctOfDebt']);
-  if (fin) put('fees.financing_pct_of_commitments', fin.value, 'convention', `financing fees ${pctText(fin.value)} of commitments — ${fin.citation}`);
+  if (fin) put('fees.financing_pct_of_commitments', fin.value, 'convention', `financing fees ${pctText(fin.value)} of commitments, ${fin.citation}`);
 
   // Debt structure template: cited leverage/spread/OID/amortization; the BASE RATE and the
   // MATURITY are left blank (NaN) on purpose — no cited live value exists in the repo, so the
@@ -180,7 +180,7 @@ export function suggestionsFor(
         sweep: { participates: true, priority: 1 },
       };
       put('structure.tranches', [t], 'convention',
-        `${t.name}: ${lev.value.toFixed(1)}x (${lev.citation}); spread ${spread.value}bps (${spread.citation}); OID ${pctText(oid.value)} (${oid.citation}); amortization ${pctText(amort.value)}/yr (${amort.citation}). Base rate and maturity are left for you — no cited live value.`);
+        `${t.name}: ${lev.value.toFixed(1)}x (${lev.citation}); spread ${spread.value}bps (${spread.citation}); OID ${pctText(oid.value)} (${oid.citation}); amortization ${pctText(amort.value)}/yr (${amort.citation}). Base rate and maturity are left for you; no cited live value.`);
     }
   }
 
@@ -193,7 +193,7 @@ export function suggestionsFor(
   if (entryMultiple !== null) {
     const priced = current?.entry.driver === 'ev';
     put('exit.multiple', entryMultiple, 'convention',
-      `exit at the entry multiple${priced ? ` (${entryMultiple.toFixed(4)}x = purchase price ÷ ${current?.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA)` : ''} — multiple expansion is usually unjustifiable (DR-4 Cat.7)`);
+      `exit at the entry multiple${priced ? ` (${entryMultiple.toFixed(4)}x = purchase price ÷ ${current?.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA)` : ''}: multiple expansion is usually unjustifiable (DR-4 Cat.7)`);
   }
 
   // ── Terminal year (§28): offered only once the analyst has chosen to state one ──

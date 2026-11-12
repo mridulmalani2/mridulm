@@ -17,7 +17,7 @@ const withSell = (a: DealAssumptions, sd: DealAssumptions['structure']['selldown
 const sumOf = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
 const DISPLAY = 0.0075; // ±$0.005m display bar + 2dp fixture rounding (§15)
 
-describe('G11-SELL — the engine against the adjudicated golden', () => {
+describe('G11-SELL: the engine against the adjudicated golden', () => {
   const o = runModel(G11.facts, G11.assumptions);
   const g = load('G11SELL');
 
@@ -38,14 +38,14 @@ describe('G11-SELL — the engine against the adjudicated golden', () => {
     expect(o.coherence.map((f) => f.code)).not.toContain('selldown_below_cost');
   });
 
-  it('sponsor IRR FALLS and MOIC falls vs the host — the sold slice ran above the deal’s own rate', () => {
+  it('sponsor IRR FALLS and MOIC falls vs the host: the sold slice ran above the deal’s own rate', () => {
     const h = runModel(host.facts, host.assumptions);
     expect(o.returns.sponsor_net.irr!).toBeLessThan(h.returns.sponsor_net.irr!);
     expect(o.returns.sponsor_net.moic!).toBeLessThan(h.returns.sponsor_net.moic!);
     expect(Math.abs(o.returns.sponsor_net.irr! - 0.131313)).toBeLessThan(1e-5);
   });
 
-  it('(xi-deal) DPI steps up at the selldown year by proceeds ÷ sponsor equity — the realized basis', () => {
+  it('(xi-deal) DPI steps up at the selldown year by proceeds ÷ sponsor equity: the realized basis', () => {
     const h = runModel(host.facts, host.assumptions);
     const se = o.sources_uses.sponsor_equity;
     expect(o.returns.dpi[1]).toBeCloseTo(h.returns.dpi[1], 12);

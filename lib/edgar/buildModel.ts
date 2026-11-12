@@ -112,14 +112,14 @@ function manualSeries(
  *    ≥3-points gate and CAGR spans behave exactly as they do for filings.
  */
 export function manualHistoricals(inp: ManualFactsInput): RawHistoricals {
-  const userProv = (label: string): Provenance => ({ source: 'user', detail: `Manually entered — ${label}` });
+  const userProv = (label: string): Provenance => ({ source: 'user', detail: `Manually entered: ${label}` });
   const sv = (value: number, label: string): SourcedValue => ({ value, provenance: userProv(label) });
   const derived = (value: number, detail: string): SourcedValue => ({ value, provenance: { source: 'user', detail } });
   const has = (v: number | null | undefined): v is number => v !== null && v !== undefined && Number.isFinite(v);
 
   const years = [...inp.years].sort((a, b) => a.end.localeCompare(b.end));
   const anchor = years.length ? years[years.length - 1] : null;
-  const anchorFy = anchor ? anchor.end.slice(0, 4) : '—';
+  const anchorFy = anchor ? anchor.end.slice(0, 4) : '–';
   const gaps: string[] = [];
 
   // ── Sizing pair (§1.1): LTM when provided, else the anchor FY ──

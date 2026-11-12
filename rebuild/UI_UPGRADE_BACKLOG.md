@@ -24,18 +24,33 @@ browser at desktop and phone widths). No engine arithmetic changed. What it adde
 - **Source and manual entry** — rebuilt around the company search; the sector is now a required
   choice (it selects the comps band), no longer pre-selected.
 
-Owner's requirements below: 1 partly (see "Not built"), 2 to 6 done, 7 observed.
-Defects below: all nine fixed, except that three labels quoted verbatim from the SPEC
-(§19.5 net-to-LP row and footnote, §23 selldown heading) keep their em dashes.
+Owner's requirements below: 1 done for every field with a cited basis (see "Still open"), 2 to 6 done, 7 observed.
+Defects below: all nine fixed.
 
-**Not built / not verified:**
+**Second pass (2026-11-12, same branch, PR #128):**
 
-- A recommendation on EVERY field: the catalogue of proposals is unchanged (`lib/engine2/suggest.ts`
-  is engine-side). The presentation is new (quiet link, source tag that explains itself, S to
-  accept), and AI proposals are now requested once per deal as soon as a key is saved.
-- Anything that needs an AI key (proposals, the challenge, "Ask about this deal") is wired but
-  was not exercised: no key was used.
-- Notes export to a separate "Analyst notes" sheet, not as comments on the Inputs cells.
+- **Recommendations**: `lib/engine2/suggest.ts` now proposes every single field that has a cited
+  basis in `suggestions/conventions.json` or the filing: holding period, entry and exit basis,
+  each facility's base rate (dated, with a warning to check it), floor, spread, OID,
+  amortization and size, mezzanine coupons, the sweep level, the springing trigger, statutory
+  tax terms for a US filer, NOL usability, promote terms, working-capital figures. Clicking the
+  word after "use" opens how the value was reached. Three older tests that pinned "no sweep
+  proposal" and "no tax-rate proposal" were updated to the new direction.
+- **Notes** export as comments on the Inputs cells (`results/exportModel.ts`, checked against
+  the workbook by `tests/export-notes.test.ts`), plus the "Analyst notes" sheet.
+- **Em dashes** are gone from everything a user reads, engine messages, Excel labels and the
+  filing-parser notes included; `tests/no-em-dash.test.ts` holds it. The SPEC's two quoted
+  §19.5 labels were amended and a presentation rule added at its head; SPEC prose is unchanged.
+
+**Still open:**
+
+- Fields with NO cited basis get no proposal without an AI key: minimum cash, maturities, exit
+  fees, the revolver commitment fee, valuation inputs (risk-free, MRP, betas, long-run growth),
+  fund terms, covenant levels. Adding them needs cited sources in `conventions.json` first.
+- Anything that needs an AI key (automatic proposals, the challenge, "Ask about this deal") is
+  wired but has never been exercised.
+- The new proposals were checked by test and by loading the page; the debt-table "use" links and
+  the explanation pop-up were not clicked through by hand on a US filer import.
 - Football field, segment / price × volume operating build, add-on acquisitions: left out by
   owner direction (engine work).
 

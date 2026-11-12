@@ -35,7 +35,7 @@ const FY = '2025-12-28';
 const raw = mapCompanyFacts(FACTS, OPTS);
 const pack = buildStatementPack({ raw, rawExLeases: mapCompanyFacts(FACTS, { ...OPTS, includeFinanceLeasesInDebt: false }), gaap: 'us-gaap', facts: FACTS });
 
-describe('frozen filing — Hasbro FY2025 / LTM Q3 2026', () => {
+describe('frozen filing: Hasbro FY2025 / LTM Q3 2026', () => {
   it('the sizing pair is the hand-worked LTM: revenue 5,181.0, EBITDA 1,460.2', () => {
     expect(raw.basis).toBe('LTM');
     expect(raw.as_of).toBe('2026-09-27');
@@ -48,14 +48,14 @@ describe('frozen filing — Hasbro FY2025 / LTM Q3 2026', () => {
     expect(cellAt(pack, 'revenue', '2024-12-29')!.value).toBeCloseTo(4135.5, 6);
   });
 
-  it('cash resolves although the filer switched cash concept — net debt is 3,264.9 − 776.6, not gross debt minus nothing', () => {
+  it('cash resolves although the filer switched cash concept: net debt is 3,264.9 − 776.6, not gross debt minus nothing', () => {
     expect(raw.gross_debt!.value).toBeCloseTo(3264.9, 6);
     expect(raw.cash!.value).toBeCloseTo(776.6, 6);
     expect(raw.net_debt!.value).toBeCloseTo(2488.3, 6);
     expect(raw.cash!.provenance.tag).toBe('CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents');
   });
 
-  it('a loss year gives NO effective tax rate (pre-tax −102.0) — not 0%, not 60%, not 21%', () => {
+  it('a loss year gives NO effective tax rate (pre-tax −102.0), not 0%, not 60%, not 21%', () => {
     expect(cellAt(pack, 'pretax_income', FY)!.value).toBeCloseTo(-102.0, 6);
     expect(raw.effective_tax_rate).toBeNull();
   });
@@ -92,7 +92,7 @@ describe('frozen filing — Hasbro FY2025 / LTM Q3 2026', () => {
   });
 });
 
-describe('frozen filing — operating NWC history (D7): one definition, every year', () => {
+describe('frozen filing: operating NWC history (D7): one definition, every year', () => {
   const facts = adaptRawHistoricals(raw).facts;
   it('the anchor year of the history IS the anchor NWC, and earlier years are on the same assembly', () => {
     const rows = facts.history.filter((h) => h.operating_nwc !== null);

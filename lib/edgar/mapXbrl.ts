@@ -201,7 +201,7 @@ function edgarProvenance(tag: string, taxonomy: string, unit: string, f: XbrlFac
   const periodLabel = f.fp === 'FY' && f.fy ? `FY${f.fy}` : (f.frame ?? f.end);
   return {
     source: 'edgar',
-    detail: `${taxonomy}:${tag} · ${periodLabel} · ${f.form ?? '—'}`,
+    detail: `${taxonomy}:${tag} · ${periodLabel} · ${f.form ?? '–'}`,
     url: filingUrl(cik10, f.accn),
     tag, taxonomy, unit, fy: f.fy, fp: f.fp, form: f.form, accession: f.accn, filed: f.filed, period: f.end,
   };
@@ -295,7 +295,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   if (opinc && daRaw) {
     fy_ebitda = sv(opinc.value + daRaw.value, {
       source: 'edgar',
-      detail: `OperatingIncomeLoss + ${daRaw.tag} · FY${anchorFy ?? '—'} · ${opinc.prov.form ?? 'filing'}`, // form from the FACT, not a literal ('10-K' mislabelled 20-F fetches and uploads)
+      detail: `OperatingIncomeLoss + ${daRaw.tag} · FY${anchorFy ?? '–'} · ${opinc.prov.form ?? 'filing'}`, // form from the FACT, not a literal ('10-K' mislabelled 20-F fetches and uploads)
       tag: 'derived:EBITDA', taxonomy: 'us-gaap', unit: opinc.prov.unit, fy: anchorFy, period: anchorEnd,
       url: opinc.prov.url,
     });
@@ -366,7 +366,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     const curFinLease = rawInstant(FINANCE_LEASE_CURRENT_TAGS, end)?.value ?? 0;
     return {
       value: (ac.value - cashAt.value - (sti?.value ?? 0)) - (lc.value - curDebt - curFinLease),
-      detail: `(AssetsCurrent − cash${sti ? ' − ST investments' : ''}) − (LiabilitiesCurrent − current debt${curFinLease ? ' − current finance leases' : ''}) — OPERATING NWC (derived)`,
+      detail: `(AssetsCurrent − cash${sti ? ' − ST investments' : ''}) − (LiabilitiesCurrent − current debt${curFinLease ? ' − current finance leases' : ''}): OPERATING NWC (derived)`,
       url: ac.prov.url,
     };
   };
@@ -396,7 +396,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   let dpo: SourcedValue | null = null;
   let cogs: SourcedValue | null = null;
   if (isFinancialSic) {
-    days_notes.push('financial-sector filer — working-capital days not applicable (% method only)');
+    days_notes.push('financial-sector filer: working-capital days not applicable (% method only)');
   } else {
     const ar = rawInstant(AR_TAGS, anchorEnd);
     let inv = rawInstant(INVENTORY_TAGS, anchorEnd);
@@ -418,7 +418,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     }
     if (cogsRaw) {
       cogs = sv(cogsRaw.value, cogsFlagged
-        ? { ...cogsRaw.prov, detail: `${cogsRaw.prov.detail} — EXCLUDES D&A (flagged: understates the purchases basis)` }
+        ? { ...cogsRaw.prov, detail: `${cogsRaw.prov.detail}: EXCLUDES D&A (flagged: understates the purchases basis)` }
         : cogsRaw.prov);
     }
 
@@ -426,18 +426,18 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
     if (ar && revenueVal > 0) {
       const v = (ar.value / revenueVal) * 365;
       dso = sv(v, { ...ar.prov, detail: `${ar.prov.detail} ÷ revenue × 365 (DSO)` });
-      if (v > 180) days_notes.push(`DSO ${v.toFixed(0)} implausible (> 180) — flagged, not suggested`);
+      if (v > 180) days_notes.push(`DSO ${v.toFixed(0)} implausible (> 180): flagged, not suggested`);
     }
     // DIO = inventory ÷ daily COGS; a services filer with no inventory ⇒ note, not a gap
     if (inv && cogs && cogs.value > 0) {
       const v = (inv.value / cogs.value) * 365;
       dio = sv(v, { source: 'edgar', detail: `${inv.tag} ÷ ${cogsRaw!.tag} × 365 (DIO)`, tag: inv.tag, period: anchorEnd, fy: anchorFy });
-      if (v > 365) days_notes.push(`DIO ${v.toFixed(0)} implausible (> 365) — flagged, not suggested`);
+      if (v > 365) days_notes.push(`DIO ${v.toFixed(0)} implausible (> 365): flagged, not suggested`);
     } else if (!inv) {
       const servicesSic = sicCode !== null && sicCode >= 7000 && sicCode <= 8999;
       days_notes.push(servicesSic
-        ? 'no inventory tagged (services filer) — DIO omitted'
-        : 'no inventory tagged — DIO omitted');
+        ? 'no inventory tagged (services filer): DIO omitted'
+        : 'no inventory tagged: DIO omitted');
     }
     // DPO: clean AP only; purchases = COGS + ΔInventory when a consecutive prior-year
     // inventory exists (D1 series), else COGS with a note. Bundled AP ⇒ GAP.
@@ -461,10 +461,10 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
       if (purchases > 0) {
         const v = (apClean.value / purchases) * 365;
         dpo = sv(v, { ...apClean.prov, detail: `${apClean.prov.detail} ÷ ${basisNote} × 365 (DPO)` });
-        if (v > 180) days_notes.push(`DPO ${v.toFixed(0)} implausible (> 180) — flagged, not suggested`);
+        if (v > 180) days_notes.push(`DPO ${v.toFixed(0)} implausible (> 180): flagged, not suggested`);
       }
     } else if (!apClean && apBundled) {
-      days_notes.push('only bundled payables+accrued tagged — DPO is a gap (% method fallback), never computed off the bundle');
+      days_notes.push('only bundled payables+accrued tagged: DPO is a gap (% method fallback), never computed off the bundle');
     }
   }
 
@@ -614,7 +614,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
         if (rate >= 0.01 && rate <= 0.15) {
           implied_cost_of_debt = sv(rate, {
             ...interest.prov,
-            detail: `${interest.tag} ÷ ${grossPrior ? `avg(gross debt ${priorEnd}, ${anchorEnd})` : `gross debt ${anchorEnd} (no prior year — ending balance)`} — approximate: includes non-cash DFC/OID amortization`,
+            detail: `${interest.tag} ÷ ${grossPrior ? `avg(gross debt ${priorEnd}, ${anchorEnd})` : `gross debt ${anchorEnd} (no prior year: ending balance)`}: approximate: includes non-cash DFC/OID amortization`,
           });
         }
       }
@@ -641,7 +641,7 @@ export function mapCompanyFacts(facts: CompanyFacts, opts: MapOptions = {}): Raw
   //    extracted figure is presented as a FLOOR, never the total. ──
   const nolRaw = rawInstant(NOL_TAGS, anchorEnd);
   const nol_carryforward = nolRaw
-    ? sv(nolRaw.value, { ...nolRaw.prov, detail: `${nolRaw.prov.detail} — ≥ floor: member-level (state/foreign) detail is invisible in companyfacts` })
+    ? sv(nolRaw.value, { ...nolRaw.prov, detail: `${nolRaw.prov.detail}: ≥ floor: member-level (state/foreign) detail is invisible in companyfacts` })
     : null;
 
   const sector: SourcedValue | null = opts.sicDescription

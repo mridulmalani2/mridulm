@@ -21,7 +21,7 @@ const ROOT = join(__dirname, '..');
 const CASES = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix'];
 const load = (c: string) => JSON.parse(readFileSync(join(ROOT, 'tests/goldens/g2ltm', c, 'expected.json'), 'utf8'));
 
-describe('G-2 LTM stitch — golden agreement', () => {
+describe('G-2 LTM stitch: golden agreement', () => {
   it('committed fixtures match a fresh run of the reference derivation (no silent drift)', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'g2ltm-'));
     execFileSync('python3', [join(ROOT, 'scripts/goldens/ltm_stitch.py'), tmp], { stdio: 'pipe' });
@@ -34,7 +34,7 @@ describe('G-2 LTM stitch — golden agreement', () => {
 });
 
 describe('G-2 §1.1 committed stitch/refusal assertions', () => {
-  it('(i) clean mid-year PROCEEDS — LTM rev 1080 / EBITDA 267, fresh (the M1 no-op regression guard)', () => {
+  it('(i) clean mid-year PROCEEDS: LTM rev 1080 / EBITDA 267, fresh (the M1 no-op regression guard)', () => {
     const g = load('i');
     expect(g.stitched).toBe(true);
     expect(g.revenue).toEqual({ basis: 'ltm_stitched', value: 1080.0, as_of: '2025-09-30' });
@@ -90,7 +90,7 @@ describe('G-2 §1.1 committed stitch/refusal assertions', () => {
     expect(g.refusal_reason).toMatch(/OperInc absent/);
   });
 
-  it('(viii) NTM base case PROCEEDS — LTM rev 1320 / EBITDA 328 [B1 stitch part]', () => {
+  it('(viii) NTM base case PROCEEDS: LTM rev 1320 / EBITDA 328 [B1 stitch part]', () => {
     const g = load('viii');
     expect(g.stitched).toBe(true);
     expect(g.revenue.value).toBe(1320.0);

@@ -23,7 +23,7 @@ const render = (golden: keyof typeof GOLDEN_DEALS) => {
   return { o, html: renderToStaticMarkup(React.createElement(Debt, { o, ccy: 'USD' as const })) };
 };
 
-describe('§20 PIK toggle display surface — Debt tab', () => {
+describe('§20 PIK toggle display surface: Debt tab', () => {
   it('G8-PIKT: every year carries its ELECTION marker, in schedule order, beside the elected leg', () => {
     const { o, html } = render('G8PIKT');
     // the marker set matches the committed schedule [pik,pik,cash,cash,pik] exactly
@@ -56,7 +56,7 @@ describe('§20 PIK toggle display surface — Debt tab', () => {
     expect(html).toContain('frozen across scenarios');
   });
 
-  it('G3 (FIXED note, elections null): NO election markers and NO §20 footnote — the fixed shape says nothing', () => {
+  it('G3 (FIXED note, elections null): NO election markers and NO §20 footnote; the fixed shape says nothing', () => {
     const { o, html } = render('G3');
     expect(html).not.toContain('· cash');
     expect(html).not.toContain('· PIK');
@@ -73,7 +73,7 @@ describe('§20 PIK toggle display surface — Debt tab', () => {
   });
 });
 
-describe('§20.8 — the PIK-toggle disclosure row is on the Methodology surface (SPEC §15)', () => {
+describe('§20.8: the PIK-toggle disclosure row is on the Methodology surface (SPEC §15)', () => {
   it('the Disclosures table carries the row with its load-bearing clauses (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
     expect(html).toContain('PIK toggle (§20)');

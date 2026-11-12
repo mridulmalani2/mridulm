@@ -13,7 +13,7 @@ import sample from './fixtures/companyfacts-sample.json';
 const facts = sample as unknown as CompanyFacts;
 const clone = (): CompanyFacts => JSON.parse(JSON.stringify(facts));
 
-describe('mapCompanyFacts — headline figures (Northwind FY2023, $m)', () => {
+describe('mapCompanyFacts: headline figures (Northwind FY2023, $m)', () => {
   const r = mapCompanyFacts(facts);
 
   it('scales raw absolute USD to the engine millions unit', () => {
@@ -66,7 +66,7 @@ describe('mapCompanyFacts — headline figures (Northwind FY2023, $m)', () => {
   });
 });
 
-describe('mapCompanyFacts — alias fallback', () => {
+describe('mapCompanyFacts: alias fallback', () => {
   it('falls back to Revenues when the primary revenue tag is absent', () => {
     const c = clone();
     const rev = c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'];
@@ -78,7 +78,7 @@ describe('mapCompanyFacts — alias fallback', () => {
   });
 });
 
-describe('mapCompanyFacts — gaps are surfaced, never silently defaulted', () => {
+describe('mapCompanyFacts: gaps are surfaced, never silently defaulted', () => {
   it('a missing capex concept becomes a Capex % gap (value null)', () => {
     const c = clone();
     delete c.facts['us-gaap']['PaymentsToAcquirePropertyPlantAndEquipment'];
@@ -96,7 +96,7 @@ describe('mapCompanyFacts — gaps are surfaced, never silently defaulted', () =
     expect(r.gaps).toContain('Net debt at entry');
   });
 
-  it('missing net PP&E stays null — NOT a Build-blocking gap (§8 has a disclosed 0-seed fallback)', () => {
+  it('missing net PP&E stays null: NOT a Build-blocking gap (§8 has a disclosed 0-seed fallback)', () => {
     const c = clone();
     delete c.facts['us-gaap']['PropertyPlantAndEquipmentNet'];
     const r = mapCompanyFacts(c);
@@ -115,7 +115,7 @@ describe('mapCompanyFacts — gaps are surfaced, never silently defaulted', () =
   });
 });
 
-describe('mapCompanyFacts — strict fiscal-year alignment (no cross-year drift)', () => {
+describe('mapCompanyFacts: strict fiscal-year alignment (no cross-year drift)', () => {
   it('a concept missing at the revenue anchor becomes a gap, not a different-year substitution', () => {
     const c = clone();
     // Drop the FY2023 operating-income fact (keep FY2021/FY2022). Revenue still anchors FY2023.
@@ -143,7 +143,7 @@ describe('mapCompanyFacts — strict fiscal-year alignment (no cross-year drift)
   });
 });
 
-describe('mapCompanyFacts — debt aliases do not double-count (Finding 4)', () => {
+describe('mapCompanyFacts: debt aliases do not double-count (Finding 4)', () => {
   it('ignores DebtCurrent when the disjoint specifics are present', () => {
     const c = clone();
     // Add DebtCurrent (total current debt — already includes the 25 of current LT maturities).
@@ -163,7 +163,7 @@ describe('mapCompanyFacts — debt aliases do not double-count (Finding 4)', () 
   });
 });
 
-describe('mapCompanyFacts — foreign reporting currency (Finding 5)', () => {
+describe('mapCompanyFacts: foreign reporting currency (Finding 5)', () => {
   it('detects the filing unit as the reporting currency', () => {
     const c = clone();
     const rev = c.facts['us-gaap']['RevenueFromContractWithCustomerExcludingAssessedTax'].units.USD;
@@ -175,7 +175,7 @@ describe('mapCompanyFacts — foreign reporting currency (Finding 5)', () => {
   });
 });
 
-describe('mapCompanyFacts — D&A reconstruction from components', () => {
+describe('mapCompanyFacts: D&A reconstruction from components', () => {
   const instant = (val: number) => ({ units: { USD: [{ start: '2023-01-01', end: '2023-12-31', val, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } });
   it('reconstructs D&A from depreciation + amortization when no combined concept is tagged', () => {
     const c = clone();
@@ -197,7 +197,7 @@ describe('mapCompanyFacts — D&A reconstruction from components', () => {
     expect(r.da).toBeNull();
     expect(r.gaps).toContain('D&A %');
   });
-  it('rejects a sub-year (Q4 stub) component at the anchor end — never sums a 3-month with a 12-month figure', () => {
+  it('rejects a sub-year (Q4 stub) component at the anchor end, never sums a 3-month with a 12-month figure', () => {
     const c = clone();
     delete c.facts['us-gaap']['DepreciationDepletionAndAmortization'];
     c.facts['us-gaap']['Depreciation'] = instant(50000000);  // full-year
@@ -209,7 +209,7 @@ describe('mapCompanyFacts — D&A reconstruction from components', () => {
   });
 });
 
-describe('mapCompanyFacts — finance leases in gross debt (US analogue of IFRS-16)', () => {
+describe('mapCompanyFacts: finance leases in gross debt (US analogue of IFRS-16)', () => {
   const lease = (val: number) => ({ units: { USD: [{ end: '2023-12-31', val, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } });
   it('adds finance (capital) lease liabilities to gross debt by default', () => {
     const c = clone();
@@ -237,7 +237,7 @@ describe('mapCompanyFacts — finance leases in gross debt (US analogue of IFRS-
   });
 });
 
-describe('mapCompanyFacts — debt/lease edge cases (adversarial-review regressions)', () => {
+describe('mapCompanyFacts: debt/lease edge cases (adversarial-review regressions)', () => {
   const instant = (val: number) => ({ units: { USD: [{ end: '2023-12-31', val, accn: 'x', fy: 2023, fp: 'FY', form: '10-K', filed: '2024-02-15' }] } });
   const onlyTotalDebt = (): CompanyFacts => {
     const c = clone();
@@ -284,13 +284,13 @@ describe('mapCompanyFacts — debt/lease edge cases (adversarial-review regressi
   });
 });
 
-describe('mapCompanyFacts — effective tax rate is the true ratio or nothing', () => {
+describe('mapCompanyFacts: effective tax rate is the true ratio or nothing', () => {
   it('no derivable rate ⇒ null (never a statutory stand-in)', () => {
     const c = clone();
     delete c.facts['us-gaap']['IncomeTaxExpenseBenefit'];
     expect(mapCompanyFacts(c).effective_tax_rate).toBeNull();
   });
-  it('a rate above 60% or below 0% is emitted as filed — never clamped', () => {
+  it('a rate above 60% or below 0% is emitted as filed, never clamped', () => {
     const scaleTax = (k: number) => {
       const c = clone();
       const anchorEnd = mapCompanyFacts(c).periodEnd;

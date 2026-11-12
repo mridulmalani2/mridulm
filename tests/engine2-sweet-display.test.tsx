@@ -22,7 +22,7 @@ const render = (golden: keyof typeof GOLDEN_DEALS) => {
   return { o, html: renderToStaticMarkup(React.createElement(EquityStrip, { o, ccy: 'USD' as const })) };
 };
 
-describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
+describe('§22 display surface: the EquityStrip block (Returns tab)', () => {
   it('G9-SWEET: every displayed cell is a NAMED equity_strip field at its committed value', () => {
     const { o, html } = render('G9SWEET');
     const es = o.equity_strip!;
@@ -50,7 +50,7 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
     expect(html).toContain('REALIZED MOIC');
   });
 
-  it('G10-RATCHET and every v1 golden: the block is ABSENT (never a zero table) — §22.10 biconditional', () => {
+  it('G10-RATCHET and every v1 golden: the block is ABSENT (never a zero table); §22.10 biconditional', () => {
     for (const g of ['G10RATCHET', 'G3', 'G2'] as const) {
       const { html } = render(g);
       expect(html, g).toBe('');
@@ -88,7 +88,7 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
   });
 });
 
-describe('§22 display surface — the S&U tab (conformance B1 twin)', () => {
+describe('§22 display surface: the S&U tab (conformance B1 twin)', () => {
   it('the Sources table carries the subscription row on a strip deal and foots; absent when off', async () => {
     const { SU } = await import('../components/deal-engine/v2/OutputTabs');
     const { facts, assumptions } = GOLDEN_DEALS.G9SWEET;
@@ -102,7 +102,7 @@ describe('§22 display surface — the S&U tab (conformance B1 twin)', () => {
   });
 });
 
-describe('§22 methodology surface (React) — the §15 row', () => {
+describe('§22 methodology surface (React): the §15 row', () => {
   it('the §22.11 disclosure row is present and carries the load-bearing clauses', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
     expect(html).toContain('Sweet equity / ratchets / warrants (§22)');

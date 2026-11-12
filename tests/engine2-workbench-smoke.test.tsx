@@ -48,7 +48,7 @@ const importFixture = (mutate?: (f: CompanyFacts) => void, anchor?: number | nul
 
 beforeEach(() => useEngine2Model.getState().reset());
 
-describe('v2 Workbench — SSR smoke on the real store', () => {
+describe('v2 Workbench: SSR smoke on the real store', () => {
   it('imported state: facts and history render; the HOLD comes first; nothing is pre-filled and Build is disabled', () => {
     importFixture(undefined, 8.2);
     let html = renderToStaticMarkup(<Workbench />);
@@ -107,7 +107,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).not.toContain('disabled');
   });
 
-  it('an UNSUPPORTED filing currency (SEK) renders its ISO code in the history — never a borrowed $ symbol', () => {
+  it('an UNSUPPORTED filing currency (SEK) renders its ISO code in the history, never a borrowed $ symbol', () => {
     importFixture((f) => {
       // re-key every unit map USD → SEK: anchor unit outside the modelled set ⇒ blocking badge
       for (const tag of Object.keys((f as any).facts['us-gaap'])) {
@@ -134,7 +134,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).toContain('trading anchor');
   });
 
-  it('E2a — output tabs render after build: summary hero, bridge rows, deleveraging footer text present; no sentinels', () => {
+  it('E2a: output tabs render after build: summary hero, bridge rows, deleveraging footer text present; no sentinels', () => {
     importFixture();
     enterDeal(enteredAssumptions());
     useEngine2Model.getState().build();
@@ -158,7 +158,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     for (const banned of ['Fragility', 'Reality Check', 'Fund economics']) expect(html).not.toContain(banned);
   });
 
-  it('E2b — buildWithExhibits populates scenarios (4 presets, entry frozen) + the 5×5 centered sensitivity; all three new tabs render', () => {
+  it('E2b: buildWithExhibits populates scenarios (4 presets, entry frozen) + the 5×5 centered sensitivity; all three new tabs render', () => {
     importFixture();
     enterDeal(enteredAssumptions());
     useEngine2Model.getState().buildWithExhibits();
@@ -191,7 +191,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
  * exactly as it did), and with one the paid/blocked evidence and the de-degenerated
  * DPI/payback headline appear.
  */
-describe('interim distributions — the v1.1.0 UI surfaces', () => {
+describe('interim distributions: the v1.1.0 UI surfaces', () => {
   const withSchedule = (dists: number[] | null, trap: number | null) => {
     importFixture();
     enterDeal(enteredAssumptions());
@@ -234,7 +234,7 @@ describe('interim distributions — the v1.1.0 UI surfaces', () => {
     expect(out.returns.dpi[out.returns.dpi.length - 1]).toBeGreaterThan(0);
   });
 
-  it('the inputs exist and start OFF — the suggestion layer proposes NEITHER (§16)', () => {
+  it('the inputs exist and start OFF: the suggestion layer proposes NEITHER (§16)', () => {
     importFixture();
     useEngine2Model.getState().setHoldYears(5);
     const html = renderToStaticMarkup(<Workbench />);
@@ -269,7 +269,7 @@ describe('every engine feature is enterable in the panel (sweep grid, covenant s
     return useEngine2Model.getState();
   };
 
-  it('a sweep step-down grid replaces the flat % — the flat % is no longer demanded, every grid cell is', () => {
+  it('a sweep step-down grid replaces the flat %: the flat % is no longer demanded, every grid cell is', () => {
     const st = draft();
     const a = st.assumptions!;
     st.editAssumptions({ ...a, structure: { ...a.structure, sweep: { base_pct: Number.NaN, grid: { tiers: [{ above_net_leverage: 4.5, pct: 0.75 }, { above_net_leverage: Number.NaN, pct: 0.5 }], else_pct: 0 } } } }, ['structure.sweep.grid']);
@@ -323,7 +323,7 @@ describe('every engine feature is enterable in the panel (sweep grid, covenant s
   });
 });
 
-describe('§23 partial exit — the panel input', () => {
+describe('§23 partial exit: the panel input', () => {
   it('offers the selldown, brings its three fields in BLANK, and Build is gated until they are entered', () => {
     importFixture();
     enterDeal(enteredAssumptions());

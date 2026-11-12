@@ -39,13 +39,13 @@ export function adaptRawHistoricals(raw: RawHistoricals): AdaptedFacts {
   };
 
   if (raw.currency_unsupported) {
-    notes.push(`currency ${raw.currency_unsupported} unsupported — Build blocked`);
+    notes.push(`currency ${raw.currency_unsupported} unsupported: Build blocked`);
   }
 
   // The combined PP&E+ROU concept is a stated fallback — surface the statement (the v2
   // screens render notes; provenance detail alone never reaches the default surface).
   if (raw.net_ppe && /right-of-use|ROU/i.test(raw.net_ppe.provenance.detail ?? '')) {
-    notes.push('net PP&E includes finance-lease right-of-use assets (combined concept — the filing does not tag the pure figure)');
+    notes.push('net PP&E includes finance-lease right-of-use assets (combined concept: the filing does not tag the pure figure)');
   }
 
   // D1 history → HistoricalYear rows: union of period ends across series, per-cell nulls.

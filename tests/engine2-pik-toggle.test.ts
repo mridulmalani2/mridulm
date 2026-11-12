@@ -78,7 +78,7 @@ describe('C-gate: the engine reproduces the adjudicated G8-PIKT gospel', () => {
     expect(o.returns.unlevered.irr!).toBeCloseTo(g8fix.returns.unlevered.irr, 6);
   });
 
-  it('§20.6(d): the capped pool flips legs by election — accrual in pik years, note cash in cash years', () => {
+  it('§20.6(d): the capped pool flips legs by election; accrual in pik years, note cash in cash years', () => {
     o.tax.forEach((y, i) => expect(y.capped_interest_pool, `pool[${i}]`).toBeCloseTo(g8fix.tax[i].capped_interest_pool, 2));
     // and the §163(j) carryforward path is the adjudicated NON-monotone one (peaks Y3)
     const cf = o.tax.map((y) => y.s163j_carryforward_end);
@@ -90,7 +90,7 @@ describe('C-gate: the engine reproduces the adjudicated G8-PIKT gospel', () => {
   });
 });
 
-describe('§20.10 directed fixtures — the golden-uncovered branches', () => {
+describe('§20.10 directed fixtures: the golden-uncovered branches', () => {
   it('(i) all-cash elections: the note behaves as a bullet cash tranche (accrual identically 0, payoff = par)', () => {
     const d = withNote({ elections: ['cash', 'cash', 'cash', 'cash', 'cash'] });
     const o = runModel(d.facts, d.assumptions);
@@ -128,7 +128,7 @@ describe('§20.10 directed fixtures — the golden-uncovered branches', () => {
     expect(c.returns.sponsor_net.irr).not.toBeCloseTo(a.returns.sponsor_net.irr!, 6);
   });
 
-  it('(iii) the FOUR §16/§20.2 rejections throw — BOTH length directions, the union at EVERY position', () => {
+  it('(iii) the FOUR §16/§20.2 rejections throw: BOTH length directions, the union at EVERY position', () => {
     const bad = (over: Partial<PikNoteAssumption>) => {
       const d = withNote(over);
       return () => runModel(d.facts, d.assumptions);
@@ -152,7 +152,7 @@ describe('§20.10 directed fixtures — the golden-uncovered branches', () => {
     expect(() => runModel(ok.facts, ok.assumptions)).not.toThrow();
   });
 
-  it('(iii-b) §18.2 rejects a refi naming a TOGGLED note — the gate reads the TYPE, not the election', () => {
+  it('(iii-b) §18.2 rejects a refi naming a TOGGLED note: the gate reads the TYPE, not the election', () => {
     // §20.5: "a cash-electing toggle is still a pik_note". The hardest case is an ALL-CASH
     // toggle, which behaves like a cash-pay tranche in every schedule row [audit B6 — an
     // election-aware gate turned a clean §18.2 rejection into an internal invariant crash].
@@ -219,7 +219,7 @@ describe('§20.10 directed fixtures — the golden-uncovered branches', () => {
     expect(codes(withNote({ elections: null, cash_coupon: 0.09, pik_coupon: 0 }))).not.toContain('ahydo_shape');
   });
 
-  it('(v-b) ahydo_shape is STRUCTURAL — it reads the TERMS, so a note that never realizes an accrual still discloses', () => {
+  it('(v-b) ahydo_shape is STRUCTURAL: it reads the TERMS, so a note that never realizes an accrual still discloses', () => {
     // §20.6(e) says "deterministic on terms alone (no run data)". A note that amortizes away
     // before its first 'pik' year realizes ZERO accrual, yet its TERMS qualify — the disclosure
     // must still fire [audit B5 — an outcome-derived `accrues` silently dropped the WARN here].
@@ -258,7 +258,7 @@ describe('§20.10 directed fixtures — the golden-uncovered branches', () => {
     expect(flags[0].severity).toBe('warn');
   });
 
-  it('(vi) §163(j) pool composition flips with the legs — the wrong-leg mutant moves cash tax', () => {
+  it('(vi) §163(j) pool composition flips with the legs: the wrong-leg mutant moves cash tax', () => {
     // Same deal, two election patterns that differ ONLY in year 3 (pik vs cash). The pool
     // composition changes, and because the cap BINDS the deductible is the same — so the
     // discriminator is the POOL and the carryforward, exactly what §20.6(d) pins.
@@ -301,13 +301,13 @@ describe('§20.10 directed fixtures — the golden-uncovered branches', () => {
   });
 });
 
-describe('§20.5/§13 — elections are STRUCTURE/POLICY, FROZEN across scenarios', () => {
+describe('§20.5/§13: elections are STRUCTURE/POLICY, FROZEN across scenarios', () => {
   // The freeze holds in the shipped code but was pinned NOWHERE: the only nearby guard tests
   // `applyScenarioDeltas` by object identity on G2, which has no pik note, and `runScenario` is
   // downstream of it [audit B1 — a mutant that rebuilt `structure` inside runScenario ran every
   // scenario as the FIXED both-legs note and manufactured a −2.89pp IRR delta from an EMPTY
   // delta set, with the full suite green].
-  it('an EMPTY delta set reproduces the base deal exactly — no phantom delta', async () => {
+  it('an EMPTY delta set reproduces the base deal exactly: no phantom delta', async () => {
     const { runModelWithScenarios } = await import('../lib/engine2/scenarios');
     const { facts, assumptions } = GOLDEN_DEALS.G8PIKT;
     const base = runModel(facts, assumptions);
@@ -318,7 +318,7 @@ describe('§20.5/§13 — elections are STRUCTURE/POLICY, FROZEN across scenario
     expect(s.irr_delta_vs_base).toBe(0);
   });
 
-  it('a LIVE delta moves ONLY the operating case — the scenario still runs the TOGGLED note', async () => {
+  it('a LIVE delta moves ONLY the operating case: the scenario still runs the TOGGLED note', async () => {
     const { runModelWithScenarios } = await import('../lib/engine2/scenarios');
     const { facts, assumptions } = GOLDEN_DEALS.G8PIKT;
     const base = runModel(facts, assumptions);
@@ -387,7 +387,7 @@ describe('§14.21 invariants on live toggles', () => {
     });
   }
 
-  it("financeLines' yearIndex DEFAULT applies year 1's election — a caller that forgets it is a REGRESSION, not fixed semantics", async () => {
+  it("financeLines' yearIndex DEFAULT applies year 1's election: a caller that forgets it is a REGRESSION, not fixed semantics", async () => {
     // The default exists so the fixed-note callers stay unchanged, but it silently substitutes
     // election[0] for every year if a future caller drops the argument [audit M6 — the only
     // committed caller exercising the default uses a note with NO elections, so the toggled

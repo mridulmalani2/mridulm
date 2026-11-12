@@ -34,7 +34,7 @@ function assertBlockMatches(actual: Record<string, unknown>[], fixture: Record<s
   }
 }
 
-describe('§7 early retirement — the deferred tax deduction lands in t+1 (accuracy-audit gate hole, 2026-07-24)', () => {
+describe('§7 early retirement: the deferred tax deduction lands in t+1 (accuracy-audit gate hole, 2026-07-24)', () => {
   // Golden-uncovered BY DESIGN (spec_calc.py raises on early retirement), so this is the
   // ONE committed end-to-end pin: a small priority-1 tranche with OID under a 100% sweep
   // retires early; the unamortized remainder is deducted exactly one year later (book write-off
@@ -84,7 +84,7 @@ describe('§7 early retirement — the deferred tax deduction lands in t+1 (accu
   });
 });
 
-describe('runCore — first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
+describe('runCore: first end-to-end: every golden block at full precision, zero injection (C5 gate)', () => {
 
   // G7FUND and G8PIKT added by the step-3 accuracy audit (M3): every OTHER feature golden was
   // in this comprehensive block-by-block gate, so the fund overlay's and the toggle's

@@ -17,7 +17,7 @@ export const SECTIONS: SectionDef[] = [
 ];
 
 /** An input's label as the interface shows it: the engine's label with its dashes read as commas. */
-export const plainLabel = (label: string): string => label.replace(/\s+—\s+/g, ', ');
+export const plainLabel = (label: string): string => label;
 
 export function sectionOf(path: string): string {
   if (/^structure\.tranches\.\d+\.elections/.test(path) || path.startsWith('structure.refinancing')) return 'refinancing';

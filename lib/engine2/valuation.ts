@@ -22,7 +22,7 @@ export function validateForecastLines(assumptions: Pick<DealAssumptions, 'operat
   const g = lines.year_n_plus_1_growth;
   if (needs && g === null) {
     throw new RangeError(
-      'forecast: enter the growth rate from the final hold year into year N+1 — the NTM exit and the flow-to-equity terminal value both need year N+1 (§24.3 R7)',
+      'forecast: enter the growth rate from the final hold year into year N+1; the NTM exit and the flow-to-equity terminal value both need year N+1 (§24.3 R7)',
     );
   }
   if (g !== null && (!Number.isFinite(g) || g <= -1)) {
@@ -106,7 +106,7 @@ export function terminalUfcf(
 /** §25.2 Gordon EV; null-with-reason when rU ≤ g. */
 export function gordonEv(ufcf: number, rU: number, g: number): { ev: number | null; reason: string | null } {
   if (!(rU > g)) {
-    return { ev: null, reason: `unlevered cost of capital ${(rU * 100).toFixed(2)}% is not above long-run growth ${(g * 100).toFixed(2)}% — a perpetuity has no finite value` };
+    return { ev: null, reason: `unlevered cost of capital ${(rU * 100).toFixed(2)}% is not above long-run growth ${(g * 100).toFixed(2)}%: a perpetuity has no finite value` };
   }
   return { ev: ufcf / (rU - g), reason: null };
 }
@@ -163,7 +163,7 @@ export function fteRecursion(v: ValuationAssumption, x: RecursionInputs): Recurs
   }
   const E: number[] = new Array(N + 1);
   E[N] = x.exit_equity;
-  if (!(E[N] > 0)) return NULL_RECURSION(`exit equity is not positive (${E[N].toFixed(2)}) — the equity beta of a non-positive claim is undefined`);
+  if (!(E[N] > 0)) return NULL_RECURSION(`exit equity is not positive (${E[N].toFixed(2)}): the equity beta of a non-positive claim is undefined`);
   const rE: (number | null)[] = new Array(N + 1).fill(null);
   for (let t = N; t >= 1; t--) {
     if (v.leverage_timing === 'end_of_year') {
@@ -179,7 +179,7 @@ export function fteRecursion(v: ValuationAssumption, x: RecursionInputs): Recurs
         (1 + v.risk_free + v.asset_beta * v.mrp);
     }
     if (!(E[t - 1] > 0)) {
-      return NULL_RECURSION(`equity value at the end of year ${t - 1} is not positive — the flow-to-equity recursion is undefined there`);
+      return NULL_RECURSION(`equity value at the end of year ${t - 1} is not positive: the flow-to-equity recursion is undefined there`);
     }
     if (v.leverage_timing === 'start_of_year') {
       rE[t] = v.risk_free + equityBeta(v, E[t - 1], x.debt[t - 1], x.cash[t - 1]) * v.mrp;

@@ -64,7 +64,7 @@ export function validateRatchetTiers(
     if (prevH !== null && !(t.hurdle_moic > prevH)) {
       bad('hurdle_moic must be strictly ascending (and strictly above the base threshold it sits on)');
     }
-    if (!(t.share_pct >= prevS)) bad('share_pct must be non-decreasing and ≥ the base share — a ratchet only ever ratchets up');
+    if (!(t.share_pct >= prevS)) bad('share_pct must be non-decreasing and ≥ the base share: a ratchet only ever ratchets up');
     if (!(t.share_pct < 1)) bad('share_pct must be < 1 (§22.5: the (1 − s) bracket denominator; §22.4: a pool taking 100% of a slice)');
     prevH = t.hurdle_moic;
     prevS = t.share_pct;
@@ -79,8 +79,8 @@ export function validateSweetEquity(
   const bad = (msg: string): never => { throw new RangeError(`sweet_equity: ${msg} (SPEC §22.3)`); };
   const sw = a.sweet_equity;
   if (sw) {
-    if (a.mip) bad('a promote and a strip may not coexist — the DR-2 double-count made STRUCTURAL (§22.3(i))');
-    if (a.rollover_equity > 0) bad('a strip may not coexist with a rollover in v1 — the allocation is negotiated with no defensible default (§22.3(ii))');
+    if (a.mip) bad('a promote and a strip may not coexist: the DR-2 double-count made STRUCTURAL (§22.3(i))');
+    if (a.rollover_equity > 0) bad('a strip may not coexist with a rollover in v1: the allocation is negotiated with no defensible default (§22.3(ii))');
     if (!(sw.sponsor_ordinary_pct > 0 && sw.sponsor_ordinary_pct <= 1)) bad('sponsor_ordinary_pct must be in (0, 1]');
     if (!(sw.loan_note_rate >= 0)) bad('loan_note_rate must be ≥ 0');
     if (!(sw.management_subscription >= 0)) bad('management_subscription must be ≥ 0');

@@ -18,7 +18,7 @@ const base: ProvenanceMap = {
 };
 const withMissing = (path: string): ProvenanceMap => ({ ...base, [path]: { source: 'missing', detail: '' } });
 
-describe('MISSING taint — helpers', () => {
+describe('MISSING taint: helpers', () => {
   it('isMissing / anyFactualMissing reflect the provenance map', () => {
     expect(anyFactualMissing(base)).toBe(false);
     expect(anyFactualMissing(withMissing('margins.base_ebitda_margin'))).toBe(true);
@@ -26,7 +26,7 @@ describe('MISSING taint — helpers', () => {
   });
 });
 
-describe('MISSING taint — dependency map (financially traced)', () => {
+describe('MISSING taint: dependency map (financially traced)', () => {
   it('EV / entry multiple depend ONLY on revenue + margin', () => {
     expect(dependsOnMissing(withMissing('margins.base_ebitda_margin'), 'entry.enterprise_value')).toBe(true);
     expect(dependsOnMissing(withMissing('revenue.base_revenue'), 'entry.enterprise_value')).toBe(true);

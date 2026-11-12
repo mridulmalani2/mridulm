@@ -106,7 +106,7 @@ export function attachNotes(wb: Workbook, inputRows: Record<string, number>, a: 
   ws.getCell('D4').value = 'Note';
   ws.getRow(4).font = { bold: true };
   entries.forEach(([path, text], i) => {
-    ws.getCell(`B${5 + i}`).value = labelFor(path).replace(/\s+—\s+/g, ', ');
+    ws.getCell(`B${5 + i}`).value = labelFor(path);
     ws.getCell(`C${5 + i}`).value = where[path] ?? 'no single cell';
     ws.getCell(`D${5 + i}`).value = text.trim();
     ws.getCell(`D${5 + i}`).alignment = { wrapText: true, vertical: 'top' };

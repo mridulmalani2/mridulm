@@ -35,7 +35,7 @@ describe('parseIxbrlUpload ≡ the adjudicated reference gospel (per-fixture)', 
   }
 });
 
-describe('uploadedFilingToRaw — the §2/§3 orchestration (mappers reused, restamp honest)', () => {
+describe('uploadedFilingToRaw: the §2/§3 orchestration (mappers reused, restamp honest)', () => {
   it('Apple 10-K: us-gaap route through mapCompanyFacts; headline values exact; restamp + no fabricated URL/CIK', () => {
     const raw = uploadedFilingToRaw('aapl-10k-trimmed.htm', FIX('aapl-10k-trimmed.htm'));
     expect(raw.origin).toBe('upload');
@@ -51,7 +51,7 @@ describe('uploadedFilingToRaw — the §2/§3 orchestration (mappers reused, res
     expect(raw.as_of).toBe('2024-09-28');
   });
 
-  it("ch-real (Companies House FRC): identity-only import — gaps, GBP, staleness date, FRC note, and the 'default' tax tag SURVIVES the restamp", () => {
+  it("ch-real (Companies House FRC): identity-only import; gaps, GBP, staleness date, FRC note, and the 'default' tax tag SURVIVES the restamp", () => {
     const exp = EXPECTED('ch-real');
     const raw = uploadedFilingToRaw('ch-real.xhtml', FIX('ch-real.xhtml'));
     expect(raw.origin).toBe('upload');

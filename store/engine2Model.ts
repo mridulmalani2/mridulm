@@ -368,7 +368,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       set({
         suggestions: { ...get().suggestions, ...proposals },
         aiNotes: [
-          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value} — ${a.basis}`),
+          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value}, ${a.basis}`),
           ...result.dropped.map((d) => `dropped: ${d}`),
         ],
         aiBusy: false,

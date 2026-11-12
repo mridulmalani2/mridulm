@@ -178,7 +178,7 @@ export function resolveLine(spec: LineSpec, N: number, label: string): number[] 
   }
   if (!Number.isFinite(spec.year1)) throw new RangeError(`operating: ${label} year-1 amount is not finite (§24.3 R6)`);
   if (spec.growth.length !== N - 1) {
-    throw new RangeError(`operating: ${label} growth must have hold_years − 1 (${N - 1}) entries — years 2..${N} (§24.3 R6)`);
+    throw new RangeError(`operating: ${label} growth must have hold_years − 1 (${N - 1}) entries, years 2..${N} (§24.3 R6)`);
   }
   const out = [spec.year1];
   spec.growth.forEach((g, i) => {
@@ -207,7 +207,7 @@ function resolveRevenue(
   const spec = ops.lines?.revenue ?? null;
   if (spec === null) {
     if (facts.fy_revenue === null || !(facts.fy_revenue > 0)) {
-      throw new RangeError('operating: the revenue growth driver needs historical revenue > 0 — enter revenue by year instead, or mark it not modelled (§24.3 R1)');
+      throw new RangeError('operating: the revenue growth driver needs historical revenue > 0: enter revenue by year instead, or mark it not modelled (§24.3 R1)');
     }
     if (ops.growth.length !== N) {
       throw new RangeError(`operating: growth (${ops.growth.length}) must have hold_years (${N}) entries`);
@@ -220,7 +220,7 @@ function resolveRevenue(
 
 function requireRevenue(rev: number | null, what: string): number {
   if (rev === null) {
-    throw new RangeError(`operating: ${what} is a % of revenue, but revenue is not modelled — enter ${what} by year instead (§24.3 R3)`);
+    throw new RangeError(`operating: ${what} is a % of revenue, but revenue is not modelled; enter ${what} by year instead (§24.3 R3)`);
   }
   return rev;
 }
@@ -251,7 +251,7 @@ export function buildOperating(
     ebitda = lines.ebitda.measure === 'ebit' ? given.map((e, i) => e + da[i]) : given;
   } else {
     if (facts.fy_ebitda_margin === null) {
-      throw new RangeError('operating: the margin driver needs a historical EBITDA margin — enter EBITDA (or EBIT) by year instead (§24.3 R2)');
+      throw new RangeError('operating: the margin driver needs a historical EBITDA margin; enter EBITDA (or EBIT) by year instead (§24.3 R2)');
     }
     driverMargins = marginPath(facts.fy_ebitda_margin, ops.target_margin, ops.margin_path, N);
     ebitda = revenue.map((r, i) => requireRevenue(r, 'the EBITDA margin driver') * driverMargins![i]);
@@ -289,7 +289,7 @@ export function buildOperating(
     for (const d of deltaNwc) { bal += d; nwcBalances.push(bal); }
   } else {
     if (facts.fy_revenue === null || facts.fy_ebitda_margin === null) {
-      throw new RangeError('operating: the NWC balance method needs historical revenue and margin for opening NWC — enter the increase in NWC by year instead (§24.3 R3)');
+      throw new RangeError('operating: the NWC balance method needs historical revenue and margin for opening NWC; enter the increase in NWC by year instead (§24.3 R3)');
     }
     nwc0 = nwcBalance(ops.nwc, facts.fy_revenue, facts.fy_ebitda_margin);
     nwcBalances = revenue.map((r, i) => {

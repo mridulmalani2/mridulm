@@ -50,7 +50,7 @@ describe('the Clean step feeds the model', () => {
     expect(model().facts!.normalisation!.ebitda.find((b) => b.period === FY)!.rows).toHaveLength(1);
   });
 
-  it('editing the ledger AFTER entering a deal keeps every assumption, badge and choice — only the output is cleared', () => {
+  it('editing the ledger AFTER entering a deal keeps every assumption, badge and choice: only the output is cleared', () => {
     const { pack } = load();
     clean().useAsReported();
     enterDeal(enteredAssumptions(5));
@@ -154,7 +154,7 @@ describe('what the sellers receive (display only)', () => {
     expect(eq.premium_to_market).toBeCloseTo(0.0575, 12);
   });
 
-  it('net debt never moves the sponsor’s returns — only what the sellers receive', () => {
+  it('net debt never moves the sponsor’s returns: only what the sellers receive', () => {
     const { pack } = load();
     clean().edit((l) => setLeaseChoice(l, 'none'));
     const a = enteredAssumptions(5);
@@ -178,7 +178,7 @@ describe('boundaries', () => {
     return out;
   };
 
-  it('NO engine arithmetic reads the normalisation record — only the type, the workbook and the display helpers name it', () => {
+  it('NO engine arithmetic reads the normalisation record: only the type, the workbook and the display helpers name it', () => {
     const allowed = new Set(['types.ts', 'workbook.ts', 'display.ts']);
     const offenders = walk(join(ROOT, 'lib', 'engine2'))
       .filter((f) => !allowed.has(f.slice(f.lastIndexOf('/') + 1)))
@@ -207,14 +207,14 @@ describe('boundaries', () => {
     }
   });
 
-  it('new deal-engine screens carry no literal colour — every colour is a design token', () => {
+  it('new deal-engine screens carry no literal colour: every colour is a design token', () => {
     const dirs = ['ui', 'shell', 'clean', 'results'].map((d) => join(ROOT, 'components', 'deal-engine', d));
     const offenders = dirs.flatMap((d) => walk(d)).filter((f) => /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(readFileSync(f, 'utf8')));
     expect(offenders).toEqual([]);
   });
 });
 
-describe('a deal survives a reload (store/session) — inputs are saved, everything derived is rebuilt', () => {
+describe('a deal survives a reload (store/session): inputs are saved, everything derived is rebuilt', () => {
   it('round trip: ledger, assumptions (blanks stay blank), badges, a confirmed fact, and the step state', async () => {
     const { restoreSession, serialiseSession } = await import('../store/session');
     const { pack } = load();
@@ -287,7 +287,7 @@ describe('a case entered directly (forecast-only, SPEC §24.2) survives a reload
   });
 });
 
-describe('the terminal year is the analyst\'s choice (SPEC §28) — an open choice, then blank inputs, never assumed', () => {
+describe('the terminal year is the analyst\'s choice (SPEC §28): an open choice, then blank inputs, never assumed', () => {
   it('switching the valuation on leaves the terminal year open; "stated" brings two blank inputs that gate Build', async () => {
     const { EA_ASSUMPTIONS } = await import('./fixtures/ea-oos');
     const { suggestionsFor } = await import('../lib/engine2/suggest');

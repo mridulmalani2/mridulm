@@ -113,7 +113,7 @@ function dedupeVintages(
       original.val !== 0 &&
       Math.abs((winner.val - original.val) / original.val) > 0.01
     ) {
-      restatedNote = `restated: ${original.val} (filed ${original.filed ?? '—'}) → ${winner.val} (filed ${winner.filed ?? '—'})`;
+      restatedNote = `restated: ${original.val} (filed ${original.filed ?? '–'}) → ${winner.val} (filed ${winner.filed ?? '–'})`;
     }
     out.set(key, { winner, restatedNote });
   }
@@ -228,7 +228,7 @@ export function deriveSeries(
   if (!components.length) return { metric, points: [], anchor_tag: null, unit: null, notes: [] };
   const units = new Set(components.map((c) => c.unit).filter(Boolean));
   if (units.size > 1) {
-    return { metric, points: [], anchor_tag: null, unit: null, notes: [`${metric}: mixed component units (${[...units].join(', ')}) — not derived`] };
+    return { metric, points: [], anchor_tag: null, unit: null, notes: [`${metric}: mixed component units (${[...units].join(', ')}), not derived`] };
   }
   const ends = components[0].points.map((p) => p.end);
   const points: HistoryPoint[] = [];

@@ -33,7 +33,7 @@ describe('sizing-basis badge (§1.1) in HistoryTable', () => {
     expect(html).not.toContain('LTM ending');
   });
 
-  it('manual facts (no sizing_basis) render no badge — never a fabricated basis', () => {
+  it('manual facts (no sizing_basis) render no badge, never a fabricated basis', () => {
     const html = renderToStaticMarkup(<HistoryTable facts={facts({ sizing_basis: undefined })} today={new Date('2025-11-15')} />);
     expect(html).not.toContain('sizing:');
   });

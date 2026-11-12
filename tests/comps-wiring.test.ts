@@ -43,7 +43,7 @@ const FIXTURE: CompanyFacts = {
   },
 } as unknown as CompanyFacts;
 
-describe('§21.5b — the EDGAR route carries the SIC end to end (the feature cannot be amputated silently)', () => {
+describe('§21.5b: the EDGAR route carries the SIC end to end (the feature cannot be amputated silently)', () => {
   it('a REIT (SIC 6798) reaches DealFacts as the Real Estate band, through the real chain', () => {
     const { facts } = adaptRawHistoricals(mapCompanyFacts(FIXTURE, { sicCode: '6798', sicDescription: 'Real Estate Investment Trusts' }));
     expect(facts.sic_code).toBe('6798');            // T2/T3 kill: the code survives the mappers
@@ -55,20 +55,20 @@ describe('§21.5b — the EDGAR route carries the SIC end to end (the feature ca
     expect(facts.sector).toBe('Real Estate Investment Trusts');
   });
 
-  it('a manufacturer (SIC 3711) reaches the Industrials band — a DIFFERENT bucket, so the join is real', () => {
+  it('a manufacturer (SIC 3711) reaches the Industrials band: a DIFFERENT bucket, so the join is real', () => {
     const { facts } = adaptRawHistoricals(mapCompanyFacts(FIXTURE, { sicCode: '3711' }));
     expect(facts.sector_comps!.bucket).toBe('Industrials');
     expect([facts.sector_comps!.low, facts.sector_comps!.median, facts.sector_comps!.high]).toEqual([11.39, 15.61, 17.18]);
   });
 
-  it('no SIC at all ⇒ sic_code null AND sector_comps null — the honest unavailable state', () => {
+  it('no SIC at all ⇒ sic_code null AND sector_comps null: the honest unavailable state', () => {
     const { facts } = adaptRawHistoricals(mapCompanyFacts(FIXTURE, {}));
     expect(facts.sic_code).toBeNull();
     expect(facts.sector_comps).toBeNull();
   });
 });
 
-describe('§21.11(viii) — the MANUAL route: the dropdown IS the bucket (audit B2 — this was a dead wire)', () => {
+describe('§21.11(viii): the MANUAL route: the dropdown IS the bucket (audit B2; this was a dead wire)', () => {
   const manual = (sector: string, currency: 'USD' | 'GBP' = 'USD') =>
     adaptRawHistoricals(manualHistoricals({
       dealName: 'Manual Co', sector, currency, basis: 'FY', ltm: null,
@@ -91,7 +91,7 @@ describe('§21.11(viii) — the MANUAL route: the dropdown IS the bucket (audit 
   });
 });
 
-describe('§21.11(xi) — the §D6 IFRS-in-SEC route (a 20-F filer whose SIC EDGAR DOES publish)', () => {
+describe('§21.11(xi): the §D6 IFRS-in-SEC route (a 20-F filer whose SIC EDGAR DOES publish)', () => {
   /** ifrs-full with no us-gaap — the branch `store/dealEngine` routes to `mapCompanyFactsIfrs`. */
   const ifrsFiler = (): CompanyFacts => ({
     cik: 41, entityName: 'Zwanzig-F AG',
@@ -105,7 +105,7 @@ describe('§21.11(xi) — the §D6 IFRS-in-SEC route (a 20-F filer whose SIC EDG
     },
   } as unknown as CompanyFacts);
 
-  it('the SIC survives the IFRS mapper and yields a EUROPE band — not the null "no sector information"', () => {
+  it('the SIC survives the IFRS mapper and yields a EUROPE band, not the null "no sector information"', () => {
     // Before step 3 this route dropped the code EDGAR had already supplied one line earlier, so
     // a 20-F filer was told nothing was known about its sector. This fixture is what keeps the
     // threading honest: it fails the moment `mapCompanyFactsIfrs` or `store/dealEngine` stops
@@ -127,7 +127,7 @@ describe('§21.11(xi) — the §D6 IFRS-in-SEC route (a 20-F filer whose SIC EDG
   });
 });
 
-describe('§21.5b — the STORE call site passes the SIC on BOTH SEC branches (a source-scan guard)', () => {
+describe('§21.5b: the STORE call site passes the SIC on BOTH SEC branches (a source-scan guard)', () => {
   // `store/dealEngine.importFromEdgar` is network-driven, so a behavioural fixture cannot reach
   // its call site — but the defect the audit found (T5) lives exactly there: the store fetches
   // `submissions.sic` once and then forks, and the IFRS branch used to drop it. The repo already
@@ -135,18 +135,18 @@ describe('§21.5b — the STORE call site passes the SIC on BOTH SEC branches (a
   // (tests/governance-display-surface.test.ts), so the same instrument applies here.
   const src = readFileSync(join(__dirname, '..', 'store', 'dealEngine.ts'), 'utf8');
 
-  it('both mapper calls receive sicCode — the us-gaap branch AND the §D6 IFRS branch', () => {
+  it('both mapper calls receive sicCode: the us-gaap branch AND the §D6 IFRS branch', () => {
     expect(src, 'the store must still fetch the numeric SIC').toMatch(/sicCode\s*=\s*\(subs as[^)]*\)\.sic/);
     const ifrsCall = /mapCompanyFactsIfrs\(facts,\s*\{([^}]*)\}/.exec(src);
     expect(ifrsCall, 'mapCompanyFactsIfrs call not found').not.toBeNull();
-    expect(ifrsCall![1], 'the §D6 IFRS branch dropped sicCode again — a 20-F filer would be told "no sector information exists" about a company whose SIC EDGAR published (SPEC §21.5b)').toContain('sicCode');
+    expect(ifrsCall![1], 'the §D6 IFRS branch dropped sicCode again: a 20-F filer would be told "no sector information exists" about a company whose SIC EDGAR published (SPEC §21.5b)').toContain('sicCode');
     const gaapCall = /mapCompanyFacts\(facts,\s*\{([^}]*)\}/.exec(src);
     expect(gaapCall, 'mapCompanyFacts call not found').not.toBeNull();
     expect(gaapCall![1], 'the us-gaap branch dropped sicCode').toContain('sicCode');
   });
 });
 
-describe('§21.5 — the entry screen\'s dropdown is BOUND to the band key set (no hand-kept list)', () => {
+describe('§21.5: the entry screen\'s dropdown is BOUND to the band key set (no hand-kept list)', () => {
   it('every dropdown option resolves to a real band, and the sets are identical', async () => {
     const { SECTORS } = await import('../components/deal-engine/start/ManualFactsScreen');
     const bands = JSON.parse(readFileSync(join(__dirname, '..', 'data', 'comps', 'bands.json'), 'utf8'));

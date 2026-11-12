@@ -330,7 +330,7 @@ const soffice = findSoffice();
 const describeIfLo = soffice ? describe : describe.skip;
 if (!soffice) {
   // eslint-disable-next-line no-console
-  console.warn('[workbook parity] LibreOffice (soffice) not found — the §14.26 parity suite is SKIPPED locally. CI installs it and runs it.');
+  console.warn('[workbook parity] LibreOffice (soffice) not found: the §14.26 parity suite is SKIPPED locally. CI installs it and runs it.');
   if (process.env.CI) throw new Error('LibreOffice is required in CI for the workbook parity suite (§14.26)');
 }
 
@@ -358,7 +358,7 @@ function readRecalculated(path: string): Recalc {
   return (sheet, addr) => sheets.get(sheet)?.get(addr) ?? null;
 }
 
-describeIfLo('§26 formula workbook — LibreOffice recalculation equals the engine, cell by cell', () => {
+describeIfLo('§26 formula workbook: LibreOffice recalculation equals the engine, cell by cell', () => {
   const recalculated = new Map<string, Recalc>();
   const parityMaps = new Map<string, ParityCell[]>();
 
@@ -411,7 +411,7 @@ describeIfLo('§26 formula workbook — LibreOffice recalculation equals the eng
   });
 });
 
-describeIfLo('Normalisation sheet — the model is DRIVEN by the bridge, not pasted beside it', () => {
+describeIfLo('Normalisation sheet: the model is DRIVEN by the bridge, not pasted beside it', () => {
   const deal = CASES.CLEAN_ADJUSTED;
   const base = runModel(deal.facts, deal.assumptions);
   const sizingCol = 'F'; // FY2021 → D, FY2022 → E, FY2023 (the sizing year) → F
@@ -462,7 +462,7 @@ describeIfLo('Normalisation sheet — the model is DRIVEN by the bridge, not pas
     expect(moved.derived.enterprise_value - base.derived.enterprise_value).toBeCloseTo(90, 9); // 9.0x × 10.0
   });
 
-  it('a period with an amount not entered reads "n/a" — a blank is never summed as zero', () => {
+  it('a period with an amount not entered reads "n/a": a blank is never summed as zero', () => {
     const adj = parity.find((p) => p.sheet === 'Normalisation' && p.label.startsWith('Adjusted ebitda') && p.expected === null)!;
     expect(adj).toBeDefined();
     expect(cell('Normalisation', adj.addr)).toBe('n/a');
@@ -474,7 +474,7 @@ describeIfLo('Normalisation sheet — the model is DRIVEN by the bridge, not pas
   });
 });
 
-describe('Normalisation sheet — structure', () => {
+describe('Normalisation sheet: structure', () => {
   it('CLEAN_CONTINUES carries two EBITDA bases: priced on 282.0, forecast margin 270 ÷ 1,250, and the Inputs sheet links both', () => {
     const o = runModel(CASES.CLEAN_CONTINUES.facts, CASES.CLEAN_CONTINUES.assumptions);
     expect(o.facts.fy_ebitda).toBe(282);
@@ -508,7 +508,7 @@ describe('Normalisation sheet — structure', () => {
   });
 });
 
-describe('§26 coverage rule — every engine feature exports as live formulas', () => {
+describe('§26 coverage rule: every engine feature exports as live formulas', () => {
   it('no golden deal is blocked from export', () => {
     for (const [name, d] of Object.entries(GOLDEN_DEALS)) {
       expect(formulaCoverageBlockers(runModel(d.facts, d.assumptions)), name).toEqual([]);
@@ -589,14 +589,14 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(s.ratchet_tiers_reached).toBe(2);
     expect(s.management_effective_ordinary_pct!).toBeGreaterThan(0.1);
   });
-  it('SWEET_UNDER: exit equity falls short of the accreted loan notes — pot zero, effective share N/A', () => {
+  it('SWEET_UNDER: exit equity falls short of the accreted loan notes; pot zero, effective share N/A', () => {
     const s = runModel(CASES.SWEET_UNDER.facts, CASES.SWEET_UNDER.assumptions).equity_strip!;
     expect(s.loan_notes_redeemed).toBeLessThan(s.loan_notes_accrued_balance - 1);
     expect(s.ordinary_pot).toBe(0);
     expect(s.management_effective_ordinary_pct).toBeNull();
     expect(s.warrant_exercised).toBe(false);
   });
-  it('SWEET_WIPEOUT: the exit does not cover the debt — equity floored at zero, lenders take the shortfall, nothing redeemed', () => {
+  it('SWEET_WIPEOUT: the exit does not cover the debt; equity floored at zero, lenders take the shortfall, nothing redeemed', () => {
     const o = runModel(CASES.SWEET_WIPEOUT.facts, CASES.SWEET_WIPEOUT.assumptions);
     expect(o.exit.exit_equity_pre_mip_total).toBe(0);
     expect(o.exit.debt_shortfall_at_exit).toBeGreaterThan(1);
@@ -619,7 +619,7 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
     expect(strip.returns.sponsor_net.cashflows.slice(1).reduce((x, y) => x + y, 0)).toBeCloseTo(
       strip.fund!.lp_distributions.reduce((x, y) => x + y, 0) + strip.fund!.gp_carry.reduce((x, y) => x + y, 0), 6);
   });
-  it('FUND_LOSS: the sponsor receives nothing at exit — no flow after close is ever negative', () => {
+  it('FUND_LOSS: the sponsor receives nothing at exit; no flow after close is ever negative', () => {
     const o = runModel(CASES.FUND_LOSS.facts, CASES.FUND_LOSS.assumptions);
     expect(o.exit.debt_shortfall_at_exit).toBeGreaterThan(1);
     expect(o.returns.sponsor_net.cashflows[o.assumptions.entry.hold_years]).toBe(0);
@@ -670,7 +670,7 @@ describe('the parity deals genuinely exercise the paths they claim to cover (els
   });
 });
 
-describe('§26 workbook layout — the sheets an analyst opens', () => {
+describe('§26 workbook layout: the sheets an analyst opens', () => {
   const o = runModel(GOLDEN_DEALS.G2DIST.facts, GOLDEN_DEALS.G2DIST.assumptions);
   const { wb } = buildFormulaWorkbook(o, { cachedResults: true });
   it('sheet order: Summary first, then Inputs, Model, Sensitivity, Checks, Methodology', () => {
@@ -707,7 +707,7 @@ describe('§26 workbook layout — the sheets an analyst opens', () => {
   });
 });
 
-describe('§26 Summary integrity rows — the workbook flags a deal the engine flags (adversarial review F1)', () => {
+describe('§26 Summary integrity rows: the workbook flags a deal the engine flags (adversarial review F1)', () => {
   it('the Summary carries live rows for a cash-floor breach and an uncovered exit, linked to the model', () => {
     const o = runModel(GOLDEN_DEALS.G2.facts, GOLDEN_DEALS.G2.assumptions);
     const { wb } = buildFormulaWorkbook(o, { cachedResults: true });

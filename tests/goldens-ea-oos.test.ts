@@ -13,7 +13,7 @@ const close = (a: number | null | undefined, b: number, what: string, tol = 1e-9
   expect(Math.abs((a as number) - b), `${what}: ${a} vs ${b}`).toBeLessThan(tol * Math.max(1, Math.abs(b)));
 };
 
-describe('EA out-of-sample — a workbook the engine never saw, reproduced cell for cell', () => {
+describe('EA out-of-sample: a workbook the engine never saw, reproduced cell for cell', () => {
   const o = runModel(EA_FACTS, EA_ASSUMPTIONS);
 
   it('debt schedule, interest and tax (rows 21–28)', () => {

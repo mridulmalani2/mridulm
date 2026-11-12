@@ -22,13 +22,13 @@ export interface EbitdaCandidateTag {
 }
 
 const BELOW_OPINC =
-  'This item is often reported below operating income. Adding it back is only right if it sits inside operating income in this filing — check the income statement.';
+  'This item is often reported below operating income. Adding it back is only right if it sits inside operating income in this filing: check the income statement.';
 
 export const EBITDA_CANDIDATE_TAGS: EbitdaCandidateTag[] = [
   { tag: 'RestructuringCharges', label: 'Restructuring charges', category: 'restructuring', sign: 1,
     rationale: 'Costs of a restructuring programme; usually treated as non-recurring.', caveat: null },
   { tag: 'RestructuringCostsAndAssetImpairmentCharges', label: 'Restructuring and asset impairment charges', category: 'restructuring', sign: 1,
-    rationale: 'Combined restructuring and impairment line; usually non-recurring. Do not also add the separate restructuring or impairment tags — that would count the same cost twice.',
+    rationale: 'Combined restructuring and impairment line; usually non-recurring. Do not also add the separate restructuring or impairment tags: that would count the same cost twice.',
     caveat: 'This combined line overlaps the separate restructuring and impairment tags. Use one or the other, not both.' },
   { tag: 'AssetImpairmentCharges', label: 'Asset impairment charges', category: 'impairment', sign: 1,
     rationale: 'Non-cash write-down of assets.', caveat: null },
@@ -37,7 +37,7 @@ export const EBITDA_CANDIDATE_TAGS: EbitdaCandidateTag[] = [
   { tag: 'ImpairmentOfIntangibleAssetsExcludingGoodwill', label: 'Impairment of intangible assets', category: 'impairment', sign: 1,
     rationale: 'Non-cash write-down of intangibles.', caveat: null },
   { tag: 'ShareBasedCompensation', label: 'Share-based compensation', category: 'sbc', sign: 1,
-    rationale: 'Non-cash today, but a real cost of employing people. Whether to add it back is a judgement — many lenders do, many buyers do not.',
+    rationale: 'Non-cash today, but a real cost of employing people. Whether to add it back is a judgement: many lenders do, many buyers do not.',
     caveat: null },
   { tag: 'BusinessCombinationAcquisitionRelatedCosts', label: 'Acquisition-related costs', category: 'transaction_costs', sign: 1,
     rationale: 'Deal fees and integration costs from the company’s own acquisitions.', caveat: null },

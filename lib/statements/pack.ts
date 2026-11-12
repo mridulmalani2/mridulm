@@ -142,7 +142,7 @@ export function buildStatementPack(inp: PackInput): StatementPack {
   const exLeases = rawExLeases ? rawExLeases.gross_debt : raw.gross_debt;
   putSourced('borrowings', anchor, exLeases);
   if (rawExLeases === null) {
-    if (withLeases) notes.push('This source does not separate lease liabilities from borrowings — “Borrowings” is gross debt as sourced.');
+    if (withLeases) notes.push('This source does not separate lease liabilities from borrowings: “Borrowings” is gross debt as sourced.');
   } else if (withLeases && exLeases && anchor) {
     const leases = withLeases.value - exLeases.value;
     if (leases !== 0) {
@@ -155,7 +155,7 @@ export function buildStatementPack(inp: PackInput): StatementPack {
         },
       });
     } else if (/lease/i.test(withLeases.provenance.detail)) {
-      notes.push('The filing’s debt concept already bundles lease liabilities — they cannot be separated from borrowings here.');
+      notes.push('The filing’s debt concept already bundles lease liabilities: they cannot be separated from borrowings here.');
     }
   }
 
@@ -197,7 +197,7 @@ export function buildStatementPack(inp: PackInput): StatementPack {
       });
     }
   } else if (gaap === 'ifrs') {
-    notes.push('Detected adjustment proposals are available for US GAAP filers only — add rows by hand for this filing.');
+    notes.push('Detected adjustment proposals are available for US GAAP filers only: add rows by hand for this filing.');
   }
 
   // D4: a D&A cell resolved from an alias that includes financing costs carries the caveat.

@@ -16,7 +16,7 @@ const G2 = GOLDEN_DEALS.G2;
 const base = runModel(G2.facts, G2.assumptions);
 const driver = (id: string) => flexDrivers(G2.facts, G2.assumptions, base).find((d) => d.id === id)!;
 
-describe('lib/analysis — flexes are engine runs', () => {
+describe('lib/analysis: flexes are engine runs', () => {
   it('a flex of nil is the base run itself', () => {
     for (const d of flexDrivers(G2.facts, G2.assumptions, base)) {
       expect(flexRun(G2.facts, G2.assumptions, base, d, 0).irr).toBe(base.returns.sponsor_net.irr);
@@ -65,7 +65,7 @@ describe('lib/analysis — flexes are engine runs', () => {
   });
 });
 
-describe('lib/analysis — grid, break-evens, headline', () => {
+describe('lib/analysis: grid, break-evens, headline', () => {
   it('the centre of a custom grid is the base run; the grid is the reviewed primitive', () => {
     const axes = gridAxes(G2.facts, G2.assumptions, base);
     const row = axes.find((a) => a.axis === 'exit_multiple')!;
@@ -95,7 +95,7 @@ describe('lib/analysis — grid, break-evens, headline', () => {
   });
 });
 
-describe('lib/analysis — what changed between two builds', () => {
+describe('lib/analysis: what changed between two builds', () => {
   const to = { ...G2.assumptions, exit: { ...G2.assumptions.exit, multiple: 10 }, operations: { ...G2.assumptions.operations, growth: [0.07, 0.06, 0.05, 0.04, 0.03] }, tax: { ...G2.assumptions.tax, rate: 0.21 } };
 
   it('lists each changed input once; a per-year line is one change', () => {
@@ -112,7 +112,7 @@ describe('lib/analysis — what changed between two builds', () => {
   });
 });
 
-describe('lib/analysis — boundary', () => {
+describe('lib/analysis: boundary', () => {
   it('reaches the engine only through the run, the §13 primitives and pure helpers', () => {
     const src = readFileSync(join(__dirname, '..', 'lib/analysis/index.ts'), 'utf8');
     const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]).sort();

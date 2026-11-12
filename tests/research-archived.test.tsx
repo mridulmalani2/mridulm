@@ -28,7 +28,7 @@ const ARCHIVED = [
   '/research/anything-at-all',
 ];
 
-describe('research is archived — nothing public resolves', () => {
+describe('research is archived: nothing public resolves', () => {
   it('the flag is off', () => {
     expect(SHOW_RESEARCH).toBe(false);
   });
@@ -57,7 +57,7 @@ describe('research is archived — nothing public resolves', () => {
   });
 });
 
-describe('research is archived — the edge turns the URLs away too', () => {
+describe('research is archived: the edge turns the URLs away too', () => {
   const vercel = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8'));
   const redirects: Array<{ source: string; destination: string; permanent: boolean }> =
     vercel.redirects;
@@ -69,7 +69,7 @@ describe('research is archived — the edge turns the URLs away too', () => {
     expect(find('/research/:path*')?.destination).toBe('/');
   });
 
-  it('those redirects are TEMPORARY — archived means reversible', () => {
+  it('those redirects are TEMPORARY: archived means reversible', () => {
     // A permanent redirect would be cached in visitors' browsers and would keep
     // firing long after the section came back. Restoring must not need a cache bust.
     expect(find('/research')?.permanent).toBe(false);

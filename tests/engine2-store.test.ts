@@ -47,7 +47,7 @@ const importFixture = (mutate?: (f: CompanyFacts) => void) => {
 
 beforeEach(() => useEngine2Model.getState().reset());
 
-describe('engine2 store — the v2.0.0 lifecycle: blank until entered', () => {
+describe('engine2 store: the v2.0.0 lifecycle: blank until entered', () => {
   it('import lands FACTS only: no draft until the holding period is chosen, then every assumption is blank and Build is gated', () => {
     importFixture();
     const s = () => useEngine2Model.getState();
@@ -121,7 +121,7 @@ describe('engine2 store — the v2.0.0 lifecycle: blank until entered', () => {
     expect(s().suggestions['exit.multiple']?.value).toBe(9);
   });
 
-  it('changing the hold keeps entered years and leaves NEW years blank (never copied forward — no invented ramp)', () => {
+  it('changing the hold keeps entered years and leaves NEW years blank (never copied forward: no invented ramp)', () => {
     importFixture();
     enterDeal(enteredAssumptions(5));
     const s = () => useEngine2Model.getState();

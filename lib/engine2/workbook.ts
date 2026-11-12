@@ -257,7 +257,7 @@ const per = (from: number, to: number, fn: (t: number) => Cell): Record<number, 
 export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResults: boolean }): FormulaWorkbook {
   const blockers = formulaCoverageBlockers(o);
   if (blockers.length) {
-    throw new RangeError(`workbook: the formula model does not implement yet: ${blockers.join(', ')} — export blocked (SPEC §26 coverage rule)`);
+    throw new RangeError(`workbook: the formula model does not implement yet: ${blockers.join(', ')}: export blocked (SPEC §26 coverage rule)`);
   }
   const a = o.assumptions;
   const f = o.facts;
@@ -295,9 +295,9 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   void all;
 
   // ═══════════════════════════════ INPUTS ═══════════════════════════════
-  I.title(`${a.deal_name} — inputs`, [
+  I.title(`${a.deal_name}: inputs`, [
     `${ccy} millions unless stated. Blue = input. Every other number in this workbook is a formula on these cells.`,
-    'Structural choices (holding period, the tranche list, forecast-line modes, the NWC method) are fixed at export — re-export from the deal engine to change them.',
+    'Structural choices (holding period, the tranche list, forecast-line modes, the NWC method) are fixed at export: re-export from the deal engine to change them.',
   ]);
   // ═══════════════════════════════ NORMALISATION ═══════════════════════════════
   // How the sourced figures became the figures the model reads. Reported lines and every
@@ -309,10 +309,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   if (nz && NZ) {
     const P = nz.periods.length;
     const close = (x: number | null, y: number | null) => x !== null && y !== null && Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(y));
-    NZ.title(`${a.deal_name} — normalisation`, [
+    NZ.title(`${a.deal_name}: normalisation`, [
       `${ccy} millions. Blue = input. The adjusted figures are formulas, and the model's sizing revenue and EBITDA on the Inputs sheet point here.`,
       nz.as_reported
-        ? 'This deal is modelled on the figures AS REPORTED — no normalisation was applied.'
+        ? 'This deal is modelled on the figures AS REPORTED: no normalisation was applied.'
         : 'A positive amount increases the line (a cost added back to EBITDA is entered as a positive number). The type in brackets is a label only.',
     ]);
     const bridge = (key: 'rev' | 'eb', label: string, list: typeof nz.ebitda) => {
@@ -325,7 +325,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       NZ.line(`${key}_rep`, `${label} as sourced${restatedNote ? ' (restated)' : ''}`, cells((b) => b.restated), { note: restatedNote || undefined });
       const rows = list[0]?.rows ?? [];
       rows.forEach((r, i) => {
-        const fc = key === 'eb' && r.forecast === 'continues' ? '; continues — not in the forecast base' : '';
+        const fc = key === 'eb' && r.forecast === 'continues' ? '; continues, not in the forecast base' : '';
         NZ.line(`${key}_a${i}`, `   ${r.label || 'Adjustment'} (${r.category.replace(/_/g, ' ')}${fc})`, cells((b) => b.rows[i]?.amount ?? null), { note: r.note || undefined });
       });
       const last = rows.length ? `${key}_a${rows.length - 1}` : `${key}_rep`;
@@ -364,7 +364,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     } else {
       NZ.note('The source gives no net debt figure.');
     }
-    NZ.note('Net debt does not enter the model’s returns (the model prices the whole enterprise); it sets what the sellers receive — see the Summary.');
+    NZ.note('Net debt does not enter the model’s returns (the model prices the whole enterprise); it sets what the sellers receive: see the Summary.');
     // The Inputs cells point here only when the bridge reproduces the figure the engine read.
     if (sizingCol >= 0) {
       linked.revenue = close(nz.revenue[sizingCol]?.adjusted ?? null, f.fy_revenue);
@@ -376,7 +376,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
 
   I.section('1. Historical facts (the debt-sizing basis)');
   const basisWord = f.sizing_basis === 'LTM' ? 'LTM' : 'FY';
-  const fromNz = 'From the Normalisation sheet — change the amounts there.';
+  const fromNz = 'From the Normalisation sheet: change the amounts there.';
   if (f.fy_revenue !== null) {
     if (linked.revenue && NZ) I.line('ltm_revenue', `${basisWord} revenue (adjusted)`, { 0: { f: NZ.ext('rev_adj', sizingCol), v: f.fy_revenue } }, { note: fromNz });
     else I.line('ltm_revenue', `${basisWord} revenue`, { 0: { input: f.fy_revenue } });
@@ -388,9 +388,9 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   if (linked.forecast && NZ && nz) {
     I.line('ltm_ebitda_fc', `${basisWord} EBITDA base for the forecast margin (§27)`, { 0: { f: NZ.ext('eb_fc', sizingCol), v: nz.forecast_ebitda } }, { note: fromNz });
   }
-  if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year — every operating line is entered directly.');
+  if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year: every operating line is entered directly.');
   I.line('net_ppe', 'Net PP&E at close (0 if the source states none)', { 0: { input: f.net_ppe ?? 0 } },
-    { note: f.net_ppe === null ? 'Not stated in the source — seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
+    { note: f.net_ppe === null ? 'Not stated in the source: seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
 
   I.section('2. Transaction');
   I.line('hold', 'Holding period, years (structural)', { 0: { input: N, fmt: FMT_YEAR } });
@@ -411,7 +411,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const gridTiers = grid ? [...grid.tiers].sort((x, y) => y.above_net_leverage - x.above_net_leverage) : [];
   if (!grid) I.line('sweep_pct', 'Cash sweep (% of cash above the minimum)', { 0: { input: a.structure.sweep.base_pct, fmt: FMT_PCT } });
   else {
-    I.note('Cash sweep by opening net leverage — tiers in DESCENDING threshold order (the first threshold exceeded wins):');
+    I.note('Cash sweep by opening net leverage: tiers in DESCENDING threshold order (the first threshold exceeded wins):');
     gridTiers.forEach((tier, j) => {
       I.line(`sg${j}_lev`, `   sweep tier ${j + 1}: when opening net leverage is above`, { 0: { input: tier.above_net_leverage, fmt: FMT_MULT } });
       I.line(`sg${j}_pct`, `   sweep tier ${j + 1}: sweep %`, { 0: { input: tier.pct, fmt: FMT_PCT } });
@@ -431,7 +431,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   I.section('3. Debt');
   terms.forEach((t, i) => {
     const k = tk[i];
-    I.note(`${t.name} — ${t.type.replace('_', ' ')}; ${t.sweep.participates ? `sweep priority ${t.sweep.priority}` : 'does not take the sweep'}`);
+    I.note(`${t.name}, ${t.type.replace('_', ' ')}; ${t.sweep.participates ? `sweep priority ${t.sweep.priority}` : 'does not take the sweep'}`);
     if (t.size.x_ebitda !== undefined) I.line(`${k}_x`, `${t.name}: size (× ${basisWord} EBITDA)`, { 0: { input: t.size.x_ebitda, fmt: FMT_MULT } });
     else I.line(`${k}_amt`, `${t.name}: size (amount)`, { 0: { input: t.size.amount } });
     if (t.type === 'pik_note') {
@@ -449,7 +449,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     I.line(`${k}_mat`, `${t.name}: maturity, years (the fee/OID amortization horizon)`, { 0: { input: t.maturity_years, fmt: FMT_YEAR } });
     const ev = refiOf(t.name);
     if (ev) {
-      I.note(`${t.name} — refinanced at the START of the year below, par for par on its opening balance`);
+      I.note(`${t.name}: refinanced at the START of the year below, par for par on its opening balance`);
       I.line(`${k}_rf_y`, `${t.name}: refinancing year`, { 0: { input: ev.year, fmt: FMT_YEAR } });
       if (ev.new_pricing.kind === 'fixed') I.line(`${k}_rf_rate`, `${t.name}: new fixed rate`, { 0: { input: ev.new_pricing.rate, fmt: FMT_PCT } });
       else {
@@ -465,7 +465,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     }
   });
   if (revolver) {
-    I.note(`${revolver.name} — revolver (undrawn at close)`);
+    I.note(`${revolver.name}: revolver (undrawn at close)`);
     if (revolver.commitment.x_ebitda !== undefined) I.line('rcf_x', `${revolver.name}: commitment (× ${basisWord} EBITDA)`, { 0: { input: revolver.commitment.x_ebitda, fmt: FMT_MULT } });
     else I.line('rcf_amt', `${revolver.name}: commitment (amount)`, { 0: { input: revolver.commitment.amount } });
     if (revolver.pricing.kind === 'fixed') I.line('rcf_rate', `${revolver.name}: fixed rate on drawn`, { 0: { input: revolver.pricing.rate, fmt: FMT_PCT } });
@@ -477,7 +477,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     I.line('rcf_fee', `${revolver.name}: commitment fee on undrawn`, { 0: { input: revolver.commitment_fee, fmt: FMT_PCT } });
     I.line('rcf_mat', `${revolver.name}: maturity, years (the fee amortization horizon)`, { 0: { input: revolver.maturity_years, fmt: FMT_YEAR } });
   }
-  if (terms.length === 0 && !revolver) I.note('All-equity deal — no debt.');
+  if (terms.length === 0 && !revolver) I.note('All-equity deal: no debt.');
 
   I.section('4. Operating forecast');
   I.header(years(1, N));
@@ -514,7 +514,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   } else {
     lineInputs('dnwc', 'Increase in net working capital', lines.delta_nwc);
     I.line('nwc0', 'Opening operating NWC (0 if the source states none)', { 0: { input: f.operating_nwc ?? 0 } },
-      { note: f.operating_nwc === null ? 'Not stated — seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
+      { note: f.operating_nwc === null ? 'Not stated: seeded at 0. It moves goodwill only, never a cash flow.' : undefined });
   }
   if (lines && lines.year_n_plus_1_growth !== null) I.line('gN1', 'Growth of every line into year N+1 (NTM exit and terminal value)', { 0: { input: lines.year_n_plus_1_growth, fmt: FMT_PCT } });
 
@@ -545,7 +545,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   I.line('ati_basis', 'ATI basis: EBITDA or EBIT', { 0: { input: a.tax.s163j.ati_basis === 'ebitda' ? 'EBITDA' : 'EBIT', fmt: '@' } });
   I.line('nol_acq', 'Acquired NOLs at close', { 0: { input: a.tax.nol.acquired_opening } });
   I.line('nol_usable', 'Acquired NOLs are usable (TRUE/FALSE)', { 0: { input: a.tax.nol.acquired_usable } });
-  I.line('nol_pre18', 'Acquired NOLs arose before 2018 — 100% cap instead of 80% (TRUE/FALSE)', { 0: { input: a.tax.nol.arose_pre_2018 } });
+  I.line('nol_pre18', 'Acquired NOLs arose before 2018, 100% cap instead of 80% (TRUE/FALSE)', { 0: { input: a.tax.nol.arose_pre_2018 } });
   I.line('s382', '§382 annual limit on acquired NOLs (blank = none)', { 0: { input: a.tax.nol.s382_annual_limit ?? '' } });
   I.line('min_tax', 'Minimum tax rate on the pre-NOL base (0 = none)', { 0: { input: a.tax.minimum_rate, fmt: FMT_PCT } });
 
@@ -567,7 +567,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
   const sweet = a.sweet_equity;
   if (sweet) {
-    I.note('Sweet-equity strip — the institution subscribes loan notes + ordinaries; management buys ordinaries (sweet equity)');
+    I.note('Sweet-equity strip: the institution subscribes loan notes + ordinaries; management buys ordinaries (sweet equity)');
     I.line('se_p', 'Institutional strip: ordinaries as % of the institution’s equity (loan notes take the rest)', { 0: { input: sweet.sponsor_ordinary_pct, fmt: FMT_PCT } });
     I.line('se_r', 'Loan-note coupon (rolled up annually; no accretion in year 0)', { 0: { input: sweet.loan_note_rate, fmt: FMT_PCT } });
     I.line('se_sub', 'Management subscription for ordinaries (a source of funds at close)', { 0: { input: sweet.management_subscription } });
@@ -579,14 +579,14 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
   const sell = a.structure.selldown;
   if (sell) {
-    I.note('Partial exit — a secondary sale of part of the sponsor’s stake (the company is untouched)');
+    I.note('Partial exit: a secondary sale of part of the sponsor’s stake (the company is untouched)');
     I.line('sd_year', 'Partial exit: the sale settles at the end of year', { 0: { input: sell.year, fmt: FMT_YEAR } });
     I.line('sd_frac', 'Partial exit: share of the sponsor’s stake sold', { 0: { input: sell.fraction, fmt: FMT_PCT } });
     I.line('sd_mult', 'Partial exit: sale multiple (× that year’s EBITDA after the monitoring fee)', { 0: { input: sell.event_multiple, fmt: FMT_MULT } });
   }
   const fund = a.fund;
   if (fund) {
-    I.section('Fund overlay — the sponsor’s equity held by a fund-of-one (net returns to the LP)');
+    I.section('Fund overlay: the sponsor’s equity held by a fund-of-one (net returns to the LP)');
     I.line('f_fee', 'Management fee (% of the fee basis a year)', { 0: { input: fund.mgmt_fee_pct, fmt: FMT_PCT } });
     I.line('f_basis', 'Fee basis: invested or committed', { 0: { input: fund.fee_basis, fmt: '@' } });
     I.line('f_commit', 'Committed capital (blank = the LP commits exactly what it pays in)', { 0: { input: fund.committed_capital ?? '' } });
@@ -599,7 +599,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   const v = a.valuation;
   const val = o.valuation;
   if (v && val) {
-    I.section('7. Valuation — flow to equity (CAPM)');
+    I.section('7. Valuation: flow to equity (CAPM)');
     I.line('rf', 'Risk-free rate', { 0: { input: v.risk_free, fmt: FMT_PCT } });
     I.line('mrp', 'Market risk premium', { 0: { input: v.mrp, fmt: FMT_PCT } });
     I.line('beta_a', 'Asset beta', { 0: { input: v.asset_beta, fmt: '0.000' } });
@@ -614,14 +614,14 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     I.section('8. Break-evens (engine-solved; Goal Seek targets after you change inputs)');
     const be = val.break_evens;
     const beRow = (key: string, label: string, b: { value: number | null; reason: string | null }, fmt: string) =>
-      I.line(key, label, { 0: { input: b.value ?? '', fmt } }, { note: b.value === null ? `Not defined — ${b.reason}` : 'Solved by the deal engine. Re-solve with Goal Seek if you change any input.' });
+      I.line(key, label, { 0: { input: b.value ?? '', fmt } }, { note: b.value === null ? `Not defined, ${b.reason}` : 'Solved by the deal engine. Re-solve with Goal Seek if you change any input.' });
     beRow('be_mult', 'Break-even exit multiple, exit (a)', be.exit_multiple, FMT_MULT);
     beRow('be_beta', 'Break-even asset beta, exit (b)', be.asset_beta, '0.0000');
     beRow('be_g', 'Break-even long-run growth, exit (b)', be.long_run_growth, FMT_PCT);
   }
 
   // ═══════════════════════════════ MODEL ═══════════════════════════════
-  M.title(`${a.deal_name} — LBO model`, [
+  M.title(`${a.deal_name}: LBO model`, [
     `${ccy} millions unless stated. Black = formula on the Inputs sheet. Green = answer.`,
     'Conventions: interest on the opening balance (no circularity); tax after interest; flows at year end; sweep after mandatory amortization.',
   ]);
@@ -739,7 +739,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
 
   // ── Fee & OID amortization ──
-  M.section('3. Financing fees and OID — straight-line over each maturity; written off when a tranche is fully repaid, and at exit');
+  M.section('3. Financing fees and OID: straight-line over each maturity; written off when a tranche is fully repaid, and at exit');
   M.header(years(1, N));
   type Amortee = { key: string; name: string; isRevolver: boolean };
   const amortees: Amortee[] = [...terms.map((t, i) => ({ key: tk[i], name: t.name, isRevolver: false })), ...(revolver ? [{ key: 'rcf', name: revolver.name, isRevolver: true }] : [])];
@@ -796,7 +796,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       const remPrev = (t: number, kind: 'oid' | 'fee') => (t === 1 ? (kind === 'oid' ? m(`${am.key}_oid_amt`, 0, true) : m(`${am.key}_fee_alloc`, 0, true)) : m(`${am.key}_${kind}_rem`, t - 1));
       M.line(`${am.key}_rf_wo`, `${am.name}: old OID + fees written off at refinancing (book)`, per(1, N, (t) => ({ f: `IF(${isR(t)},${remPrev(t, 'oid')}+${remPrev(t, 'fee')},0)`, v: rows[t - 1].unamortized_writeoff })));
       // §18.5 [v2.4.0] the OID part of the write-off is repurchase premium (§163(j) interest)
-      M.line(`${am.key}_rf_wo_oid`, `${am.name}:    of which old OID (repurchase premium — interest for tax)`, per(1, N, (t) => ({ f: `IF(${isR(t)},${remPrev(t, 'oid')},0)`, v: null })), { italic: true, noParity: true });
+      M.line(`${am.key}_rf_wo_oid`, `${am.name}:    of which old OID (repurchase premium; interest for tax)`, per(1, N, (t) => ({ f: `IF(${isR(t)},${remPrev(t, 'oid')},0)`, v: null })), { italic: true, noParity: true });
       M.line(`${am.key}_rf_premium`, `${am.name}: call premium`, per(1, N, (t) => ({ f: `IF(${isR(t)},${iv(`${am.key}_rf_prem`)}*${m(`${am.key}_open`, t)},0)`, v: null })), { noParity: true });
       M.line(`${am.key}_rf_cost`, `${am.name}: refinancing cash cost  =  premium + new OID + new fees`, per(1, N, (t) => ({
         f: `IF(${isR(t)},(${iv(`${am.key}_rf_prem`)}+${iv(`${am.key}_rf_oid`)}+${iv(`${am.key}_rf_fee`)})*${m(`${am.key}_open`, t)},0)`, v: rows[t - 1].refinancing_cash_cost,
@@ -806,8 +806,8 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
   const refis = amortees.filter((am) => !am.isRevolver && refiOf(am.name));
   const refiSum = (suffix: string, t: number) => sumOf(refis.map((am) => `${am.key}_${suffix}`), t);
-  M.line('oid_am', 'OID amortization (total) — capped interest for tax', per(1, N, (t) => ({ f: sumOf(oidAmKeys, t), v: op[t - 1].oid_amortization })));
-  M.line('fee_am', 'Financing-fee amortization (total) — an uncapped deduction', per(1, N, (t) => ({ f: sumOf(feeAmKeys, t), v: op[t - 1].financing_fee_amortization })));
+  M.line('oid_am', 'OID amortization (total): capped interest for tax', per(1, N, (t) => ({ f: sumOf(oidAmKeys, t), v: op[t - 1].oid_amortization })));
+  M.line('fee_am', 'Financing-fee amortization (total): an uncapped deduction', per(1, N, (t) => ({ f: sumOf(feeAmKeys, t), v: op[t - 1].financing_fee_amortization })));
   const allAfter = [...afterKeysByAmortee.values()].flat();
   M.line('book_wo', 'Unamortized fees/OID written off (book): retired tranches; everything at exit', per(1, N, (t) => ({
     f: t === N
@@ -840,7 +840,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   })), { noParity: true });
 
   // ── Debt & waterfall ──
-  M.section('4. Debt schedule and cash waterfall — order: interest → mandatory amortization → revolver → sweep → draw');
+  M.section('4. Debt schedule and cash waterfall: order: interest → mandatory amortization → revolver → sweep → draw');
   M.header({ 0: 'Close', ...years(1, N) });
   const priorities = [...new Set(terms.filter((t) => t.sweep.participates).map((t) => t.sweep.priority))].sort((x, y) => x - y);
   terms.forEach((t, i) => {
@@ -967,7 +967,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('debt_close', 'Total debt at par (incl. accrued PIK and the drawn revolver)', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: sumOf(debtKeys, t), v: o.balance_sheet[t].debt_at_par }])), { bold: true });
 
   // ── Tax ──
-  M.section('5. Tax — interest cap with an indefinite carryforward; acquired and post-close NOL pools; minimum tax');
+  M.section('5. Tax: interest cap with an indefinite carryforward; acquired and post-close NOL pools; minimum tax');
   M.header(years(1, N));
   const tx = o.tax;
   const pikSum = (t: number) => sumOf(tk.map((k) => `${k}_pik`), t);
@@ -1002,7 +1002,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   M.line('cash_tax', 'Cash tax  =  MAX(regular, minimum)', per(1, N, (t) => ({ f: `MAX(${m('reg_tax', t)},${m('min_tax', t)})`, v: tx[t - 1].cash_tax })), { bold: true });
 
   // ── Balance sheet ──
-  M.section('6. Balance sheet — goodwill is the purchase-accounting plug at close');
+  M.section('6. Balance sheet: goodwill is the purchase-accounting plug at close');
   M.header({ 0: 'Close', ...years(1, N) });
   const bs = o.balance_sheet;
   M.line('ppe', 'Net PP&E  =  prior + capex − D&A', { 0: { f: iv('net_ppe'), v: bs[0].ppe }, ...per(1, N, (t) => ({ f: `${m('ppe', t - 1)}+${m('capex', t)}-${m('da', t)}`, v: bs[t].ppe })) });
@@ -1040,7 +1040,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   // §9.1 limited liability: equity is worth zero at worst; the lenders take any shortfall
   M.line('exit_resid', '   residual value  =  EV − debt + cash − fees − termination', { 0: { f: `${m('exit_ev', 0)}-${m('payoff', 0)}+${m('exit_cash', 0)}-${m('exit_fees', 0)}-${m('mon_term', 0)}`, v: null } }, { italic: true, noParity: true });
   M.line('shortfall', 'Debt the exit does not cover (the lenders’ loss)  =  MAX(0, −residual)', { 0: { f: `MAX(0,-${m('exit_resid', 0)})`, v: ex.debt_shortfall_at_exit } });
-  M.line('exit_eq', 'Exit equity, all holders  =  MAX(0, residual) — limited liability', { 0: { f: `MAX(0,${m('exit_resid', 0)})`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
+  M.line('exit_eq', 'Exit equity, all holders  =  MAX(0, residual): limited liability', { 0: { f: `MAX(0,${m('exit_resid', 0)})`, v: ex.exit_equity_pre_mip_total } }, { bold: true });
   // §10/§22.4 promote: MARGINAL tiers on total proceeds (exit equity + distributions paid)
   // against total invested equity; capped at the positive exit equity.
   const tiers = a.mip ? [{ h: iv('mip_hurdle'), s: iv('mip_pool') }, ...(a.mip.ratchet ?? []).map((_, j) => ({ h: iv(`mip_r${j}_h`), s: iv(`mip_r${j}_s`) }))] : [];
@@ -1173,7 +1173,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   // ── §19 Fund overlay ──
   const fo = o.fund;
   if (fund && fo) {
-    M.section('Fund overlay — the LP’s net return (event order each year-end: accrue the pref, draw the fee, distribute)');
+    M.section('Fund overlay: the LP’s net return (event order each year-end: accrue the pref, draw the fee, distribute)');
     M.header({ 0: 'Year 0', ...years(1, N) });
     const c = iv('f_carry');
     const q = iv('f_cu');
@@ -1193,17 +1193,17 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       ...per(1, N, (t) => ({ f: m('f_fees', t), v: fo.lp_contributions[t] })),
     });
     M.line('f_unret_pre', '   unreturned capital before distributing (european: fees join it)', per(1, N, (t) => ({ f: `${prev('f_unret', t, m('sponsor', 0, true))}+IF(${eu},${m('f_fees', t)},0)`, v: null })), { italic: true, noParity: true });
-    M.line('f_d1', 'Step 1 — return of capital to the LP', per(1, N, (t) => ({ f: `MIN(${m('f_in', t)},${m('f_unret_pre', t)})`, v: null })), { noParity: true });
-    M.line('f_d2', 'Step 2 — preferred return to the LP', per(1, N, (t) => ({ f: `MIN(${m('f_in', t)}-${m('f_d1', t)},${m('f_prefacc', t)})`, v: null })), { noParity: true });
+    M.line('f_d1', 'Step 1: return of capital to the LP', per(1, N, (t) => ({ f: `MIN(${m('f_in', t)},${m('f_unret_pre', t)})`, v: null })), { noParity: true });
+    M.line('f_d2', 'Step 2: preferred return to the LP', per(1, N, (t) => ({ f: `MIN(${m('f_in', t)}-${m('f_d1', t)},${m('f_prefacc', t)})`, v: null })), { noParity: true });
     M.line('f_r2', '   left after return of capital and pref', per(1, N, (t) => ({ f: `${m('f_in', t)}-${m('f_d1', t)}-${m('f_d2', t)}`, v: null })), { italic: true, noParity: true });
     M.line('f_prefpaid', '   pref paid to date', per(1, N, (t) => ({ f: `${prev('f_prefpaid', t, '0')}+${m('f_d2', t)}`, v: null })), { italic: true, noParity: true });
     // the catch-up runs until the GP holds carry% of everything distributed above capital:
     // x = (c × (pref + catch-up + LP carry split to date) − GP to date) ÷ (q − c); q = c ⇒ unbounded
-    M.line('f_x', 'Step 3 — catch-up slice (the GP takes the catch-up share of it)', per(1, N, (t) => ({
+    M.line('f_x', 'Step 3: catch-up slice (the GP takes the catch-up share of it)', per(1, N, (t) => ({
       f: `IF(AND(${m('f_r2', t)}>0,${q}>0),MIN(${m('f_r2', t)},IF(${q}-${c}<=0,${m('f_r2', t)},MAX(0,(${c}*(${m('f_prefpaid', t)}+${prev('f_s3', t, '0')}+${prev('f_s4lp', t, '0')})-${prev('f_gpcum', t, '0')})/(${q}-${c})))),0)`,
       v: null,
     })), { noParity: true });
-    M.line('f_r3', 'Step 4 — residual split carry% / (1 − carry%)', per(1, N, (t) => ({ f: `${m('f_r2', t)}-${m('f_x', t)}`, v: null })), { noParity: true });
+    M.line('f_r3', 'Step 4: residual split carry% / (1 − carry%)', per(1, N, (t) => ({ f: `${m('f_r2', t)}-${m('f_x', t)}`, v: null })), { noParity: true });
     M.line('f_gp', 'GP carried interest', per(1, N, (t) => ({ f: `${q}*${m('f_x', t)}+IF(${m('f_r3', t)}>0,${c}*${m('f_r3', t)},0)`, v: fo.gp_carry[t - 1] })), { bold: true });
     M.line('f_lp', 'LP distributions', per(1, N, (t) => ({ f: `${m('f_d1', t)}+${m('f_d2', t)}+(1-${q})*${m('f_x', t)}+IF(${m('f_r3', t)}>0,(1-${c})*${m('f_r3', t)},0)`, v: fo.lp_distributions[t - 1] })), { bold: true });
     M.line('f_s3', '   catch-up slices to date', per(1, N, (t) => ({ f: `${prev('f_s3', t, '0')}+${m('f_x', t)}`, v: null })), { italic: true, noParity: true });
@@ -1252,7 +1252,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
 
   // ── Valuation ──
   if (v && val) {
-    M.section('9. Flow to equity — what the equity is worth (CAPM; the cost of equity re-levered every year)');
+    M.section('9. Flow to equity: what the equity is worth (CAPM; the cost of equity re-levered every year)');
     M.line('ru', 'Unlevered cost of capital  rU  =  rf + βA × MRP', { 0: { f: `${iv('rf')}+${iv('beta_a')}*${iv('mrp')}`, v: val.r_unlevered, fmt: FMT_PCT } });
     // §28.2 [v2.6.0]: capex and ΔNWC are year N's own, or the stated steady-state terminal lines
     const termCapex = v.terminal ? `${iv('term_capex')}*${m('da', N)}` : m('capex', N);
@@ -1261,7 +1261,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       ? 'Year N+1 unlevered FCF  =  (1+g) × [EBIT(1−t) + D&A − terminal capex − terminal ΔNWC]'
       : 'Year N+1 unlevered FCF  =  (1+g) × [EBIT(1−t) + D&A − capex − ΔNWC]', {
       0: { f: `(1+${gN1Ref})*((${m('ebitda', N)}-${m('da', N)})*(1-${iv('tax_rate')})+${m('da', N)}-${termCapex}-${termNwc})`, v: val.ufcf_n_plus_1 },
-    }, { note: 'Every line of this cash flow must be able to continue for ever at g — check capex against D&A, and the working-capital build.' });
+    }, { note: 'Every line of this cash flow must be able to continue for ever at g: check capex against D&A, and the working-capital build.' });
     M.line('ev_b', 'Exit EV from fundamentals  =  UFCF(N+1) ÷ (rU − g)', { 0: { f: `IF(${m('ru', 0)}>${iv('g_lr')},${m('ufcf6', 0)}/(${m('ru', 0)}-${iv('g_lr')}),"N/A")`, v: val.gordon_ev } }, { bold: true });
     M.line('mult_b', '   as a multiple of the exit-basis EBITDA', { 0: { f: `IF(ISNUMBER(${m('ev_b', 0)}),${m('ev_b', 0)}/${m('exit_basis_ebitda', 0)},"N/A")`, v: val.gordon_implied_multiple, fmt: FMT_MULT } });
     const sooy = v.leverage_timing === 'start_of_year';
@@ -1270,7 +1270,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       { k: 'b', title: '(b) Exit from fundamentals', c: val.fundamentals, ev: m('ev_b', 0) },
     ] as const;
     for (const { k, title, c, ev } of cases) {
-      if (c === null) { M.note(`${title}: not defined — ${val.gordon_null_reason ?? ''}`); continue; }
+      if (c === null) { M.note(`${title}: not defined, ${val.gordon_null_reason ?? ''}`); continue; }
       M.note(title);
       M.header({ 0: 'Year 0', ...years(1, N) });
       M.line(`${k}_exit_eq`, 'Exit equity  =  MAX(0, EV − debt + cash − exit fees − termination)', { 0: { f: `MAX(0,${ev}-${m('payoff', 0)}+${m('exit_cash', 0)}-${iv('exit_fee')}*${ev}-${m('mon_term', 0)})`, v: c.exit_equity_total } });
@@ -1280,7 +1280,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
         if (!sooy) return `(${m(`${k}_E`, t + 1)}+${m(`${k}_ecf`, t + 1)})/(1+${m(`${k}_re`, t + 1)})`;
         return `(${m(`${k}_E`, t + 1)}+${m(`${k}_ecf`, t + 1)}-${iv('mrp')}*(${iv('beta_a')}*(${m(`${k}_D`, t)}-${m(`${k}_C`, t)})-${iv('beta_d')}*${m(`${k}_D`, t)}))/(1+${iv('rf')}+${iv('beta_a')}*${iv('mrp')})`;
       };
-      M.line(`${k}_E`, 'Equity value, end of year — worked backwards from the exit', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: eFormula(t), v: c.equity_value ? c.equity_value[t] : null }])), { bold: true },
+      M.line(`${k}_E`, 'Equity value, end of year: worked backwards from the exit', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: eFormula(t), v: c.equity_value ? c.equity_value[t] : null }])), { bold: true },
       );
       M.line(`${k}_D`, 'Debt, end of year', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: m('debt_close', t), v: c.debt[t] }])));
       M.line(`${k}_C`, 'Cash, end of year', Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: m('cash_close', t), v: c.cash[t] }])));
@@ -1288,7 +1288,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       M.line(`${k}_beta`, 'Equity beta  =  βA + (βA × (D − C) − βD × D) ÷ E', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
         f: `${iv('beta_a')}+(${iv('beta_a')}*(${m(`${k}_D`, t)}-${m(`${k}_C`, t)})-${iv('beta_d')}*${m(`${k}_D`, t)})/${m(`${k}_E`, t)}`, v: c.beta_equity ? c.beta_equity[t] : null, fmt: '0.000',
       }])));
-      M.line(`${k}_re`, `Cost of equity  =  rf + βE × MRP — leverage at the ${sooy ? 'START' : 'END'} of the year discounted`,
+      M.line(`${k}_re`, `Cost of equity  =  rf + βE × MRP: leverage at the ${sooy ? 'START' : 'END'} of the year discounted`,
         sooy
           ? per(1, N, (t) => ({ f: `${iv('rf')}+${m(`${k}_beta`, t - 1)}*${iv('mrp')}`, v: c.cost_of_equity ? c.cost_of_equity[t] : null, fmt: FMT_PCT }))
           : Object.fromEntries(range(N + 1, 0).map((t) => [t, { f: `${iv('rf')}+${m(`${k}_beta`, t)}*${iv('mrp')}`, v: c.cost_of_equity ? c.cost_of_equity[t] : null, fmt: FMT_PCT }])));
@@ -1305,11 +1305,11 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       M.line(`${k}_req`, 'Return the equity requires over the hold  =  IRR on value', { 0: { f: irrF(m(`${k}_cfv`, 0), m(`${k}_cfv`, N), N), v: c.required_return, fmt: FMT_PCT } });
       M.line(`${k}_excess`, 'Excess return a year  =  IRR − required (same sign as the NPV, always)', { 0: { f: `${m(`${k}_irr`, 0)}-${m(`${k}_req`, 0)}`, v: c.excess_return, fmt: FMT_PCT } }, { bold: true });
     }
-    M.section('10. What would have to be true — break-evens (NPV = 0, one input at a time)');
+    M.section('10. What would have to be true: break-evens (NPV = 0, one input at a time)');
     const be = val.break_evens;
-    M.line('be_mult_m', 'Break-even exit multiple, exit (a) — from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_mult')}),${iv('be_mult')},"N/A")`, v: be.exit_multiple.value, fmt: FMT_MULT } }, { note: 'Solved by the deal engine; after you change inputs, re-solve with Goal Seek. The live NPV below shows when it stops reading 0.' });
-    M.line('be_beta_m', 'Break-even asset beta, exit (b) — from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_beta')}),${iv('be_beta')},"N/A")`, v: be.asset_beta.value, fmt: '0.0000' } });
-    M.line('be_g_m', 'Break-even long-run growth, exit (b) — from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_g')}),${iv('be_g')},"N/A")`, v: be.long_run_growth.value, fmt: FMT_PCT } });
+    M.line('be_mult_m', 'Break-even exit multiple, exit (a): from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_mult')}),${iv('be_mult')},"N/A")`, v: be.exit_multiple.value, fmt: FMT_MULT } }, { note: 'Solved by the deal engine; after you change inputs, re-solve with Goal Seek. The live NPV below shows when it stops reading 0.' });
+    M.line('be_beta_m', 'Break-even asset beta, exit (b): from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_beta')}),${iv('be_beta')},"N/A")`, v: be.asset_beta.value, fmt: '0.0000' } });
+    M.line('be_g_m', 'Break-even long-run growth, exit (b): from Inputs', { 0: { f: `IF(ISNUMBER(${iv('be_g')}),${iv('be_g')},"N/A")`, v: be.long_run_growth.value, fmt: FMT_PCT } });
     if (be.exit_multiple.value !== null && !sooy) {
       M.header({ 0: 'Year 0', ...years(1, N) });
       M.line('be_E', '   equity value at the break-even exit multiple (live recursion)', Object.fromEntries(range(N + 1, 0).map((t) => [t, {
@@ -1332,10 +1332,10 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     const runs = sensMults.map((mult) => runModel(f, { ...a, exit: { ...a.exit, multiple: mult } }));
     const pts = (fn: (j: number) => Cell): Record<number, Cell> => Object.fromEntries(range(K, 0).map((j) => [j, fn(j)]));
     const pointHead = Object.fromEntries(range(K, 0).map((j) => [j, `Point ${j + 1}`]));
-    I.section('Sensitivity — exit multiples to test (the Sensitivity sheet recalculates at each)');
+    I.section('Sensitivity: exit multiples to test (the Sensitivity sheet recalculates at each)');
     I.header(pointHead);
     I.line('sens_m', 'Exit multiple', pts((j) => ({ input: sensMults[j], fmt: FMT_MULT })));
-    X.title(`${a.deal_name} — sensitivity to the exit multiple`, [
+    X.title(`${a.deal_name}: sensitivity to the exit multiple`, [
       'Each column re-runs the exit at the multiple on the Inputs sheet (Sensitivity section). Every interim flow is the Model’s own.',
     ]);
     X.section('The exit at each multiple');
@@ -1436,7 +1436,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
 
   // ═══════════════════════════════ CHECKS ═══════════════════════════════
-  C.title('Checks — every row must read zero', ['A non-zero row means an input change has broken an identity the model relies on.']);
+  C.title('Checks: every row must read zero', ['A non-zero row means an input change has broken an identity the model relies on.']);
   C.r += 1;
   const mx = (key: string, t: number) => M.ext(key, t);
   const checks: [string, string, string][] = [
@@ -1469,15 +1469,15 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
 
   // Deal WARNINGS are outcomes of the deal, not broken identities — they are shown with the
   // engine's own figure and are never part of the must-be-zero total.
-  C.section('Deal warnings (outcomes to review — not model errors)');
+  C.section('Deal warnings (outcomes to review, not model errors)');
   const breach = o.waterfall.some((w) => w.cash_floor_breach);
   C.line('wn_cash', 'Cash below the minimum, summed over the hold (0 = never breached)', { 0: { f: range(N, 1).map((t) => `MAX(0,${iv('min_cash')}-${mx('cash_close', t)}-1E-9)`).join('+'), v: null } },
-    { noParity: true, note: breach ? 'The engine flags a cash-floor breach — add a revolver, lower the debt, or revisit the forecast.' : undefined });
+    { noParity: true, note: breach ? 'The engine flags a cash-floor breach: add a revolver, lower the debt, or revisit the forecast.' : undefined });
   C.line('wn_short', 'Debt the exit does not cover (0 = covered; else the lenders’ loss)', { 0: { f: mx('shortfall', 0), v: null } },
     { noParity: true, note: 'Positive when exit value is below the debt: equity is worth zero (limited liability) and the lenders take this loss.' });
   if (sell) {
     C.line('wn_sd', 'Partial exit below the pro-rata entry cost (0 = not below; else the shortfall)', { 0: { f: `MAX(0,${iv('sd_frac')}*${mx('sponsor', 0)}-0.005-${mx('sd_proc', 0)})`, v: null } },
-      { noParity: true, note: 'Positive when the sold slice fetches less than its share of the sponsor’s entry cheque — a warning, not an error.' });
+      { noParity: true, note: 'Positive when the sold slice fetches less than its share of the sponsor’s entry cheque: a warning, not an error.' });
   }
   if (sweet) {
     C.line('wn_ln', 'Loan notes NOT covered by exit equity (0 = fully redeemed)', { 0: { f: `${mx('ln_bal', N)}-${mx('ln_exit_red', 0)}`, v: null } },
@@ -1488,7 +1488,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   // The one page an MD reads first. Every number is a formula on the Model / Checks sheets.
   {
     const mm = (key: string, t = 0) => M.ext(key, t);
-    S.title(`${a.deal_name} — summary`, [
+    S.title(`${a.deal_name}: summary`, [
       `${ccy} millions unless stated. Every number on this page is a live formula on the Model sheet; change the Inputs sheet and it moves.`,
     ]);
     S.section('Price and structure');
@@ -1529,7 +1529,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       S.line('s_lp_moic', 'LP net money multiple', { 0: { f: mm('f_moic'), v: o.fund.fund_lp_net.moic, fmt: FMT_MULT } });
     }
     if (v && val) {
-      S.section('Valuation — flow to equity');
+      S.section('Valuation: flow to equity');
       for (const [k, title, c] of [['a', 'at the assumed exit multiple', val.assumed], ['b', 'from fundamentals', val.fundamentals]] as const) {
         if (!c) continue;
         S.line(`s_${k}_npv`, `NPV of the equity, ${title}`, { 0: { f: mm(`${k}_npv`), v: c.npv } }, { answer: true });
@@ -1547,7 +1547,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     // exit does not cover the debt, is flagged on the page the reader opens first
     S.line('s_cashwarn', 'Cash below the minimum, summed over the hold (0 = never; else the deal needs more liquidity)', { 0: { f: C.ext('wn_cash', 0), v: null } }, { noParity: true });
     S.line('s_shortfall', 'Debt the exit does not cover (0 = covered; else the lenders’ loss)', { 0: { f: mm('shortfall'), v: ex.debt_shortfall_at_exit } });
-    S.line('s_checks', 'Model checks total (must read 0 — see the Checks sheet)', { 0: { f: C.ext('ck_total', 0), v: 0, fmt: '0.000000' } }, { bold: true });
+    S.line('s_checks', 'Model checks total (must read 0: see the Checks sheet)', { 0: { f: C.ext('ck_total', 0), v: 0, fmt: '0.000000' } }, { bold: true });
   }
 
   // ═══════════════════════════════ METHODOLOGY ═══════════════════════════════
@@ -1557,7 +1557,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     ws.getColumn(2).width = 44;
     ws.getColumn(3).width = 120;
     const t = ws.getCell('B1');
-    t.value = 'Assumptions and methodology (SPEC §15) — what this model simplifies, and why';
+    t.value = 'Assumptions and methodology (SPEC §15): what this model simplifies, and why';
     t.font = { bold: true, size: 14, color: { argb: NAVY } };
     DISCLOSURES.forEach(([what, why], i) => {
       const r = i + 3;

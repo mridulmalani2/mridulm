@@ -15,6 +15,12 @@ The spec is **versioned**: v1.0 at Phase A sign-off; amendments during B–E via
 + golden-workbook update, re-reviewing only the touched section. Code may never deviate from
 the current spec version.
 
+**Presentation rule (2026-11-12, owner direction; no calculation is affected).** Text a user reads
+(labels, warnings, disclosures, notes, Excel row labels) carries no em dash. Where this document
+quotes such text with an em dash, the shipped string writes a colon, a semicolon or a comma in
+its place; the quoted labels of §19.5 are amended in place. `tests/no-em-dash.test.ts` holds the
+rule. This document's own prose is unchanged.
+
 ---
 
 ## §1 Periodicity & timing [CONFIRMED DR-2]
@@ -2081,7 +2087,7 @@ construction — the round-1 B2 finding).
 `mgmt_fees_net[t]`, `paid_in_total`, `committed_capital` (echo, or derived-for-reporting),
 and the stream `fund_lp_net: {irr, moic, dpi[], payback_year}` where:
 - `moic = Σ lp_distributions ÷ paid_in_total` — TVPI ≡ DPI at exit (everything REALIZED at
-  N; no RVPI row exists; the display labels the multiple "TVPI (= DPI — fully realized)").
+  N; no RVPI row exists; the display labels the multiple "TVPI (= DPI, fully realized)").
 - `dpi[t] = (cumulative lp_distributions through t) ÷ (cumulative lp_contributions through
   t)` — the ILPA to-date ratio on the GROWING paid-in, NOT ÷ paid_in_total [round-1 B6].
 - `payback_year` = the first year cumulative `lp_distributions` ≥ cumulative
@@ -2092,7 +2098,7 @@ and the stream `fund_lp_net: {irr, moic, dpi[], payback_year}` where:
   the sponsor-layer rule counts year-N interim distributions separately; a deal repaying on
   year-N interim alone shows sponsor payback = N, fund payback = null. Engine and reference
   both implement this reading.]
-Labels carry the ILPA basis: "Net to LP — after fund fees & carry (fund-of-one overlay)".
+Labels carry the ILPA basis: "Net to LP, after fund fees & carry (fund-of-one overlay)".
 The §12 bridge is UNCHANGED (the overlay is value SHARING on the sponsor-LP boundary, not
 value creation — DR-2 Item 7); a memo line "less: fund fees & carry → net to LP" may render
 on the returns surface only.

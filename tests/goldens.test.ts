@@ -208,7 +208,7 @@ describe('SPEC §17 committed assertions', () => {
     expect(g2distd.returns.sponsor_net.irr).toBeLessThanOrEqual(g2dist.returns.sponsor_net.irr);
   });
 
-  it('G6-REFI (§18): a TLB refi at year 3 — reprice, premium, extend, write-off deducted IN Y3 (§18.5 v2.4.0)', () => {
+  it('G6-REFI (§18): a TLB refi at year 3; reprice, premium, extend, write-off deducted IN Y3 (§18.5 v2.4.0)', () => {
     const tlb = g6refi.tranches['TLB'];
     // §18 is post-close, so it cannot re-price entry; §9 is capital-structure-blind.
     expect(g6refi.sources_uses).toEqual(g2.sources_uses);
@@ -268,7 +268,7 @@ describe('SPEC §17 committed assertions', () => {
   });
 });
 
-describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjudicated values)', () => {
+describe('SPEC §19 committed assertions: G7-FUND (fund-of-one overlay; adjudicated values)', () => {
   const g7 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G7FUND/expected.json'), 'utf8'));
   const g2dist = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G2DIST/expected.json'), 'utf8'));
   const f = g7.fund;
@@ -304,7 +304,7 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
     const gp = f.gp_carry.reduce((a: number, b: number) => a + b, 0);
     expect(gp).toBeCloseTo(0.2 * Math.max(0, lp + gp - f.paid_in_total), 4);
   });
-  it('§14.20(d): dpi[N] ≡ moic; cumulative lp_distributions monotone (and dpi itself is NOT — fee-only years)', () => {
+  it('§14.20(d): dpi[N] ≡ moic; cumulative lp_distributions monotone (and dpi itself is NOT; fee-only years)', () => {
     const dpi = f.fund_lp_net.dpi;
     expect(dpi[dpi.length - 1]).toBeCloseTo(f.fund_lp_net.moic, 6);
     let cum = 0;
@@ -322,7 +322,7 @@ describe('SPEC §19 committed assertions — G7-FUND (fund-of-one overlay; adjud
   });
 });
 
-describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; GOSPEL — both adjudication passes SIGNED)', () => {
+describe('SPEC §20 committed assertions: G8-PIKT (PIK toggle; GOSPEL: both adjudication passes SIGNED)', () => {
   const g8 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G8PIKT/expected.json'), 'utf8'));
   const g3 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G3/expected.json'), 'utf8'));
   const note = g8.tranches['PIK Note'];
@@ -359,7 +359,7 @@ describe('SPEC §20 committed assertions — G8-PIKT (PIK toggle; GOSPEL — bot
   });
 });
 
-describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet equity / ratchets / warrants; GOSPEL — both blind adjudication passes SIGNED, zero mismatches)', () => {
+describe('SPEC §22.12 committed assertions: G9-SWEET + G10-RATCHET (sweet equity / ratchets / warrants; GOSPEL: both blind adjudication passes SIGNED, zero mismatches)', () => {
   const g3 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G3/expected.json'), 'utf8'));
   const g9 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G9SWEET/expected.json'), 'utf8'));
   const g10 = JSON.parse(readFileSync(join(ROOT, 'tests/goldens/G10RATCHET/expected.json'), 'utf8'));
@@ -381,7 +381,7 @@ describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet eq
     expect(g9.sources_uses.total_uses).toBe(797.08);            // sources ≡ uses, always
     expect(g9.sources_uses.total_uses).toBe(g3.sources_uses.total_uses);
   });
-  it('G9-SWEET: exit_equity_pre_mip_total IDENTICAL to G3 — the strip re-cuts the pot, never re-prices it (§22.12)', () => {
+  it('G9-SWEET: exit_equity_pre_mip_total IDENTICAL to G3; the strip re-cuts the pot, never re-prices it (§22.12)', () => {
     expect(g9.exit.exit_equity_pre_mip_total).toBe(g3.exit.exit_equity_pre_mip_total);
     expect(g9.operating).toEqual(g3.operating);                 // capital-structure-blind
     expect(g9.returns.unlevered).toEqual(g3.returns.unlevered);
@@ -416,7 +416,7 @@ describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet eq
     expect(g9.exit.sponsor_share).toBe(672.9);                 // loan notes + institutional ords
     expect(g9.exit.mip_payout).toBe(0.0);                       // mip null, FORCED by §22.3(i)
   });
-  it('G10-RATCHET: entry and operating BYTE-identical to G3 — a promote cannot re-price entry (§13/§22.12)', () => {
+  it('G10-RATCHET: entry and operating BYTE-identical to G3; a promote cannot re-price entry (§13/§22.12)', () => {
     expect(g10.sources_uses).toEqual(g3.sources_uses);
     expect(g10.operating).toEqual(g3.operating);
     expect(g10.exit.exit_equity_pre_mip_total).toBe(g3.exit.exit_equity_pre_mip_total);
@@ -432,7 +432,7 @@ describe('SPEC §22.12 committed assertions — G9-SWEET + G10-RATCHET (sweet eq
   });
 });
 
-describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO selldown)', () => {
+describe('SPEC §23.12 committed assertions: G11-SELL (partial exit / IPO selldown)', () => {
   const g2dist = load('G2DIST');
   const g11 = load('G11SELL');
   const sd = g11.selldown;
@@ -447,7 +447,7 @@ describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO sel
     }
   });
 
-  it('§14.24(g) COMPANY INVARIANCE — a secondary never transits the company', () => {
+  it('§14.24(g) COMPANY INVARIANCE: a secondary never transits the company', () => {
     for (const blk of ['sources_uses', 'operating', 'tax', 'waterfall', 'tranches',
                        'balance_sheet', 'credit', 'revolver'] as const) {
       expect(g11[blk], `${blk} moved under a secondary selldown`).toEqual(g2dist[blk]);
@@ -460,7 +460,7 @@ describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO sel
     }
   });
 
-  it('§23.2 the event chain — the §9 valuation FORM at year 3, never an invented mark', () => {
+  it('§23.2 the event chain: the §9 valuation FORM at year 3, never an invented mark', () => {
     expect(sd.year).toBe(3);
     expect(sd.fraction).toBe(0.25);
     // 8.5 x EBITDA_adj[3], less (TLB ending y3 + 0 drawn - closing cash y3)
@@ -486,7 +486,7 @@ describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO sel
     expect(g11.exit.exit_equity_pre_mip_total).toBe(g2dist.exit.exit_equity_pre_mip_total);
   });
 
-  it('§23.2 the boundary — the SELLER takes the WHOLE year-t distribution; ONE period-t flow', () => {
+  it('§23.2 the boundary: the SELLER takes the WHOLE year-t distribution; ONE period-t flow', () => {
     const a = g11.distributions.sponsor_share_paid, b = g2dist.distributions.sponsor_share_paid;
     expect(a.slice(0, 3)).toEqual(b.slice(0, 3));                              // years 1-3 untouched
     expect(Math.abs(a[3] - 0.75 * b[3])).toBeLessThan(0.005);                  // year 4 partitions
@@ -497,7 +497,7 @@ describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO sel
     expect(Math.abs(c[3] - (d[3] + sd.selldown_proceeds))).toBeLessThan(0.005);
   });
 
-  it('§23.6 DPI is on the REALIZED-PROCEEDS basis (owner question Q-A) — the year-3 discriminator', () => {
+  it('§23.6 DPI is on the REALIZED-PROCEEDS basis (owner question Q-A): the year-3 discriminator', () => {
     let cum = 0;
     g11.distributions.sponsor_share_paid.forEach((p: number, i: number) => {
       cum += p + (i + 1 === sd.year ? sd.selldown_proceeds : 0);
@@ -515,7 +515,7 @@ describe('SPEC §23.12 committed assertions — G11-SELL (partial exit / IPO sel
     expect(g2dist.returns.payback_year).toBeNull();
   });
 
-  it('§23.12 the direction claims — IRR and MOIC both FALL', () => {
+  it('§23.12 the direction claims: IRR and MOIC both FALL', () => {
     // The sold slice runs [-proceeds, +buyer's y4 distribution, +buyer's y5 + exit share]:
     // an implied ~15.9%, ABOVE the deal's own rate, so releasing it early gives up return.
     // "Earlier money lifts IRR" holds only at or below the deal's own rate.

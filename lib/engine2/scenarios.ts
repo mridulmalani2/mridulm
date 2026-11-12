@@ -52,7 +52,7 @@ export function applyScenarioDeltas(base: DealAssumptions, deltas: ScenarioDelta
     for (const key of Object.keys(ops)) {
       const line = DRIVER_OF[key];
       if (line && line !== 'margin_driver' && lines[line] !== null) {
-        throw new RangeError(`scenarios: '${key}' moves a §7 driver, but that line is entered directly in this deal — shift the entered line instead (§24.3 R8)`);
+        throw new RangeError(`scenarios: '${key}' moves a §7 driver, but that line is entered directly in this deal: shift the entered line instead (§24.3 R8)`);
       }
     }
   }

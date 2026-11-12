@@ -83,9 +83,9 @@ function stateFromFixture(g: any, y: number, tax: TaxAssumption): KernelTaxState
   };
 }
 
-describe('tax.ts reproduces the golden tax blocks — pools assembled from raw lines (C3 gate)', () => {
+describe('tax.ts reproduces the golden tax blocks: pools assembled from raw lines (C3 gate)', () => {
   for (const golden of ['G1', 'G2', 'G2D', 'G3', 'G4', 'G5']) {
-    it(`${golden}: ATI, pool assembly, deduction, NOL usage, floor, cash tax — every year`, () => {
+    it(`${golden}: ATI, pool assembly, deduction, NOL usage, floor, cash tax; every year`, () => {
       const g = load(golden);
       const tax = TAXES[golden];
       for (let y = 0; y < g.tax.length; y++) {
@@ -192,7 +192,7 @@ describe('tax.ts §6 properties', () => {
     );
   });
 
-  it('§9 unlevered independence: the unlevered run never sees interest, §163(j) or the monitoring fee — identical for any finance inputs', () => {
+  it('§9 unlevered independence: the unlevered run never sees interest, §163(j) or the monitoring fee; identical for any finance inputs', () => {
     fc.assert(
       fc.property(taxArb, money(0, 300), money(0, 100), (tax, ebitda, da) => {
         const a = runUnleveredTaxYear(tax, openingTaxState(tax), { ebitda, da });

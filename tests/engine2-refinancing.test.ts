@@ -49,7 +49,7 @@ const extraCapped = (core: ReturnType<typeof runCore>, y: number) =>
 const extraUncapped = (core: ReturnType<typeof runCore>, y: number) =>
   core.tax[y].uncapped_deductions - (core.operating[y].financing_fee_amortization + core.waterfall[y].commitment_fees);
 
-describe('§18.11(vi) — refi of a tranche with NON-ZERO unamortized OID (the sign-off blocking gap)', () => {
+describe('§18.11(vi): refi of a tranche with NON-ZERO unamortized OID (the sign-off blocking gap)', () => {
   // G6-REFI refis the OID=0 G2 TLB, so the OLD-OID write-off and OLD-OID-amortization-STOP
   // sub-paths run with all-zero inputs. This fixture gives the refinanced tranche old OID > 0
   // AND new OID > 0 with R+1 < N, so BOTH transitions are non-trivially exercised. Single term
@@ -100,7 +100,7 @@ describe('§18.11(vi) — refi of a tranche with NON-ZERO unamortized OID (the s
   });
 });
 
-describe('§18.11(i) — refi in year N−1: its deduction stays in year N−1, the exit year carries only the exit write-off', () => {
+describe('§18.11(i): refi in year N−1: its deduction stays in year N−1, the exit year carries only the exit write-off', () => {
   const deal = withRefi('G2', [REFI({ tranche_name: 'TLB', year: 4 })]); // R=4, N=5
   const core = runCore(deal.facts, deal.assumptions);
   it('year 4 carries the refi flag/cost AND its deduction; year 5 carries the exit write-off alone, split by character', () => {
@@ -126,7 +126,7 @@ describe('§18.11(i) — refi in year N−1: its deduction stays in year N−1, 
   });
 });
 
-describe('§18.11(ii) — refi under a BINDING §163(j)', () => {
+describe('§18.11(ii): refi under a BINDING §163(j)', () => {
   // G3 binds §163(j) every year (PIK compounding). Refi its Senior tranche (the PIK note is not
   // refinanceable). This is the corner where the tax CHARACTER of the refi deduction matters
   // (§18.5 [v2.4.0]): the old OID + call premium are §163(j) interest, so under a binding cap
@@ -156,7 +156,7 @@ describe('§18.11(ii) — refi under a BINDING §163(j)', () => {
   });
 });
 
-describe('§18.11(iii) — the refi cash cost forces a revolver draw', () => {
+describe('§18.11(iii): the refi cash cost forces a revolver draw', () => {
   // A large premium/OID/fee on G5 (which already draws in Y1) forces a further draw in the refi
   // year — §18.4's "senior to the sweep, can pull cash toward the floor" clause.
   const deal = withRefi('G5', [REFI({ tranche_name: 'Senior', year: 2, call_premium_pct: 0.2, new_oid_pct: 0.05, new_financing_fee_pct: 0.05, new_amort_pct_of_face: 0.1, new_pricing: { kind: 'floating', base_rate: 0.036, spread: 0.0425, floor: 0 } })]);
@@ -170,7 +170,7 @@ describe('§18.11(iii) — the refi cash cost forces a revolver draw', () => {
   });
 });
 
-describe('§18.11(iv) — refi + a live §3-step-7 distribution and RP trap compose', () => {
+describe('§18.11(iv): refi + a live §3-step-7 distribution and RP trap compose', () => {
   // G2-DIST (distributions [25,25,25,10,8], trap 2.75) + a TLB refi at year 3. The refi cost is
   // senior to the distribution, so it shrinks year-3 distribution capacity; par-for-par leaves
   // gross_debt_end unchanged so the trap composes with no special handling (§18.7).
@@ -189,7 +189,7 @@ describe('§18.11(iv) — refi + a live §3-step-7 distribution and RP trap comp
   });
 });
 
-describe('§18.11(vii) — multiple independent refis accumulate additively', () => {
+describe('§18.11(vii): multiple independent refis accumulate additively', () => {
   const deal = withRefi(
     'G2',
     [REFI({ tranche_name: 'TLB', year: 2 }), REFI({ tranche_name: 'TLA', year: 3 })],
@@ -246,7 +246,7 @@ describe('§18.11(vii) — multiple independent refis accumulate additively', ()
   });
 });
 
-describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, never computed defaults)', () => {
+describe('§18.11(v) / §16: structural-gate REJECTIONS (input-gate throws, never computed defaults)', () => {
   const bad = (refinancing: RefinancingEvent[], mutate?: (a: DealAssumptions) => void) => () =>
     runCore(GOLDEN_DEALS.G2.facts, withRefi('G2', refinancing, mutate).assumptions);
   it('refi naming the revolver → throws', () => {
@@ -272,7 +272,7 @@ describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, n
   it('refi whose new maturity balloons inside the hold ((year−1)+new_maturity ≤ hold) → throws', () => {
     expect(bad([REFI({ tranche_name: 'TLB', year: 3, new_maturity_years: 2 })])).toThrow(/new maturity must exceed/);
   });
-  it('refi with a NaN new maturity → throws at the gate (NaN passes < and ≤ checks — must not poison effMaturity)', () => {
+  it('refi with a NaN new maturity → throws at the gate (NaN passes < and ≤ checks: must not poison effMaturity)', () => {
     expect(bad([REFI({ tranche_name: 'TLB', year: 3, new_maturity_years: NaN })])).toThrow(/new maturity must exceed/);
   });
   it('two refis on the same tranche → throws', () => {
@@ -283,7 +283,7 @@ describe('§18.11(v) / §16 — structural-gate REJECTIONS (input-gate throws, n
   });
 });
 
-describe('§14.19 — refinancing invariants (par-for-par, BS close, cash cost)', () => {
+describe('§14.19: refinancing invariants (par-for-par, BS close, cash cost)', () => {
   // Applied across G6-REFI and the directed fixtures above.
   const cases: { name: string; deal: { facts: DealAssumptions extends never ? never : any; assumptions: DealAssumptions } }[] = [
     { name: 'G6-REFI', deal: GOLDEN_DEALS.G6REFI },
@@ -292,7 +292,7 @@ describe('§14.19 — refinancing invariants (par-for-par, BS close, cash cost)'
     }) },
   ];
   for (const { name, deal } of cases) {
-    it(`${name}: §14.19(a) par-for-par at the refi — the refi moves no principal; (b) BS closes; (d) cash cost = premium+OID+fee`, () => {
+    it(`${name}: §14.19(a) par-for-par at the refi; the refi moves no principal; (b) BS closes; (d) cash cost = premium+OID+fee`, () => {
       const core = runCore(deal.facts, deal.assumptions);
       const events = deal.assumptions.structure.refinancing ?? [];
       for (const ev of events) {
@@ -317,7 +317,7 @@ describe('§14.19 — refinancing invariants (par-for-par, BS close, cash cost)'
   }
 });
 
-describe('§18.11(viii) — the retired-balance no-op raises the §18.8 refi_noop WARN [v1.3.1]', () => {
+describe('§18.11(viii): the retired-balance no-op raises the §18.8 refi_noop WARN [v1.3.1]', () => {
   // MUTANTS (each run RED during development, then reverted — the three directions §18.11(viii)
   // names): (a) drop the flags.push in check.ts → the two positive asserts below redden;
   // (b) drop the balance condition (flag every refi) → the G6-REFI negative + the C5
@@ -352,7 +352,7 @@ describe('§18.11(viii) — the retired-balance no-op raises the §18.8 refi_noo
     expect(flags[0].message).toContain('~0');
   });
 
-  it('DUST case — engine-retired residual in (0, RETIRED_TOL]: the flag STILL fires (pins ε to the §7 tolerance)', () => {
+  it('DUST case: engine-retired residual in (0, RETIRED_TOL]: the flag STILL fires (pins ε to the §7 tolerance)', () => {
     // Amortization leaves exactly ~0.002 outstanding entering year 4 (3 years × amort_pct
     // chosen so par·(1 − 3·pct) = 0.002); no sweep. The tranche crossed the §7 retired
     // threshold in year 3 (write-off taken, dust persists) — §18.8: its refi is the no-op class.
@@ -377,7 +377,7 @@ describe('§18.11(viii) — the retired-balance no-op raises the §18.8 refi_noo
     expect(flags.length).toBe(1); // ε = RETIRED_TOL, not machine epsilon (mutant (c) reddens here)
   });
 
-  it('NEGATIVE — a live-balance refi (G6-REFI) raises NO refi_noop', () => {
+  it('NEGATIVE: a live-balance refi (G6-REFI) raises NO refi_noop', () => {
     const { facts, assumptions } = GOLDEN_DEALS.G6REFI;
     const o = runModel(facts, assumptions);
     expect(o.tranches[0][2].refinanced).toBe(true); // the refi genuinely ran…

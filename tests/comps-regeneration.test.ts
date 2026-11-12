@@ -34,7 +34,7 @@ const VINTAGE_MAX_MONTHS = 15;
 
 const sha256 = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
-describe('§21.10(3) — bands.json regenerates byte-identically from the reference derivation', () => {
+describe('§21.10(3): bands.json regenerates byte-identically from the reference derivation', () => {
   it('committed bands.json matches a fresh run of scripts/comps/derive_bands.py', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'comps-'));
     execFileSync('python3', [join(ROOT, 'scripts/comps/derive_bands.py'), tmp], { stdio: 'pipe' });
@@ -44,10 +44,10 @@ describe('§21.10(3) — bands.json regenerates byte-identically from the refere
   });
 });
 
-describe('§21.10(4) — the vendored CSVs are integrity- and freshness-pinned', () => {
+describe('§21.10(4): the vendored CSVs are integrity- and freshness-pinned', () => {
   for (const [region, want] of Object.entries(SHA256)) {
     it(`${region}.csv matches its pinned SHA-256 (an upstream re-publish must be adjudicated, not absorbed)`, () => {
-      expect(sha256(join(RAW, `${region}.csv`)), `${region}.csv changed — re-run scripts/comps/refresh.md and RE-ADJUDICATE`).toBe(want);
+      expect(sha256(join(RAW, `${region}.csv`)), `${region}.csv changed: re-run scripts/comps/refresh.md and RE-ADJUDICATE`).toBe(want);
     });
   }
 
@@ -61,15 +61,15 @@ describe('§21.10(4) — the vendored CSVs are integrity- and freshness-pinned',
     expect(mi, `unknown month in "${vintage}"`).toBeGreaterThanOrEqual(0);
     const published = new Date(2000 + Number(m![3]), mi, Number(m![1]));
     const ageMonths = (Date.now() - published.getTime()) / (365.25 / 12 * 86_400_000);
-    expect(ageMonths, `comps vintage "${vintage}" is ${ageMonths.toFixed(1)} months old — run scripts/comps/refresh.md and RE-ADJUDICATE (SPEC §21.10(4))`)
+    expect(ageMonths, `comps vintage "${vintage}" is ${ageMonths.toFixed(1)} months old: run scripts/comps/refresh.md and RE-ADJUDICATE (SPEC §21.10(4))`)
       .toBeLessThan(VINTAGE_MAX_MONTHS);
   });
 });
 
-describe('§21.4/§21.5 — the committed bands carry the shape the spec pins', () => {
+describe('§21.4/§21.5: the committed bands carry the shape the spec pins', () => {
   const bands = JSON.parse(readFileSync(join(ROOT, 'data/comps/bands.json'), 'utf8'));
 
-  it('four regions only — Global/Emerging/China are unreachable and NOT vendored (§21.6)', () => {
+  it('four regions only: Global/Emerging/China are unreachable and NOT vendored (§21.6)', () => {
     expect(Object.keys(bands).sort()).toEqual(['Europe', 'India', 'Japan', 'US']);
   });
 
@@ -94,7 +94,7 @@ describe('§21.4/§21.5 — the committed bands carry the shape the spec pins', 
     expect(us.Other.firms).toBe(4822);
   });
 
-  it('the pinned §21.5 worked bands (US) reproduce exactly — the spec is checkable, not decorative', () => {
+  it('the pinned §21.5 worked bands (US) reproduce exactly: the spec is checkable, not decorative', () => {
     const us = bands.US;
     expect([us.Technology.low, us.Technology.median, us.Technology.high]).toEqual([22.01, 24.48, 24.48]);
     expect([us.Healthcare.low, us.Healthcare.median, us.Healthcare.high]).toEqual([15.25, 15.78, 19.78]);
@@ -111,7 +111,7 @@ describe('§21.4/§21.5 — the committed bands carry the shape the spec pins', 
     expect([us['Real Estate'].low, us['Real Estate'].median, us['Real Estate'].high]).toEqual([19.87, 19.87, 19.87]);
   });
 
-  it('§21.10(2): the Japan Real Estate DISCRIMINATOR — nearest-rank 8.91, not interpolation 10.71', () => {
+  it('§21.10(2): the Japan Real Estate DISCRIMINATOR; nearest-rank 8.91, not interpolation 10.71', () => {
     const jp = bands.Japan['Real Estate'];
     expect(jp.firms).toBe(168);            // W; p·W = 42.00 lands EXACTLY on c₁ (n=42)
     expect(jp.low).toBe(8.91);             // `≥` takes constituent 1
@@ -120,7 +120,7 @@ describe('§21.4/§21.5 — the committed bands carry the shape the spec pins', 
   });
 });
 
-describe('§21.10(4) — ALL 36 bands are pinned, not just the US nine (audit B3: the drift bound was US-only)', () => {
+describe('§21.10(4): ALL 36 bands are pinned, not just the US nine (audit B3: the drift bound was US-only)', () => {
   const bands = JSON.parse(readFileSync(join(ROOT, 'data/comps/bands.json'), 'utf8'));
 
   // The signed gospel, in full. The byte gate is regeneration-SYMMETRIC — it re-runs the same
@@ -187,7 +187,7 @@ describe('§21.10(4) — ALL 36 bands are pinned, not just the US nine (audit B3
     }
   });
 
-  it('§21.11(v): India takes the FIRST duplicate aggregate row — 17.56/4523, NEVER 16.35/3850', () => {
+  it('§21.11(v): India takes the FIRST duplicate aggregate row, 17.56/4523, NEVER 16.35/3850', () => {
     // The round-1 B6 defect is silently reintroducible: the audit removed the first-row rule
     // from the reference, regenerated, and every gate stayed green.
     expect([bands.India.Other.low, bands.India.Other.firms]).toEqual([17.56, 4523]);

@@ -75,7 +75,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'selldown_below_cost',
       severity: 'warn',
-      message: `The year-${s.year} selldown of ${(s.fraction * 100).toFixed(1)}% fetches $${s.selldown_proceeds.toFixed(2)}m — below that slice's share of the sponsor's entry cheque ($${(s.fraction * x.sources_uses.sponsor_equity).toFixed(2)}m) (SPEC §23/§14.24(f)).`,
+      message: `The year-${s.year} selldown of ${(s.fraction * 100).toFixed(1)}% fetches $${s.selldown_proceeds.toFixed(2)}m: below that slice's share of the sponsor's entry cheque ($${(s.fraction * x.sources_uses.sponsor_equity).toFixed(2)}m) (SPEC §23/§14.24(f)).`,
     });
   }
 
@@ -85,7 +85,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'exit_debt_shortfall',
       severity: 'warn',
-      message: `The exit does not cover the debt: lenders recover $${x.exit.debt_shortfall_at_exit.toFixed(2)}m less than they are owed. Equity is worth zero at exit (limited liability — no equity holder pays in) (SPEC §9.1).`,
+      message: `The exit does not cover the debt: lenders recover $${x.exit.debt_shortfall_at_exit.toFixed(2)}m less than they are owed. Equity is worth zero at exit (limited liability; no equity holder pays in) (SPEC §9.1).`,
     });
   }
 
@@ -103,7 +103,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
       flags.push({
         code: 'ahydo_shape',
         severity: 'warn',
-        message: `"${tr.name}" has the AHYDO shape (maturity ${tr.maturity_years}y > 5 with accruing PIK): under §163(e)(5)/§163(i) the accrued-PIK deduction can be DEFERRED until paid and a disqualified portion permanently disallowed. v1 deducts PIK as accrued and does NOT model this (SPEC §20.4/§20.8) — the assumed cure is the contractual AHYDO catch-up payment most such indentures carry. The yield leg (YTM ≥ AFR + 5pts) is NOT tested here (needs the monthly AFR) and the significant-OID leg is proxied, so this flag is structural and deliberately over-inclusive.`,
+        message: `"${tr.name}" has the AHYDO shape (maturity ${tr.maturity_years}y > 5 with accruing PIK): under §163(e)(5)/§163(i) the accrued-PIK deduction can be DEFERRED until paid and a disqualified portion permanently disallowed. v1 deducts PIK as accrued and does NOT model this (SPEC §20.4/§20.8); the assumed cure is the contractual AHYDO catch-up payment most such indentures carry. The yield leg (YTM ≥ AFR + 5pts) is NOT tested here (needs the monthly AFR) and the significant-OID leg is proxied, so this flag is structural and deliberately over-inclusive.`,
       });
     }
   }
@@ -119,7 +119,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
         flags.push({
           code: 'refi_noop',
           severity: 'warn',
-          message: `Refinancing of "${r.name}" scheduled for year ${t + 1} is a no-op — the tranche entered the year at/below the §7 retired tolerance (already repaid); the stamped premium, new OID/fees and write-off are ~0 (§18.8)`,
+          message: `Refinancing of "${r.name}" scheduled for year ${t + 1} is a no-op: the tranche entered the year at/below the §7 retired tolerance (already repaid); the stamped premium, new OID/fees and write-off are ~0 (§18.8)`,
         });
       }
     }
@@ -129,7 +129,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'negative_sponsor_equity',
       severity: 'block',
-      message: `Sponsor equity plug is ${x.sources_uses.sponsor_equity.toFixed(1)} — uses exceed debt + rollover capacity (§2 solvency check)`,
+      message: `Sponsor equity plug is ${x.sources_uses.sponsor_equity.toFixed(1)}: uses exceed debt + rollover capacity (§2 solvency check)`,
     });
   }
 
@@ -138,7 +138,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'cash_floor_breach',
       severity: 'block',
-      message: `Cash floor breached in year ${breachYear + 1} with the revolver exhausted — post-breach years are not economically meaningful (§3 step 6, v1.0.3)`,
+      message: `Cash floor breached in year ${breachYear + 1} with the revolver exhausted: post-breach years are not economically meaningful (§3 step 6, v1.0.3)`,
     });
   }
 
@@ -153,7 +153,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'distribution_blocked',
       severity: 'warn',
-      message: `Restricted-payment trap blocks distributions in year${blockedYears.length > 1 ? 's' : ''} ${blockedYears.join(', ')} — cash was available but the pro-forma net-leverage test was not met; blocked capacity does NOT carry forward (§3.7)`,
+      message: `Restricted-payment trap blocks distributions in year${blockedYears.length > 1 ? 's' : ''} ${blockedYears.join(', ')}: cash was available but the pro-forma net-leverage test was not met; blocked capacity does NOT carry forward (§3.7)`,
     });
   }
 
@@ -162,7 +162,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'negative_ppe',
       severity: 'warn',
-      message: `Net PP&E rolls negative from year ${negativePpeYear} — D&A outruns capex (§8 mechanical roll; revisit da_pct vs capex_pct)`,
+      message: `Net PP&E rolls negative from year ${negativePpeYear}: D&A outruns capex (§8 mechanical roll; revisit da_pct vs capex_pct)`,
     });
   }
 
@@ -174,7 +174,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'negative_goodwill',
       severity: 'warn',
-      message: `Goodwill plug is NEGATIVE (${x.balance_sheet[0].goodwill.toFixed(1)}) — entry price (incl. transaction costs) sits below the carrying value of net identifiable assets; bargain-purchase signal, shown unclamped (§8; ASC 805 gain recognition out of scope in v1)`,
+      message: `Goodwill plug is NEGATIVE (${x.balance_sheet[0].goodwill.toFixed(1)}): entry price (incl. transaction costs) sits below the carrying value of net identifiable assets; bargain-purchase signal, shown unclamped (§8; ASC 805 gain recognition out of scope in v1)`,
     });
   }
 
@@ -184,7 +184,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'ppe_seeded_at_zero',
       severity: 'warn',
-      message: 'Opening PP&E seeded at 0 — the filing/facts provided no net PP&E; the §8 roll and D&A basis start from zero (disclosed §8 fallback)',
+      message: 'Opening PP&E seeded at 0: the filing/facts provided no net PP&E; the §8 roll and D&A basis start from zero (disclosed §8 fallback)',
     });
   }
 
@@ -193,7 +193,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'covenant_breach_base_case',
       severity: 'warn',
-      message: `Base case breaches a covenant in year ${covenantBreach} (signed headroom negative — §11)`,
+      message: `Base case breaches a covenant in year ${covenantBreach} (signed headroom negative: §11)`,
     });
   }
 

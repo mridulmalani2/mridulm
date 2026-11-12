@@ -11,8 +11,8 @@ import { runModel } from '../lib/engine2/facade';
 import { mapCompanyFacts } from '../lib/edgar/mapXbrl';
 import type { CompanyFacts } from '../lib/edgar/client';
 
-describe('lib/format — §15 display boundary (snapshot rules)', () => {
-  it('money: 1dp of millions, thousands separators, sign outside the symbol — ALL FIVE modelled symbols', () => {
+describe('lib/format: §15 display boundary (snapshot rules)', () => {
+  it('money: 1dp of millions, thousands separators, sign outside the symbol; ALL FIVE modelled symbols', () => {
     expect(money(1234.567, 'USD')).toBe('$1,234.6m');
     expect(money(-42.04, 'EUR')).toBe('−€42.0m');
     expect(money(0, 'GBP')).toBe('£0.0m');
@@ -28,7 +28,7 @@ describe('lib/format — §15 display boundary (snapshot rules)', () => {
     expect(moneyIso(210838, 'SEK', 0)).not.toContain('$');
   });
 
-  it('pct/multiple/bps/headroom: 1dp conventions; null ⇒ N/A — 9999/99 can never render', () => {
+  it('pct/multiple/bps/headroom: 1dp conventions; null ⇒ N/A, 9999/99 can never render', () => {
     expect(pct(0.159649)).toBe('16.0%');
     expect(pct(null)).toBe('N/A');
     expect(multiple(2.104)).toBe('2.1x');
@@ -59,7 +59,7 @@ describe('lib/format — §15 display boundary (snapshot rules)', () => {
   });
 });
 
-describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → suggest → runModel', () => {
+describe('E1 adapter: RawHistoricals → DealFacts (gaps stay gaps) → suggest → runModel', () => {
   const M = 1e6;
   const fy = (start: string, end: string, val: number, filed = '2026-02-15') => ({
     start, end, val: val * M, fy: Number(end.slice(0, 4)), fp: 'FY', form: '10-K', filed, accn: `a-${filed}`,
@@ -133,7 +133,7 @@ describe('E1 adapter — RawHistoricals → DealFacts (gaps stay gaps) → sugge
     expect(missing).toContain('currency_unsupported');
   });
 
-  it('an underivable tax rate is NULL end to end — no statutory stand-in is generated anywhere', () => {
+  it('an underivable tax rate is NULL end to end: no statutory stand-in is generated anywhere', () => {
     const noTax: CompanyFacts = JSON.parse(JSON.stringify(FIXTURE));
     delete (noTax as any).facts['us-gaap'].IncomeTaxExpenseBenefit;
     const raw = mapCompanyFacts(noTax, { sicCode: '3711' });

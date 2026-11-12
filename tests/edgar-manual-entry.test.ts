@@ -22,7 +22,7 @@ const FULL: ManualFactsInput = {
   netPpe: 40, taxRate: 0.25, nol: 7,
 };
 
-describe('manualHistoricals — full multi-year entry (FY basis)', () => {
+describe('manualHistoricals: full multi-year entry (FY basis)', () => {
   const raw = manualHistoricals(FULL);
 
   it('sizing pair + anchor identity come from the LAST fiscal year', () => {
@@ -73,7 +73,7 @@ describe('manualHistoricals — full multi-year entry (FY basis)', () => {
   });
 });
 
-describe('manualHistoricals — sparse entry: blanks stay gaps, NEVER fabricated zeros', () => {
+describe('manualHistoricals: sparse entry: blanks stay gaps, NEVER fabricated zeros', () => {
   const raw = manualHistoricals({
     dealName: 'Fixture Sparse Co', sector: 'Other', currency: 'EUR', basis: 'FY', ltm: null,
     years: [{ end: '2025-06-30', revenue: 200, ebitda: 50, da: null, capex: null }],
@@ -98,13 +98,13 @@ describe('manualHistoricals — sparse entry: blanks stay gaps, NEVER fabricated
     expect(adapted.facts.effective_tax_rate).toBeNull(); // never a statutory stand-in
   });
 
-  it('a single history point yields NO growth proposal (D1 ≥3 gate) — never a template guess', () => {
+  it('a single history point yields NO growth proposal (D1 ≥3 gate), never a template guess', () => {
     const adapted = adaptRawHistoricals(raw);
     expect(suggestionsFor(adapted.facts, 5)['operations.growth']).toBeUndefined();
   });
 });
 
-describe('manualHistoricals — LTM sizing basis (§1.1, the CIM presentation)', () => {
+describe('manualHistoricals: LTM sizing basis (§1.1, the CIM presentation)', () => {
   const raw = manualHistoricals({
     dealName: 'Fixture LTM Co', sector: 'Consumer', currency: 'GBP', basis: 'LTM',
     ltm: { asOf: '2026-06-30', revenue: 118, ebitda: 25 },
@@ -119,7 +119,7 @@ describe('manualHistoricals — LTM sizing basis (§1.1, the CIM presentation)',
     expect(raw.basis).toBe('LTM');
     expect(raw.as_of).toBe('2026-06-30');
     expect(raw.fy_revenue?.value).toBe(118);
-    expect(raw.fy_revenue?.provenance.detail).toBe('Manually entered — LTM revenue as of 2026-06-30');
+    expect(raw.fy_revenue?.provenance.detail).toBe('Manually entered: LTM revenue as of 2026-06-30');
     expect(raw.ebitda_margin?.value).toBeCloseTo(25 / 118, 12);
   });
 
@@ -130,7 +130,7 @@ describe('manualHistoricals — LTM sizing basis (§1.1, the CIM presentation)',
     expect(raw.da_pct_revenue?.provenance.detail).toContain('FY2025');
   });
 
-  it('the annual history contains ONLY full fiscal years — no LTM contamination of CAGR spans', () => {
+  it('the annual history contains ONLY full fiscal years: no LTM contamination of CAGR spans', () => {
     expect(raw.history?.revenue.points.map((p) => p.end)).toEqual(['2024-12-31', '2025-12-31']);
     expect(raw.net_debt?.value).toBe(30); // direct entry honoured when legs are absent
     const adapted = adaptRawHistoricals(raw);
@@ -139,7 +139,7 @@ describe('manualHistoricals — LTM sizing basis (§1.1, the CIM presentation)',
   });
 });
 
-describe('shiftYearEnd — fiscal-year date arithmetic', () => {
+describe('shiftYearEnd: fiscal-year date arithmetic', () => {
   it('steps whole years and clamps Feb-29 off leap years', () => {
     expect(shiftYearEnd('2025-12-31', 1)).toBe('2024-12-31');
     expect(shiftYearEnd('2025-03-31', 2)).toBe('2023-03-31');

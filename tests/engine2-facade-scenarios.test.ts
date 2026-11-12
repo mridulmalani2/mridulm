@@ -28,7 +28,7 @@ const G2_DOWNSIDE: ScenarioDeltas = {
   exit_multiple: 8.5,
 };
 
-describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', () => {
+describe('facade.ts: assembled ModelOutput mirrors & coherence (C5 gate)', () => {
   // G6REFI [v1.3.0] joins the mirror/bridge/coherence gate: a refinancing raises NO coherence
   // flag by itself (§18.8), the §14.9 bridge STILL reconciles with the refi's cash costs embedded
   // in the paydown bar (no new bar/walk-down line — §18.7), and gp_fee_income stays null.
@@ -114,7 +114,7 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
     expect(Math.abs(out.bridge.walkdown.sponsor_net_delta - sponsorDelta)).toBeLessThan(1e-9);
   });
 
-  it('coherence flags fire on engineered defects (§16 — each code reachable, right severity)', () => {
+  it('coherence flags fire on engineered defects (§16: each code reachable, right severity)', () => {
     const { facts, assumptions } = GOLDEN_DEALS.G5;
     // negative sponsor equity: par above total uses — cheap bullet debt so ONLY the
     // solvency flag fires (no cash-flow collapse muddying the case)
@@ -198,7 +198,7 @@ describe('facade.ts — assembled ModelOutput mirrors & coherence (C5 gate)', ()
   });
 });
 
-describe('scenarios.ts — §13 semantics on the committed G2-D scenario (C9 gate)', () => {
+describe('scenarios.ts: §13 semantics on the committed G2-D scenario (C9 gate)', () => {
   it('G2-D reproduces the committed fixture: frozen S&U, returns, smaller sweep every year, credit dashboard attached', () => {
     const g2 = load('G2');
     const g2d = load('G2D');
@@ -247,7 +247,7 @@ describe('scenarios.ts — §13 semantics on the committed G2-D scenario (C9 gat
   });
 });
 
-describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () => {
+describe('scenarios.ts: sensitivity grids (§13/§14.7/§14.11/§14.12)', () => {
   it('§14.7: the center cell IS the base run; operating axes leave S&U frozen; entry axis re-prices', () => {
     const { facts, assumptions } = GOLDEN_DEALS.G2;
     const out = runModelWithScenarios(facts, assumptions, {
@@ -275,7 +275,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
     }
   });
 
-  it('§14.12 (frictionless domain): leverage ↑ ⇒ sponsor IRR ↑ — zero fees/OID, bullet fixed-rate debt, no revolver, no floor bind, unlevered return > cost of debt', () => {
+  it('§14.12 (frictionless domain): leverage ↑ ⇒ sponsor IRR ↑; zero fees/OID, bullet fixed-rate debt, no revolver, no floor bind, unlevered return > cost of debt', () => {
     const facts: DealFacts = { ...GOLDEN_DEALS.G1.facts };
     const frictionless: DealAssumptions = {
       ...GOLDEN_DEALS.G1.assumptions,
@@ -304,7 +304,7 @@ describe('scenarios.ts — sensitivity grids (§13/§14.7/§14.11/§14.12)', () 
     }
   });
 
-  it('§13 [C9 review F1]: an operating co-axis NEVER re-prices entry in a mixed grid — NTM basis, entry axis at its base value ⇒ cell ≡ the entry-frozen scenario oracle', () => {
+  it('§13 [C9 review F1]: an operating co-axis NEVER re-prices entry in a mixed grid; NTM basis, entry axis at its base value ⇒ cell ≡ the entry-frozen scenario oracle', () => {
     // Under entry.basis 'ntm', deriveEntry prices EV off growth[0]; a growth co-axis in a
     // mixed grid must not reach entry pricing (the L-1 pattern — probed at ~69bp optimistic
     // pre-fix). With the entry axis pinned AT its base value, every cell must equal the
@@ -577,7 +577,7 @@ describe('§17 golden-uncovered branches (the list each needs a fixture for)', (
       .toBeLessThan(out.waterfall.reduce((s, w) => s + w.distribution_paid, 0)); // NOT the total
   });
 
-  it('(x) §10 hurdle base takes the TOTAL distributions, not the sponsor share — the rollover∧MIP∧dist case no golden makes (accuracy audit B, 2026-07-25)', () => {
+  it('(x) §10 hurdle base takes the TOTAL distributions, not the sponsor share: the rollover∧MIP∧dist case no golden makes (accuracy audit B, 2026-07-25)', () => {
     // SPEC §17(x): §10's hurdle takes the TOTAL cumulative distributions while §12's
     // walk-down adds back only the SPONSOR share; they coincide at rollover 0, which is every
     // golden. The audit proved a `total→share` mutation of facade.ts:43 passed 402/402 — only
@@ -640,7 +640,7 @@ describe('§17 golden-uncovered branches (the list each needs a fixture for)', (
  * mutation partner. G2 growth[0] = 6%, so NTM EBITDA = FY × 1.06 and the two multiples must
  * genuinely differ under an NTM entry.
  */
-describe('entryMultipleDisplay — §11 "shows both, LTM canonical"', () => {
+describe('entryMultipleDisplay: §11 "shows both, LTM canonical"', () => {
   const ntm = (): DealAssumptions => ({
     ...GOLDEN_DEALS.G2.assumptions,
     entry: { ...GOLDEN_DEALS.G2.assumptions.entry, basis: 'ntm' },
@@ -671,7 +671,7 @@ describe('entryMultipleDisplay — §11 "shows both, LTM canonical"', () => {
   });
 });
 
-describe('exitMultipleDisplay — §9 single-source + value provenance', () => {
+describe('exitMultipleDisplay: §9 single-source + value provenance', () => {
   // The exit multiple was reconstructed inline as `exit_ev / exit_ebitda_basis_value` on THREE
   // surfaces (OutputTabs, excelExport, memo); this pins the one helper they now share.
   it('recovers the exit multiple ASSUMPTION exactly (provenance: exit_ev = multiple × basis)', () => {
@@ -695,7 +695,7 @@ describe('exitMultipleDisplay — §9 single-source + value provenance', () => {
   });
 });
 
-describe('G-2 fixture (viii) — the NTM base on a STITCHED LTM fact [B1, engine half]', () => {
+describe('G-2 fixture (viii): the NTM base on a STITCHED LTM fact [B1, engine half]', () => {
   // The stitch (data-side) produces LTM EBITDA 328 for fixture (viii); this pins the ENGINE half:
   // under an NTM entry the valuation base is LTM × (1 + growth[0]) with growth[0] the annualized
   // rate, and entry_ebitda_for_sizing is the LTM sizing basis — NOT the stale FY, NOT the projected base.
