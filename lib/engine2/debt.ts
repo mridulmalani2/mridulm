@@ -46,7 +46,7 @@ export function validateStructureForHold(sized: SizedStructure, holdYears: numbe
   for (const t of sized.terms) {
     if (t.assumption.maturity_years <= holdYears) {
       throw new RangeError(
-        `debt: ${t.assumption.name} matures in year ${t.assumption.maturity_years}, inside the ${holdYears}-year hold; v1 has no refinancing/balloon module (SPEC §3 scope; Phase G)`,
+        `debt: ${t.assumption.name} matures in year ${t.assumption.maturity_years}, inside the ${holdYears}-year hold; a maturity inside the hold needs a scheduled refinancing, since a balloon repayment is not modelled`,
       );
     }
   }
@@ -70,28 +70,28 @@ export function validateRefinancing(
     const term = sized.terms.find((t) => t.assumption.name === ev.tranche_name);
     if (!term) {
       throw new RangeError(
-        `debt: refinancing names "${ev.tranche_name}", which is not a term tranche: v1 refinances cash-pay term tranches only (not the revolver) (SPEC §18.2)`,
+        `debt: refinancing names "${ev.tranche_name}", which is not a term tranche: only cash-pay term tranches can be refinanced (not the revolver)`,
       );
     }
     if (term.assumption.type === 'pik_note') {
       throw new RangeError(
-        `debt: refinancing names "${ev.tranche_name}", a pik_note: PIK notes are not refinanceable in v1 (SPEC §18.2)`,
+        `debt: refinancing names "${ev.tranche_name}", a PIK note: PIK notes cannot be refinanced`,
       );
     }
     if (seen.has(ev.tranche_name)) {
-      throw new RangeError(`debt: tranche "${ev.tranche_name}" is refinanced more than once: at most one refi per tranche in v1 (SPEC §18.1)`);
+      throw new RangeError(`debt: tranche "${ev.tranche_name}" is refinanced more than once: at most one refinancing per tranche`);
     }
     seen.add(ev.tranche_name);
     if (!Number.isInteger(ev.year) || ev.year < 1 || ev.year > holdYears - 1) {
       throw new RangeError(
-        `debt: refinancing of "${ev.tranche_name}" at year ${ev.year}: the refi year must be 1..${holdYears - 1} (before the exit year; SPEC §18.3)`,
+        `debt: refinancing of "${ev.tranche_name}" at year ${ev.year}: the refi year must be 1..${holdYears - 1} (before the exit year)`,
       );
     }
     // NaN-safe: NaN fails BOTH comparisons and would sail through to poison effMaturity —
     // an input-gate field must reject non-finite input, not compute with it (§18.3).
     if (!Number.isFinite(ev.new_maturity_years) || ev.new_maturity_years < 1 || ev.year - 1 + ev.new_maturity_years <= holdYears) {
       throw new RangeError(
-        `debt: refinancing of "${ev.tranche_name}": the new maturity must exceed the remaining hold ((year−1)+new_maturity_years > ${holdYears}); no balloon inside the hold (SPEC §18.3)`,
+        `debt: refinancing of "${ev.tranche_name}": the new maturity must exceed the remaining hold ((year−1)+new_maturity_years > ${holdYears}); no balloon inside the hold`,
       );
     }
     for (const [k, v] of [
@@ -100,7 +100,7 @@ export function validateRefinancing(
       ['new_financing_fee_pct', ev.new_financing_fee_pct],
       ['new_amort_pct_of_face', ev.new_amort_pct_of_face],
     ] as const) {
-      if (!(v >= 0)) throw new RangeError(`debt: refinancing of "${ev.tranche_name}", ${k} must be ≥ 0 (SPEC §18.1)`);
+      if (!(v >= 0)) throw new RangeError(`debt: refinancing of "${ev.tranche_name}", ${k} must be ≥ 0`);
     }
   }
 }
@@ -120,7 +120,7 @@ export function validatePikElections(sized: SizedStructure, holdYears: number): 
     const el = a.elections;
     if (el === null || el === undefined) continue; // null ≡ the v1 FIXED both-legs note
     const bad = (msg: string): never => {
-      throw new RangeError(`debt: pik_note "${a.name}" elections, ${msg} (SPEC §20.2/§16)`);
+      throw new RangeError(`debt: pik_note "${a.name}" elections, ${msg}`);
     };
     if (el.length !== holdYears) {
       bad(`length ${el.length} ≠ hold_years ${holdYears}; the schedule is one election per HOLD year`);

@@ -22,11 +22,11 @@ export function validateForecastLines(assumptions: Pick<DealAssumptions, 'operat
   const g = lines.year_n_plus_1_growth;
   if (needs && g === null) {
     throw new RangeError(
-      'forecast: enter the growth rate from the final hold year into year N+1; the NTM exit and the flow-to-equity terminal value both need year N+1 (§24.3 R7)',
+      'forecast: enter the growth rate from the final hold year into year N+1; the NTM exit and the flow-to-equity terminal value both need year N+1',
     );
   }
   if (g !== null && (!Number.isFinite(g) || g <= -1)) {
-    throw new RangeError('forecast: year N+1 growth must be finite and > −100% (§24.3 R7)');
+    throw new RangeError('forecast: year N+1 growth must be finite and > −100%');
   }
 }
 
@@ -40,18 +40,18 @@ export function validateValuation(v: ValuationAssumption): void {
     ['long-run growth', v.long_run_growth],
   ];
   for (const [name, x] of fields) {
-    if (!Number.isFinite(x)) throw new RangeError(`valuation: ${name} must be a finite number (§25.1)`);
+    if (!Number.isFinite(x)) throw new RangeError(`valuation: ${name} must be a finite number`);
   }
-  if (v.mrp < 0) throw new RangeError('valuation: market risk premium must be ≥ 0 (§25.1)');
-  if (v.asset_beta < 0) throw new RangeError('valuation: asset beta must be ≥ 0 (§25.1)');
-  if (v.debt_beta < 0) throw new RangeError('valuation: debt beta must be ≥ 0 (§25.1)');
+  if (v.mrp < 0) throw new RangeError('valuation: market risk premium must be ≥ 0');
+  if (v.asset_beta < 0) throw new RangeError('valuation: asset beta must be ≥ 0');
+  if (v.debt_beta < 0) throw new RangeError('valuation: debt beta must be ≥ 0');
   const t = v.terminal ?? null;
   if (t !== null) {
     if (!Number.isFinite(t.capex_pct_of_da) || t.capex_pct_of_da < 0) {
-      throw new RangeError('valuation: terminal capex ÷ D&A must be a finite number ≥ 0 (§28.1)');
+      throw new RangeError('valuation: terminal capex ÷ D&A must be a finite number ≥ 0');
     }
     if (!Number.isFinite(t.delta_nwc_before_growth)) {
-      throw new RangeError('valuation: the terminal increase in NWC must be a finite number (§28.1)');
+      throw new RangeError('valuation: the terminal increase in NWC must be a finite number');
     }
   }
 }

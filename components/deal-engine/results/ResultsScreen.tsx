@@ -25,7 +25,7 @@ import { exportExcelModel } from './exportModel';
 import { RESULT_VIEWS } from './views';
 import { CasesCompare, SaveCase } from '../shell/WorkspaceDrawers';
 
-const { Operating, BS, Credit, Sensitivity, Scenarios } = DETAIL_VIEWS;
+const { Operating, BS, Credit, Scenarios } = DETAIL_VIEWS;
 
 /** Where the equity value comes from: the four SPEC §12 bars on top of the equity invested. */
 const ValueBridgeCard: React.FC<{ o: Engine2ModelOutput; note?: boolean }> = ({ o, note = true }) => {
@@ -311,7 +311,7 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
       case 'debt': return <div className="space-y-5"><DebtChart o={output} /><Card title="Debt schedule"><Debt o={output} ccy={ccy} /></Card></div>;
       case 'credit': return <div className="space-y-5"><CovenantCards o={output} ccy={ccy} /><Card title="Credit statistics"><Credit o={output} /></Card></div>;
       case 'bs': return <Card title="Balance sheet"><BS o={output} ccy={ccy} /></Card>;
-      case 'sensitivity': return <div className="space-y-5"><TornadoCard o={output} /><GridCard o={output} /><BreakEvenCard o={output} /><Card title="Entry and exit multiple, as exported to Excel"><Sensitivity o={output} /></Card></div>;
+      case 'sensitivity': return <div className="space-y-5"><TornadoCard o={output} /><GridCard o={output} /><BreakEvenCard o={output} /></div>;
       case 'scenarios': return (
         <div className="space-y-5">
           <Card title="Stress scenarios"><Scenarios o={output} ccy={ccy} /></Card>

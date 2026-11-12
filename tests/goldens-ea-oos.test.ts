@@ -103,7 +103,7 @@ describe('EA out-of-sample: a workbook the engine never saw, reproduced cell for
   it('terminal inputs are gated: a negative capex ratio or a non-finite NWC is rejected, never clamped', () => {
     const bad = (terminal: { capex_pct_of_da: number; delta_nwc_before_growth: number }) =>
       () => runModel(EA_FACTS, { ...EA_ASSUMPTIONS, valuation: { ...EA_ASSUMPTIONS.valuation!, terminal } });
-    expect(bad({ capex_pct_of_da: -0.1, delta_nwc_before_growth: 0 })).toThrow(/§28\.1/);
-    expect(bad({ capex_pct_of_da: 1, delta_nwc_before_growth: Number.NaN })).toThrow(/§28\.1/);
+    expect(bad({ capex_pct_of_da: -0.1, delta_nwc_before_growth: 0 })).toThrow(/terminal capex ÷ D&A must be/);
+    expect(bad({ capex_pct_of_da: 1, delta_nwc_before_growth: Number.NaN })).toThrow(/terminal increase in NWC must be/);
   });
 });

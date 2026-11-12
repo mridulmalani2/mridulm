@@ -24,6 +24,10 @@ export interface DealUiStore {
   /** The results section in view (the rail and the command palette both set it). */
   resultsView: string;
   setResultsView: (v: string) => void;
+  /** The analyst's hurdle IRR as typed (a percentage; blank until entered). One value for every
+   *  analysis view that reads it, so the grid and the break-evens can never disagree. */
+  hurdle: string;
+  setHurdle: (v: string) => void;
 }
 
 export const dealUiStore = createStore<DealUiStore>()((set, get) => ({
@@ -37,6 +41,8 @@ export const dealUiStore = createStore<DealUiStore>()((set, get) => ({
   jumpTo: (jump) => set({ jump }),
   resultsView: 'overview',
   setResultsView: (resultsView) => set({ resultsView }),
+  hurdle: '',
+  setHurdle: (hurdle) => set({ hurdle }),
 }));
 
 export function useDealUi<T>(selector: (s: DealUiStore) => T): T {

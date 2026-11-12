@@ -168,7 +168,7 @@ describe('§20.10 directed fixtures: the golden-uncovered branches', () => {
         }],
       };
     });
-    expect(() => runModel(d.facts, d.assumptions)).toThrow(/PIK notes are not refinanceable/);
+    expect(() => runModel(d.facts, d.assumptions)).toThrow(/PIK notes cannot be refinanced/);
   });
 
   it('(iv) elections WITH mandatory amort: a cash year pays coupon + amort (balance DECREASES); a pik year accrues AND amortizes', () => {

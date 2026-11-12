@@ -243,6 +243,41 @@ describe('a deal survives a reload (store/session): inputs are saved, everything
     expect(model().missing().map((m) => m.path)).toContain('exit.multiple');
   });
 
+  it('a deal that had been built is built again on restore: the figures are recomputed, never read back, so a reload on Results stays there', async () => {
+    const { restoreSession, serialiseSession } = await import('../store/session');
+    const { resolveStep } = await import('../pages/DealEngine');
+    const { pack } = load();
+    clean().edit((l) => stops(setLeaseChoice(acceptCandidate(l, pack.candidates.find((c) => c.tag === 'RestructuringCharges')!), 'all')));
+    expect(clean().confirmAdjusted()).toBe(true);
+    enterDeal(enteredAssumptions(5));
+    model().buildWithExhibits();
+    const built = model().output!;
+    expect(built).not.toBeNull();
+    const text = serialiseSession()!;
+    expect(JSON.parse(text).built).toBe(true);
+    expect(text).not.toContain('"output"'); // only the fact that it was built is saved
+    expect(text).not.toContain('"returns"');
+
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    expect(restoreSession(text)).toBe(true);
+    const again = model().output!;
+    expect(again).not.toBeNull();
+    expect(again).not.toBe(built);
+    expect(again.returns.sponsor_net.irr).toBe(built.returns.sponsor_net.irr);
+    expect(again.sensitivity).toEqual(built.sensitivity); // the same build the Build button runs, exhibits included
+    expect(resolveStep('results', { hasFacts: true, cleanDone: clean().done, hasOutput: model().output !== null })).toBe('results');
+
+    // a saved deal whose inputs no longer build opens on Assumptions, with no error shown unasked
+    const blanked = JSON.parse(text);
+    blanked.assumptions.exit.multiple = '__blank__';
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    expect(restoreSession(JSON.stringify(blanked))).toBe(true);
+    expect(model().output).toBeNull();
+    expect(model().error).toBeNull();
+  });
+
   it('garbage, an old version or nothing at all restores nothing', async () => {
     const { restoreSession, serialiseSession } = await import('../store/session');
     expect(serialiseSession()).toBeNull();

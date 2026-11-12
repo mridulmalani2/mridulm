@@ -36,8 +36,8 @@ describe('§23 display surface', () => {
   });
   it('the Methodology tab carries the §23 and §3.8 disclosures', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Partial exits (§23)');
+    expect(html).toContain('Partial exits');
     expect(html).toContain('SECONDARY selldowns only');
-    expect(html).toContain('Surplus-cash distributions (§3.8)');
+    expect(html).toContain('Surplus-cash distributions');
   });
 });

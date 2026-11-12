@@ -170,7 +170,7 @@ export function applyCleaning(raw: RawHistoricals, pack: StatementPack, ledgerIn
     const r = out.fy_revenue?.value ?? null;
     const e = continuing.length ? out.forecast_ebitda?.value ?? null : out.fy_ebitda?.value ?? null;
     out.ebitda_margin = r !== null && e !== null && r > 0
-      ? { value: e / r, provenance: { source: 'adjusted', detail: continuing.length ? 'forecast-base EBITDA ÷ adjusted revenue (§27)' : 'adjusted EBITDA ÷ adjusted revenue' } }
+      ? { value: e / r, provenance: { source: 'adjusted', detail: continuing.length ? 'forecast-base EBITDA ÷ adjusted revenue' : 'adjusted EBITDA ÷ adjusted revenue' } }
       : null;
   }
 

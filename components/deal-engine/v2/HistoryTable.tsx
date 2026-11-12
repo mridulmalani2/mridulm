@@ -4,7 +4,7 @@
  * All numbers pass through lib/format — engine floats never reach the DOM raw.
  */
 import React from 'react';
-import { money, moneyIso, num, pct, staleness, stalenessTier } from '../../../lib/format';
+import { money, moneyIso, pct, staleness, stalenessTier } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 import type { DealFacts } from '../../../lib/engine2/types';
 
@@ -49,7 +49,7 @@ const HistoryTable: React.FC<{
             const tier = stalenessTier(facts.sizing_as_of, today); // view-relative, uniform across all filer paths
             return (
               <span className="text-[12px] flex items-center gap-1" style={label}
-                title="Sizing basis for leverage & entry EBITDA (SPEC §1.1)">
+                title="Sizing basis for leverage & entry EBITDA">
                 <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: STALE_COLOR[tier ?? 'fresh'] }} />
                 {facts.sizing_basis === 'LTM' ? `sizing: LTM ending ${facts.sizing_as_of}` : 'sizing: FY'}
                 {tier ? ` · ${tier}` : ''}
@@ -76,7 +76,7 @@ const HistoryTable: React.FC<{
                 <td>{cell(h.revenue, fmtMoney)}</td>
                 <td>{cell(h.ebitda, fmtMoney)}</td>
                 <td>{h.revenue !== null && h.ebitda !== null && h.revenue > 0 ? pct(h.ebitda / h.revenue) : '–'}</td>
-                <td>{cell(h.capex, (x) => num(x, 0))}</td>
+                <td>{cell(h.capex, fmtMoney)}</td>
               </tr>
             ))}
           </tbody>

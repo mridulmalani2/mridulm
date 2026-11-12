@@ -194,7 +194,7 @@ export function suggestionsFor(
   if (entryMultiple !== null) {
     const priced = current?.entry.driver === 'ev';
     put('exit.multiple', entryMultiple, 'convention',
-      `exit at the entry multiple${priced ? ` (${entryMultiple.toFixed(4)}x = purchase price ÷ ${current?.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA)` : ''}: multiple expansion is usually unjustifiable (DR-4 Cat.7)`);
+      `exit at the entry multiple${priced ? ` (${entryMultiple.toFixed(4)}x = purchase price ÷ ${current?.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA)` : ''}: multiple expansion is usually unjustifiable`);
   }
 
   // ── Terminal year (§28): offered only once the analyst has chosen to state one ──
@@ -212,10 +212,10 @@ export function suggestionsFor(
   // Bases: the historical year where there is one (what filings report), and the exit on the
   // entry's basis so the two multiples can be compared (SPEC §9/§11).
   if (facts.fy_ebitda !== null && facts.fy_ebitda > 0) {
-    put('entry.basis', 'fy', 'convention', `price on the historical year (${facts.sizing_basis === 'LTM' ? 'LTM' : fy}), the figure the source reports; choose NTM only if the price was struck on forecast EBITDA (SPEC §9)`);
+    put('entry.basis', 'fy', 'convention', `price on the historical year (${facts.sizing_basis === 'LTM' ? 'LTM' : fy}), the figure the source reports; choose NTM only if the price was struck on forecast EBITDA`);
   }
   if (current && !pending.includes('entry.basis')) {
-    put('exit.basis', current.entry.basis, 'convention', 'the same basis as the entry multiple, so the change between entry and exit multiples is a like-for-like comparison (SPEC §9/§11)');
+    put('exit.basis', current.entry.basis, 'convention', 'the same basis as the entry multiple, so the change between entry and exit multiples is a like-for-like comparison');
   }
 
   // Single figures from the filing, for a field entered on its own.

@@ -58,7 +58,7 @@ describe('§19 fund display surface: Returns tab', () => {
   it('G7FUND: the footnote carries the §19.5 memo line, the TVPI-≡-DPI label, paid-in, and the interim-only payback sentinel', () => {
     const { o, html } = render('G7FUND');
     const f = o.fund!;
-    expect(html).toContain('less: fund fees &amp; carry → net to LP (SPEC §19)');
+    expect(html).toContain('less: fund fees &amp; carry → net to LP');
     expect(html).toContain('TVPI (= DPI, fully realized)');
     expect(html).toContain(money(f.paid_in_total, 'USD'));       // $645.9m — the named field
     expect(html).toContain(money(f.committed_capital, 'USD'));   // ≡ paid-in on the null-committed golden
@@ -82,7 +82,7 @@ describe('§19 fund display surface: Returns tab', () => {
 describe('§19.8: the fund-overlay disclosure row is on the Methodology surface (SPEC §15)', () => {
   it('the Disclosures table carries the Fund/LP overlay row with the load-bearing clauses (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Fund/LP overlay (§19)');
+    expect(html).toContain('Fund/LP overlay');
     // the load-bearing clauses of the §19.8 sentence — a paraphrase drift reddens here
     expect(html).toContain('NO fee-recovery tier');
     expect(html).toContain('NOT fund carry');

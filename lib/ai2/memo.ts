@@ -76,7 +76,7 @@ FCF conversion: ${o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.
 
 ## Caveats
 ${o.coherence.length ? o.coherence.map((f) => `- ${f.severity === 'block' ? 'BLOCK' : 'WARN'}: ${f.message}`).join('\n') : '- No coherence flags on this run.'}
-- Entry leverage is GROSS (debt at par ÷ ${em.sizing_label} EBITDA: the quoted sizing basis, SPEC §11); the per-year credit statistics are NET of cash. The two are different bases, so entry and final-year leverage are not a single deleveraging series.
-- A model is a range, not a point: see the Sensitivity and Scenarios exhibits (SPEC §15).
+- Entry leverage is GROSS (debt at par ÷ ${em.sizing_label} EBITDA: the quoted sizing basis); the per-year credit statistics are NET of cash. The two are different bases, so entry and final-year leverage are not a single deleveraging series.
+- A model is a range, not a point: see the Sensitivity and Scenarios exhibits.
 `;
 }

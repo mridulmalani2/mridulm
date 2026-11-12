@@ -41,7 +41,7 @@ export function show(v: number | null | undefined, unit: Unit): string {
  * numbers pasted together, not 1253.
  */
 export function parse(text: string, unit: Unit): number | null {
-  const t = text.trim();
+  const t = text.trim().replace(/−/g, '-'); // a figure copied from the page carries the typographic minus
   if (t === '') return Number.NaN;
   if (/\s/.test(t)) return null;
   if (unit === 'pct') return fromPctInput(t);

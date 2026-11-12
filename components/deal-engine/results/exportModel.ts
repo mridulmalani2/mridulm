@@ -7,7 +7,8 @@ import type { Workbook } from 'exceljs';
 import type { Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { labelFor } from '../../../lib/engine2/draft';
 
-export const fileStem = (name: string) => name.replace(/[^\w-]+/g, '_');
+/** A company name as a file name: letters, digits and hyphens, one underscore between words, none at either end. */
+export const fileStem = (name: string) => name.replace(/[^\p{L}\p{N}-]+/gu, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'deal';
 
 export function download(name: string, data: BlobPart, type: string): void {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -133,7 +134,7 @@ export async function exportExcelModel(output: Engine2ModelOutput, notes: Record
 /** Copy a table to the clipboard as tab-separated text, which pastes into Excel and PowerPoint as cells. */
 export async function copyTable(table: HTMLTableElement): Promise<boolean> {
   const text = Array.from(table.rows)
-    .map((r) => Array.from(r.cells).map((c) => (c.innerText ?? c.textContent ?? '').replace(/\s+/g, ' ').trim()).join('\t'))
+    .map((r) => Array.from(r.cells).map((c) => (c.innerText ?? c.textContent ?? '').replace(/\s+/g, ' ').replace(/−/g, '-').trim()).join('\t')) // a plain hyphen, so Excel reads a negative as a number
     .join('\n');
   try {
     await navigator.clipboard.writeText(text);

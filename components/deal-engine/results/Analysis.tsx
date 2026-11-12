@@ -9,6 +9,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
+import { useDealUi } from '../../../store/dealUi';
 import { breakEvens, customGrid, gridAxes, headlineOf, tornado, type FlexDriver, type FlexId } from '../../../lib/analysis';
 import type { Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { covenantEbitdaCushion } from '../../../lib/engine2/display';
@@ -25,6 +26,18 @@ const MiniNum: React.FC<{ value: string; onChange: (v: string) => void; suffix: 
     <span className="pr-1.5 text-[11px] text-[color:var(--de-ink-3)]">{suffix}</span>
   </span>
 );
+
+/** The hurdle IRR, typed once and read by every view on the page. Blank or unreadable is no hurdle. */
+function useHurdle(): { text: string; set: (v: string) => void; value: number | null } {
+  const text = useDealUi((s) => s.hurdle);
+  const set = useDealUi((s) => s.setHurdle);
+  const value = text.trim() === '' || !Number.isFinite(Number(text)) ? null : Number(text) / 100;
+  return { text, set, value };
+}
+const HurdleBox: React.FC = () => {
+  const { text, set } = useHurdle();
+  return <span className="inline-flex items-center gap-2 text-[13px] text-[color:var(--de-ink-2)]">Your hurdle IRR <MiniNum ariaLabel="Hurdle IRR" value={text} suffix="%" onChange={set} /></span>;
+};
 
 const scaleOf = (d: Pick<FlexDriver, 'unit'>) => (d.unit === 'x' ? 1 : 100);
 const suffixOf = (d: Pick<FlexDriver, 'unit'>) => (d.unit === 'x' ? 'x' : d.unit === 'pts' ? 'pts' : '%');
@@ -114,16 +127,16 @@ export const GridCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
   const [metric, setMetric] = useState<'irr' | 'moic'>('irr');
   const [rowStep, setRowStep] = useState('');
   const [colStep, setColStep] = useState('');
-  const [hurdle, setHurdle] = useState('');
+  const h = useHurdle().value;
   const row = axes.find((a) => a.axis === rowId) ?? axes[0];
   const col = axes.find((a) => a.axis === colId && a.axis !== row.axis) ?? axes.find((a) => a.axis !== row.axis)!;
   const rs = parseStep(rowStep, row.unit === 'x' ? 1 : 100) ?? row.step;
   const cs = parseStep(colStep, col.unit === 'x' ? 1 : 100) ?? col.step;
   const grid = useMemo(() => customGrid(o.facts, assumptions, o, row, col, rs, cs), [o, assumptions, row, col, rs, cs]);
-  const h = hurdle.trim() === '' || !Number.isFinite(Number(hurdle)) ? null : Number(hurdle) / 100;
   const head = (a: typeof row, v: number) => (a.unit === 'x' ? multiple(v, 1) : a.axis === 'growth' ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${num(Math.abs(v) * 100, 1)} pts` : pct(v, 1));
   const cells = grid ? (metric === 'irr' ? grid.irr : grid.moic) : null;
   const base = cells ? cells[2][2] : null;
+  const byHurdle = metric === 'irr' && h !== null;
   const opts = axes.map((a) => ({ value: a.axis, label: a.label }));
   return (
     <Card title="The return at any two inputs" aside={<Segmented size="sm" ariaLabel="Figure shown" value={metric} onChange={setMetric} options={[{ value: 'irr', label: 'IRR' }, { value: 'moic', label: 'Money multiple' }]} />}>
@@ -136,7 +149,7 @@ export const GridCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
           <Dropdown ariaLabel="Columns" align="left" className="w-52 max-w-full" value={col.axis} options={opts.filter((x) => x.value !== row.axis)} onChange={(v) => { setColId(v); setColStep(''); }} />
           step <MiniNum ariaLabel="Column step" value={colStep || num(col.step * (col.unit === 'x' ? 1 : 100), 1)} suffix={col.unit === 'x' ? 'x' : 'pts'} onChange={setColStep} />
         </span>
-        {metric === 'irr' && <span className="inline-flex items-center gap-2">Your hurdle <MiniNum ariaLabel="Hurdle IRR" value={hurdle} suffix="%" onChange={setHurdle} /></span>}
+        {metric === 'irr' && <HurdleBox />}
       </div>
       {!cells || !grid ? <p className="text-[14px] text-[color:var(--de-ink-2)]">This pair of inputs cannot be flexed together on this deal.</p> : (
         <div className="de-scroll-x">
@@ -153,13 +166,13 @@ export const GridCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
                   <th scope="row" className={cx('text-[12px] font-medium text-right pr-2 whitespace-nowrap', r === 2 ? 'text-[color:var(--de-ink)]' : 'text-[color:var(--de-ink-3)]')}>{head(row, grid.row_values[r])}</th>
                   {line.map((v, c) => {
                     const isBase = r === 2 && c === 2;
-                    const below = metric === 'irr' && h !== null && v !== null && v < h;
+                    // one colour rule at a time: against the hurdle once there is one, against the base case until then
+                    const mark = byHurdle ? h : base;
                     return (
                       <td key={c} className={cx('text-[13px] text-right px-2 h-9 rounded-[5px]',
                         v === null ? 'bg-[var(--de-sunken)] text-[color:var(--de-ink-3)]'
-                          : base !== null && v > base ? 'bg-[var(--de-pos-soft)]' : base !== null && v < base ? 'bg-[var(--de-accent-soft)]' : 'bg-[var(--de-sunken)]',
-                        isBase && 'font-semibold shadow-[inset_0_0_0_1.5px_var(--de-ink)]',
-                        below && 'text-[color:var(--de-accent)]')}>
+                          : mark === null || (!byHurdle && v === mark) ? 'bg-[var(--de-sunken)]' : v >= mark ? 'bg-[var(--de-pos-soft)]' : 'bg-[var(--de-accent-soft)]',
+                        isBase && 'font-semibold shadow-[inset_0_0_0_1.5px_var(--de-ink)]')}>
                         {v === null ? 'N/A' : metric === 'irr' ? pct(v, 1) : multiple(v, 2)}
                       </td>
                     );
@@ -171,7 +184,7 @@ export const GridCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
         </div>
       )}
       <p className="text-[12px] text-[color:var(--de-ink-3)] mt-3 max-w-[80ch]">
-        The outlined cell is the base case. Green is above it, red below{metric === 'irr' && h !== null ? '; red figures are below your hurdle' : ''}. Each cell is a full run of the model. When the entry multiple or the debt moves, entry is re-priced; operating inputs leave the purchase price and the debt as built. N/A: the structure does not hold there.
+        The outlined cell is the base case. {byHurdle ? `Green meets your ${pct(h, 1)} hurdle, red falls short of it` : 'Green is above it, red below'}. Entry against exit at the starting steps is the grid in the Excel model. Each cell is a full run of the model. When the entry multiple or the debt moves, entry is re-priced; operating inputs leave the purchase price and the debt as built. N/A: the structure does not hold there.
       </p>
     </Card>
   );
@@ -181,8 +194,7 @@ export const GridCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
 
 export const BreakEvenCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
   const assumptions = useEngine2Model((s) => s.assumptions)!;
-  const [hurdle, setHurdle] = useState('');
-  const h = hurdle.trim() === '' || !Number.isFinite(Number(hurdle)) ? null : Number(hurdle) / 100;
+  const h = useHurdle().value;
   const atZero = useMemo(() => breakEvens(o.facts, assumptions, o, 0), [o, assumptions]);
   const atHurdle = useMemo(() => (h === null ? null : breakEvens(o.facts, assumptions, o, h)), [o, assumptions, h]);
   const base = headlineOf(o).irr;
@@ -193,8 +205,7 @@ export const BreakEvenCard: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
     return lever === 'growth_shift' ? `${d > 0 ? '+' : '−'}${num(Math.abs(d) * 100, 2)} pts` : `${d > 0 ? '+' : '−'}${num(Math.abs(d), 2)}x`;
   };
   return (
-    <Card title="How far it can bend" aside={
-      <span className="inline-flex items-center gap-2 text-[13px] text-[color:var(--de-ink-2)]">Your hurdle IRR <MiniNum ariaLabel="Hurdle IRR" value={hurdle} suffix="%" onChange={setHurdle} /></span>}>
+    <Card title="How far it can bend" aside={<HurdleBox />}>
       <div className="de-scroll-x">
         <table className="de-table de-num">
           <thead>

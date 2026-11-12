@@ -36,7 +36,7 @@ const App: React.FC = () => {
   return (
     <MotionConfig reducedMotion="user">
     <div
-      className={`relative min-h-screen ${isDealEngine ? 'bg-[#080b11]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-ink/10 selection:text-ink' : 'bg-black'}`}
+      className={`relative min-h-screen ${isDealEngine ? 'bg-[#F4F5F2]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-ink/10 selection:text-ink' : 'bg-black'}`}
     >
       {/* Skip to main content link */}
       <a

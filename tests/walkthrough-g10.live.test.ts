@@ -122,7 +122,7 @@ describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE: production p
     // the render surface carries the block with its basis labels
     const html = renderToStaticMarkup(React.createElement(EquityStrip, { o: on as never, ccy: 'USD' as const }));
     expect(html).toContain('Sweet equity strip');
-    expect(html).toContain('§22.5 basis');
+    expect(html).toContain('own realised value');
     console.log(`APPLE strip leg: LN0=${es.loan_notes_subscribed.toFixed(3)} LN[N]=${es.loan_notes_accrued_balance.toFixed(3)} ` +
       `redeemed=${es.loan_notes_redeemed.toFixed(3)} tiers=${es.ratchet_tiers_reached} moic=${es.institution_moic_at_ratchet?.toFixed(4)} ` +
       `M=${es.management_ordinary_share.toFixed(3)} wnet=${es.warrant_payout_net.toFixed(3)} irr=${on.returns.sponsor_net.irr}`);

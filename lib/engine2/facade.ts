@@ -252,7 +252,7 @@ export function buildValuation(
   const paths = debtAndCashPaths(core);
   const lastOp = core.operating[N - 1];
   const gN1 = yearNPlus1Growth(assumptions.operations, N);
-  if (gN1 === null) throw new RangeError('valuation: year N+1 growth is required (§24.3 R7)');
+  if (gN1 === null) throw new RangeError('valuation: year N+1 growth is required');
   // §28.2 [v2.6.0]: year N's lines, or the stated steady-state capex and ΔNWC — resolved ONCE.
   const terminalYear = terminalYearFromCore(core, assumptions);
   const ufcf = terminalUfcf(terminalYear, assumptions.tax.rate, gN1);
@@ -392,7 +392,7 @@ export function runModel(facts: DealFacts, assumptions: DealAssumptions): Engine
       coherence.push({
         code: 'terminal_not_steady_state',
         severity: 'warn',
-        message: `Terminal value capitalises a year that is not a steady state: ${issues.join('; ')}. State the terminal year (capex ÷ D&A, increase in NWC) in the valuation inputs (§28)`,
+        message: `Terminal value capitalises a year that is not a steady state: ${issues.join('; ')}. State the terminal year (capex ÷ D&A, increase in NWC) in the valuation inputs`,
       });
     }
   }

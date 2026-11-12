@@ -275,7 +275,7 @@ const dimsKey = (dims: Record<string, string>) => JSON.stringify(Object.fromEntr
 const INF = 1e9;
 
 function finish(raw: { facts: ParsedFact[]; notes: string[]; identity: UploadIdentity; namespaces: Record<string, string>; entities: Set<string> }): ParsedUpload {
-  if (raw.entities.size > 1) raw.notes.push('multiple entity identifiers in one upload, out of scope; facts merged per §1a note');
+  if (raw.entities.size > 1) raw.notes.push('multiple entity identifiers in one upload, which is not supported; the facts were merged');
   const groups = new Map<string, ParsedFact[]>();
   for (const f of raw.facts) {
     const key = `${f.concept} ${f.period} ${f.unit} ${dimsKey(f.dims)}`;
@@ -418,7 +418,7 @@ export function restampUpload(raw: RawHistoricals, p: ParsedUpload, filename: st
 }
 
 /** The §2b FRC document-level note (identity-only import; every financial field a gap). */
-const FRC_NOTE = 'FRC (Companies House) accounts: v1 extracts identity only; financial fields surface as gaps; FRC alias mapping is a planned extension';
+const FRC_NOTE = 'FRC (Companies House) accounts: only the identity is extracted; financial fields surface as gaps; FRC alias mapping is a planned extension';
 
 /**
  * The upload orchestrator: bytes → RawHistoricals through the SAME mappers as the fetch

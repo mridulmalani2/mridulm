@@ -40,7 +40,7 @@ export interface FundOverlayInputs {
  *  circularity). The committed-below-contributions rejection fires inside the walk where
  *  paid-in is already computed — one fee loop, no second path. */
 export function validateFund(fund: FundOverlayAssumption): void {
-  const bad = (msg: string): never => { throw new RangeError(`fund: ${msg} (SPEC §19.2/§16)`); };
+  const bad = (msg: string): never => { throw new RangeError(`fund: ${msg}`); };
   if (fund.committed_capital === null && fund.fee_basis === 'committed') {
     bad("committed_capital = null with fee_basis 'committed' is circular: the fee would depend on committed which depends on fees drawn");
   }
@@ -137,7 +137,7 @@ export function buildFundOverlay(fund: FundOverlayAssumption, x: FundOverlayInpu
   let paidIn = 0;
   for (const cn of contributions) paidIn += cn;
   if (fund.committed_capital !== null && fund.committed_capital < paidIn - 5e-3) {
-    throw new RangeError(`fund: committed_capital ${fund.committed_capital} is below the required contributions ${paidIn} (SPEC §19.2/§16)`);
+    throw new RangeError(`fund: committed_capital ${fund.committed_capital} is below the required contributions ${paidIn}`);
   }
   let lpTotal = 0;
   for (const d of lpDist) lpTotal += d;

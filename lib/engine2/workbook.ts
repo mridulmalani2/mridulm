@@ -257,7 +257,7 @@ const per = (from: number, to: number, fn: (t: number) => Cell): Record<number, 
 export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResults: boolean }): FormulaWorkbook {
   const blockers = formulaCoverageBlockers(o);
   if (blockers.length) {
-    throw new RangeError(`workbook: the formula model does not implement yet: ${blockers.join(', ')}: export blocked (SPEC §26 coverage rule)`);
+    throw new RangeError(`workbook: the formula model does not implement yet: ${blockers.join(', ')}: export blocked, so that the workbook never shows a figure it cannot recompute`);
   }
   const a = o.assumptions;
   const f = o.facts;
@@ -345,7 +345,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
         let v: number | null = known ? b.adjusted : null;
         if (v !== null) for (const i of contIdx) v -= b.rows[i].amount!;
         return [t, { f: `IF(ISNUMBER(${NZ.at('eb_adj', t)}),${NZ.at('eb_adj', t)}${contIdx.map((i) => `-${NZ.at(`eb_a${i}`, t)}`).join('')},"n/a")`, v } as Cell];
-      })), { bold: true, note: 'SPEC §27: an add-back that keeps costing cash is in the price basis, not in forecast cash flow.' });
+      })), { bold: true, note: 'An add-back that keeps costing cash is in the price basis, not in forecast cash flow.' });
     }
     const nd = nz.net_debt;
     NZ.section(`Net debt at ${nz.anchor ?? 'entry'}`);
@@ -386,7 +386,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     else I.line('ltm_ebitda', `${basisWord} EBITDA`, { 0: { input: f.fy_ebitda } });
   }
   if (linked.forecast && NZ && nz) {
-    I.line('ltm_ebitda_fc', `${basisWord} EBITDA base for the forecast margin (§27)`, { 0: { f: NZ.ext('eb_fc', sizingCol), v: nz.forecast_ebitda } }, { note: fromNz });
+    I.line('ltm_ebitda_fc', `${basisWord} EBITDA base for the forecast margin`, { 0: { f: NZ.ext('eb_fc', sizingCol), v: nz.forecast_ebitda } }, { note: fromNz });
   }
   if (f.fy_revenue === null && f.fy_ebitda === null) I.note('This case states no historical year: every operating line is entered directly.');
   I.line('net_ppe', 'Net PP&E at close (0 if the source states none)', { 0: { input: f.net_ppe ?? 0 } },
@@ -1557,7 +1557,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
     ws.getColumn(2).width = 44;
     ws.getColumn(3).width = 120;
     const t = ws.getCell('B1');
-    t.value = 'Assumptions and methodology (SPEC §15): what this model simplifies, and why';
+    t.value = 'Assumptions and methodology: what this model simplifies, and why';
     t.font = { bold: true, size: 14, color: { argb: NAVY } };
     DISCLOSURES.forEach(([what, why], i) => {
       const r = i + 3;
@@ -1578,7 +1578,7 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
       const b1 = ws.getCell(`C${r}`);
       b1.value = nz.as_reported
         ? 'The deal is modelled on the figures as reported: the analyst chose to apply no normalisation.'
-        : 'Revenue, EBITDA and net debt were normalised before modelling. Every restated figure and every adjustment is itemised on the Normalisation sheet, which the Inputs sheet references. An add-back marked as continuing (SPEC §27) is in the price and leverage basis but not in the forecast margin base, because the cost keeps being paid in cash; every other add-back is in both.';
+        : 'Revenue, EBITDA and net debt were normalised before modelling. Every restated figure and every adjustment is itemised on the Normalisation sheet, which the Inputs sheet references. An add-back marked as continuing is in the price and leverage basis but not in the forecast margin base, because the cost keeps being paid in cash; every other add-back is in both.';
       b1.alignment = { vertical: 'top', wrapText: true };
     }
   }

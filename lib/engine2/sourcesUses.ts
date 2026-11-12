@@ -15,7 +15,7 @@ import type { DealAssumptions, DealFacts, RevolverAssumption, SourcesUses, TermT
 export function trancheSize(size: TrancheSize, fyEbitda: number | null): number {
   if (size.x_ebitda !== undefined) {
     if (fyEbitda === null || !(fyEbitda > 0)) {
-      throw new RangeError('sourcesUses: a tranche sized as a multiple of EBITDA needs historical (LTM/FY) EBITDA > 0: size it as an amount instead (§24.3 R5)');
+      throw new RangeError('sourcesUses: a tranche sized as a multiple of EBITDA needs historical (LTM/FY) EBITDA > 0: size it as an amount instead');
     }
     return size.x_ebitda * fyEbitda;
   }
@@ -67,7 +67,7 @@ export function rescaleTermTranchesToLeverage<A extends Pick<DealAssumptions, 's
   targetLeverage: number,
 ): A {
   if (facts.fy_ebitda === null || !(facts.fy_ebitda > 0)) {
-    throw new RangeError('sourcesUses: total leverage is a multiple of historical EBITDA, which this case does not have; size the tranches as amounts (§24.3 R5)');
+    throw new RangeError('sourcesUses: total leverage is a multiple of historical EBITDA, which this case does not have; size the tranches as amounts');
   }
   const currentTotal = totalTermParFromAssumptions(facts, assumptions);
   if (currentTotal <= 0) {
@@ -108,11 +108,11 @@ export function deriveEntry(
   let valuationEbitda: number;
   if (entry.basis === 'fy') {
     if (fy === null || !(fy > 0)) {
-      throw new RangeError('sourcesUses: an FY/LTM entry multiple needs historical EBITDA > 0: use the NTM basis or enter the price (§24.3 R4)');
+      throw new RangeError('sourcesUses: an FY/LTM entry multiple needs historical EBITDA > 0: use the NTM basis or enter the price');
     }
     valuationEbitda = fy;
   } else {
-    if (!(year1Ebitda > 0)) throw new RangeError('sourcesUses: an NTM entry multiple needs forecast year-1 EBITDA > 0 (§24.3 R4)');
+    if (!(year1Ebitda > 0)) throw new RangeError('sourcesUses: an NTM entry multiple needs forecast year-1 EBITDA > 0');
     valuationEbitda = year1Ebitda;
   }
   let ev: number;
@@ -149,7 +149,7 @@ export function sizeStructure(
   fyEbitda: number | null,
 ): SizedStructure {
   const revolvers = structure.tranches.filter((t): t is RevolverAssumption => t.type === 'revolver');
-  if (revolvers.length > 1) throw new RangeError('sourcesUses: at most ONE revolver per deal (§16)');
+  if (revolvers.length > 1) throw new RangeError('sourcesUses: at most ONE revolver per deal');
   // Tranche names must be unique (C5 review): retirement reporting and the write-off
   // schedules are name-keyed — duplicates mis-attribute early-retirement write-offs
   // (wrong tranche's OID written off, the retired one keeps amortizing). Same input-gate
@@ -157,7 +157,7 @@ export function sizeStructure(
   const names = new Set<string>();
   for (const t of structure.tranches) {
     if (names.has(t.name)) {
-      throw new RangeError(`sourcesUses: duplicate tranche name "${t.name}": names key the §7 write-off schedules and retirement reporting`);
+      throw new RangeError(`sourcesUses: duplicate tranche name "${t.name}": each tranche needs its own name`);
     }
     names.add(t.name);
   }
@@ -172,14 +172,14 @@ export function sizeStructure(
     ? { assumption: revolvers[0], commitment: trancheSize(revolvers[0].commitment, fyEbitda) }
     : null;
   if (revolver && revolver.commitment < 0) {
-    throw new RangeError('sourcesUses: revolver commitment must be ≥ 0 (it feeds the §2 fee base)');
+    throw new RangeError('sourcesUses: revolver commitment must be ≥ 0');
   }
   // v1 input gate (C2 review F1): a revolver drawn at close would put interest-bearing
   // debt on the opening BS whose proceeds never entered §2 sources (the goodwill plug
   // would silently absorb it) — types.ts pins v1 drawn_at_close = 0; enforce it here,
   // same pattern as the v1.0.3 maturity gate.
   if (revolver && revolver.assumption.drawn_at_close !== 0) {
-    throw new RangeError('sourcesUses: drawn_at_close must be 0 in v1 (§2 has no drawn-revolver source line)');
+    throw new RangeError('sourcesUses: the revolver must be undrawn at close (a revolver drawn at close is not modelled)');
   }
   const totalPar = terms.reduce((s, t) => s + t.par, 0);
   return {
@@ -246,7 +246,7 @@ export function stripPlugRejection(
   assumptions: Pick<DealAssumptions, 'sweet_equity'>,
 ): string | null {
   if (assumptions.sweet_equity && !(su.sponsor_equity > 0)) {
-    return `sourcesUses: the management subscription leaves a non-positive sponsor plug (${su.sponsor_equity.toFixed(4)}); rejected at Build (SPEC §22.3(vi))`;
+    return `sourcesUses: the management subscription leaves a non-positive sponsor plug (${su.sponsor_equity.toFixed(4)}); rejected at Build`;
   }
   return null;
 }

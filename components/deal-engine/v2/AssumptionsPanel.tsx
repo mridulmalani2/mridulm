@@ -375,7 +375,7 @@ const AssumptionsPanel: React.FC = () => {
       <Section id="equity" optional title="Management and equity">
         <Toggle on={a.mip !== null} label="Management promote (MIP)"
           onOn={() => set({ ...a, mip: { pool_pct: U, hurdle_moic: U, ratchet: null }, sweet_equity: null }, ['mip', ...(a.sweet_equity ? ['sweet_equity'] : [])])}
-          onOff={() => set({ ...a, mip: null }, ['mip'])} hint="A promote and a sweet-equity strip may not coexist (§22.3)." />
+          onOff={() => set({ ...a, mip: null }, ['mip'])} hint="A promote and a sweet-equity strip may not coexist." />
         {a.mip && (
           <>
             <SuggestionChips path="mip" render={() => 'cited pool / hurdle'} />
@@ -395,7 +395,7 @@ const AssumptionsPanel: React.FC = () => {
         )}
         <Toggle on={a.sweet_equity !== null} label="Sweet-equity strip (loan notes + ordinaries)"
           onOn={() => set({ ...a, sweet_equity: { sponsor_ordinary_pct: U, loan_note_rate: U, management_subscription: U, management_ordinary_pct: U, ratchet: null }, mip: null }, ['sweet_equity', ...(a.mip ? ['mip'] : [])])}
-          onOff={() => set({ ...a, sweet_equity: null }, ['sweet_equity'])} hint="Replaces the promote; rollover must be 0 (§22.3)." />
+          onOff={() => set({ ...a, sweet_equity: null }, ['sweet_equity'])} hint="Replaces the promote; rollover must be 0." />
         {a.sweet_equity && (
           <>
             <NumField path="sweet_equity.sponsor_ordinary_pct" label="Institution's strip in ordinaries" unit="pct" value={a.sweet_equity.sponsor_ordinary_pct} />
@@ -432,7 +432,7 @@ const AssumptionsPanel: React.FC = () => {
           return (
             <>
               <Toggle on={sd !== null} label="Partial exit before the final exit (secondary selldown)"
-                hint={blockedBy ? `Not available beside ${blockedBy} (SPEC §23.3): how the buyer ranks is negotiated.` : 'The sponsor sells part of its stake at the end of a year before the exit, at a multiple of that year’s EBITDA less net debt. The company itself is unaffected.'}
+                hint={blockedBy ? `Not available beside ${blockedBy}: how the buyer ranks is negotiated.` : 'The sponsor sells part of its stake at the end of a year before the exit, at a multiple of that year’s EBITDA less net debt. The company itself is unaffected.'}
                 onOn={() => { if (!blockedBy) set(at('structure.selldown', { year: U, fraction: U, event_multiple: U }), ['structure.selldown']); }}
                 onOff={() => set(at('structure.selldown', null), ['structure.selldown'])} />
               {blockedBy && sd === null && (

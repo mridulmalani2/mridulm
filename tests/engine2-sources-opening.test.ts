@@ -344,9 +344,9 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
     expect(byEv.entry_multiple).toBeCloseTo(9, 12);
     expect(byEv.entry_ebitda_for_sizing).toBe(100);
     // §24.3 R4: an NTM entry with non-positive year-1 EBITDA is rejected, never priced
-    expect(() => deriveEntry(facts, { entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'ntm', hold_years: 5 } }, 0)).toThrow(/R4/);
+    expect(() => deriveEntry(facts, { entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'ntm', hold_years: 5 } }, 0)).toThrow(/needs forecast year-1 EBITDA > 0/);
     // §24.3 R4: an FY entry with no historical EBITDA is rejected
-    expect(() => deriveEntry({ fy_ebitda: null }, { entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'fy', hold_years: 5 } }, year1)).toThrow(/R4/);
+    expect(() => deriveEntry({ fy_ebitda: null }, { entry: { driver: 'multiple', entry_multiple: 9, enterprise_value: null, basis: 'fy', hold_years: 5 } }, year1)).toThrow(/needs historical EBITDA > 0/);
     // a forecast-only case CAN price on NTM, and has no sizing EBITDA (null, never 0)
     const noHistory = deriveEntry({ fy_ebitda: null }, { entry: { driver: 'ev', entry_multiple: null, enterprise_value: 1100, basis: 'ntm', hold_years: 5 } }, 145);
     expect(noHistory.entry_multiple).toBeCloseTo(1100 / 145, 12);
@@ -359,7 +359,7 @@ describe('sourcesUses.ts + openingBalance.ts §2/§8 properties', () => {
       commitment_fee: 0.005, maturity_years: 6, drawn_at_close: drawn,
     });
     // §2 has no drawn-revolver source line — proceeds would vanish into the goodwill plug
-    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).toThrow(/drawn_at_close/);
+    expect(() => sizeStructure({ tranches: [rcf(5)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).toThrow(/undrawn at close/);
     expect(() => sizeStructure({ tranches: [rcf(0, -3)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).toThrow(/commitment/);
     // drawn_at_close = 0 stays valid
     expect(() => sizeStructure({ tranches: [rcf(0)], min_cash: 0, sweep: { base_pct: 0, grid: null } , distributions: null, surplus_distribution: null, refinancing: null, selldown: null }, 100)).not.toThrow();

@@ -219,7 +219,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         {m.ltm ? (
                           <input aria-label={`${m.label} LTM`} value={ltm[m.key as 'revenue' | 'ebitda']} onChange={(e) => setLtm((p) => ({ ...p, [m.key]: e.target.value }))} inputMode="decimal" className={cellIn} placeholder="–" />
                         ) : (
-                          <span className="block text-right text-[12px] pr-2 text-[color:var(--de-ink-3)]" title="Operating rates always derive from the anchor fiscal year (§1.1)">n/a</span>
+                          <span className="block text-right text-[12px] pr-2 text-[color:var(--de-ink-3)]" title="Operating rates always derive from the anchor fiscal year">n/a</span>
                         )}
                       </td>
                     )}
@@ -238,7 +238,7 @@ const ManualFactsScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <Segmented ariaLabel="Sizing basis" value={basis} onChange={setBasis} options={[{ value: 'FY', label: 'Latest FY' }, { value: 'LTM', label: 'LTM' }]} />
             {basis === 'LTM' && <span className="flex items-center gap-2 text-[13px] text-[color:var(--de-ink-2)]">LTM as of <DateField ariaLabel="LTM as of" value={ltmAsOf} onChange={setLtmAsOf} /></span>}
             <span className="text-[12px] text-[color:var(--de-ink-3)]">
-              {basis === 'LTM' ? 'Leverage and entry EBITDA are sized on the LTM pair; D&A, capex and working-capital rates stay on the fiscal year (§1.1).' : 'Leverage and entry EBITDA are sized on the latest fiscal year.'}
+              {basis === 'LTM' ? 'Leverage and entry EBITDA are sized on the LTM pair; D&A, capex and working-capital rates stay on the fiscal year.' : 'Leverage and entry EBITDA are sized on the latest fiscal year.'}
             </span>
           </div>
         </Block>

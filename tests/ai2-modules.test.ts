@@ -128,7 +128,7 @@ describe('E4: redline + memo', () => {
     expect(credit).not.toMatch(/\bdo not present\b|\byou (must|should)\b|\bnote that\b/i);
     const caveats = md.slice(md.indexOf('## Caveats'));
     expect(caveats).toContain('Entry leverage is GROSS');
-    expect(caveats).toContain('SPEC §11');
+    expect(caveats).toContain('the quoted sizing basis');
   });
 });
 

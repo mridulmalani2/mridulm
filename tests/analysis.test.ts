@@ -76,6 +76,22 @@ describe('lib/analysis: grid, break-evens, headline', () => {
     expect(customGrid(G2.facts, G2.assumptions, base, row, row)).toBeNull(); // one input cannot be both axes
   });
 
+  it('entry against exit at the starting steps is the grid the Excel model exports, so the page shows it once', () => {
+    const axes = gridAxes(G2.facts, G2.assumptions, base);
+    expect(axes.slice(0, 2).map((a) => a.axis)).toEqual(['entry_multiple', 'exit_multiple']); // the grid the page opens on
+    const g = customGrid(G2.facts, G2.assumptions, base, axes[0], axes[1])!;
+    // the grid the Build button asks the engine for (store/engine2Model: buildWithExhibits)
+    const around = (c: number) => [c - 1, c - 0.5, c, c + 0.5, c + 1];
+    const exported = buildSensitivityGrid(G2.facts, G2.assumptions, base, {
+      row_axis: 'entry_multiple', col_axis: 'exit_multiple', row_values: around(base.derived.entry_multiple), col_values: around(G2.assumptions.exit.multiple), base_row_index: 2, base_col_index: 2,
+    });
+    expect([g.row_axis, g.col_axis]).toEqual([exported.row_axis, exported.col_axis]);
+    expect(g.row_values).toEqual(exported.row_values);
+    expect(g.col_values).toEqual(exported.col_values);
+    expect(g.irr).toEqual(exported.irr);
+    expect(g.moic).toEqual(exported.moic);
+  });
+
   it('a break-even, put back into the model, returns the target', () => {
     const be = breakEvens(G2.facts, G2.assumptions, base, 0.1).find((b) => b.lever === 'exit_multiple')!;
     expect(be.value).not.toBeNull();

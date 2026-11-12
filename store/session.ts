@@ -5,7 +5,9 @@
  * Saved: the figures as sourced (or, for a case entered directly, its name and currency), the cleaning ledger, the assumptions the analyst entered, their
  * badges and open choices, and any fact confirmed by hand. NOT saved: anything derived — the
  * cleaned figures, the proposals and the model output are rebuilt from the saved inputs, so a
- * restored deal can never show a number the current code would not compute.
+ * restored deal can never show a number the current code would not compute. A deal that had been
+ * built is built again on restore (only the fact that it was built is saved, never its figures),
+ * so a reload on Results stays on Results.
  *
  * localStorage only. Nothing is sent anywhere.
  */
@@ -29,6 +31,8 @@ interface Saved {
   pending: string[];
   basis: Record<string, FieldBasis>;
   confirmed: Record<string, number>;
+  /** The model had been built when this was saved: it is run again on restore, never read back. */
+  built?: boolean;
 }
 
 const storage = (): Storage | null => {
@@ -54,8 +58,17 @@ export function serialiseSession(): string | null {
     cleaning: sourced ? { raw: c.raw!, pack: c.pack!, ledger: c.ledger, market: c.market, done: c.done, dismissed: c.dismissed } : null,
     ...(forecastOnly ? { forecastFacts: m.facts } : {}),
     assumptions: m.assumptions, pending: m.pending, basis: m.basis, confirmed,
+    ...(m.output !== null ? { built: true } : {}),
   };
   return JSON.stringify(saved, (_k, v) => (typeof v === 'number' && Number.isNaN(v) ? NAN : v));
+}
+
+/** Run the model again for a deal that had been built. If the inputs no longer build on the current
+ *  code, the deal opens on Assumptions with nothing said: the message appears when Build is pressed. */
+function rebuild(saved: Saved): void {
+  if (!saved.built) return;
+  engine2Store.getState().buildWithExhibits(); // the same build the Build button runs
+  if (engine2Store.getState().output === null) engine2Store.setState({ error: null });
 }
 
 /** Rebuild both stores from a saved session. Returns false (and changes nothing) if it is not one. */
@@ -73,8 +86,9 @@ export function restoreSession(text: string | null): boolean {
       facts: f, sourceCurrency: f.currency, missingFacts: [], factNotes: [],
       assumptions: saved.assumptions, pending: saved.pending ?? [], basis: saved.basis ?? {},
       suggestions: suggestionsFor(f, saved.assumptions.entry.hold_years, saved.assumptions, saved.pending ?? []),
-      output: null, error: null, // never restored: the analyst rebuilds, on the current code
+      output: null, error: null, // never restored: rebuilt below, on the current code
     });
+    rebuild(saved);
     return true;
   }
   if (!saved.cleaning.raw || !saved.cleaning.pack || saved.cleaning.ledger?.version !== 1) return false;
@@ -86,8 +100,9 @@ export function restoreSession(text: string | null): boolean {
       assumptions: saved.assumptions, pending: saved.pending ?? [],
       basis: { ...engine2Store.getState().basis, ...saved.basis },
       suggestions: suggestionsFor(facts, saved.assumptions.entry.hold_years, saved.assumptions, saved.pending ?? []),
-      output: null, // never restored: the analyst rebuilds, on the current code
+      output: null, // never restored: rebuilt below, on the current code
     });
+    rebuild(saved);
   }
   return true;
 }

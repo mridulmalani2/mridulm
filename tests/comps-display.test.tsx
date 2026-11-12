@@ -63,7 +63,7 @@ describe('§21 comps display: the band renders with its basis, region, vintage a
 describe('§21.9: the disclosure row is on the Methodology surface (label mutation-tested)', () => {
   it('carries the load-bearing clauses', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Sector comps band (§21)');
+    expect(html).toContain('Sector comps band');
     expect(html).toContain('NOT buyout-entry multiples');
     expect(html).toContain('INDUSTRY AGGREGATE');
     expect(html).toContain('industry POPULATION');

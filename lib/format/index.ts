@@ -23,9 +23,13 @@ const clean = (v: number): number => (Object.is(v, -0) ? 0 : v); // "−0.0" mus
 const settle = (v: number, dp: number): number => (Math.abs(v) < 0.5 * 10 ** -dp ? 0 : clean(v));
 
 /** Thousands-separated fixed-decimal: 2026472.04 → "2,026,472.0". */
+/** One minus sign everywhere a figure is shown: the typographic minus money() already uses, so a
+ *  negative percentage and a negative amount in the same table read alike. */
+const minus = (text: string) => text.replace(/^-/, '−');
+
 export function num(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  return settle(v, dp).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  return minus(settle(v, dp).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }));
 }
 
 /** Money in millions of deal currency, 1dp (§15): 1234.567 → "$1,234.6m". */
@@ -47,13 +51,13 @@ export function moneyIso(v: number | null | undefined, isoCode: string, dp = 1):
 /** Rate/IRR as a percentage, 1dp (§15): 0.1596 → "16.0%"; null → "N/A" (never 9999). */
 export function pct(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  return `${settle(v * 100, dp).toFixed(dp)}%`;
+  return `${minus(settle(v * 100, dp).toFixed(dp))}%`;
 }
 
 /** Multiple, 1dp + "x" (§15): 2.104 → "2.1x"; null → "N/A". */
 export function multiple(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return 'N/A';
-  return `${settle(v, dp).toFixed(dp)}x`;
+  return `${minus(settle(v, dp).toFixed(dp))}x`;
 }
 
 /** Basis points for spreads: 0.0375 → "375bps". */

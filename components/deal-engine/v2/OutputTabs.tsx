@@ -106,7 +106,7 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
                 : ` · ${o.facts.sector_comps.firms} firms`}
             </p>
           ) : (
-            <p className="text-[12px] leading-snug mt-1" style={label}>Sector comps unavailable: no sector source for this deal (§21)</p>
+            <p className="text-[12px] leading-snug mt-1" style={label}>Sector comps unavailable: no sector source for this deal</p>
           )}
         </>}>
         {multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}
@@ -178,7 +178,7 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
       </Table>
       {f && (
         <p className={NOTE} style={label}>
-          less: fund fees & carry → net to LP (SPEC §19). Paid-in {money(f.paid_in_total, ccy)} (equity
+          less: fund fees & carry → net to LP. Paid-in {money(f.paid_in_total, ccy)} (equity
           check + annual fee draws; committed {money(f.committed_capital, ccy)}); the LP multiple is
           TVPI (= DPI, fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
           {f.fund_lp_net.payback_year === null ? 'N/A' : `Y${f.fund_lp_net.payback_year}`} (interim
@@ -211,7 +211,7 @@ export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }>
   ];
   return (
     <div className="mt-4">
-      <p className={H}>Partial exit: secondary selldown (SPEC §23)</p>
+      <p className={H}>Partial exit: secondary selldown</p>
       <Table head={['', '']}>
         {rows.map(([l, v]) => (
           <tr key={l} style={rowB}>
@@ -248,7 +248,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       ? ([
           ['Loan notes subscribed (institutional strip)', money(es.loan_notes_subscribed, ccy)],
           ['Institutional ordinaries subscribed (= sponsor equity − loan notes)', money(o.sources_uses.sponsor_equity - es.loan_notes_subscribed, ccy)],
-          ['Management subscription (a §2 source)', money(o.sources_uses.management_subscription, ccy)],
+          ['Management subscription (a source of funds at close)', money(o.sources_uses.management_subscription, ccy)],
           ['Loan notes accrued at exit (pre-redemption)', money(es.loan_notes_accrued_balance, ccy)],
           ['Loan notes redeemed at exit', money(es.loan_notes_redeemed, ccy)],
         ] as [string, string][])
@@ -266,7 +266,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       ? ([
           ['Management ordinary share at exit', money(es.management_ordinary_share, ccy)],
           ['Institutional ordinary share at exit', money(es.institution_ordinary_share, ccy)],
-          ['Sweet-equity ratchet tiers reached (§22.5 basis; the promote ratchet emits no count)', String(es.ratchet_tiers_reached)],
+          ['Sweet-equity ratchet tiers reached (on the institution’s own realised value; the promote ratchet reports no count)', String(es.ratchet_tiers_reached)],
           ['Management effective ordinary % (N/A at a non-positive pot)', es.management_effective_ordinary_pct === null ? 'N/A' : pct(es.management_effective_ordinary_pct)],
           ['Institution MOIC at ratchet (REALIZED: the figure the ratchet is struck on)', multiple(es.institution_moic_at_ratchet)],
         ] as [string, string][])
@@ -275,7 +275,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
   return (
     <div className="mt-4">
       <p className={H}>
-        {sw ? 'Sweet equity strip' : 'Warrant'} (SPEC §22)
+        {sw ? 'Sweet equity strip' : 'Warrant'}
       </p>
       <Table head={['', '']}>
         {rows.map(([l, v]) => (
@@ -286,10 +286,10 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
         ))}
       </Table>
       <p className={NOTE} style={label}>
-        Loan notes are EQUITY (§22.2): outside §11 leverage/ICR/FCCR/DSCR and the §3 waterfall, accruing
+        Loan notes are EQUITY: outside leverage, ICR, FCCR and DSCR and the cash waterfall, accruing
         only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC. ' : ''}
-        {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value (§22.6). ' : ''}
-        Management&apos;s subscription reduces the sponsor&apos;s own cheque (§2).
+        {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value. ' : ''}
+        Management&apos;s subscription reduces the sponsor&apos;s own cheque.
       </p>
     </div>
   );
@@ -375,7 +375,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           </Table>
           {elections && (
             <p className={NOTE} style={label}>
-              PIK toggle (§20): each year the issuer elects the WHOLE coupon: “cash” pays the cash
+              PIK toggle: each year the issuer elects the WHOLE coupon: “cash” pays the cash
               coupon on the beginning balance and accrues nothing; “PIK” accrues the PIK coupon and
               pays nothing. Never both legs in one year. Elections are frozen across scenarios.
             </p>
@@ -407,7 +407,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           aggregation, no engine import). Rendered only when a refi exists. */}
       {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
         <div className="mb-3">
-          <p className={H}>Refinancing events (§18)</p>
+          <p className={H}>Refinancing events</p>
           <Table head={['Tranche', 'Year', 'Cash cost (premium + new OID + fees)', 'Old OID + fees written off']}>
             {o.tranches.flatMap((rows) =>
               rows
@@ -424,10 +424,10 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
             )}
           </Table>
           <p className={NOTE} style={label}>
-            Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off (old
+            Cash cost is paid in the refi year (senior to the sweep). The write-off (old
             unamortized OID + financing fees) is a NON-cash book charge that year, and it is deducted
             for tax the same year with the call premium: the old OID and the premium as interest
-            (subject to the §163(j) cap), the old fees in full (§7.1/§18.5).
+            (subject to the §163(j) cap), the old fees in full.
             Par-for-par: leverage is unchanged at the refi and then deleverages on the new schedule.
           </p>
         </div>
@@ -451,7 +451,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
             ))}
           </Table>
           <p className={NOTE} style={label}>
-            RP capacity is N/A when no trap is set (§3.7). Blocked capacity does NOT carry forward.
+            RP capacity is N/A when no trap is set. Blocked capacity does NOT carry forward.
           </p>
         </div>
       )}
@@ -510,7 +510,7 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
   {/* §11 [v1.1.2]: these are NET of cash; the Summary tab's entry figure is GROSS. Stated
       on screen, because reading the two as one deleveraging series overstates it. */}
   <p className={NOTE} style={label}>
-    Leverage here is NET of cash (SPEC §11). The Summary tab&apos;s entry leverage is GROSS
+    Leverage here is NET of cash. The Summary tab&apos;s entry leverage is GROSS
     (debt at par ÷ {entryLeverageDisplay(o).basis_label} EBITDA, the quoted sizing basis), so the two are not a single series.
   </p>
   </div>
@@ -539,7 +539,7 @@ const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
     <div>
       {block('Sponsor IRR', grid.irr, (x) => pct(x))}
       {block('Sponsor MOIC', grid.moic, (x) => multiple(x))}
-      <p className={NOTE} style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). When the entry multiple moves, the debt is held at its base amount and the sponsor's equity takes up the difference in price. Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
+      <p className={NOTE} style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen. When the entry multiple moves, the debt is held at its base amount and the sponsor's equity takes up the difference in price. Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
     </div>
   );
 };
@@ -572,7 +572,7 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
           );
         })}
       </Table>
-      <p className={NOTE} style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (SPEC §13: a downside never silently re-prices entry).</p>
+      <p className={NOTE} style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (a downside never silently re-prices entry).</p>
     </div>
   );
 };
@@ -614,7 +614,7 @@ export const Methodology: React.FC<{ o?: Engine2ModelOutput }> = ({ o }) => {
   const hidden = DISCLOSURES.length - rows.length;
   return (
     <div>
-      <p className="text-[14px] text-[color:var(--de-ink-2)] mb-2 max-w-[70ch]">Assumptions & methodology (SPEC §15). What the model simplifies, and why each simplification is immaterial or conservative. A model is a range, not a point.</p>
+      <p className="text-[14px] text-[color:var(--de-ink-2)] mb-2 max-w-[70ch]">Assumptions & methodology. What the model simplifies, and why each simplification is immaterial or conservative. A model is a range, not a point.</p>
       {[...groups.entries()].map(([g, list]) => (
         <div key={g}>
           <p className={H}>{g}</p>

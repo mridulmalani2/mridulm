@@ -298,7 +298,7 @@ function validate(input: WaterfallYearIn): void {
   if (input.surplus) {
     const p = input.surplus.payout_pct;
     if (!(p >= 0 && p <= 1)) throw new RangeError(`kernel/waterfall: surplus payout_pct must be in [0, 1], got ${p}`);
-    if (input.distribution_request !== 0) throw new RangeError('kernel/waterfall: a surplus policy and a requested distribution are mutually exclusive (§3.8)');
+    if (input.distribution_request !== 0) throw new RangeError('kernel/waterfall: a surplus policy and a requested distribution are mutually exclusive');
   }
   // §18.4 the refi cash cost is a use ≥ 0 (a "negative" cost would be a source — not modelled).
   if (input.refinancing_cash_cost !== undefined) assertNonNegative(input.refinancing_cash_cost, 'refinancing_cash_cost');

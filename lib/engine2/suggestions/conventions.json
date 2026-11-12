@@ -20,16 +20,16 @@
     "holdPeriodYears": {
       "suggested": 5,
       "basis": "OWNER-decided 2026-07-05: 5 years (practitioner underwriting convention; underwriting hold, not realized hold). The UI shows a context line: realized median holds at exit are ~7yr (Bain GPE Report 2026; PitchBook 7.1yr median for 2023 exits), which DR-4 Rec 2 preferred.",
-      "citation": "owner decision; context: Bain GPE Report 2026 (Feb 2026), PitchBook via LCD",
+      "citation": "practitioner underwriting convention; realised holds for context: Bain Global Private Equity Report 2026 (Feb 2026), PitchBook via LCD",
       "asOf": "2026-02"
     },
     "exitMultiple": {
       "suggested": "= entry multiple (flat)",
       "basis": "Industry best practice; multiple expansion 'usually an unjustifiable assumption'. Downside cases haircut 0.5-1.0x; upside +1.0-2.0x.",
-      "citation": "Wall Street Prep; Macabacus; CT Acquisitions (DR-4 Cat.7)",
+      "citation": "Wall Street Prep; Macabacus; CT Acquisitions",
       "asOf": "2025-12"
     },
-    "valuationBasis": { "suggested": "FY (LTM deferred)", "basis": "Extraction is FY-anchored (PHASE_D D3); staleness badge shown", "citation": "internal: SPEC §9/D3", "asOf": "2026-07" }
+    "valuationBasis": { "suggested": "FY (LTM deferred)", "basis": "Extraction is FY-anchored (PHASE_D D3); staleness badge shown", "citation": "the fiscal-year figures the source reports", "asOf": "2026-07" }
   },
   "entryMultiples": {
     "usBuyoutOverall": { "value": 12.0, "citation": "PitchBook 2025 Annual US PE Breakdown (US buyout EV/EBITDA)", "asOf": "2025-12" },
@@ -60,15 +60,15 @@
     "interestCoverageContext": { "note": "BSL LBO interest coverage hit record-low ~2.3x in 2024: coherence-gate band informed by this", "citation": "PitchBook LCD", "asOf": "2024-12" }
   },
   "pricing": {
-    "baseRate": { "termSofr3m": 0.036, "note": "Overnight SOFR 3.66% / 90-day avg ~3.64% as of Jul 1 2026; refresh quarterly: v2 wires FRED", "citation": "Federal Reserve Bank of New York via DR-4", "asOf": "2026-07" },
+    "baseRate": { "termSofr3m": 0.036, "note": "Overnight SOFR 3.66% / 90-day avg ~3.64% as of Jul 1 2026; refresh quarterly: v2 wires FRED", "citation": "Federal Reserve Bank of New York", "asOf": "2026-07" },
     "tlbSpreadBps": {
       "value": 375,
       "range": [350, 425],
       "note": "DR-4 INTERNAL CONFLICT recorded: Cat.2 sourced Data Dive figure = S+350-425 for B/B-flat (midpoint 375, B-minus ~427) vs DR-4's own TL;DR/Rec-1 headline of S+450-475. 375 chosen as the index-sourced cohort figure; Q1 2026 widening of 25-50bps flagged: revisit toward ~425 on refresh.",
-      "citation": "PitchBook LCD Data Dive (mid-2025); conflict + widening per DR-4 TL;DR/Caveats",
+      "citation": "PitchBook LCD Data Dive (mid-2025); spreads widened 25 to 50bps in Q1 2026",
       "asOf": "2025-06"
     },
-    "sofrFloor": { "value": 0.0, "range": [0.0, 0.0075], "note": "0% standard on top credits; 0.50% appears; 0.75-1.00% legacy/private-credit only. Formula: max(base, floor) + spread", "citation": "PitchBook LCD; DR-1 Item 4", "asOf": "2025-12" },
+    "sofrFloor": { "value": 0.0, "range": [0.0, 0.0075], "note": "0% standard on top credits; 0.50% appears; 0.75-1.00% legacy/private-credit only. Formula: max(base, floor) + spread", "citation": "PitchBook LCD; Morgan Stanley IM, Floating-Rate Loan Market Monitor Q4 2025", "asOf": "2025-12" },
     "tlbOidPct": { "value": 0.005, "range": [0.005, 0.01], "note": "OID 99.0-99.5 large-cap", "citation": "PitchBook LCD Data Dive", "asOf": "2025-12" },
     "unitrancheSpreadBps": { "value": 500, "range": [425, 575], "note": "UMM S+425-475; core MM +50-100bps; median PE-backed private-credit deal S+475 (Q4 2025)", "citation": "Capstone Partners Winter 2025; PitchBook LCD", "asOf": "2025-12" },
     "unitrancheOidPct": { "value": 0.025, "range": [0.02, 0.03], "citation": "Private Equity Bro / CT Acquisitions", "asOf": "2025-12" },
@@ -80,9 +80,9 @@
     "lenderFriendlyPreset": { "grid": [{ "aboveLeverage": 4.5, "sweepPct": 0.75 }, { "aboveLeverage": 3.5, "sweepPct": 0.50 }, { "aboveLeverage": 0, "sweepPct": 0.0 }], "note": "Alternative grids exist (75/50/25, 50/25/0: Cummings Law per DR-1)", "citation": "LSTA via CT Acquisitions", "asOf": "2025-12" }
   },
   "amortization": {
-    "tlbUsPctPerYear": { "value": 0.01, "note": "1%/yr of ORIGINAL face, bullet at maturity; European TLB frequently 0% (full bullet)", "citation": "White & Case Debt Explorer; LSTA; DR-1 Item 7", "asOf": "2025-12" },
+    "tlbUsPctPerYear": { "value": 0.01, "note": "1%/yr of ORIGINAL face, bullet at maturity; European TLB frequently 0% (full bullet)", "citation": "White & Case Debt Explorer; LSTA; Macabacus, Debt Amortization", "asOf": "2025-12" },
     "tlaPctPerYear": { "value": 0.075, "range": [0.05, 0.25], "citation": "White & Case; Ryan O'Connell (teaching range)", "asOf": "2025-12" },
-    "notesSecondLienMezz": { "value": 0.0, "note": "bullet", "citation": "DR-1 Item 7", "asOf": "2025-12" }
+    "notesSecondLienMezz": { "value": 0.0, "note": "bullet", "citation": "Macabacus, Debt Amortization; Rosenbaum & Pearl, Investment Banking", "asOf": "2025-12" }
   },
   "covenants": {
     "bslPreset": { "type": "cov-lite", "covLiteShareNewIssue": 0.93, "springing": { "revolverDrawTrigger": 0.40, "testType": "first-lien net leverage, RCF-only, typically no step-downs" }, "citation": "S&P Global via WSP; Paul Weiss; Latham (35-40% trigger); Proskauer (Nov 2025)", "asOf": "2025-11" },
@@ -90,18 +90,18 @@
   },
   "fees": {
     "buySideAdvisoryPctOfEv": { "value": 0.02, "range": [0.015, 0.025], "citation": "S&P Global LCD via CT Acquisitions", "asOf": "2025-12" },
-    "financingFeePctOfDebt": { "value": 0.015, "range": [0.01, 0.02], "note": "base includes total commitments INCLUDING undrawn revolver (SPEC §2; DR-2 Item 1 flags the forgotten revolver fee)", "citation": "Syndicated-loan arrangement fee convention (DR-4 Cat.6)", "asOf": "2025-12" },
+    "financingFeePctOfDebt": { "value": 0.015, "range": [0.01, 0.02], "note": "base includes total commitments INCLUDING undrawn revolver (SPEC §2; DR-2 Item 1 flags the forgotten revolver fee)", "citation": "syndicated-loan arrangement fee convention", "asOf": "2025-12" },
     "monitoringFee": { "suggested": "OFF", "note": "declining practice, increasingly 100% LP-offset; absence is a legitimate default", "citation": "Preqin/Dechert; Winston & Strawn; ILPA principles", "asOf": "2025-12" }
   },
   "mip": {
-    "poolPctOfFdEquity": { "value": 0.15, "range": [0.10, 0.20], "citation": "Private Equity Toolkit; Macabacus (US promote pool: undated practitioner sources per DR-2)", "asOf": null },
-    "hurdleMoic": { "value": 2.0, "range": [2.0, 3.0], "note": "hurdle-type statistic: ~2/3 of plans MOIC-only (Goodwin Mar 2024); the 2.0-3.0x LEVEL range is from practitioner sources", "citation": "level: Macabacus / A Simple Model (via DR-2); type statistic: Goodwin Incentive Equity (Mar 2024)", "asOf": "2024-03" },
+    "poolPctOfFdEquity": { "value": 0.15, "range": [0.10, 0.20], "citation": "Private Equity Toolkit; Macabacus (US promote pool: undated practitioner sources)", "asOf": null },
+    "hurdleMoic": { "value": 2.0, "range": [2.0, 3.0], "note": "hurdle-type statistic: ~2/3 of plans MOIC-only (Goodwin Mar 2024); the 2.0-3.0x LEVEL range is from practitioner sources", "citation": "level: Macabacus / A Simple Model; type statistic: Goodwin Incentive Equity (Mar 2024)", "asOf": "2024-03" },
     "sweetEquityContext": { "note": "UK/EU sweet equity (16% avg of ordinaries, 12% shareholder-debt coupon, ratchets on 55% of deals: Travers Smith 2025) is a SEPARATE Phase G instrument, never blended with the promote", "citation": "Travers Smith PE Market Insights 2025", "asOf": "2025-12" }
   },
   "tax": {
-    "section163j": { "atiBasisDefault": "EBITDA", "atiPct": 0.30, "appliesDefault": true, "note": "OBBBA (P.L. 119-21, Jul 2025): EBITDA-based ATI permanent for TY beginning after 12/31/2024; EBIT toggle for earlier fiscal years; section_163j_applies=false expresses the small-business exception (<$31M avg gross receipts, TY2025)", "citation": "OBBBA; IRS FS-2025-09; DR-3 Item 1", "asOf": "2026-07" },
-    "section382": { "ltterPct": 0.0358, "basisNote": "annual limit = TARGET (loss corporation) equity value immediately before the ownership change x LTTER: the purchase equity value (EV − net debt at close, sponsor + rollover), NOT the sponsor-only check. Static per-year limit is a disclosed conservative simplification (real unused limitation carries forward). Refresh LTTER monthly from IRS AFR rulings.", "citation": "IRC §382(f); Rev. Rul. 2025-24 Table 3 (Dec 2025); DR-3 Item 2", "asOf": "2025-12" },
-    "acquiredNolUsable": { "suggested": false, "note": "target NOLs generally do not survive sponsor structures (asset / 338(h)(10) / 336(e)); enabling turns on the 382 limit", "citation": "DR-3 Item 3; Macabacus", "asOf": "2026-07" },
+    "section163j": { "atiBasisDefault": "EBITDA", "atiPct": 0.30, "appliesDefault": true, "note": "OBBBA (P.L. 119-21, Jul 2025): EBITDA-based ATI permanent for TY beginning after 12/31/2024; EBIT toggle for earlier fiscal years; section_163j_applies=false expresses the small-business exception (<$31M avg gross receipts, TY2025)", "citation": "IRC §163(j); OBBBA (P.L. 119-21); IRS FS-2025-09", "asOf": "2026-07" },
+    "section382": { "ltterPct": 0.0358, "basisNote": "annual limit = TARGET (loss corporation) equity value immediately before the ownership change x LTTER: the purchase equity value (EV − net debt at close, sponsor + rollover), NOT the sponsor-only check. Static per-year limit is a disclosed conservative simplification (real unused limitation carries forward). Refresh LTTER monthly from IRS AFR rulings.", "citation": "IRC §382(f); Rev. Rul. 2025-24 Table 3 (Dec 2025)", "asOf": "2025-12" },
+    "acquiredNolUsable": { "suggested": false, "note": "target NOLs generally do not survive sponsor structures (asset / 338(h)(10) / 336(e)); enabling turns on the 382 limit", "citation": "IRC §382, §338(h)(10), §336(e); Macabacus", "asOf": "2026-07" },
     "nolLimitPctPost2017": { "value": 0.80, "note": "100% (no cap) for the pre-2018 layer: flag `nol_arose_pre_2018`", "citation": "IRC 172 (TCJA, unchanged by OBBBA)", "asOf": "2026-07" }
   },
   "presentation": {
