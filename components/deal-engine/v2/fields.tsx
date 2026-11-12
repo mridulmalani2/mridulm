@@ -30,7 +30,8 @@ export function show(v: number | null | undefined, unit: Unit): string {
   if (!isSet(v)) return '';
   if (unit === 'pct') return toPctInput(v);
   if (unit === 'years') return String(v);
-  if (unit === 'beta' || unit === 'ratio') return num(v, 3);
+  if (unit === 'ratio') return String(v); // a rank (sweep priority): 1, not 1.000
+  if (unit === 'beta') return num(v, 3);
   return num(v, 2);
 }
 
@@ -172,18 +173,36 @@ export const Line: React.FC<{ path?: string; label: React.ReactNode; hint?: stri
 const KIND_WORD: Record<string, string> = { history: 'Worked out from the filing history', convention: 'A cited market convention or statute', facts: 'Read from the source', template: 'A cited template', ai: 'Proposed by the AI model you connected' };
 
 /** One proposal: "use X" applies it; the word after it opens how the value was reached. */
-const SuggestionLink: React.FC<{ text: string; kind: string; detail: string; onUse: () => void }> = ({ text, kind, detail, onUse }) => {
-  const [open, setOpen] = useState(false);
+export const SuggestionLink: React.FC<{ text: string; kind: string; detail: string; onUse: () => void }> = ({ text, kind, detail, onUse }) => {
+  // where the pop-up sits, in window coordinates: it is drawn `fixed` so that a scrolling table
+  // or the bottom of the window never cuts it off
+  const [at, setAt] = useState<React.CSSProperties | null>(null);
   const [how, source] = detail.split(/\s*Source:\s*/);
   const tone = kind === 'ai' ? 'text-[color:var(--de-ai)]' : 'text-[color:var(--de-input)]';
+  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (at) { setAt(null); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    const up = window.innerHeight - r.bottom < 280 && r.top > 280;
+    setAt({
+      ...(up ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
+      ...(r.right >= 336 ? { right: window.innerWidth - r.right < 8 ? 8 : window.innerWidth - r.right } : { left: 8 }),
+    });
+  };
+  React.useEffect(() => {
+    if (!at) return;
+    const close = () => setAt(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [at]);
   return (
-    <span className="relative inline-flex items-baseline text-[12px] whitespace-nowrap">
+    <span className="inline-flex items-baseline text-[12px] whitespace-nowrap">
       {/* out of the tab order: tabbing through the sheet moves between inputs only */}
       <button type="button" tabIndex={-1} onClick={onUse} title={detail} className={cx('font-medium underline underline-offset-2 decoration-dotted rounded px-1 hover:bg-[var(--de-input-soft)]', tone)}>use {text}</button>
-      <button type="button" tabIndex={-1} onClick={() => setOpen((o) => !o)} onBlur={() => setOpen(false)} aria-expanded={open} title="How this value was reached"
+      <button type="button" tabIndex={-1} onClick={toggle} onBlur={() => setAt(null)} onKeyDown={(e) => { if (e.key === 'Escape') setAt(null); }} aria-expanded={at !== null} title="How this value was reached"
         className="text-[color:var(--de-ink-3)] hover:text-[color:var(--de-ink)] rounded pr-1"> · {kind}</button>
-      {open && (
-        <span role="dialog" aria-label="How this value was reached" className="de-pop absolute right-0 top-full z-30 mt-1.5 w-80 max-w-[80vw] p-4 rounded-[var(--de-r)] bg-[var(--de-surface)] border border-[color:var(--de-rule)] shadow-[var(--de-shadow-pop)] text-left whitespace-normal">
+      {at && (
+        <span role="dialog" aria-label="How this value was reached" style={at} className="de-pop fixed z-50 w-80 max-w-[calc(100vw-16px)] p-4 rounded-[var(--de-r)] bg-[var(--de-surface)] border border-[color:var(--de-rule)] shadow-[var(--de-shadow-pop)] text-left whitespace-normal">
           <span className="block text-[12px] text-[color:var(--de-ink-3)]">{KIND_WORD[kind] ?? kind}</span>
           <span className={cx('de-num block text-[22px] font-semibold leading-tight mt-1', tone)}>{text}</span>
           <span className="block text-[13px] leading-relaxed text-[color:var(--de-ink-2)] mt-2">{how}</span>

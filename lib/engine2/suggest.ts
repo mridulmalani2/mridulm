@@ -133,7 +133,8 @@ export function suggestionsFor(
 
   // ── Filing ratios (each a forecast assumption — proposed, never pre-filled) ──
   if (facts.fy_ebitda_margin !== null) {
-    put('operations.target_margin', facts.fy_ebitda_margin, 'facts', `${fy} EBITDA margin ${pctText(facts.fy_ebitda_margin)} held flat: expansion needs an explicit thesis`);
+    // the margin is formed on the sizing figures: say LTM when they are LTM, never the fiscal year
+    put('operations.target_margin', facts.fy_ebitda_margin, 'facts', `${facts.sizing_basis === 'LTM' ? 'LTM' : fy} EBITDA margin ${pctText(facts.fy_ebitda_margin)} held flat: expansion needs an explicit thesis`);
   }
   if (facts.da_pct_revenue !== null) put('operations.da_pct_revenue', facts.da_pct_revenue, 'facts', `${fy} D&A ÷ revenue from the filing`);
   if (facts.maint_capex_pct_revenue !== null) put('operations.maint_capex_pct_revenue', facts.maint_capex_pct_revenue, 'facts', `${fy} capex ÷ revenue from the filing`);

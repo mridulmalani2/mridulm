@@ -42,6 +42,21 @@ Defects below: all nine fixed.
   filing-parser notes included; `tests/no-em-dash.test.ts` holds it. The SPEC's two quoted
   §19.5 labels were amended and a presentation rule added at its head; SPEC prose is unchanged.
 
+**Browser review (2026-11-12, Hasbro import, Source to Results):** clicked through by hand; six
+defects fixed. Accepting a proposal now refreshes the proposals that follow it (the debt table's
+base rate, exit = entry) and AI proposals survive later edits (`store/engine2Model.ts`, pinned in
+`tests/engine2-store.test.ts`); the explanation pop-up is anchored to the window so it is never
+cut off, and the debt table uses it too; the entry multiple and the margin proposal say LTM when
+the figures are LTM (`entryBasisText` in `lib/engine2/display.ts`); group proposals disappear once
+applied; sweep priority shows as a whole number. Trace, tornado, break-evens and the Excel note
+comments were checked and work.
+
+Left for the owner after that review: internal references in user-visible sources and warnings
+("owner decision", "DR-4", "SPEC §9", "§8 mechanical roll"); a reload on Results drops the built
+model and lands on Clean; the Sensitivity page has two unshared hurdle boxes, shows the entry and
+exit grid twice, and mixes two colour rules once a hurdle is set; the filing-history table mixes
+number formats; a dark flash before the page loads; a double underscore in the export file name.
+
 **Still open:**
 
 - Fields with NO cited basis get no proposal without an AI key: minimum cash, maturities, exit

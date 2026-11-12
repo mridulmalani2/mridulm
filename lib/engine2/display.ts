@@ -54,6 +54,15 @@ export function entryMultipleDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'as
 }
 
 /**
+ * The words that follow the entry multiple on screen ("12.00x LTM EBITDA"): NTM for a price struck
+ * on forecast EBITDA, otherwise the historical figure the price was struck on, which is the LTM
+ * stitch when the filing supports one and the fiscal year when it does not. `basis_label` alone
+ * says FY for every historical entry, which is false for an LTM-sized deal.
+ */
+export const entryBasisText = (em: { basis_label: 'FY' | 'NTM'; sizing_label: 'FY' | 'LTM' }): 'FY' | 'LTM' | 'NTM' =>
+  (em.basis_label === 'NTM' ? 'NTM' : em.sizing_label);
+
+/**
  * The operating chart's series, decided by the DATA of the deal in front of it: revenue is drawn
  * whenever the deal carries any revenue figure (a sourced historical year, or a forecast revenue
  * line of any kind), and left out only when it has none at all (SPEC §24: a case may state EBIT /

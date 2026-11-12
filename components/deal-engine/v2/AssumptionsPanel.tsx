@@ -168,7 +168,8 @@ const AssumptionsPanel: React.FC = () => {
             <SmallButton onClick={() => editWithChoices({ ...a, structure: { ...a.structure, tranches: [] } }, ['structure.tranches'], [])}>No debt</SmallButton>
           </Line>
         )}
-        {!pending.includes('structure.tranches') && <div className="flex justify-end"><SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} /></div>}
+        {/* once facilities exist the template is no longer offered: accepting it again would replace them */}
+        {!pending.includes('structure.tranches') && tranches.length === 0 && <div className="flex justify-end"><SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} /></div>}
         {tranches.length > 0 && (
           <DebtTable tranches={tranches} hasLtm={hasLtm} pending={pending} onSet={(path, value) => set(at(path, value), [path])} onRemove={removeTranche} />
         )}
@@ -277,7 +278,7 @@ const AssumptionsPanel: React.FC = () => {
             <ChoiceField path="operations.nwc.method" label="NWC method" value={a.operations.nwc.method}
               options={[{ value: 'pct', label: '% of revenue' }, { value: 'days', label: 'days (DSO / DIO / DPO)' }]}
               onChoose={(mth) => set({ ...a, operations: { ...a.operations, nwc: mth === 'pct' ? { method: 'pct', pct_revenue: U } : { method: 'days', dso: U, dio: U, dpo: U } } }, ['operations.nwc.method', 'operations.nwc'])} />
-            <SuggestionChips path="operations.nwc" render={(x) => ((x as { method: string }).method === 'days' ? 'filing days' : 'filing % of revenue')} />
+            {(pending.includes('operations.nwc.method') || (a.operations.nwc.method === 'pct' ? !isSet(a.operations.nwc.pct_revenue) : !(isSet(a.operations.nwc.dso) && isSet(a.operations.nwc.dio) && isSet(a.operations.nwc.dpo)))) && <SuggestionChips path="operations.nwc" render={(x) => ((x as { method: string }).method === 'days' ? 'filing days' : 'filing % of revenue')} />}
             {a.operations.nwc.method === 'pct'
               ? <NumField path="operations.nwc.pct_revenue" label="Operating NWC (% of revenue)" unit="pct" value={a.operations.nwc.pct_revenue} />
               : <>
@@ -309,7 +310,7 @@ const AssumptionsPanel: React.FC = () => {
             // the ATI basis is the analyst's choice too: it stays open (gating Build) until made, never a silent EBITDA
             onChoose={(ap) => editWithChoices(at('tax.s163j.applies', ap), ['tax.s163j.applies'], ap ? ['tax.s163j.ati_basis'] : [], ['tax.s163j.ati_basis'])} />
         )}
-        <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />
+        {a.tax.interest_deductible && (pending.includes('tax.s163j.applies') || (a.tax.s163j.applies && (!isSet(a.tax.s163j.ati_pct) || pending.includes('tax.s163j.ati_basis')))) && <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />}
         {a.tax.interest_deductible && a.tax.s163j.applies && (
           <>
             <NumField path="tax.s163j.ati_pct" label="Cap (% of adjusted taxable income)" unit="pct" value={a.tax.s163j.ati_pct} />

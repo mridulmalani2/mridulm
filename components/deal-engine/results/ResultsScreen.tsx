@@ -12,7 +12,7 @@ import { useWorkspace } from '../../../store/workspace';
 import { useDealUi } from '../../../store/dealUi';
 import { money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
-import { entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, impliedEquityDisplay } from '../../../lib/engine2/display';
+import { entryBasisText, entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, impliedEquityDisplay } from '../../../lib/engine2/display';
 import type { Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { ebitdaWaterfall, netDebtWaterfall, waterfall } from '../../../lib/cleaning/view';
 import { DETAIL_VIEWS, Debt, Methodology, Returns, SU, Valuation } from '../v2/OutputTabs';
@@ -136,7 +136,7 @@ const Headline: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o
       <Kpi label="Money multiple" value={nm ? 'N/M' : <Fig label="Sponsor money multiple">{multiple(o.returns.sponsor_net.moic, 2)}</Fig>} sub="sponsor, net" />
       <Kpi label="Equity cheque" value={<Fig label="Sponsor equity" year={0}>{money(o.sources_uses.sponsor_equity, ccy, 0)}</Fig>} sub={`of ${money(o.sources_uses.total_uses, ccy, 0)} total uses`} />
       <Kpi label="Entry leverage" value={multiple(lev.value, 2)} sub={`gross debt ÷ ${lev.basis_label} EBITDA`} />
-      <Kpi label="Purchase price" value={<Fig label="Enterprise value" year={0}>{money(o.derived.enterprise_value, ccy, 0)}</Fig>} sub={`${multiple(entry.valuation, 2)} ${entry.basis_label} EBITDA`} />
+      <Kpi label="Purchase price" value={<Fig label="Enterprise value" year={0}>{money(o.derived.enterprise_value, ccy, 0)}</Fig>} sub={`${multiple(entry.valuation, 2)} ${entryBasisText(entry)} EBITDA`} />
     </div>
   );
 };
@@ -203,7 +203,7 @@ const OnePager: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o
       <div className="grid grid-cols-4 gap-4 de-num">
         {[
           ['Purchase price', money(o.derived.enterprise_value, ccy, 0)],
-          [`Entry multiple (${entry.basis_label})`, multiple(entry.valuation, 2)],
+          [`Entry multiple (${entryBasisText(entry)})`, multiple(entry.valuation, 2)],
           ['Exit multiple', multiple(exitMultipleDisplay(o), 2)],
           [`Debt at close ÷ ${lev.basis_label} EBITDA`, multiple(lev.value, 2)],
         ].map(([l, v]) => <div key={l}><p className="text-[11px] text-[color:var(--de-ink-3)]">{l}</p><p className="text-[18px] font-semibold">{v}</p></div>)}
@@ -341,7 +341,7 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
         <div className="min-w-0">
           <h1 className="de-display text-[34px] leading-tight truncate">{output.assumptions.deal_name}</h1>
           <p className="text-[14px] text-[color:var(--de-ink-2)] mt-1">
-            {output.assumptions.entry.hold_years}-year hold, priced at {multiple(entry.valuation, 2)} {entry.basis_label} EBITDA
+            {output.assumptions.entry.hold_years}-year hold, priced at {multiple(entry.valuation, 2)} {entryBasisText(entry)} EBITDA
             {facts.sizing_as_of ? `, sized on ${entry.sizing_label} figures to ${facts.sizing_as_of}` : ''}
           </p>
         </div>

@@ -15,7 +15,7 @@ import React, { useRef, useState } from 'react';
 import Fig from '../ui/Fig';
 import { copyTable } from '../results/exportModel';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
-import { entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful} from '../../../lib/engine2/display';
+import { entryBasisText, entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful} from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
@@ -82,7 +82,7 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         {headlineNotMeaningful(o) ? 'N/M' : <Fig label="Sponsor IRR">{pct(o.returns.sponsor_net.irr)}</Fig>}
       </Stat>
       <Stat label="MOIC">{headlineNotMeaningful(o) ? 'N/M' : <Fig label="Sponsor money multiple">{multiple(o.returns.sponsor_net.moic)}</Fig>}</Stat>
-      <Stat label={<>Entry ({em.basis_label}) → exit</>}
+      <Stat label={<>Entry ({entryBasisText(em)}) → exit</>}
         note={<>
           {em.fy_canonical !== null && (
             <p className="text-[12px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>

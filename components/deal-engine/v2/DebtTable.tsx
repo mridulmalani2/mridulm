@@ -10,7 +10,7 @@ import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { pct } from '../../../lib/format';
 import { Dropdown, Segmented } from '../ui/kit';
 import { useEngine2Model } from '../../../store/engine2Model';
-import { NumBox, isSet, show, type Unit } from './fields';
+import { NumBox, SuggestionLink, isSet, show, type Unit } from './fields';
 
 const NA = <span className="text-[color:var(--de-ink-3)]">–</span>;
 
@@ -32,10 +32,7 @@ const DebtTable: React.FC<{
       <span data-path={path} className="inline-flex flex-col items-end gap-0.5 w-full">
         <NumBox value={value} unit={unit} compact width="w-full" ariaLabel={label} onCommit={(v) => onSet(path, v)} onUseSuggestion={sug ? () => accept(path) : undefined} />
         {sug && typeof sug.value === 'number' && (
-          <button type="button" tabIndex={-1} onClick={() => accept(path)} title={sug.basis.detail}
-            className="text-[11px] text-[color:var(--de-input)] underline underline-offset-2 decoration-dotted rounded px-1 hover:bg-[var(--de-input-soft)]">
-            use {show(sug.value, unit)}{unit === 'pct' ? '%' : unit === 'mult' ? 'x' : ''}
-          </button>
+          <SuggestionLink text={`${show(sug.value, unit)}${unit === 'pct' ? '%' : unit === 'mult' ? 'x' : ''}`} kind={sug.basis.kind} detail={sug.basis.detail} onUse={() => accept(path)} />
         )}
       </span>
     );

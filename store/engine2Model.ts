@@ -19,6 +19,15 @@ import { holdSuggestion, suggestionsFor, type SuggestionBasis, type SuggestionCa
 
 /** Before the draft exists the one thing that can be proposed is the holding period itself. */
 const holdOnly = (): SuggestionCatalogue => { const h = holdSuggestion(); return h ? { 'entry.hold_years': h } : {}; };
+/**
+ * A refreshed catalogue keeps the AI proposals already on screen (keys `<path>@ai`): they came
+ * from a call the analyst made, and an edit elsewhere on the sheet must not make them vanish.
+ */
+const keepAi = (fresh: SuggestionCatalogue, prev: SuggestionCatalogue): SuggestionCatalogue => {
+  const out = { ...fresh };
+  for (const k of Object.keys(prev)) if (k.includes('@')) out[k] = prev[k];
+  return out;
+};
 import { blankAssumptions, CHOICE_PATHS, missingInputs, resizeHold, setPath, type MissingInput } from '../lib/engine2/draft';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts, NormalisationFacts } from '../lib/engine2/types';
@@ -188,7 +197,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   resuggest: () => {
     const { facts, assumptions } = get();
     if (!facts || !assumptions) return;
-    set({ suggestions: suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending) });
+    set({ suggestions: keepAi(suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending), get().suggestions) });
   },
 
   acceptSuggestion: (key) => {
@@ -202,11 +211,16 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     if (path === 'entry.hold_years') { if (typeof sug.value === 'number') get().setHoldYears(sug.value); return; }
     let next = setPath(assumptions, path, sug.value);
     if (path === 'entry.entry_multiple') next = { ...next, entry: { ...next.entry, driver: 'multiple', enterprise_value: null } };
+    const stillPending = pending.filter((p) => p !== path && !p.startsWith(`${path}.`));
+    const { facts } = get();
     set({
       assumptions: next,
       basis: { ...basis, [path]: sug.basis },
-      pending: pending.filter((p) => p !== path && !p.startsWith(`${path}.`)),
+      pending: stillPending,
       output: null,
+      // an accepted proposal is an input like any other: the proposals that follow it (each
+      // facility's terms after the template, exit = entry after the entry multiple) refresh
+      suggestions: facts ? keepAi(suggestionsFor(facts, next.entry.hold_years, next, stillPending), suggestions) : suggestions,
     });
   },
 
@@ -214,7 +228,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const { facts, assumptions } = get();
     if (!facts || facts.entity_name !== entityName) return;
     const next = { ...facts, implied_trading_ev_ebitda: anchor };
-    set({ facts: next, suggestions: assumptions ? suggestionsFor(next, assumptions.entry.hold_years, assumptions, get().pending) : get().suggestions });
+    set({ facts: next, suggestions: assumptions ? keepAi(suggestionsFor(next, assumptions.entry.hold_years, assumptions, get().pending), get().suggestions) : get().suggestions });
   },
 
   setHoldYears: (n) => {
@@ -222,7 +236,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     if (!facts) return;
     if (!Number.isInteger(n) || n < 1) { set({ error: 'Holding period must be a whole number of years ≥ 1.' }); return; }
     const next = assumptions ? resizeHold(assumptions, n) : blankAssumptions(`${facts.entity_name} LBO`, n);
-    set({ assumptions: next, suggestions: suggestionsFor(facts, n, next, get().pending), output: null, error: null });
+    set({ assumptions: next, suggestions: keepAi(suggestionsFor(facts, n, next, get().pending), get().suggestions), output: null, error: null });
   },
 
   missing: () => {
@@ -280,7 +294,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     set({
       assumptions: next, basis: marked, pending, output: null,
       // proposals that follow other inputs (exit = entry) track what was entered
-      suggestions: facts ? suggestionsFor(facts, next.entry.hold_years, next, pending) : get().suggestions,
+      suggestions: facts ? keepAi(suggestionsFor(facts, next.entry.hold_years, next, pending), get().suggestions) : get().suggestions,
     });
   },
 
