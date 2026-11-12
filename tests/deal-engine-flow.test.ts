@@ -50,7 +50,7 @@ describe('the Clean step feeds the model', () => {
     expect(model().facts!.normalisation!.ebitda.find((b) => b.period === FY)!.rows).toHaveLength(1);
   });
 
-  it('editing the ledger AFTER entering a deal keeps every assumption, badge and choice — only the output is cleared', () => {
+  it('editing the ledger AFTER entering a deal keeps every assumption, badge and choice: only the output is cleared', () => {
     const { pack } = load();
     clean().useAsReported();
     enterDeal(enteredAssumptions(5));
@@ -154,7 +154,7 @@ describe('what the sellers receive (display only)', () => {
     expect(eq.premium_to_market).toBeCloseTo(0.0575, 12);
   });
 
-  it('net debt never moves the sponsor’s returns — only what the sellers receive', () => {
+  it('net debt never moves the sponsor’s returns: only what the sellers receive', () => {
     const { pack } = load();
     clean().edit((l) => setLeaseChoice(l, 'none'));
     const a = enteredAssumptions(5);
@@ -178,7 +178,7 @@ describe('boundaries', () => {
     return out;
   };
 
-  it('NO engine arithmetic reads the normalisation record — only the type, the workbook and the display helpers name it', () => {
+  it('NO engine arithmetic reads the normalisation record: only the type, the workbook and the display helpers name it', () => {
     const allowed = new Set(['types.ts', 'workbook.ts', 'display.ts']);
     const offenders = walk(join(ROOT, 'lib', 'engine2'))
       .filter((f) => !allowed.has(f.slice(f.lastIndexOf('/') + 1)))
@@ -207,14 +207,14 @@ describe('boundaries', () => {
     }
   });
 
-  it('new deal-engine screens carry no literal colour — every colour is a design token', () => {
+  it('new deal-engine screens carry no literal colour: every colour is a design token', () => {
     const dirs = ['ui', 'shell', 'clean', 'results'].map((d) => join(ROOT, 'components', 'deal-engine', d));
     const offenders = dirs.flatMap((d) => walk(d)).filter((f) => /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(readFileSync(f, 'utf8')));
     expect(offenders).toEqual([]);
   });
 });
 
-describe('a deal survives a reload (store/session) — inputs are saved, everything derived is rebuilt', () => {
+describe('a deal survives a reload (store/session): inputs are saved, everything derived is rebuilt', () => {
   it('round trip: ledger, assumptions (blanks stay blank), badges, a confirmed fact, and the step state', async () => {
     const { restoreSession, serialiseSession } = await import('../store/session');
     const { pack } = load();
@@ -243,10 +243,118 @@ describe('a deal survives a reload (store/session) — inputs are saved, everyth
     expect(model().missing().map((m) => m.path)).toContain('exit.multiple');
   });
 
+  it('a deal that had been built is built again on restore: the figures are recomputed, never read back, so a reload on Results stays there', async () => {
+    const { restoreSession, serialiseSession } = await import('../store/session');
+    const { resolveStep } = await import('../pages/DealEngine');
+    const { pack } = load();
+    clean().edit((l) => stops(setLeaseChoice(acceptCandidate(l, pack.candidates.find((c) => c.tag === 'RestructuringCharges')!), 'all')));
+    expect(clean().confirmAdjusted()).toBe(true);
+    enterDeal(enteredAssumptions(5));
+    model().buildWithExhibits();
+    const built = model().output!;
+    expect(built).not.toBeNull();
+    const text = serialiseSession()!;
+    expect(JSON.parse(text).built).toBe(true);
+    expect(text).not.toContain('"output"'); // only the fact that it was built is saved
+    expect(text).not.toContain('"returns"');
+
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    expect(restoreSession(text)).toBe(true);
+    const again = model().output!;
+    expect(again).not.toBeNull();
+    expect(again).not.toBe(built);
+    expect(again.returns.sponsor_net.irr).toBe(built.returns.sponsor_net.irr);
+    expect(again.sensitivity).toEqual(built.sensitivity); // the same build the Build button runs, exhibits included
+    expect(resolveStep('results', { hasFacts: true, cleanDone: clean().done, hasOutput: model().output !== null })).toBe('results');
+
+    // a saved deal whose inputs no longer build opens on Assumptions, with no error shown unasked
+    const blanked = JSON.parse(text);
+    blanked.assumptions.exit.multiple = '__blank__';
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    expect(restoreSession(JSON.stringify(blanked))).toBe(true);
+    expect(model().output).toBeNull();
+    expect(model().error).toBeNull();
+  });
+
   it('garbage, an old version or nothing at all restores nothing', async () => {
     const { restoreSession, serialiseSession } = await import('../store/session');
     expect(serialiseSession()).toBeNull();
     for (const bad of [null, '', '{', '{"v":0}', '{"v":1,"cleaning":{}}']) expect(restoreSession(bad)).toBe(false);
     expect(model().facts).toBeNull();
+  });
+});
+
+describe('a case entered directly (forecast-only, SPEC §24.2) survives a reload too', () => {
+  it('round trip: name, currency, every entered input and open choice come back; the output does not', async () => {
+    const { restoreSession, serialiseSession } = await import('../store/session');
+    const { G12_ASSUMPTIONS } = await import('./fixtures/g12-prof');
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    useEngine2Model.getState().startForecastOnly({ entity_name: 'Worked example', currency: 'USD', hold_years: 5 });
+    const blankExit = { ...G12_ASSUMPTIONS, exit: { ...G12_ASSUMPTIONS.exit, multiple: Number.NaN } };
+    useEngine2Model.getState().editAssumptions(blankExit, ['entry.driver', 'entry.basis']);
+    const before = useEngine2Model.getState();
+    const text = serialiseSession();
+    expect(text).not.toBeNull();
+    expect(text!).not.toContain('"output"');
+
+    useEngine2Model.getState().reset();
+    expect(restoreSession(text)).toBe(true);
+    const after = useEngine2Model.getState();
+    expect(after.facts).toEqual(before.facts);
+    expect(after.assumptions).toEqual(before.assumptions);
+    expect(Number.isNaN(after.assumptions!.exit.multiple)).toBe(true);
+    expect(after.pending).toEqual(before.pending);
+    expect(after.basis).toEqual(before.basis);
+    expect(after.output).toBeNull();
+    // the proposals are rebuilt, including exit = the multiple the purchase price implies
+    expect(after.suggestions['exit.multiple'].value).toBe(1100 / 145);
+    useEngine2Model.getState().reset();
+  });
+
+  it('a forecast-only save with sourced-looking facts is refused (facts are never trusted from storage)', async () => {
+    const { restoreSession } = await import('../store/session');
+    const bad = JSON.stringify({ v: 1, cleaning: null, forecastFacts: { source: 'edgar', history: [] }, assumptions: {}, pending: [], basis: {} });
+    expect(restoreSession(bad)).toBe(false);
+    expect(useEngine2Model.getState().facts).toBeNull();
+  });
+});
+
+describe('the terminal year is the analyst\'s choice (SPEC §28): an open choice, then blank inputs, never assumed', () => {
+  it('switching the valuation on leaves the terminal year open; "stated" brings two blank inputs that gate Build', async () => {
+    const { EA_ASSUMPTIONS } = await import('./fixtures/ea-oos');
+    const { suggestionsFor } = await import('../lib/engine2/suggest');
+    useEngine2Model.getState().reset();
+    useCleaning.getState().reset();
+    const st = useEngine2Model.getState();
+    st.startForecastOnly({ entity_name: 'Electronic Arts', currency: 'USD', hold_years: 5 });
+    // everything entered except the terminal-year choice
+    useEngine2Model.getState().editWithChoices({ ...EA_ASSUMPTIONS, valuation: { ...EA_ASSUMPTIONS.valuation!, terminal: null } },
+      ['entry.basis', 'exit.basis', 'structure.tranches', 'tax.interest_deductible', 'tax.s163j.applies', 'valuation'], ['valuation.terminal']);
+    const paths = () => useEngine2Model.getState().missing().map((m) => m.path);
+    expect(paths()).toEqual(['valuation.terminal']);
+    useEngine2Model.getState().build();
+    expect(useEngine2Model.getState().output).toBeNull();
+
+    // "stated for a steady state": both inputs arrive blank
+    const a = useEngine2Model.getState().assumptions!;
+    useEngine2Model.getState().editAssumptions({ ...a, valuation: { ...a.valuation!, terminal: { capex_pct_of_da: Number.NaN, delta_nwc_before_growth: Number.NaN } } }, ['valuation.terminal']);
+    expect(paths().sort()).toEqual(['valuation.terminal.capex_pct_of_da', 'valuation.terminal.delta_nwc_before_growth']);
+    // the capex convention is PROPOSED with its reasoning, not applied
+    const sug = suggestionsFor(useEngine2Model.getState().facts!, 5, useEngine2Model.getState().assumptions!);
+    expect(sug['valuation.terminal.capex_pct_of_da'].value).toBe(1);
+    expect(Number.isNaN(useEngine2Model.getState().assumptions!.valuation!.terminal!.capex_pct_of_da)).toBe(true);
+
+    // entered as the workbook states it → builds, and reproduces the workbook's NPV
+    const b = useEngine2Model.getState().assumptions!;
+    useEngine2Model.getState().editAssumptions({ ...b, valuation: { ...b.valuation!, terminal: { capex_pct_of_da: 1, delta_nwc_before_growth: -60 } } },
+      ['valuation.terminal.capex_pct_of_da', 'valuation.terminal.delta_nwc_before_growth']);
+    expect(paths()).toEqual([]);
+    useEngine2Model.getState().build();
+    const npv = useEngine2Model.getState().output!.valuation!.fundamentals!.npv!;
+    expect(Math.abs(npv - -2322.54539530639)).toBeLessThan(1e-6);
+    useEngine2Model.getState().reset();
   });
 });

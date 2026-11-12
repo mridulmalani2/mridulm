@@ -125,7 +125,7 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
       const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
       set({
         error: /not found/i.test(msg)
-          ? 'Not found on EDGAR — this looks like a private target or an unknown CIK. Try the company autocomplete, or Manual entry.'
+          ? 'Not found on EDGAR: this looks like a private target or an unknown CIK. Try the company autocomplete, or Manual entry.'
           : `EDGAR import failed: ${msg || 'unknown error'}`,
         isCalculating: false,
       });
@@ -137,7 +137,7 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
     try {
       const filings = await getEsefFilings(lei);
       if (!filings.length) {
-        set({ error: 'No ESEF filing found for this entity — pick the listed parent (not a subsidiary), or use Manual entry.', isCalculating: false });
+        set({ error: 'No ESEF filing found for this entity: pick the listed parent (not a subsidiary), or use Manual entry.', isCalculating: false });
         return;
       }
       const base = 'https://filings.xbrl.org';

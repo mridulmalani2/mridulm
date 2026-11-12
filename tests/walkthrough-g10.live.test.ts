@@ -55,7 +55,7 @@ async function importAndBuild(
   const confirmed: [string, number][] = [];
   for (const path of [...e2.missingFacts]) {
     const v = confirmValues[path];
-    if (v === undefined) throw new Error(`unexpected gap ${path} — walkthrough must record it, not invent it`);
+    if (v === undefined) throw new Error(`unexpected gap ${path}: walkthrough must record it, not invent it`);
     engine2Store.getState().confirmFact(path, v);
     confirmed.push([path, v]);
   }
@@ -82,7 +82,7 @@ function assertSection22Silence(o: Engine2ModelOutput) {
   expect(o.coherence.map((f: { code: string }) => f.code)).not.toContain('loan_notes_unredeemed');
 }
 
-describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE — production proxy)', () => {
+describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE: production proxy)', () => {
   it('Apple (CIK 320193): imports, builds, §22 silent; then the strip+warrant leg computes on live data', async () => {
     const { o } = await importAndBuild(
       () => dealEngineStore.getState().importFromEdgar('CIK0000320193'),
@@ -122,7 +122,7 @@ describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE — productio
     // the render surface carries the block with its basis labels
     const html = renderToStaticMarkup(React.createElement(EquityStrip, { o: on as never, ccy: 'USD' as const }));
     expect(html).toContain('Sweet equity strip');
-    expect(html).toContain('§22.5 basis');
+    expect(html).toContain('own realised value');
     console.log(`APPLE strip leg: LN0=${es.loan_notes_subscribed.toFixed(3)} LN[N]=${es.loan_notes_accrued_balance.toFixed(3)} ` +
       `redeemed=${es.loan_notes_redeemed.toFixed(3)} tiers=${es.ratchet_tiers_reached} moic=${es.institution_moic_at_ratchet?.toFixed(4)} ` +
       `M=${es.management_ordinary_share.toFixed(3)} wnet=${es.warrant_payout_net.toFixed(3)} irr=${on.returns.sponsor_net.irr}`);
@@ -177,7 +177,7 @@ describe.skipIf(!LIVE)('§22 three-issuer E-gate walkthrough (LIVE — productio
 });
 
 describe.skipIf(LIVE)('walkthrough harness placeholder (CI)', () => {
-  it('is opt-in via LIVE_WALKTHROUGH=1 — skipped in CI by design', () => {
+  it('is opt-in via LIVE_WALKTHROUGH=1: skipped in CI by design', () => {
     expect(true).toBe(true);
   });
 });

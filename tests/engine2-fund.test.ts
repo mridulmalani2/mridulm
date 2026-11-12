@@ -66,7 +66,7 @@ describe('C-gate: the engine reproduces the adjudicated G7-FUND gospel at full p
   });
 });
 
-describe('§19.10 directed fixtures — the golden-uncovered branches', () => {
+describe('§19.10 directed fixtures: the golden-uncovered branches', () => {
   it("(i) american vs european on the SAME deal: fee draws in vs out of the hurdle move pref AND carry; both bounds bind at equality", () => {
     const eu = runModel(GOLDEN_DEALS.G7FUND.facts, GOLDEN_DEALS.G7FUND.assumptions).fund!;
     const amDeal = withFund('G7FUND', { ...FUND_EU, waterfall: 'american' });
@@ -84,7 +84,7 @@ describe('§19.10 directed fixtures — the golden-uncovered branches', () => {
     expect(am.paid_in_total).toBeCloseTo(eu.paid_in_total, 6); // fees drawn identically either way
   });
 
-  it('(ii) catchup_pct = 0 (hard hurdle) ≡ catchup_pct = carry_pct (the domain floor) — the same split by two routes', () => {
+  it('(ii) catchup_pct = 0 (hard hurdle) ≡ catchup_pct = carry_pct (the domain floor): the same split by two routes', () => {
     const hard = runModel(GOLDEN_DEALS.G7FUND.facts, withFund('G7FUND', { ...FUND_EU, catchup_pct: 0 }).assumptions).fund!;
     const floor = runModel(GOLDEN_DEALS.G7FUND.facts, withFund('G7FUND', { ...FUND_EU, catchup_pct: 0.20 }).assumptions).fund!;
     expect(sum(hard.gp_carry)).toBeCloseTo(sum(floor.gp_carry), 9);
@@ -145,7 +145,7 @@ describe('§19.10 directed fixtures — the golden-uncovered branches', () => {
     }
   });
 
-  it('(vii) rollover_equity > 0: the LP inflow is the SPONSOR share — a total-based mutant moves every fund number', () => {
+  it('(vii) rollover_equity > 0: the LP inflow is the SPONSOR share; a total-based mutant moves every fund number', () => {
     const d = withFund('G2DIST', FUND_EU, (a) => { a.rollover_equity = 100; });
     const o = runModel(d.facts, d.assumptions);
     const f = o.fund!;
@@ -163,7 +163,7 @@ describe('§19.10 directed fixtures — the golden-uncovered branches', () => {
   });
 });
 
-describe('§19.10 (viii) — the B8 event-order pin, unit-level (the only branch where the order is observable)', () => {
+describe('§19.10 (viii): the B8 event-order pin, unit-level (the only branch where the order is observable)', () => {
   // On every runModel fixture the catch-up completes in the exit year, where the pref
   // CANCELS out of the GP total (gp = carry × (D − capital) regardless of pref) — so the
   // rejected draw-before-accrue order is invisible there. It is observable exactly when
@@ -185,7 +185,7 @@ describe('§19.10 (viii) — the B8 event-order pin, unit-level (the only branch
   });
 });
 
-describe('§19.10 (ix)/(x) — the pref-magnitude / catch-up-memory pins (audit B1: mutants θ and δ ran green through every pre-existing test)', () => {
+describe('§19.10 (ix)/(x): the pref-magnitude / catch-up-memory pins (audit B1: mutants θ and δ ran green through every pre-existing test)', () => {
   // (ix) Hard hurdle, exit-only, N=5, NO fees: the outputs depend on the pref MAGNITUDE
   // itself — which every catchup-completing fixture is algebraically blind to (same-year
   // completion cancels pref out of GP; the engine emits byte-identical G7 outputs at

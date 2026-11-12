@@ -22,11 +22,11 @@ export function validateForecastLines(assumptions: Pick<DealAssumptions, 'operat
   const g = lines.year_n_plus_1_growth;
   if (needs && g === null) {
     throw new RangeError(
-      'forecast: enter the growth rate from the final hold year into year N+1 — the NTM exit and the flow-to-equity terminal value both need year N+1 (§24.3 R7)',
+      'forecast: enter the growth rate from the final hold year into year N+1; the NTM exit and the flow-to-equity terminal value both need year N+1',
     );
   }
   if (g !== null && (!Number.isFinite(g) || g <= -1)) {
-    throw new RangeError('forecast: year N+1 growth must be finite and > −100% (§24.3 R7)');
+    throw new RangeError('forecast: year N+1 growth must be finite and > −100%');
   }
 }
 
@@ -40,11 +40,48 @@ export function validateValuation(v: ValuationAssumption): void {
     ['long-run growth', v.long_run_growth],
   ];
   for (const [name, x] of fields) {
-    if (!Number.isFinite(x)) throw new RangeError(`valuation: ${name} must be a finite number (§25.1)`);
+    if (!Number.isFinite(x)) throw new RangeError(`valuation: ${name} must be a finite number`);
   }
-  if (v.mrp < 0) throw new RangeError('valuation: market risk premium must be ≥ 0 (§25.1)');
-  if (v.asset_beta < 0) throw new RangeError('valuation: asset beta must be ≥ 0 (§25.1)');
-  if (v.debt_beta < 0) throw new RangeError('valuation: debt beta must be ≥ 0 (§25.1)');
+  if (v.mrp < 0) throw new RangeError('valuation: market risk premium must be ≥ 0');
+  if (v.asset_beta < 0) throw new RangeError('valuation: asset beta must be ≥ 0');
+  if (v.debt_beta < 0) throw new RangeError('valuation: debt beta must be ≥ 0');
+  const t = v.terminal ?? null;
+  if (t !== null) {
+    if (!Number.isFinite(t.capex_pct_of_da) || t.capex_pct_of_da < 0) {
+      throw new RangeError('valuation: terminal capex ÷ D&A must be a finite number ≥ 0');
+    }
+    if (!Number.isFinite(t.delta_nwc_before_growth)) {
+      throw new RangeError('valuation: the terminal increase in NWC must be a finite number');
+    }
+  }
+}
+
+/**
+ * §28.2 [v2.6.0]: the year-N-terms lines the terminal cash flow is built on. With no terminal
+ * statement they are year N's own (v2.0.0). With one, capex is `capex_pct_of_da × D&A_N` and
+ * ΔNWC is the stated amount; EBITDA and D&A are never touched. The ONE place this is decided —
+ * `terminalUfcf`, the steady-state WARN and the workbook all read the result.
+ */
+export function resolveTerminalYear(
+  yearN: { ebitda: number; da: number; capex: number; delta_nwc: number },
+  terminal: ValuationAssumption['terminal'],
+): { ebitda: number; da: number; capex: number; delta_nwc: number; normalised: boolean } {
+  const t = terminal ?? null;
+  if (t === null) return { ...yearN, normalised: false };
+  return { ebitda: yearN.ebitda, da: yearN.da, capex: t.capex_pct_of_da * yearN.da, delta_nwc: t.delta_nwc_before_growth, normalised: true };
+}
+
+/**
+ * §24.5 / §28.4: what in the terminal year cannot last for ever — capex below D&A (the asset
+ * base is run down in perpetuity) and a working-capital INFLOW (released for ever). Empty when
+ * the terminal year is a steady state. Tolerance: a relative 1e-9, so capex ≡ D&A never trips.
+ */
+export function terminalSteadyStateIssues(t: { da: number; capex: number; delta_nwc: number }): string[] {
+  const issues: string[] = [];
+  const eps = 1e-9 * Math.max(1, Math.abs(t.da));
+  if (t.capex < t.da - eps) issues.push(`capex (${t.capex.toFixed(1)}) is below D&A (${t.da.toFixed(1)}) for ever`);
+  if (t.delta_nwc < -eps) issues.push(`working capital releases cash (${t.delta_nwc.toFixed(1)}) for ever`);
+  return issues;
 }
 
 /** §25.2 rU = rf + βA × MRP. */
@@ -53,8 +90,9 @@ export function unleveredCost(v: Pick<ValuationAssumption, 'risk_free' | 'asset_
 }
 
 /**
- * §25.2 terminal unlevered FCF: year N lines grown by g_{N+1}, EBIT taxed at the statutory
- * rate (a perpetuity carries no NOL/§163(j) state). EBITDA is pre-monitoring-fee.
+ * §25.2 terminal unlevered FCF: the year-N-terms lines (as resolved by `resolveTerminalYear`,
+ * §28.2) grown by g_{N+1}, EBIT taxed at the statutory rate (a perpetuity carries no NOL /
+ * §163(j) state). EBITDA is pre-monitoring-fee.
  */
 export function terminalUfcf(
   yearN: { ebitda: number; da: number; capex: number; delta_nwc: number },
@@ -68,7 +106,7 @@ export function terminalUfcf(
 /** §25.2 Gordon EV; null-with-reason when rU ≤ g. */
 export function gordonEv(ufcf: number, rU: number, g: number): { ev: number | null; reason: string | null } {
   if (!(rU > g)) {
-    return { ev: null, reason: `unlevered cost of capital ${(rU * 100).toFixed(2)}% is not above long-run growth ${(g * 100).toFixed(2)}% — a perpetuity has no finite value` };
+    return { ev: null, reason: `unlevered cost of capital ${(rU * 100).toFixed(2)}% is not above long-run growth ${(g * 100).toFixed(2)}%: a perpetuity has no finite value` };
   }
   return { ev: ufcf / (rU - g), reason: null };
 }
@@ -125,7 +163,7 @@ export function fteRecursion(v: ValuationAssumption, x: RecursionInputs): Recurs
   }
   const E: number[] = new Array(N + 1);
   E[N] = x.exit_equity;
-  if (!(E[N] > 0)) return NULL_RECURSION(`exit equity is not positive (${E[N].toFixed(2)}) — the equity beta of a non-positive claim is undefined`);
+  if (!(E[N] > 0)) return NULL_RECURSION(`exit equity is not positive (${E[N].toFixed(2)}): the equity beta of a non-positive claim is undefined`);
   const rE: (number | null)[] = new Array(N + 1).fill(null);
   for (let t = N; t >= 1; t--) {
     if (v.leverage_timing === 'end_of_year') {
@@ -141,7 +179,7 @@ export function fteRecursion(v: ValuationAssumption, x: RecursionInputs): Recurs
         (1 + v.risk_free + v.asset_beta * v.mrp);
     }
     if (!(E[t - 1] > 0)) {
-      return NULL_RECURSION(`equity value at the end of year ${t - 1} is not positive — the flow-to-equity recursion is undefined there`);
+      return NULL_RECURSION(`equity value at the end of year ${t - 1} is not positive: the flow-to-equity recursion is undefined there`);
     }
     if (v.leverage_timing === 'start_of_year') {
       rE[t] = v.risk_free + equityBeta(v, E[t - 1], x.debt[t - 1], x.cash[t - 1]) * v.mrp;

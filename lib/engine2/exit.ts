@@ -27,7 +27,7 @@ export function exitBasisValue(
   lastGrowth: number | null,
 ): number {
   if (basis === 'fy') return exitYearEbitdaAdj;
-  if (lastGrowth === null) throw new RangeError('exit: an NTM exit needs the year N+1 growth rate (§24.3 R7)');
+  if (lastGrowth === null) throw new RangeError('exit: an NTM exit needs the year N+1 growth rate');
   return exitYearEbitdaAdj * (1 + lastGrowth);
 }
 
@@ -56,7 +56,7 @@ export function validateRatchetTiers(
   home: string,
 ): void {
   if (!tiers || tiers.length === 0) return; // null ≡ [] ≡ no tiers (§22.3)
-  const bad = (msg: string): never => { throw new RangeError(`${home}: ${msg} (SPEC §22.3)`); };
+  const bad = (msg: string): never => { throw new RangeError(`${home}: ${msg}`); };
   let prevH = baseHurdle;
   let prevS = baseShare;
   for (const t of tiers) {
@@ -64,8 +64,8 @@ export function validateRatchetTiers(
     if (prevH !== null && !(t.hurdle_moic > prevH)) {
       bad('hurdle_moic must be strictly ascending (and strictly above the base threshold it sits on)');
     }
-    if (!(t.share_pct >= prevS)) bad('share_pct must be non-decreasing and ≥ the base share — a ratchet only ever ratchets up');
-    if (!(t.share_pct < 1)) bad('share_pct must be < 1 (§22.5: the (1 − s) bracket denominator; §22.4: a pool taking 100% of a slice)');
+    if (!(t.share_pct >= prevS)) bad('share_pct must be non-decreasing and ≥ the base share: a ratchet only ever ratchets up');
+    if (!(t.share_pct < 1)) bad('each ratchet share must be below 100% (a pool cannot take the whole of a slice)');
     prevH = t.hurdle_moic;
     prevS = t.share_pct;
   }
@@ -76,17 +76,17 @@ export function validateRatchetTiers(
 export function validateSweetEquity(
   a: Pick<DealAssumptions, 'sweet_equity' | 'warrant' | 'mip' | 'rollover_equity'>,
 ): void {
-  const bad = (msg: string): never => { throw new RangeError(`sweet_equity: ${msg} (SPEC §22.3)`); };
+  const bad = (msg: string): never => { throw new RangeError(`sweet_equity: ${msg}`); };
   const sw = a.sweet_equity;
   if (sw) {
-    if (a.mip) bad('a promote and a strip may not coexist — the DR-2 double-count made STRUCTURAL (§22.3(i))');
-    if (a.rollover_equity > 0) bad('a strip may not coexist with a rollover in v1 — the allocation is negotiated with no defensible default (§22.3(ii))');
+    if (a.mip) bad('a promote and a strip may not coexist: together they would count the same incentive twice');
+    if (a.rollover_equity > 0) bad('a strip may not coexist with a rollover: the allocation is negotiated with no defensible default');
     if (!(sw.sponsor_ordinary_pct > 0 && sw.sponsor_ordinary_pct <= 1)) bad('sponsor_ordinary_pct must be in (0, 1]');
     if (!(sw.loan_note_rate >= 0)) bad('loan_note_rate must be ≥ 0');
     if (!(sw.management_subscription >= 0)) bad('management_subscription must be ≥ 0');
     if (!(sw.management_ordinary_pct >= 0 && sw.management_ordinary_pct < 1)) bad('management_ordinary_pct must be in [0, 1)');
     if (sw.management_ordinary_pct === 0 && sw.management_subscription > 0) {
-      bad('management paying a real subscription for a ZERO ordinary share is a typo, not a structure (§22.3(vii)); a zero subscription with a zero share stays legal (the all-institutional strip)');
+      bad('management paying a real subscription for a ZERO ordinary share is a typo, not a structure; a zero subscription with a zero share stays legal (the all-institutional strip)');
     }
     validateRatchetTiers(sw.ratchet, null, sw.management_ordinary_pct, 'sweet_equity.ratchet');
   }
@@ -95,9 +95,9 @@ export function validateSweetEquity(
   if (w) {
     // L15: the warrant's rejections carry their OWN prefix — an out-of-domain warrant must
     // not throw under a 'sweet_equity:' label.
-    const badW = (msg: string): never => { throw new RangeError(`warrant: ${msg} (SPEC §22.3)`); };
-    if (!(w.pct_of_ordinary > 0 && w.pct_of_ordinary < 1)) badW('pct_of_ordinary must be in (0, 1) (§22.3(v))');
-    if (!(w.strike_total >= 0)) badW('strike_total must be ≥ 0 (§22.3(v))');
+    const badW = (msg: string): never => { throw new RangeError(`warrant: ${msg}`); };
+    if (!(w.pct_of_ordinary > 0 && w.pct_of_ordinary < 1)) badW('the share of the ordinary equity must be between 0% and 100%');
+    if (!(w.strike_total >= 0)) badW('the strike must be 0 or more');
   }
 }
 

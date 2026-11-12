@@ -16,7 +16,7 @@ const ROOT = join(__dirname, '..');
 const CASES = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix'];
 const load = (c: string, f: string) => JSON.parse(readFileSync(join(ROOT, 'tests/goldens/g2ltm', c, f), 'utf8'));
 
-describe('LTM stitch conformance — TS === gospel g2ltm goldens', () => {
+describe('LTM stitch conformance: TS === gospel g2ltm goldens', () => {
   for (const c of CASES) {
     it(`(${c}) matches the adjudicated expected.json`, () => {
       const input = load(c, 'input.json');
@@ -31,7 +31,7 @@ describe('LTM stitch conformance — TS === gospel g2ltm goldens', () => {
 // End-to-end production path (the goldens call stitchLtm directly and skip this): a REAL revenue tag
 // (RevenueFromContractWithCustomer…, not Revenues), raw-dollar XBRL vals (×1e6), through
 // mapCompanyFacts — proving tag-priority resolution + M() scaling + the LTM override + staleness.
-describe('mapCompanyFacts integration — the stitch activates end-to-end', () => {
+describe('mapCompanyFacts integration: the stitch activates end-to-end', () => {
   const M = 1e6;
   const f = (start: string, end: string, val: number, filed: string, form = '10-Q', fy?: number, fp?: string) =>
     ({ start, end, val, accn: `a-${filed}`, filed, form, fy, fp });

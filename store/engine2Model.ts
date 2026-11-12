@@ -15,7 +15,19 @@ import { createStore } from 'zustand/vanilla';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { runModel, type Engine2ModelOutput } from '../lib/engine2/facade';
 import { runModelWithScenarios } from '../lib/engine2/scenarios';
-import { suggestionsFor, type SuggestionBasis, type SuggestionCatalogue } from '../lib/engine2/suggest';
+import { holdSuggestion, suggestionsFor, type SuggestionBasis, type SuggestionCatalogue } from '../lib/engine2/suggest';
+
+/** Before the draft exists the one thing that can be proposed is the holding period itself. */
+const holdOnly = (): SuggestionCatalogue => { const h = holdSuggestion(); return h ? { 'entry.hold_years': h } : {}; };
+/**
+ * A refreshed catalogue keeps the AI proposals already on screen (keys `<path>@ai`): they came
+ * from a call the analyst made, and an edit elsewhere on the sheet must not make them vanish.
+ */
+const keepAi = (fresh: SuggestionCatalogue, prev: SuggestionCatalogue): SuggestionCatalogue => {
+  const out = { ...fresh };
+  for (const k of Object.keys(prev)) if (k.includes('@')) out[k] = prev[k];
+  return out;
+};
 import { blankAssumptions, CHOICE_PATHS, missingInputs, resizeHold, setPath, type MissingInput } from '../lib/engine2/draft';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts, NormalisationFacts } from '../lib/engine2/types';
@@ -123,7 +135,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       // v2.0.0: NOTHING pre-filled — a blank draft plus a catalogue of proposals.
       assumptions: N === null ? null : blankAssumptions(`${facts.entity_name} LBO`, N),
       pending: [...CHOICE_PATHS],
-      suggestions: N === null ? {} : suggestionsFor(facts, N),
+      suggestions: N === null ? holdOnly() : suggestionsFor(facts, N),
       basis: {},
       output: null, error: null,
       // AI notes/redlines describe assumptions that no longer exist after ANY re-import
@@ -158,7 +170,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const a = prev.assumptions;
     set({
       facts, missingFacts: missing, factNotes: adapted.notes,
-      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a) : {},
+      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a, prev.pending) : holdOnly(),
       output: null, error: null,
     });
   },
@@ -185,22 +197,30 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   resuggest: () => {
     const { facts, assumptions } = get();
     if (!facts || !assumptions) return;
-    set({ suggestions: suggestionsFor(facts, assumptions.entry.hold_years, assumptions) });
+    set({ suggestions: keepAi(suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending), get().suggestions) });
   },
 
   acceptSuggestion: (key) => {
     const { assumptions, suggestions, basis, pending } = get();
     const sug = suggestions[key];
+    if (sug && !assumptions && key === 'entry.hold_years' && typeof sug.value === 'number') { get().setHoldYears(sug.value); return; }
     if (!assumptions || !sug) return;
     // catalogue keys may carry a variant (`entry.entry_multiple@ai`) — the target is the path
     const path = key.split('@')[0];
+    // the holding period resizes every per-year line: it goes through its own action
+    if (path === 'entry.hold_years') { if (typeof sug.value === 'number') get().setHoldYears(sug.value); return; }
     let next = setPath(assumptions, path, sug.value);
     if (path === 'entry.entry_multiple') next = { ...next, entry: { ...next.entry, driver: 'multiple', enterprise_value: null } };
+    const stillPending = pending.filter((p) => p !== path && !p.startsWith(`${path}.`));
+    const { facts } = get();
     set({
       assumptions: next,
       basis: { ...basis, [path]: sug.basis },
-      pending: pending.filter((p) => p !== path && !p.startsWith(`${path}.`)),
+      pending: stillPending,
       output: null,
+      // an accepted proposal is an input like any other: the proposals that follow it (each
+      // facility's terms after the template, exit = entry after the entry multiple) refresh
+      suggestions: facts ? keepAi(suggestionsFor(facts, next.entry.hold_years, next, stillPending), suggestions) : suggestions,
     });
   },
 
@@ -208,7 +228,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const { facts, assumptions } = get();
     if (!facts || facts.entity_name !== entityName) return;
     const next = { ...facts, implied_trading_ev_ebitda: anchor };
-    set({ facts: next, suggestions: assumptions ? suggestionsFor(next, assumptions.entry.hold_years, assumptions) : get().suggestions });
+    set({ facts: next, suggestions: assumptions ? keepAi(suggestionsFor(next, assumptions.entry.hold_years, assumptions, get().pending), get().suggestions) : get().suggestions });
   },
 
   setHoldYears: (n) => {
@@ -216,7 +236,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     if (!facts) return;
     if (!Number.isInteger(n) || n < 1) { set({ error: 'Holding period must be a whole number of years ≥ 1.' }); return; }
     const next = assumptions ? resizeHold(assumptions, n) : blankAssumptions(`${facts.entity_name} LBO`, n);
-    set({ assumptions: next, suggestions: suggestionsFor(facts, n, next), output: null, error: null });
+    set({ assumptions: next, suggestions: keepAi(suggestionsFor(facts, n, next, get().pending), get().suggestions), output: null, error: null });
   },
 
   missing: () => {
@@ -274,7 +294,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     set({
       assumptions: next, basis: marked, pending, output: null,
       // proposals that follow other inputs (exit = entry) track what was entered
-      suggestions: facts ? suggestionsFor(facts, next.entry.hold_years, next) : get().suggestions,
+      suggestions: facts ? keepAi(suggestionsFor(facts, next.entry.hold_years, next, pending), get().suggestions) : get().suggestions,
     });
   },
 
@@ -362,7 +382,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       set({
         suggestions: { ...get().suggestions, ...proposals },
         aiNotes: [
-          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value} — ${a.basis}`),
+          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value}, ${a.basis}`),
           ...result.dropped.map((d) => `dropped: ${d}`),
         ],
         aiBusy: false,

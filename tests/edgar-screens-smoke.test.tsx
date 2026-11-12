@@ -28,12 +28,11 @@ describe('SourceScreen SSR', () => {
     expect(html).toContain('Source the target');
     // the honest sourcing map: manual = realistic private path; filings = take-private + demo
     expect(html).toContain('Manual entry');
-    expect(html).toContain('the realistic path');
-    expect(html).toContain('take-private screen');
-    expect(html).toContain('fastest demo');
+    expect(html).toContain('A private company, from a CIM'); // the copy was cut down in the UI upgrade; the three ways in remain
+    expect(html).toContain('Deal library');
     // upload path is LIVE (IXBRL_SPEC v1) with the privacy promise on the card
     expect(html).toContain('Upload a filing');
-    expect(html).toContain('parsed in your browser');
+    expect(html).toContain('Read in your browser');
     expect(html).toContain('never leaves your machine');
     // the filings search renders expanded by default
     expect(html).toContain('Company name or ticker');
@@ -54,7 +53,7 @@ describe('ManualFactsScreen SSR', () => {
     expect(html).toContain('Net PP&amp;E');
     expect(html).toContain('Blank cells stay blank');
     // empty form ⇒ the submit is GATED on the sizing pair (no silent 0-EBITDA submit)
-    expect(html).toContain('revenue &amp; EBITDA to continue');
+    expect(html).toContain('to continue'); // the submit says what is still needed (name, sector, sizing figures)
   });
 });
 

@@ -11,17 +11,22 @@
  * this list in v1.4.0 — the §19 overlay renders on the Returns tab.)
  */
 import { DISCLOSURES } from '../../../lib/engine2/disclosures';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { dealUiStore } from '../../../store/dealUi';
+import Fig from '../ui/Fig';
+import { copyTable } from '../results/exportModel';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
-import { entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, sizingBasisLabel } from '../../../lib/engine2/display';
+import { entryBasisText, entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful} from '../../../lib/engine2/display';
 import { headroom, money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 
-const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const label = { color: 'rgba(17,17,17,0.62)', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' } as const;
-const th = 'text-right font-normal px-2 py-1';
-const td = 'text-right px-2 py-1';
-const rowB = { borderTop: '1px solid rgba(17,17,17,0.08)' } as const;
+const label = { color: 'var(--de-ink-3)' } as const;
+const td = '';
+const rowB = undefined;
+/** A sub-heading above a table. */
+const H = 'text-[14px] font-semibold mt-6 mb-2 first:mt-0';
+/** A note under a table. */
+const NOTE = 'text-[12px] leading-relaxed mt-2 max-w-[80ch]';
 
 type Tab = 'summary' | 'returns' | 'valuation' | 'operating' | 'su' | 'debt' | 'bs' | 'credit' | 'sensitivity' | 'scenarios' | 'methodology';
 const TABS: { id: Tab; label: string }[] = [
@@ -38,12 +43,30 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'methodology', label: 'Methodology' },
 ];
 
-const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, children }) => (
-  <div style={{ overflowX: 'auto' }}>
-    <table className="w-full text-[13px]" style={{ fontFamily: mono, borderCollapse: 'collapse', color: '#111' }}>
-      <thead><tr style={{ color: 'rgba(17,17,17,0.45)' }}>{head.map((h, i) => <th key={i} className={i === 0 ? 'text-left font-normal px-2 py-1' : th}>{h}</th>)}</tr></thead>
-      <tbody>{children}</tbody>
-    </table>
+/** A table of figures. Hovering shows a button that copies it as cells for Excel or PowerPoint. */
+export const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, children }) => {
+  const ref = useRef<HTMLTableElement>(null);
+  return (
+    <div className="group/table relative">
+      <button type="button" onClick={async () => { if (ref.current) dealUiStore.getState().notify((await copyTable(ref.current)) ? 'Table copied. Paste it into Excel or a slide' : 'Copying is blocked in this browser'); }}
+        className="de-no-print absolute -top-7 right-0 h-6 px-2 rounded text-[12px] text-[color:var(--de-ink-3)] opacity-0 group-hover/table:opacity-100 focus:opacity-100 hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)] transition-opacity">
+        Copy table
+      </button>
+      <div className="de-scroll-x">
+        <table ref={ref} className="de-table de-num">
+          {head.some((h) => h !== '') && <thead><tr>{head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>}
+          <tbody>{children}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const Stat: React.FC<{ label: React.ReactNode; children: React.ReactNode; note?: React.ReactNode }> = ({ label: l, children, note }) => (
+  <div className="min-w-0">
+    <p className="text-[12px] font-medium" style={label}>{l}</p>
+    <p className="de-num text-[24px] font-semibold leading-tight mt-1">{children}</p>
+    {note}
   </div>
 );
 
@@ -54,65 +77,66 @@ export const Summary: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
   const em = entryMultipleDisplay(o);
   return (
   <div>
-    <div className="flex gap-8 mb-4">
-      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Sponsor IRR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : pct(o.returns.sponsor_net.irr)}</p>
-        {headlineNotMeaningful(o) && <p className="text-[12px]" style={{ color: '#b91c1c' }}>not meaningful — see the ■ warning above</p>}</div>
-      <div><p className="text-[12px] uppercase tracking-widest" style={label}>MOIC</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{headlineNotMeaningful(o) ? 'N/M' : multiple(o.returns.sponsor_net.moic)}</p></div>
-      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Entry ({em.basis_label}) → exit</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}</p>
-        {em.fy_canonical !== null && (
-          <p className="text-[12px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
-        )}
-        {/* §21 [v1.6.0]: the sector comps band, beside the entry multiple because that is the
-            number a reader compares it against. Every part of the label is load-bearing — the
-            band is a PUBLIC-MARKET trading range, NOT a buyout-entry range (§21.8(e)'s
-            NON-claim), so the surface states its basis, region, vintage and how many industries
-            stand behind it, and asserts NO ordering against the entry multiple. Reads the named
-            fact; no arithmetic here. */}
-        {o.facts.sector_comps !== null ? (
-          <p className="text-[12px]" style={label}>
-            {o.facts.sector_comps.basis === 'sector'
-              ? `${o.facts.sector_comps.bucket} peers trade`
-              : 'Whole market (ex-financials) trades'}{' '}
-            {multiple(o.facts.sector_comps.low)}–{multiple(o.facts.sector_comps.high)} (median{' '}
-            {multiple(o.facts.sector_comps.median)}) — listed comps, NOT buyout entry ·{' '}
-            {o.facts.sector_comps.region} · {o.facts.sector_comps.vintage}
-            {o.facts.sector_comps.basis === 'sector'
-              ? ` · ${o.facts.sector_comps.industries_used} industries, ${o.facts.sector_comps.firms} firms`
-              : ` · ${o.facts.sector_comps.firms} firms`}
-          </p>
-        ) : (
-          <p className="text-[12px]" style={label}>Sector comps unavailable — no sector source for this deal (§21)</p>
-        )}</div>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-5 mb-6">
+      <Stat label="Sponsor IRR" note={headlineNotMeaningful(o) ? <p className="text-[12px] text-[color:var(--de-accent)]">not meaningful: see the ■ warning above</p> : undefined}>
+        {headlineNotMeaningful(o) ? 'N/M' : <Fig label="Sponsor IRR">{pct(o.returns.sponsor_net.irr)}</Fig>}
+      </Stat>
+      <Stat label="MOIC">{headlineNotMeaningful(o) ? 'N/M' : <Fig label="Sponsor money multiple">{multiple(o.returns.sponsor_net.moic)}</Fig>}</Stat>
+      <Stat label={<>Entry ({entryBasisText(em)}) → exit</>}
+        note={<>
+          {em.fy_canonical !== null && (
+            <p className="text-[12px]" style={label}>FY/LTM canonical {multiple(em.fy_canonical)}</p>
+          )}
+          {/* §21 [v1.6.0]: the sector comps band, beside the entry multiple because that is the
+              number a reader compares it against. Every part of the label is load-bearing — the
+              band is a PUBLIC-MARKET trading range, NOT a buyout-entry range (§21.8(e)'s
+              NON-claim), so the surface states its basis, region, vintage and how many industries
+              stand behind it, and asserts NO ordering against the entry multiple. Reads the named
+              fact; no arithmetic here. */}
+          {o.facts.sector_comps !== null ? (
+            <p className="text-[12px] leading-snug mt-1" style={label}>
+              {o.facts.sector_comps.basis === 'sector'
+                ? `${o.facts.sector_comps.bucket} peers trade`
+                : 'Whole market (ex-financials) trades'}{' '}
+              {multiple(o.facts.sector_comps.low)}–{multiple(o.facts.sector_comps.high)} (median{' '}
+              {multiple(o.facts.sector_comps.median)}); listed comps, NOT buyout entry ·{' '}
+              {o.facts.sector_comps.region} · {o.facts.sector_comps.vintage}
+              {o.facts.sector_comps.basis === 'sector'
+                ? ` · ${o.facts.sector_comps.industries_used} industries, ${o.facts.sector_comps.firms} firms`
+                : ` · ${o.facts.sector_comps.firms} firms`}
+            </p>
+          ) : (
+            <p className="text-[12px] leading-snug mt-1" style={label}>Sector comps unavailable: no sector source for this deal</p>
+          )}
+        </>}>
+        {multiple(em.valuation)} → {multiple(exitMultipleDisplay(o))}
+      </Stat>
       {/* §11 [v1.1.2]: entry leverage is GROSS (par ÷ FY EBITDA) — labelled, because the
           per-year credit metrics on the other tabs are NET. */}
-      <div><p className="text-[12px] uppercase tracking-widest" style={label}>Entry gross leverage · Y1 DSCR</p>
-        <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.derived.entry_gross_leverage_fy)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}</p></div>
+      <Stat label={<>Entry gross leverage ({entryLeverageDisplay(o).basis_label}) · Y1 DSCR</>}>
+        {multiple(entryLeverageDisplay(o).value)} · {o.credit[0]?.dscr == null ? 'N/A' : num(o.credit[0].dscr, 2)}
+      </Stat>
     </div>
-    <Table head={['Value bridge', money(0, ccy) === '' ? '' : '']}>
+    <Table head={['Value bridge', '']}>
       {[
         ['EBITDA growth @ entry multiple', o.bridge.ebitda_growth_at_entry_multiple],
         ['Multiple change', o.bridge.multiple_change_bar],
         ['Interaction', o.bridge.interaction],
         ['Net-debt paydown', o.bridge.net_debt_paydown],
       ].map(([l, v]) => (
-        <tr key={l as string} style={rowB}><td className="px-2 py-1">{l}</td><td className={td}>{money(v as number, ccy)}</td></tr>
+        <tr key={l as string} style={rowB}><td className="">{l}</td><td className={td}>{money(v as number, ccy)}</td></tr>
       ))}
     </Table>
     {/* §9 [v1.1.0]: DPI and payback are headline-eligible ONLY when a distribution was
         actually paid. With none, DPI is identically zero and payback is N/A by
         construction — showing them would be the degenerate headline §9 removed (L-10). */}
     {(o.waterfall.some((w) => w.distribution_paid > 0) || o.selldown !== null) && (
-      <div className="flex gap-8 mb-4">
-        <div><p className="text-[12px] uppercase tracking-widest" style={label}>{o.selldown ? 'DPI (distributions + selldown ÷ check)' : 'DPI (distributions ÷ check)'}</p>
-          <p className="text-2xl" style={{ fontFamily: mono }}>{multiple(o.returns.dpi[o.returns.dpi.length - 1] ?? null)}</p></div>
-        <div><p className="text-[12px] uppercase tracking-widest" style={label}>{o.selldown ? 'Payback (cash realized before the exit)' : 'Payback (distributions alone)'}</p>
-          <p className="text-2xl" style={{ fontFamily: mono }}>{o.returns.payback_year === null ? 'N/A' : `Y${o.returns.payback_year}`}</p></div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-5 my-6">
+        <Stat label={o.selldown ? 'DPI (distributions + selldown ÷ check)' : 'DPI (distributions ÷ check)'}>{multiple(o.returns.dpi[o.returns.dpi.length - 1] ?? null)}</Stat>
+        <Stat label={o.selldown ? 'Payback (cash realized before the exit)' : 'Payback (distributions alone)'}>{o.returns.payback_year === null ? 'N/A' : `Y${o.returns.payback_year}`}</Stat>
       </div>
     )}
-    <p className="text-[12px] mt-2" style={label}>
+    <p className={NOTE} style={label}>
       FCF conversion by year: {o.credit.map((c) => (c.fcf_conversion == null ? 'N/A' : pct(c.fcf_conversion))).join(' · ')}
     </p>
   </div>
@@ -128,13 +152,13 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
   return (
     <div>
       <Table head={['Stream', 'Outflow', 'Final inflow', 'IRR', 'MOIC']}>
-        {([['Sponsor net', o.returns.sponsor_net], ['Pre-promote', o.returns.pre_promote], ['Unlevered', o.returns.unlevered]] as const).map(([l, s]) => (
+        {([['Sponsor net', o.returns.sponsor_net, 'Sponsor IRR', 'Sponsor money multiple'], ['Pre-promote', o.returns.pre_promote, 'Total equity IRR (before the promote)', 'Total equity money multiple (before the promote)'], ['Unlevered', o.returns.unlevered, 'Unlevered IRR', null]] as const).map(([l, s, irrRow, moicRow]) => (
           <tr key={l} style={rowB}>
-            <td className="px-2 py-1">{l}</td>
+            <td className="">{l}</td>
             <td className={td}>{money(s.cashflows[0], ccy)}</td>
             <td className={td}>{money(s.cashflows[s.cashflows.length - 1], ccy)}</td>
-            <td className={td}>{pct(s.irr)}</td>
-            <td className={td}>{multiple(s.moic)}</td>
+            <td className={td}><Fig label={irrRow}>{pct(s.irr)}</Fig></td>
+            <td className={td}>{moicRow ? <Fig label={moicRow}>{multiple(s.moic)}</Fig> : multiple(s.moic)}</td>
           </tr>
         ))}
         {f && (
@@ -144,7 +168,7 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
              §19.5 label rides the footnote. Fee-only years make the LP stream multi-sign;
              kernel/irr's policy applies and a null renders N/A, never a fabricated rate. */
           <tr style={rowB}>
-            <td className="px-2 py-1">Net to LP — after fund fees & carry (fund-of-one overlay)</td>
+            <td className="">Net to LP, after fund fees & carry (fund-of-one overlay)</td>
             <td className={td}>{money(-f.lp_contributions[0], ccy)}</td>
             <td className={td}>{money(f.lp_distributions[N - 1] - f.mgmt_fees_net[N - 1], ccy)}</td>
             <td className={td}>{pct(f.fund_lp_net.irr)}</td>
@@ -153,12 +177,12 @@ export const Returns: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> 
         )}
       </Table>
       {f && (
-        <p className="text-[12px] mt-2" style={label}>
-          less: fund fees & carry → net to LP (SPEC §19). Paid-in {money(f.paid_in_total, ccy)} (equity
+        <p className={NOTE} style={label}>
+          less: fund fees & carry → net to LP. Paid-in {money(f.paid_in_total, ccy)} (equity
           check + annual fee draws; committed {money(f.committed_capital, ccy)}); the LP multiple is
-          TVPI (= DPI — fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
+          TVPI (= DPI, fully realized) {multiple(f.fund_lp_net.moic)}; payback{' '}
           {f.fund_lp_net.payback_year === null ? 'N/A' : `Y${f.fund_lp_net.payback_year}`} (interim
-          distributions only — the exit year never counts). Outflow shows the t=0 equity draw; fee
+          distributions only; the exit year never counts). Outflow shows the t=0 equity draw; fee
           draws continue annually.
         </p>
       )}
@@ -187,16 +211,16 @@ export const Selldown: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }>
   ];
   return (
     <div className="mt-4">
-      <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Partial exit — secondary selldown (SPEC §23)</p>
+      <p className={H}>Partial exit: secondary selldown</p>
       <Table head={['', '']}>
         {rows.map(([l, v]) => (
           <tr key={l} style={rowB}>
-            <td className="px-2 py-1">{l}</td>
+            <td className="">{l}</td>
             <td className={td}>{v}</td>
           </tr>
         ))}
       </Table>
-      <p className="text-[12px] mt-1" style={label}>
+      <p className={NOTE} style={label}>
         A secondary sale of the sponsor’s own stake: the company’s cash, debt and balance sheet are
         unchanged. The proceeds are in the sponsor’s cash flows and count toward DPI and payback; the
         promote hurdle and the value bridge bars do not include them. From the year after the sale the
@@ -224,7 +248,7 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       ? ([
           ['Loan notes subscribed (institutional strip)', money(es.loan_notes_subscribed, ccy)],
           ['Institutional ordinaries subscribed (= sponsor equity − loan notes)', money(o.sources_uses.sponsor_equity - es.loan_notes_subscribed, ccy)],
-          ['Management subscription (a §2 source)', money(o.sources_uses.management_subscription, ccy)],
+          ['Management subscription (a source of funds at close)', money(o.sources_uses.management_subscription, ccy)],
           ['Loan notes accrued at exit (pre-redemption)', money(es.loan_notes_accrued_balance, ccy)],
           ['Loan notes redeemed at exit', money(es.loan_notes_redeemed, ccy)],
         ] as [string, string][])
@@ -242,30 +266,30 @@ export const EquityStrip: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency
       ? ([
           ['Management ordinary share at exit', money(es.management_ordinary_share, ccy)],
           ['Institutional ordinary share at exit', money(es.institution_ordinary_share, ccy)],
-          ['Sweet-equity ratchet tiers reached (§22.5 basis — the promote ratchet emits no count)', String(es.ratchet_tiers_reached)],
+          ['Sweet-equity ratchet tiers reached (on the institution’s own realised value; the promote ratchet reports no count)', String(es.ratchet_tiers_reached)],
           ['Management effective ordinary % (N/A at a non-positive pot)', es.management_effective_ordinary_pct === null ? 'N/A' : pct(es.management_effective_ordinary_pct)],
-          ['Institution MOIC at ratchet (REALIZED — the figure the ratchet is struck on)', multiple(es.institution_moic_at_ratchet)],
+          ['Institution MOIC at ratchet (REALIZED: the figure the ratchet is struck on)', multiple(es.institution_moic_at_ratchet)],
         ] as [string, string][])
       : []),
   ];
   return (
     <div className="mt-4">
-      <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>
-        {sw ? 'Sweet equity strip' : 'Warrant'} (SPEC §22)
+      <p className={H}>
+        {sw ? 'Sweet equity strip' : 'Warrant'}
       </p>
       <Table head={['', '']}>
         {rows.map(([l, v]) => (
           <tr key={l} style={rowB}>
-            <td className="px-2 py-1">{l}</td>
+            <td className="">{l}</td>
             <td className={td}>{v}</td>
           </tr>
         ))}
       </Table>
-      <p className="text-[12px] mt-1" style={label}>
-        Loan notes are EQUITY (§22.2) — outside §11 leverage/ICR/FCCR/DSCR and the §3 waterfall, accruing
+      <p className={NOTE} style={label}>
+        Loan notes are EQUITY: outside leverage, ICR, FCCR and DSCR and the cash waterfall, accruing
         only, no interest deduction. {sw ? 'The ratchet is struck ONCE at exit on the institution\u2019s own REALIZED MOIC. ' : ''}
-        {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value (§22.6). ' : ''}
-        Management&apos;s subscription reduces the sponsor&apos;s own cheque (§2).
+        {es.warrant_exercised ? 'The warrant settles on full dilution with the strike paid in; its dilution of the class equals its own net value. ' : ''}
+        Management&apos;s subscription reduces the sponsor&apos;s own cheque.
       </p>
     </div>
   );
@@ -275,15 +299,15 @@ const Operating: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
   <Table head={['Year', 'Revenue', 'EBITDA', 'Margin', 'D&A', 'Capex', 'ΔNWC', 'Cash tax', 'FCF pre-debt']}>
     {o.operating.map((y, i) => (
       <tr key={i} style={rowB}>
-        <td className="px-2 py-1">Y{i + 1}</td>
-        <td className={td}>{money(y.revenue, ccy, 0)}</td>
-        <td className={td}>{money(y.ebitda_adj, ccy, 0)}</td>
-        <td className={td}>{pct(y.margin)}</td>
-        <td className={td}>{num(y.da, 1)}</td>
-        <td className={td}>{num(y.maint_capex + y.growth_capex, 1)}</td>
-        <td className={td}>{num(y.delta_nwc, 1)}</td>
-        <td className={td}>{num(o.tax[i].cash_tax, 1)}</td>
-        <td className={td}>{money(y.fcf_pre_debt, ccy, 1)}</td>
+        <td className="">Y{i + 1}</td>
+        <td className={td}><Fig label="Revenue" year={i + 1}>{money(y.revenue, ccy, 0)}</Fig></td>
+        <td className={td}><Fig label="EBITDA" year={i + 1}>{money(y.ebitda_adj, ccy, 0)}</Fig></td>
+        <td className={td}><Fig label="EBITDA margin" year={i + 1}>{pct(y.margin)}</Fig></td>
+        <td className={td}><Fig label="Depreciation & amortization" year={i + 1}>{num(y.da, 1)}</Fig></td>
+        <td className={td}><Fig label="Capex" year={i + 1}>{num(y.maint_capex + y.growth_capex, 1)}</Fig></td>
+        <td className={td}><Fig label="Increase in NWC" year={i + 1}>{num(y.delta_nwc, 1)}</Fig></td>
+        <td className={td}><Fig label="Cash tax" year={i + 1}>{num(o.tax[i].cash_tax, 1)}</Fig></td>
+        <td className={td}><Fig label="Free cash flow before debt service" year={i + 1}>{money(y.fcf_pre_debt, ccy, 1)}</Fig></td>
       </tr>
     ))}
   </Table>
@@ -291,16 +315,16 @@ const Operating: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
 
 // Exported for the directed §22 display test (the M10 sources-row twin).
 export const SU: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
-  <div className="grid grid-cols-2 gap-6">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
     <Table head={['Uses', '']}>
-      {[
-        ['Enterprise value', o.sources_uses.enterprise_value],
-        ['Transaction costs', o.sources_uses.transaction_costs],
-        ['Financing fees', o.sources_uses.financing_fees],
-        ['OID', o.sources_uses.oid_funded],
-        ['Cash to balance sheet', o.sources_uses.cash_to_balance_sheet],
-        ['Total uses', o.sources_uses.total_uses],
-      ].map(([l, v]) => <tr key={l as string} style={rowB}><td className="px-2 py-1">{l}</td><td className={td}>{money(v as number, ccy)}</td></tr>)}
+      {([
+        ['Enterprise value', o.sources_uses.enterprise_value, 'Enterprise value'],
+        ['Transaction costs', o.sources_uses.transaction_costs, 'Transaction costs'],
+        ['Financing fees', o.sources_uses.financing_fees, 'Financing fees'],
+        ['OID', o.sources_uses.oid_funded, 'OID funded (total)'],
+        ['Cash to balance sheet', o.sources_uses.cash_to_balance_sheet, 'Cash to the balance sheet (the minimum cash)'],
+        ['Total uses', o.sources_uses.total_uses, 'Total uses'],
+      ] as const).map(([l, v, t]) => <tr key={l} style={rowB} data-total={l === 'Total uses' || undefined}><td className="">{l}</td><td className={td}><Fig label={t} year={0}>{money(v, ccy)}</Fig></td></tr>)}
     </Table>
     <Table head={['Sources', '']}>
       {[
@@ -312,7 +336,7 @@ export const SU: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
           : []),
         ['Sponsor equity', o.sources_uses.sponsor_equity] as const,
         ['Total sources', o.sources_uses.total_sources] as const,
-      ].map(([l, v]) => <tr key={l} style={rowB}><td className="px-2 py-1">{l}</td><td className={td}>{money(v, ccy)}</td></tr>)}
+      ].map(([l, v]) => <tr key={l} style={rowB} data-total={l === 'Total sources' || undefined}><td className="">{l}</td><td className={td}>{l === 'Sponsor equity' || l === 'Total sources' ? <Fig label={l} year={0}>{money(v, ccy)}</Fig> : money(v, ccy)}</td></tr>)}
     </Table>
   </div>
 );
@@ -333,25 +357,25 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
         const elections = trancheAssumption && trancheAssumption.type === 'pik_note' ? trancheAssumption.elections : null;
         return (
         <div key={k} className="mb-3">
-          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>{rows[0]?.name ?? `Tranche ${k + 1}`}</p>
+          <p className={H}>{rows[0]?.name ?? `Tranche ${k + 1}`}</p>
           <Table head={['Year', 'Beginning', 'Interest', 'PIK', 'Amort', 'Sweep', 'Ending']}>
             {rows.map((r, i) => (
               <tr key={i} style={rowB}>
                 {/* §18: mark the refi year — the tranche re-prices/re-terms at the start of it.
                     §20: mark the year's PIK-toggle election (cash coupon paid vs coupon accrued). */}
-                <td className="px-2 py-1">Y{i + 1}{r.refinanced ? ' ⟳' : ''}{elections ? (elections[i] === 'cash' ? ' · cash' : ' · PIK') : ''}</td>
-                <td className={td}>{num(r.beginning_balance, 1)}</td>
-                <td className={td}>{num(r.cash_interest, 2)}</td>
-                <td className={td}>{num(r.pik_accrual, 2)}</td>
-                <td className={td}>{num(r.mandatory_amort, 2)}</td>
-                <td className={td}>{num(r.sweep_repayment, 2)}</td>
-                <td className={td}>{num(r.ending_balance, 1)}</td>
+                <td className="">Y{i + 1}{r.refinanced ? ' ⟳' : ''}{elections ? (elections[i] === 'cash' ? ' · cash' : ' · PIK') : ''}</td>
+                <td className={td}><Fig label={`${r.name}: opening balance`} year={i + 1}>{num(r.beginning_balance, 1)}</Fig></td>
+                <td className={td}><Fig label={`${r.name}: cash interest`} year={i + 1}>{num(r.cash_interest, 2)}</Fig></td>
+                <td className={td}><Fig label={`${r.name}: PIK accrual`} year={i + 1}>{num(r.pik_accrual, 2)}</Fig></td>
+                <td className={td}><Fig label={`${r.name}: mandatory amortization`} year={i + 1}>{num(r.mandatory_amort, 2)}</Fig></td>
+                <td className={td}><Fig label={`${r.name}: sweep repayment`} year={i + 1}>{num(r.sweep_repayment, 2)}</Fig></td>
+                <td className={td}><Fig label={`${r.name}: closing balance`} year={i + 1}>{num(r.ending_balance, 1)}</Fig></td>
               </tr>
             ))}
           </Table>
           {elections && (
-            <p className="text-[12px] mt-1" style={label}>
-              PIK toggle (§20): each year the issuer elects the WHOLE coupon — “cash” pays the cash
+            <p className={NOTE} style={label}>
+              PIK toggle: each year the issuer elects the WHOLE coupon: “cash” pays the cash
               coupon on the beginning balance and accrues nothing; “PIK” accrues the PIK coupon and
               pays nothing. Never both legs in one year. Elections are frozen across scenarios.
             </p>
@@ -361,11 +385,11 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
       })}
       {o.revolver && (
         <div className="mb-3">
-          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Revolver</p>
+          <p className={H}>Revolver</p>
           <Table head={['Year', 'Drawn (beg)', 'Draw', 'Repay', 'Interest', 'Fee', 'Drawn (end)']}>
             {o.revolver.map((r, i) => (
               <tr key={i} style={rowB}>
-                <td className="px-2 py-1">Y{i + 1}</td>
+                <td className="">Y{i + 1}</td>
                 <td className={td}>{num(r.beginning_drawn, 2)}</td>
                 <td className={td}>{num(r.draw, 2)}</td>
                 <td className={td}>{num(r.repayment, 2)}</td>
@@ -383,7 +407,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           aggregation, no engine import). Rendered only when a refi exists. */}
       {o.tranches.some((rows) => rows.some((r) => r.refinanced)) && (
         <div className="mb-3">
-          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Refinancing events (§18)</p>
+          <p className={H}>Refinancing events</p>
           <Table head={['Tranche', 'Year', 'Cash cost (premium + new OID + fees)', 'Old OID + fees written off']}>
             {o.tranches.flatMap((rows) =>
               rows
@@ -391,7 +415,7 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
                 .filter((x) => x.r.refinanced)
                 .map((x) => (
                   <tr key={`${x.name}-${x.i}`} style={rowB}>
-                    <td className="px-2 py-1">{x.name}</td>
+                    <td className="">{x.name}</td>
                     <td className={td}>Y{x.i + 1}</td>
                     <td className={td}>{money(x.r.refinancing_cash_cost, ccy, 2)}</td>
                     <td className={td}>{money(x.r.unamortized_writeoff, ccy, 2)}</td>
@@ -399,12 +423,12 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
                 )),
             )}
           </Table>
-          <p className="text-[12px] mt-1" style={label}>
-            Cash cost is paid in the refi year (senior to the sweep, §3 step 2R). The write-off (old
+          <p className={NOTE} style={label}>
+            Cash cost is paid in the refi year (senior to the sweep). The write-off (old
             unamortized OID + financing fees) is a NON-cash book charge that year, and it is deducted
             for tax the same year with the call premium: the old OID and the premium as interest
-            (subject to the §163(j) cap), the old fees in full (§7.1/§18.5).
-            Par-for-par — leverage is unchanged at the refi and then deleverages on the new schedule.
+            (subject to the §163(j) cap), the old fees in full.
+            Par-for-par: leverage is unchanged at the refi and then deleverages on the new schedule.
           </p>
         </div>
       )}
@@ -413,26 +437,26 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
           would be noise. */}
       {o.waterfall.some((w) => w.distribution_requested > 0) && (
         <div className="mb-3">
-          <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>Interim distributions</p>
+          <p className={H}>Interim distributions</p>
           <Table head={['Year', 'Requested', 'Cash above floor', 'RP capacity', 'Paid', 'Trap']}>
             {o.waterfall.map((w, i) => (
               <tr key={i} style={rowB}>
-                <td className="px-2 py-1">Y{i + 1}</td>
+                <td className="">Y{i + 1}</td>
                 <td className={td}>{num(w.distribution_requested, 1)}</td>
                 <td className={td}>{num(Math.max(0, w.closing_cash + w.distribution_paid - o.assumptions.structure.min_cash), 1)}</td>
                 <td className={td}>{w.rp_max === null ? 'N/A' : num(w.rp_max, 1)}</td>
                 <td className={td}>{num(w.distribution_paid, 1)}</td>
-                <td className={td}>{w.distribution_blocked ? '■ blocked' : '—'}</td>
+                <td className={td}>{w.distribution_blocked ? '■ blocked' : '–'}</td>
               </tr>
             ))}
           </Table>
-          <p className="text-[12px] mt-1" style={label}>
-            RP capacity is N/A when no trap is set (§3.7). Blocked capacity does NOT carry forward.
+          <p className={NOTE} style={label}>
+            RP capacity is N/A when no trap is set. Blocked capacity does NOT carry forward.
           </p>
         </div>
       )}
       {/* SPEC §11 deleveraging footer — first-class, never buried */}
-      <p className="text-[12px] mt-1" style={label}>
+      <p className={NOTE} style={label}>
         Cumulative paydown: {last?.cumulative_paydown_pct_of_entry_debt == null ? 'N/A' : pct(last.cumulative_paydown_pct_of_entry_debt)} of entry debt
         {' · '}FCF conversion (final year): {last?.fcf_conversion == null ? 'N/A' : pct(last.fcf_conversion)}
         {' · '}Closing cash: {money(o.waterfall[o.waterfall.length - 1]?.closing_cash ?? null, ccy)}
@@ -442,22 +466,29 @@ export const Debt: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = (
 };
 
 const BS: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => (
+  <div>
   <Table head={['Year', 'Cash', 'NWC', 'PP&E', 'DFC', 'Goodwill', 'Assets', 'Debt', 'Equity', 'Check']}>
     {o.balance_sheet.map((b, i) => (
       <tr key={i} style={rowB}>
-        <td className="px-2 py-1">{i === 0 ? 'Open' : `Y${i}`}</td>
-        <td className={td}>{num(b.cash, 1)}</td>
-        <td className={td}>{num(b.operating_nwc, 1)}</td>
-        <td className={td}>{num(b.ppe, 1)}</td>
-        <td className={td}>{num(b.deferred_financing_costs, 1)}</td>
-        <td className={td}>{num(b.goodwill, 1)}</td>
-        <td className={td}>{money(b.total_assets, ccy)}</td>
-        <td className={td}>{num(b.debt_at_par, 1)}</td>
-        <td className={td}>{num(b.equity, 1)}</td>
+        <td className="">{i === 0 ? 'Open' : `Y${i}`}</td>
+        <td className={td}><Fig label="Closing cash" year={i}>{num(b.cash, 1)}</Fig></td>
+        <td className={td}><Fig label="Operating NWC (balance)" year={i}>{num(b.operating_nwc, 1)}</Fig></td>
+        <td className={td}><Fig label="Net PP&E" year={i}>{num(b.ppe, 1)}</Fig></td>
+        <td className={td}><Fig label="Deferred financing costs" year={i}>{num(b.deferred_financing_costs, 1)}</Fig></td>
+        <td className={td}><Fig label="Goodwill" year={i}>{num(b.goodwill, 1)}</Fig></td>
+        <td className={td}><Fig label="Total assets" year={i}>{money(b.total_assets, ccy)}</Fig></td>
+        <td className={td}><Fig label={i === 0 ? 'Total debt at par' : 'Total debt at par (incl. accrued PIK and the drawn revolver)'} year={i}>{num(b.debt_at_par, 1)}</Fig></td>
+        <td className={td}><Fig label="Shareholders’ equity" year={i}>{num(b.equity, 1)}</Fig></td>
         <td className={td}>{Math.abs(b.check) < 0.005 ? '✓' : num(b.check, 3)}</td>
       </tr>
     ))}
   </Table>
+  {o.facts.net_ppe === null && o.facts.operating_nwc === null && (
+    <p className={NOTE} style={label}>
+      This case states no opening balance sheet, so fixed assets and working capital open at nil and the whole purchase price above the cash at close sits in goodwill. The returns do not depend on that split.
+    </p>
+  )}
+  </div>
 );
 
 const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
@@ -465,39 +496,39 @@ const Credit: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => (
   <Table head={['Year', 'Net lev', 'Senior net', 'ICR', 'FCCR', 'DSCR', 'Lev headroom', 'Springing']}>
     {o.credit.map((c, i) => (
       <tr key={i} style={rowB}>
-        <td className="px-2 py-1">Y{i + 1}</td>
-        <td className={td}>{c.net_leverage == null ? 'N/A' : num(c.net_leverage, 2)}</td>
-        <td className={td}>{c.senior_net_leverage == null ? 'N/A' : num(c.senior_net_leverage, 2)}</td>
-        <td className={td}>{c.icr == null ? 'N/A' : num(c.icr, 2)}</td>
-        <td className={td}>{c.fccr == null ? 'N/A' : num(c.fccr, 2)}</td>
-        <td className={td}>{c.dscr == null ? 'N/A' : num(c.dscr, 2)}</td>
+        <td className="">Y{i + 1}</td>
+        <td className={td}>{c.net_leverage == null ? 'N/A' : <Fig label="Net leverage" year={i + 1}>{num(c.net_leverage, 2)}</Fig>}</td>
+        <td className={td}>{c.senior_net_leverage == null ? 'N/A' : <Fig label="Senior net leverage" year={i + 1}>{num(c.senior_net_leverage, 2)}</Fig>}</td>
+        <td className={td}>{c.icr == null ? 'N/A' : <Fig label="Interest cover" year={i + 1}>{num(c.icr, 2)}</Fig>}</td>
+        <td className={td}>{c.fccr == null ? 'N/A' : <Fig label="FCCR" year={i + 1}>{num(c.fccr, 2)}</Fig>}</td>
+        <td className={td}>{c.dscr == null ? 'N/A' : <Fig label="DSCR" year={i + 1}>{num(c.dscr, 2)}</Fig>}</td>
         <td className={td}>{headroom(c.leverage_headroom)}</td>
-        <td className={td}>{c.springing_test_active ? 'active' : '—'}</td>
+        <td className={td}>{c.springing_test_active ? 'active' : '–'}</td>
       </tr>
     ))}
   </Table>
   {/* §11 [v1.1.2]: these are NET of cash; the Summary tab's entry figure is GROSS. Stated
       on screen, because reading the two as one deleveraging series overstates it. */}
-  <p className="text-[12px] mt-2" style={label}>
-    Leverage here is NET of cash (SPEC §11). The Summary tab&apos;s entry leverage is GROSS
-    (debt at par ÷ {sizingBasisLabel(o.facts.sizing_basis)} EBITDA — the quoted sizing basis), so the two are not a single series.
+  <p className={NOTE} style={label}>
+    Leverage here is NET of cash. The Summary tab&apos;s entry leverage is GROSS
+    (debt at par ÷ {entryLeverageDisplay(o).basis_label} EBITDA, the quoted sizing basis), so the two are not a single series.
   </p>
   </div>
 );
 
 const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
   const grid = o.sensitivity?.[0];
-  if (!grid) return <p className="text-[13px]" style={label}>Run “Build” to compute the sensitivity exhibits.</p>;
+  if (!grid) return <p className="text-[14px]" style={label}>Run “Build” to compute the sensitivity exhibits.</p>;
   const cell = (c: number, v: number | null, isBase: boolean, fmt: (x: number | null) => string) => (
-    <td key={c} className={td} style={isBase ? { background: 'rgba(21,93,252,0.10)', fontWeight: 600 } : undefined}>{fmt(v)}</td>
+    <td key={c} className={td} style={isBase ? { background: 'var(--de-sunken)', fontWeight: 600, boxShadow: 'inset 0 0 0 1.5px var(--de-ink)' } : undefined}>{fmt(v)}</td>
   );
   const block = (title: string, m: (number | null)[][], fmt: (x: number | null) => string) => (
     <div className="mb-4">
-      <p className="text-[12px] uppercase tracking-widest mb-1" style={label}>{title} — {grid.row_axis} (rows) × {grid.col_axis} (cols)</p>
+      <p className={H}>{title}: {grid.row_axis.replace(/_/g, ' ')} down, {grid.col_axis.replace(/_/g, ' ')} across</p>
       <Table head={['', ...grid.col_values.map((v) => num(v, 1))]}>
         {m.map((row, r) => (
           <tr key={r} style={rowB}>
-            <td className="px-2 py-1">{num(grid.row_values[r], 1)}</td>
+            <td className="">{num(grid.row_values[r], 1)}</td>
             {row.map((v, c) => cell(c, v, r === grid.base_row_index && c === grid.base_col_index, fmt))}
           </tr>
         ))}
@@ -508,13 +539,13 @@ const Sensitivity: React.FC<{ o: Engine2ModelOutput }> = ({ o }) => {
     <div>
       {block('Sponsor IRR', grid.irr, (x) => pct(x))}
       {block('Sponsor MOIC', grid.moic, (x) => multiple(x))}
-      <p className="text-[12px]" style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen (SPEC §13). Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
+      <p className={NOTE} style={label}>Entry-side axes re-price entry; operating axes hold the base structure frozen. When the entry multiple moves, the debt is held at its base amount and the sponsor's equity takes up the difference in price. Center cell ≡ base. N/A = not meaningful at that point: the structure breaches its cash floor or leaves no sponsor equity, or no IRR exists.</p>
     </div>
   );
 };
 
 const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
-  if (!o.scenarios?.length) return <p className="text-[13px]" style={label}>Run “Build” to compute the scenario exhibits.</p>;
+  if (!o.scenarios?.length) return <p className="text-[14px]" style={label}>Run “Build” to compute the scenario exhibits.</p>;
   return (
     <div>
       <Table head={['Scenario', 'IRR', 'Δ vs base', 'MOIC', 'Min closing cash', 'Distributions paid', 'Blocked', 'Breach year', 'Floor breach']}>
@@ -528,36 +559,76 @@ const Scenarios: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ 
           const blockedYears = s.waterfall.map((w, i) => (w.distribution_blocked ? i + 1 : 0)).filter(Boolean);
           return (
             <tr key={s.name} style={rowB}>
-              <td className="px-2 py-1">{s.name}</td>
+              <td className="">{s.name}</td>
               <td className={td}>{pct(s.returns.sponsor_net.irr)}</td>
               <td className={td}>{s.irr_delta_vs_base == null ? 'N/A' : pct(s.irr_delta_vs_base)}</td>
               <td className={td}>{multiple(s.returns.sponsor_net.moic)}</td>
               <td className={td}>{money(minCash, ccy)}</td>
-              <td className={td}>{paid === 0 ? '—' : money(paid, ccy)}</td>
-              <td className={td}>{blockedYears.length === 0 ? '—' : `Y${blockedYears.join(', Y')}`}</td>
-              <td className={td}>{s.covenant_breach_year == null ? '—' : `Y${s.covenant_breach_year}`}</td>
-              <td className={td}>{anyBreach ? '■ yes' : '—'}</td>
+              <td className={td}>{paid === 0 ? '–' : money(paid, ccy)}</td>
+              <td className={td}>{blockedYears.length === 0 ? '–' : `Y${blockedYears.join(', Y')}`}</td>
+              <td className={td}>{s.covenant_breach_year == null ? '–' : `Y${s.covenant_breach_year}`}</td>
+              <td className={td}>{anyBreach ? '■ yes' : '–'}</td>
             </tr>
           );
         })}
       </Table>
-      <p className="text-[12px] mt-2" style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (SPEC §13 — a downside never silently re-prices entry).</p>
+      <p className={NOTE} style={label}>Entry EV, debt quantum and sponsor equity are FROZEN at base-case close in every scenario (a downside never silently re-prices entry).</p>
     </div>
   );
 };
 
 /** SPEC §15: the assumptions & methodology page — every disclosed simplification, matter-of-fact. */
 
-export const Methodology: React.FC = () => (
-  <div>
-    <p className="text-[12px] uppercase tracking-widest mb-2" style={label}>Assumptions & methodology (SPEC §15) — a model is a range, not a point</p>
-    <Table head={['Simplification', 'Why it is immaterial or conservative']}>
-      {DISCLOSURES.map(([a, b]) => (
-        <tr key={a} style={rowB}><td className="px-2 py-1">{a}</td><td className="px-2 py-1 text-left" style={{ color: 'rgba(17,17,17,0.65)' }}>{b}</td></tr>
+/** Whether a disclosed simplification bears on THIS deal. A row with no rule always applies. */
+const APPLIES: [RegExp, (o: Engine2ModelOutput) => boolean][] = [
+  [/^Refinancing/, (o) => (o.assumptions.structure.refinancing ?? []).length > 0],
+  [/^Fund\/LP overlay/, (o) => o.fund !== null && o.fund !== undefined],
+  [/^PIK toggle/, (o) => o.assumptions.structure.tranches.some((t) => t.type === 'pik_note' && t.elections !== null)],
+  [/^Partial exits/, (o) => o.selldown !== null && o.selldown !== undefined],
+  [/^Sweet equity/, (o) => o.assumptions.sweet_equity !== null || o.assumptions.warrant !== null],
+  [/^Interim distributions/, (o) => o.assumptions.structure.distributions !== null || o.assumptions.structure.surplus_distribution !== null],
+  [/^Surplus-cash distributions/, (o) => o.assumptions.structure.surplus_distribution !== null],
+  [/^Sector comps band/, (o) => o.facts.sector_comps !== null],
+  [/^§382 limit static|^NOL usage/, (o) => o.assumptions.tax.nol.acquired_opening > 0],
+  [/^Acquired §163\(j\)|^Post-2025 OBBBA/, (o) => o.assumptions.tax.interest_deductible && o.assumptions.tax.s163j.applies],
+  [/^Static rates|^Call protection|^Day-count|^Debt retired/, (o) => o.assumptions.structure.tranches.length > 0],
+  [/^Exit = entry multiple/, (o) => o.assumptions.exit.basis === o.assumptions.entry.basis && Math.abs(o.assumptions.exit.multiple - o.derived.entry_multiple) < 1e-9],
+];
+const GROUPS: [string, RegExp][] = [
+  ['Tax', /tax|NOL|§382|§163|OBBBA/i],
+  ['Debt', /interest|Day-count|rates|Call protection|Refinancing|PIK|Debt retired/i],
+  ['Equity, distributions and the fund', /distributions|Fund|Partial exits|Sweet equity|Limited liability|Exit = entry/i],
+  ['Data and comparables', /comps/i],
+];
+
+export const Methodology: React.FC<{ o?: Engine2ModelOutput }> = ({ o }) => {
+  // On a deal, only the simplifications that bear on it are listed; with no deal, all of them.
+  const rows = DISCLOSURES
+    .filter(([a]) => { const rule = o ? APPLIES.find(([re]) => re.test(a)) : undefined; return !rule || rule[1](o!); })
+    .map(([a, b]): [string, string] => (o && o.facts.source === 'manual' && a === 'Constant tax rate' ? [a, 'the tax rate entered is held flat over the hold'] : [a, b]));
+  const groups = new Map<string, [string, string][]>();
+  for (const r of rows) {
+    const g = GROUPS.find(([, re]) => re.test(r[0]))?.[0] ?? 'Timing and conventions';
+    groups.set(g, [...(groups.get(g) ?? []), r]);
+  }
+  const hidden = DISCLOSURES.length - rows.length;
+  return (
+    <div>
+      <p className="text-[14px] text-[color:var(--de-ink-2)] mb-2 max-w-[70ch]">Assumptions & methodology. What the model simplifies, and why each simplification is immaterial or conservative. A model is a range, not a point.</p>
+      {[...groups.entries()].map(([g, list]) => (
+        <div key={g}>
+          <p className={H}>{g}</p>
+          <Table head={['Simplification', 'Why it is immaterial or conservative']}>
+            {list.map(([a, b]) => (
+              <tr key={a} style={rowB}><td className="align-top whitespace-nowrap font-medium">{a}</td><td className="!text-left !whitespace-normal text-[color:var(--de-ink-2)]">{b}</td></tr>
+            ))}
+          </Table>
+        </div>
       ))}
-    </Table>
-  </div>
-);
+      {o && hidden > 0 && <p className={NOTE} style={label}>{hidden} further simplification{hidden === 1 ? '' : 's'} concern features this deal does not use. The Methodology sheet of the Excel model lists all of them.</p>}
+    </div>
+  );
+};
 
 /**
  * §25 [v2.0.0] — flow to equity: what the equity is worth, at both exits, and the one
@@ -566,7 +637,7 @@ export const Methodology: React.FC = () => (
 export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }> = ({ o, ccy }) => {
   const v = o.valuation;
   if (!v) {
-    return <p className="text-[13px]" style={label}>Valuation is off — switch on "Value the equity (flow to equity)" in section 5 of the inputs.</p>;
+    return <p className="text-[14px]" style={label}>Valuation is off. Switch on "Value the equity (flow to equity)" under Valuation on the input sheet.</p>;
   }
   const N = o.assumptions.entry.hold_years;
   const cases = [
@@ -575,8 +646,8 @@ export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }
   ];
   const be = v.break_evens;
   return (
-    <div className="text-[13px]" style={{ fontFamily: mono }}>
-      <p className="mb-2" style={label}>
+    <div className="text-[13px]">
+      <p className="text-[13px] mb-3" style={label}>
         rU = {pct(v.r_unlevered)} · year N+1 unlevered FCF {money(v.ufcf_n_plus_1, ccy)} ·
         fundamentals exit EV {v.gordon_ev === null ? `N/A (${v.gordon_null_reason})` : `${money(v.gordon_ev, ccy)} = ${multiple(v.gordon_implied_multiple)}`}
       </p>
@@ -584,41 +655,41 @@ export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }
         {([
           ['Exit multiple', (c: NonNullable<typeof v.fundamentals>) => multiple(c.exit_multiple)],
           ['Exit equity (all holders)', (c: NonNullable<typeof v.fundamentals>) => money(c.exit_equity_total, ccy)],
-          ['Equity IRR — the LBO model', (c: NonNullable<typeof v.fundamentals>) => pct(c.equity_irr)],
+          ['Equity IRR, from the LBO model', (c: NonNullable<typeof v.fundamentals>) => pct(c.equity_irr)],
           ['Return the equity requires', (c: NonNullable<typeof v.fundamentals>) => pct(c.required_return)],
           ['Excess return a year', (c: NonNullable<typeof v.fundamentals>) => pct(c.excess_return)],
           ['Equity value at entry', (c: NonNullable<typeof v.fundamentals>) => money(c.equity_value_at_entry, ccy)],
           ['Equity invested', (c: NonNullable<typeof v.fundamentals>) => money(c.equity_invested, ccy)],
-          ['NPV — flow to equity', (c: NonNullable<typeof v.fundamentals>) => money(c.npv, ccy)],
+          ['NPV, flow to equity', (c: NonNullable<typeof v.fundamentals>) => money(c.npv, ccy)],
           ['Value per dollar invested', (c: NonNullable<typeof v.fundamentals>) => num(c.value_per_dollar, 3)],
         ] as const).map(([lab, f]) => (
           <tr key={lab} style={rowB}>
-            <td className="px-2 py-1 text-left">{lab}</td>
+            <td className="">{lab}</td>
             {cases.map((x) => <td key={x.name} className={td}>{x.c ? f(x.c) : 'N/A'}</td>)}
           </tr>
         ))}
       </Table>
-      <p className="mt-1 mb-3" style={label}>The IRR beats the required return exactly when the NPV is positive — one statement, made twice.</p>
+      <p className={NOTE + " mb-4"} style={label}>The IRR beats the required return exactly when the NPV is positive: one statement, made twice.</p>
       {cases.map((x) => x.c && x.c.equity_value && (
         <div key={x.name} className="mb-3">
-          <p className="mb-1" style={label}>{x.name} — worked backwards from the exit</p>
+          <p className={H}>{x.name}: worked backwards from the exit</p>
           <Table head={['', ...Array.from({ length: N + 1 }, (_, t) => `Y${t}`)]}>
-            <tr style={rowB}><td className="px-2 py-1 text-left">Equity value</td>{x.c.equity_value.map((e, t) => <td key={t} className={td}>{num(e, 2)}</td>)}</tr>
-            <tr style={rowB}><td className="px-2 py-1 text-left">Debt</td>{x.c.debt.map((d, t) => <td key={t} className={td}>{num(d, 2)}</td>)}</tr>
-            <tr style={rowB}><td className="px-2 py-1 text-left">E ÷ (D + E)</td>{x.c.equity_weight!.map((w, t) => <td key={t} className={td}>{num(w, 4)}</td>)}</tr>
-            <tr style={rowB}><td className="px-2 py-1 text-left">Equity beta</td>{x.c.beta_equity!.map((b, t) => <td key={t} className={td}>{num(b, 2)}</td>)}</tr>
-            <tr style={rowB}><td className="px-2 py-1 text-left">Cost of equity</td>{x.c.cost_of_equity!.map((r, t) => <td key={t} className={td}>{r === null ? '–' : pct(r)}</td>)}</tr>
+            <tr style={rowB}><td className="">Equity value</td>{x.c.equity_value.map((e, t) => <td key={t} className={td}>{num(e, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="">Debt</td>{x.c.debt.map((d, t) => <td key={t} className={td}>{num(d, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="">E ÷ (D + E)</td>{x.c.equity_weight!.map((w, t) => <td key={t} className={td}>{num(w, 4)}</td>)}</tr>
+            <tr style={rowB}><td className="">Equity beta</td>{x.c.beta_equity!.map((b, t) => <td key={t} className={td}>{num(b, 2)}</td>)}</tr>
+            <tr style={rowB}><td className="">Cost of equity</td>{x.c.cost_of_equity!.map((r, t) => <td key={t} className={td}>{r === null ? '–' : pct(r)}</td>)}</tr>
           </Table>
         </div>
       ))}
       {cases.map((x) => x.c && x.c.recursion_null_reason && <p key={x.name} style={label}>{x.name}: {x.c.recursion_null_reason}</p>)}
-      <p className="mt-2 mb-1" style={label}>What would have to be true — NPV = 0 by changing one input</p>
+      <p className={H}>What would have to be true: NPV = 0 by changing one input</p>
       <Table head={['Input', 'Break-even', 'Base case']}>
-        <tr style={rowB}><td className="px-2 py-1 text-left">Exit multiple, exit (a)</td><td className={td}>{be.exit_multiple.value === null ? `N/A — ${be.exit_multiple.reason}` : multiple(be.exit_multiple.value)}</td><td className={td}>{multiple(be.exit_multiple.base)}</td></tr>
-        <tr style={rowB}><td className="px-2 py-1 text-left">Asset beta, exit (b)</td><td className={td}>{be.asset_beta.value === null ? `N/A — ${be.asset_beta.reason}` : num(be.asset_beta.value, 3)}</td><td className={td}>{num(be.asset_beta.base, 3)}</td></tr>
-        <tr style={rowB}><td className="px-2 py-1 text-left">Long-run growth, exit (b)</td><td className={td}>{be.long_run_growth.value === null ? `N/A — ${be.long_run_growth.reason}` : pct(be.long_run_growth.value)}</td><td className={td}>{pct(be.long_run_growth.base)}</td></tr>
+        <tr style={rowB}><td className="">Exit multiple, exit (a)</td><td className={td}>{be.exit_multiple.value === null ? `N/A: ${be.exit_multiple.reason}` : multiple(be.exit_multiple.value)}</td><td className={td}>{multiple(be.exit_multiple.base)}</td></tr>
+        <tr style={rowB}><td className="">Asset beta, exit (b)</td><td className={td}>{be.asset_beta.value === null ? `N/A: ${be.asset_beta.reason}` : num(be.asset_beta.value, 3)}</td><td className={td}>{num(be.asset_beta.base, 3)}</td></tr>
+        <tr style={rowB}><td className="">Long-run growth, exit (b)</td><td className={td}>{be.long_run_growth.value === null ? `N/A: ${be.long_run_growth.reason}` : pct(be.long_run_growth.value)}</td><td className={td}>{pct(be.long_run_growth.base)}</td></tr>
       </Table>
-      <p className="mt-2" style={label}>
+      <p className={NOTE} style={label}>
         Assumptions stated: debt beta {num(o.assumptions.valuation!.debt_beta, 2)} ({o.assumptions.valuation!.debt_beta === 0 ? 'riskless debt' : 'risky debt'}); the debt schedule is the base case, not an expectation;
         tax shields are as risky as the business; cost of equity on leverage at the {o.assumptions.valuation!.leverage_timing === 'end_of_year' ? 'end' : 'start'} of each year.
       </p>
@@ -626,15 +697,17 @@ export const Valuation: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Currency }
   );
 };
 
+/** The detail views, for a screen that lays them out itself (the Results rail). */
+export const DETAIL_VIEWS = { Operating, BS, Credit, Sensitivity, Scenarios };
+
 const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Currency }> = ({ output, currency }) => {
   const [tab, setTab] = useState<Tab>('summary');
   return (
-    <div className="mt-5">
-      <div className="flex gap-0.5 mb-3 flex-wrap">
+    <div className="mt-6">
+      <div role="tablist" className="flex gap-1 mb-5 flex-wrap">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className="px-2.5 py-1 text-[12px] uppercase tracking-widest"
-            style={{ background: tab === t.id ? '#111' : 'transparent', color: tab === t.id ? '#fff' : 'rgba(17,17,17,0.5)', fontFamily: mono, border: '1px solid rgba(17,17,17,0.12)' }}>
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            className={`h-8 px-3 rounded-full text-[13px] transition-colors ${tab === t.id ? 'bg-[var(--de-ink)] text-white font-medium' : 'text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)]'}`}>
             {t.label}
           </button>
         ))}
@@ -649,7 +722,7 @@ const OutputTabs: React.FC<{ output: Engine2ModelOutput; currency: Engine2Curren
       {tab === 'credit' && <Credit o={output} />}
       {tab === 'sensitivity' && <Sensitivity o={output} />}
       {tab === 'scenarios' && <Scenarios o={output} ccy={currency} />}
-      {tab === 'methodology' && <Methodology />}
+      {tab === 'methodology' && <Methodology o={output} />}
     </div>
   );
 };

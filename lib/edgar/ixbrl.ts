@@ -231,12 +231,12 @@ function parseOneDocument(text: string, filename: string, out: {
           const i = fmt.indexOf(':');
           const key = `${nsmap[fmt.slice(0, i)] ?? ''}|${fmt.slice(i + 1)}`;
           if (!DATE_TRANSFORMS.has(key)) {
-            out.notes.push(`unsupported date transform ${fmt} on ${cname} — identity read skipped`);
+            out.notes.push(`unsupported date transform ${fmt} on ${cname}, identity read skipped`);
             continue;
           }
         }
         const d = parseDate(raw);
-        if (d === null) out.notes.push(`unreadable date on ${cname} — identity read skipped`);
+        if (d === null) out.notes.push(`unreadable date on ${cname}, identity read skipped`);
         else out.identity[IDENTITY_DATES[cname]] = d;
       }
       continue;
@@ -244,7 +244,7 @@ function parseOneDocument(text: string, filename: string, out: {
     const ctx = scan.contexts.get(el.getAttribute('contextRef') ?? '');
     const unit = scan.units.get(el.getAttribute('unitRef') ?? '');
     if (ctx === undefined || unit === undefined) {
-      out.notes.push(`unresolved contextRef/unitRef on ${cname} — fact dropped`);
+      out.notes.push(`unresolved contextRef/unitRef on ${cname}, fact dropped`);
       continue;
     }
     let kind: NumKind | null = null;
@@ -253,13 +253,13 @@ function parseOneDocument(text: string, filename: string, out: {
       const key = `${nsmap[fmt.slice(0, i)] ?? ''}|${fmt.slice(i + 1)}`;
       const k = NUMERIC_TRANSFORMS.get(key);
       if (k === undefined) {
-        out.notes.push(`unsupported transform ${fmt} on ${cname} — fact dropped`);
+        out.notes.push(`unsupported transform ${fmt} on ${cname}, fact dropped`);
         continue;
       }
       kind = k;
     }
     let n = parseNumber(kind, raw);
-    if (n === null) { out.notes.push(`untransformable text on ${cname} — fact dropped`); continue; }
+    if (n === null) { out.notes.push(`untransformable text on ${cname}, fact dropped`); continue; }
     if (el.getAttribute('sign') === '-') n = -n;
     n = n * Math.pow(10, parseInt(el.getAttribute('scale') ?? '0', 10));
     const dec = el.getAttribute('decimals');
@@ -275,7 +275,7 @@ const dimsKey = (dims: Record<string, string>) => JSON.stringify(Object.fromEntr
 const INF = 1e9;
 
 function finish(raw: { facts: ParsedFact[]; notes: string[]; identity: UploadIdentity; namespaces: Record<string, string>; entities: Set<string> }): ParsedUpload {
-  if (raw.entities.size > 1) raw.notes.push('multiple entity identifiers in one upload — out of scope; facts merged per §1a note');
+  if (raw.entities.size > 1) raw.notes.push('multiple entity identifiers in one upload, which is not supported; the facts were merged');
   const groups = new Map<string, ParsedFact[]>();
   for (const f of raw.facts) {
     const key = `${f.concept} ${f.period} ${f.unit} ${dimsKey(f.dims)}`;
@@ -290,7 +290,7 @@ function finish(raw: { facts: ParsedFact[]; notes: string[]; identity: UploadIde
     const { concept, period } = g[0];
     if (rounded.size > 1) {
       const vals = Array.from(new Set(g.map((x) => x.value))).sort((a, b) => a - b);
-      raw.notes.push(`inconsistent duplicate ${concept} @ ${period}: ${pyFloat(vals[0])} vs ${pyFloat(vals[vals.length - 1])} — dropped to gap`);
+      raw.notes.push(`inconsistent duplicate ${concept} @ ${period}: ${pyFloat(vals[0])} vs ${pyFloat(vals[vals.length - 1])}, dropped to gap`);
       continue;
     }
     const best = [...g].sort((a, b) => ((b.decimals ?? INF) - (a.decimals ?? INF)) || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0))[0];
@@ -418,7 +418,7 @@ export function restampUpload(raw: RawHistoricals, p: ParsedUpload, filename: st
 }
 
 /** The §2b FRC document-level note (identity-only import; every financial field a gap). */
-const FRC_NOTE = 'FRC (Companies House) accounts: v1 extracts identity only — financial fields surface as gaps; FRC alias mapping is a planned extension';
+const FRC_NOTE = 'FRC (Companies House) accounts: only the identity is extracted; financial fields surface as gaps; FRC alias mapping is a planned extension';
 
 /**
  * The upload orchestrator: bytes → RawHistoricals through the SAME mappers as the fetch
@@ -429,10 +429,10 @@ export function uploadedFilingToRaw(filename: string, bytes: Uint8Array): RawHis
   const interim = (p.identity.fp !== undefined && p.identity.fp !== 'FY')
     || (p.identity.docType !== undefined && /10-Q|6-K/i.test(p.identity.docType));
   if (interim) {
-    throw new Error("interim filings aren't supported yet — upload the annual report (10-K, 20-F, annual accounts)");
+    throw new Error("interim filings aren't supported yet: upload the annual report (10-K, 20-F, annual accounts)");
   }
   if (p.facts.length === 0) {
-    throw new Error('no XBRL facts found in this file — is it an iXBRL filing? (PDFs and plain HTML have no tagged data)');
+    throw new Error('no XBRL facts found in this file: is it an iXBRL filing? (PDFs and plain HTML have no tagged data)');
   }
   let raw: RawHistoricals;
   if (p.routing === 'us-gaap') {

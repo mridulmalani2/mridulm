@@ -10,8 +10,6 @@ import { PROVIDER_DEFAULTS } from '../../../lib/ai2/gateway/providers';
  * stay in sync. Keys live only in the browser and go straight to the chosen provider.
  */
 
-const mono = "'JetBrains Mono', monospace";
-
 const ApiKeyInline: React.FC = () => {
   const apiKey = useDealEngineStore((s) => s.apiKey);
   const aiProvider = useDealEngineStore((s) => s.aiProvider);
@@ -30,35 +28,29 @@ const ApiKeyInline: React.FC = () => {
   const providerName = apiKey ? (PROVIDER_DEFAULTS[aiProvider]?.displayName ?? aiProvider) : null;
 
   return (
-    <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(17,17,17,0.08)' }}>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] tracking-widest uppercase" style={{ color: apiKey ? '#15803d' : 'rgba(17,17,17,0.4)', fontFamily: mono }}>
-          {apiKey ? `AI Key ✓ ${providerName}` : 'AI Key'}
-          <span className="ml-1.5 text-[9px]" style={{ color: 'rgba(17,17,17,0.3)' }}>optional · for AI-suggested assumptions</span>
-        </span>
-        {apiKey && !editing && (
+    <div className="mt-3">
+      {apiKey && !editing ? (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[13px] text-[color:var(--de-pos)]">Key saved for {providerName}</span>
           <button type="button" onClick={() => { clearApiKey(); setEditing(true); }}
-            className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(17,17,17,0.4)', fontFamily: mono, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            className="text-[13px] text-[color:var(--de-ink-2)] underline underline-offset-2 decoration-dotted hover:text-[color:var(--de-ink)]">
             Change
           </button>
-        )}
-      </div>
-      {(!apiKey || editing) && (
-        <div className="flex gap-2">
-          <input
-            type="password"
-            value={value}
-            placeholder="gsk_… · sk-ant-… · sk-… · AIza…"
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
-            onBlur={save}
-            className="flex-1 px-2.5 py-1.5 text-xs outline-none"
-            style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.12)', color: '#111', fontFamily: mono }}
-          />
         </div>
+      ) : (
+        <input
+          type="password"
+          value={value}
+          aria-label="AI key"
+          placeholder="Paste a key: gsk_…  sk-ant-…  sk-…  AIza…"
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
+          onBlur={save}
+          className="de-control w-full px-3 text-[13px]"
+        />
       )}
-      <p className="mt-1.5 text-[9px]" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: mono, lineHeight: 1.6 }}>
-        Stored only in your browser; sent directly to the provider. Free Groq key at console.groq.com/keys.
+      <p className="mt-2 text-[12px] leading-relaxed text-[color:var(--de-ink-3)]">
+        Stored only in your browser and sent directly to the provider. A free Groq key is available at console.groq.com/keys.
       </p>
     </div>
   );

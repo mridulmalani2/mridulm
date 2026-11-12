@@ -169,20 +169,20 @@ export interface OperatingBuild {
 export function resolveLine(spec: LineSpec, N: number, label: string): number[] {
   if (spec.mode === 'explicit') {
     if (spec.values.length !== N) {
-      throw new RangeError(`operating: ${label} explicit values must have hold_years (${N}) entries, got ${spec.values.length} (§24.3 R6)`);
+      throw new RangeError(`operating: ${label} explicit values must have hold_years (${N}) entries, got ${spec.values.length}`);
     }
     spec.values.forEach((v, i) => {
-      if (!Number.isFinite(v)) throw new RangeError(`operating: ${label} year ${i + 1} is not a finite number (§24.3 R6)`);
+      if (!Number.isFinite(v)) throw new RangeError(`operating: ${label} year ${i + 1} is not a finite number`);
     });
     return [...spec.values];
   }
-  if (!Number.isFinite(spec.year1)) throw new RangeError(`operating: ${label} year-1 amount is not finite (§24.3 R6)`);
+  if (!Number.isFinite(spec.year1)) throw new RangeError(`operating: ${label} year-1 amount is not finite`);
   if (spec.growth.length !== N - 1) {
-    throw new RangeError(`operating: ${label} growth must have hold_years − 1 (${N - 1}) entries — years 2..${N} (§24.3 R6)`);
+    throw new RangeError(`operating: ${label} growth must have hold_years − 1 (${N - 1}) entries, years 2..${N}`);
   }
   const out = [spec.year1];
   spec.growth.forEach((g, i) => {
-    if (!Number.isFinite(g) || g <= -1) throw new RangeError(`operating: ${label} growth for year ${i + 2} must be finite and > −100% (§24.3 R6)`);
+    if (!Number.isFinite(g) || g <= -1) throw new RangeError(`operating: ${label} growth for year ${i + 2} must be finite and > −100%`);
     out.push(out[i] * (1 + g));
   });
   return out;
@@ -207,7 +207,7 @@ function resolveRevenue(
   const spec = ops.lines?.revenue ?? null;
   if (spec === null) {
     if (facts.fy_revenue === null || !(facts.fy_revenue > 0)) {
-      throw new RangeError('operating: the revenue growth driver needs historical revenue > 0 — enter revenue by year instead, or mark it not modelled (§24.3 R1)');
+      throw new RangeError('operating: the revenue growth driver needs historical revenue > 0: enter revenue by year instead, or mark it not modelled');
     }
     if (ops.growth.length !== N) {
       throw new RangeError(`operating: growth (${ops.growth.length}) must have hold_years (${N}) entries`);
@@ -220,7 +220,7 @@ function resolveRevenue(
 
 function requireRevenue(rev: number | null, what: string): number {
   if (rev === null) {
-    throw new RangeError(`operating: ${what} is a % of revenue, but revenue is not modelled — enter ${what} by year instead (§24.3 R3)`);
+    throw new RangeError(`operating: ${what} is a % of revenue, but revenue is not modelled; enter ${what} by year instead`);
   }
   return rev;
 }
@@ -251,7 +251,7 @@ export function buildOperating(
     ebitda = lines.ebitda.measure === 'ebit' ? given.map((e, i) => e + da[i]) : given;
   } else {
     if (facts.fy_ebitda_margin === null) {
-      throw new RangeError('operating: the margin driver needs a historical EBITDA margin — enter EBITDA (or EBIT) by year instead (§24.3 R2)');
+      throw new RangeError('operating: the margin driver needs a historical EBITDA margin; enter EBITDA (or EBIT) by year instead');
     }
     driverMargins = marginPath(facts.fy_ebitda_margin, ops.target_margin, ops.margin_path, N);
     ebitda = revenue.map((r, i) => requireRevenue(r, 'the EBITDA margin driver') * driverMargins![i]);
@@ -264,7 +264,7 @@ export function buildOperating(
   const capexLine = lines?.capex ?? null;
   if (capexLine !== null) {
     if (capexLine.mode === 'pct_of_da') {
-      if (!Number.isFinite(capexLine.pct) || capexLine.pct < 0) throw new RangeError('operating: capex % of D&A must be finite and ≥ 0 (§24.3 R6)');
+      if (!Number.isFinite(capexLine.pct) || capexLine.pct < 0) throw new RangeError('operating: capex % of D&A must be finite and ≥ 0');
       capexTotal = da.map((d) => capexLine.pct * d);
     } else {
       capexTotal = resolveLine(capexLine, N, 'capex');
@@ -289,13 +289,13 @@ export function buildOperating(
     for (const d of deltaNwc) { bal += d; nwcBalances.push(bal); }
   } else {
     if (facts.fy_revenue === null || facts.fy_ebitda_margin === null) {
-      throw new RangeError('operating: the NWC balance method needs historical revenue and margin for opening NWC — enter the increase in NWC by year instead (§24.3 R3)');
+      throw new RangeError('operating: the NWC balance method needs historical revenue and margin for opening NWC; enter the increase in NWC by year instead');
     }
     nwc0 = nwcBalance(ops.nwc, facts.fy_revenue, facts.fy_ebitda_margin);
     nwcBalances = revenue.map((r, i) => {
       const rev = requireRevenue(r, 'NWC');
       const m = margin[i];
-      if (ops.nwc.method === 'days' && m === null) throw new RangeError('operating: the NWC days method needs a modelled margin (§24.3 R3)');
+      if (ops.nwc.method === 'days' && m === null) throw new RangeError('operating: the NWC days method needs a modelled margin');
       return nwcBalance(ops.nwc, rev, m ?? 0);
     });
     deltaNwc = nwcBalances.map((b, i) => b - (i === 0 ? nwc0 : nwcBalances[i - 1]));

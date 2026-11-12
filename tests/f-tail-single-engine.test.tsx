@@ -33,7 +33,7 @@ beforeEach(() => {
   useDealEngineStore.setState({ legacySaveNotice: false, error: null, isCalculating: false });
 });
 
-describe('F tail — the old engine is gone from the tree', () => {
+describe('F tail: the old engine is gone from the tree', () => {
   it('lib/engine and the old types no longer exist on disk', () => {
     const root = join(__dirname, '..');
     expect(existsSync(join(root, 'lib', 'engine'))).toBe(false);
@@ -46,7 +46,7 @@ describe('F tail — the old engine is gone from the tree', () => {
   });
 });
 
-describe('/deal-engine routing — Source → Clean → Assumptions → Results', () => {
+describe('/deal-engine routing: Source → Clean → Assumptions → Results', () => {
   it('the URL names the step; anything else names none', () => {
     expect(stepFromPath('/deal-engine/lbo/clean')).toBe('clean');
     expect(stepFromPath('/deal-engine/lbo/results/')).toBe('results');
@@ -96,7 +96,7 @@ describe('/deal-engine routing — Source → Clean → Assumptions → Results'
     const html = page();
     expect(html).toContain('The holding period sizes every per-year input');
     expect(html).not.toContain('Clean the numbers');
-    expect(html).toContain('New deal');
+    expect(html).toContain('Deal menu'); // "New deal" lives in the deal menu, closed until opened
     expect(page('/deal-engine/lbo/clean')).toContain('Clean the numbers'); // going back is always allowed
   });
 

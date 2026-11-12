@@ -39,7 +39,7 @@ const eurFiler = (unit = 'EUR'): CompanyFacts => ({
   },
 }) as unknown as CompanyFacts;
 
-describe('D6 — IFRS 20-F filer in companyfacts (EUR happy path)', () => {
+describe('D6: IFRS 20-F filer in companyfacts (EUR happy path)', () => {
   const r = mapCompanyFactsIfrs(eurFiler(), { sicDescription: 'Industrial machinery' });
 
   it('routes: ifrs-full present + no us-gaap ⇒ IFRS mapper', () => {
@@ -87,20 +87,20 @@ describe('D6 — IFRS 20-F filer in companyfacts (EUR happy path)', () => {
   });
 });
 
-describe('D6 — non-modelled currency (SEK 20-F filer)', () => {
-  it('extracts honestly but sets the BLOCKING currency_unsupported badge — no silent USD', () => {
+describe('D6: non-modelled currency (SEK 20-F filer)', () => {
+  it('extracts honestly but sets the BLOCKING currency_unsupported badge: no silent USD', () => {
     const r = mapCompanyFactsIfrs(eurFiler('SEK'), {});
     expect(r.currency_unsupported).toBe('SEK');
     expect(r.fy_revenue?.value).toBe(2290); // facts still shown — Build is what's blocked
   });
 
-  it.each(['CHF', 'NOK', 'DKK', 'CNY'])('%s — every non-modelled code raises the badge and keeps its identity', (code) => {
+  it.each(['CHF', 'NOK', 'DKK', 'CNY'])('%s: every non-modelled code raises the badge and keeps its identity', (code) => {
     const r = mapCompanyFactsIfrs(eurFiler(code), {});
     expect(r.currency_unsupported).toBe(code);
     expect(r.currency).toBe(code);
   });
 
-  it.each(['USD', 'EUR', 'GBP', 'JPY', 'INR'])('%s — every MODELLED currency passes clean (no badge)', (code) => {
+  it.each(['USD', 'EUR', 'GBP', 'JPY', 'INR'])('%s: every MODELLED currency passes clean (no badge)', (code) => {
     const r = mapCompanyFactsIfrs(eurFiler(code), {});
     expect(r.currency_unsupported).toBeUndefined();
     expect(r.currency).toBe(code);

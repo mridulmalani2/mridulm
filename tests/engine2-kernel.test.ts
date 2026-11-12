@@ -22,7 +22,7 @@ const pct = (max = 1) => fc.double({ min: 0, max, noNaN: true });
 
 // ── rates (SPEC §4) ───────────────────────────────────────────────────────────
 
-describe('kernel/rates — SPEC §4', () => {
+describe('kernel/rates: SPEC §4', () => {
   it('floating all-in = max(base, floor) + spread; the floor is a MAX, never an addition (DR-1 Item 4). Domain: rates ∈ [0, 25%]', () => {
     fc.assert(
       fc.property(pct(0.25), pct(0.25), pct(0.25), (base, floor, spread) => {
@@ -58,8 +58,8 @@ describe('kernel/rates — SPEC §4', () => {
 
 // ── amort (SPEC §3.3, invariant §14.15) ──────────────────────────────────────
 
-describe('kernel/amort — SPEC §3.3 / §14.15', () => {
-  it('§14.15: straight-line amort is % × ORIGINAL face — constant per year, never the declining balance. Domain: pct ∈ [0, 1], face ∈ [0, 1e4]', () => {
+describe('kernel/amort: SPEC §3.3 / §14.15', () => {
+  it('§14.15: straight-line amort is % × ORIGINAL face; constant per year, never the declining balance. Domain: pct ∈ [0, 1], face ∈ [0, 1e4]', () => {
     fc.assert(
       fc.property(pct(1), money(0, 1e4), fc.integer({ min: 0, max: 20 }), fc.integer({ min: 0, max: 20 }), (p, face, i, j) => {
         const s = { kind: 'straight_line_pct' as const, pct_of_face: p };
@@ -79,7 +79,7 @@ describe('kernel/amort — SPEC §3.3 / §14.15', () => {
     );
   });
 
-  it('cap-at-outstanding: min(scheduled, max(0, outstanding)) — never negative, never exceeds either bound (§3.3)', () => {
+  it('cap-at-outstanding: min(scheduled, max(0, outstanding)), never negative, never exceeds either bound (§3.3)', () => {
     fc.assert(
       fc.property(money(0, 1e3), fc.double({ min: -100, max: 1e3, noNaN: true }), (s, o) => {
         const a = capAtOutstanding(s, o);
@@ -111,7 +111,7 @@ describe('kernel/amort — SPEC §3.3 / §14.15', () => {
 
 // ── irr (SPEC §1, §14.14) ─────────────────────────────────────────────────────
 
-describe('kernel/irr — SPEC §1 / §14.14', () => {
+describe('kernel/irr: SPEC §1 / §14.14', () => {
   it('§14.14: two-flow stream [−a, 0…, m·a at N] ⇒ IRR = m^(1/N) − 1 (closed form). Domain: a ∈ [1, 1e4], m ∈ [0.05, 8], N ∈ [1, 15]', () => {
     fc.assert(
       fc.property(money(1, 1e4), fc.double({ min: 0.05, max: 8, noNaN: true }), fc.integer({ min: 1, max: 15 }), (a, m, n) => {
@@ -149,7 +149,7 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     );
   });
 
-  it('§1 mid-year: interim flows shift to t−0.5, exit NEVER shifts — inert when interim flows are zero (the v1 UI statement)', () => {
+  it('§1 mid-year: interim flows shift to t−0.5, exit NEVER shifts; inert when interim flows are zero (the v1 UI statement)', () => {
     fc.assert(
       fc.property(money(10, 1e3), fc.double({ min: 0.1, max: 5, noNaN: true }), fc.integer({ min: 2, max: 10 }), (a, m, n) => {
         const cfs = [-a, ...Array(n - 1).fill(0), m * a];
@@ -184,7 +184,7 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     );
   });
 
-  it('numerics guards (2026-07-21 review): sub-economic magnitudes and NaN bracket endpoints are N/A — never the unsolved Newton seed or a bracket edge', () => {
+  it('numerics guards (2026-07-21 review): sub-economic magnitudes and NaN bracket endpoints are N/A, never the unsolved Newton seed or a bracket edge', () => {
     // Σ|cf| ≲ 1e-11 used to satisfy the npvTol floor AT the 10% Newton seed unsolved
     expect(irr([-1e-13, 2e-13])).toBeNull();
     expect(irr([-1e-160, 2e-160])).toBeNull();
@@ -242,7 +242,7 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     expect(r!).toBeLessThan(10);
   });
 
-  it('multi-sign-change: a returned IRR always satisfies the solver contract — converged residual OR a bracketed sign change', () => {
+  it('multi-sign-change: a returned IRR always satisfies the solver contract; converged residual OR a bracketed sign change', () => {
     // The contract is a DISJUNCTION, and stating it as either half alone is false:
     //   (a) |NPV(r)| ≤ 1e-12 · Σ|cf|  — the solver's own convergence test (early return); or
     //   (b) r sits within ~1 ulp of a sign change — the bracket-exhaustion path.
@@ -297,7 +297,7 @@ describe('kernel/irr — SPEC §1 / §14.14', () => {
     );
   });
 
-  it('§3 step 7 shape: a NEGATIVE year-N flow (value wipeout) after paid distributions is the one two-sign-change case — N/A, never a fabricated IRR', () => {
+  it('§3 step 7 shape: a NEGATIVE year-N flow (value wipeout) after paid distributions is the one two-sign-change case; N/A, never a fabricated IRR', () => {
     // [−587.22, +12.09, +15.34, +10, −5] — distributions paid, then the exit wipes out.
     const cfs = [-587.22, 12.09, 15.34, 10, -5];
     const r = irr(cfs);
@@ -353,7 +353,7 @@ const waterfallArb: fc.Arbitrary<WaterfallYearIn> = fc.record({
   revolver: fc.option(revolverArb, { nil: null }),
 });
 
-describe('kernel/waterfall — SPEC §3', () => {
+describe('kernel/waterfall: SPEC §3', () => {
   it('§14.3 running-cash conservation: closing = opening + FCF − interest − fees − amort − repay − sweep + draw − distribution, exact. Domain: any valid config', () => {
     fc.assert(
       fc.property(waterfallArb, (input) => {
@@ -394,7 +394,7 @@ describe('kernel/waterfall — SPEC §3', () => {
     );
   });
 
-  it('§17 item (vii): the blocked FLAG uses min(request, cashCap), not cashCap alone — directed (accuracy audit C, 2026-07-25)', () => {
+  it('§17 item (vii): the blocked FLAG uses min(request, cashCap), not cashCap alone; directed (accuracy audit C, 2026-07-25)', () => {
     // The property test can't reliably hit rp_max STRICTLY BETWEEN the request and the cash
     // cap, so a mutant `blocked = rpCap < max(0, cashCap)` (dropping the request term) went
     // undetected by 402 tests. This pins it: cash 60, floor 10 ⇒ cashCap 50; one un-swept
@@ -412,7 +412,7 @@ describe('kernel/waterfall — SPEC §3', () => {
     expect(out.distribution_blocked).toBe(false);       // the trap did NOT clip below the request
   });
 
-  it('§14.18 / §3.7 at EBITDA_adj < 0 WITH a payment (net-cash regime) — directed (accuracy audit D, 2026-07-25)', () => {
+  it('§14.18 / §3.7 at EBITDA_adj < 0 WITH a payment (net-cash regime): directed (accuracy audit D, 2026-07-25)', () => {
     // The E ≤ 0 corner where a distribution still PAYS (net cash, so gross − cash < L·E even
     // for negative E) is only ~1% likely per CI run under the generator. Pinned directly:
     // no debt, cash 100, floor 10, E = −5, L 2 ⇒ rp_max = 100 − (0 − 2·(−5)) = 90; paid =
@@ -430,7 +430,7 @@ describe('kernel/waterfall — SPEC §3', () => {
     expect(out.distribution_blocked).toBe(false);
   });
 
-  it('§3.7 at EBITDA_adj ≤ 0 with NO net-cash cushion is full lockdown (rp_max 0) — directed', () => {
+  it('§3.7 at EBITDA_adj ≤ 0 with NO net-cash cushion is full lockdown (rp_max 0): directed', () => {
     // The lender-intent case the ratio form would invert: levered and loss-making ⇒ paid 0.
     const out = waterfallYear({
       opening_cash: 50, fcf_pre_debt: 0, min_cash: 5, sweep_pct: 0,
@@ -476,7 +476,7 @@ describe('kernel/waterfall — SPEC §3', () => {
     );
   });
 
-  it('§3.5: sweep % applies to the POOL (max(0, cash − floor)) — total applied ≤ pct × pool; non-participating tranches never swept. Domain: any valid config', () => {
+  it('§3.5: sweep % applies to the POOL (max(0, cash − floor)); total applied ≤ pct × pool; non-participating tranches never swept. Domain: any valid config', () => {
     fc.assert(
       fc.property(waterfallArb, (input) => {
         const out = waterfallYear(input);
@@ -542,7 +542,7 @@ describe('kernel/waterfall — SPEC §3', () => {
     );
   });
 
-  it('§3.5 multi-tier + intra-tier pro-rata (directed): tier 1 pair splits 2:1 to capacity, the remainder cascades to tier 2 — hand-computed', () => {
+  it('§3.5 multi-tier + intra-tier pro-rata (directed): tier 1 pair splits 2:1 to capacity, the remainder cascades to tier 2; hand-computed', () => {
     // pool = 0 + 190 − 0 − 0 − 0 = 190 above the 10 floor → 180; sweepable = 0.5 × 180 = 90.
     // Tier 1 capacity 40 + 20 = 60 < 90 → both retire EXACTLY; tier 2 gets 90 − 60 = 30 of 100.
     const out = waterfallYear({
@@ -622,7 +622,7 @@ describe('kernel/waterfall — SPEC §3', () => {
 // ABOVE the commitment — either poisons the next year's validator (§14.5 / drawn ≤
 // commitment) with a RangeError.
 
-describe('kernel/waterfall — ulp exactness (full retirement / full draw compose year-over-year)', () => {
+describe('kernel/waterfall: ulp exactness (full retirement / full draw compose year-over-year)', () => {
   it('a tier retired by the sweep ends at EXACTLY 0 and re-injects without throwing (trigger: outstanding 108.18633402746718)', () => {
     const y1 = waterfallYear({
       opening_cash: 500,
@@ -753,7 +753,7 @@ describe('kernel/waterfall — ulp exactness (full retirement / full draw compos
     );
   });
 
-  it('§3.6 [v1.0.3] post-breach continuation: a negative closing cash re-injects as next year opening — conservation stays exact, the flag persists until cured', () => {
+  it('§3.6 [v1.0.3] post-breach continuation: a negative closing cash re-injects as next year opening; conservation stays exact, the flag persists until cured', () => {
     // Y1: 5 + (−50) = −45; commitment 10 fully drawn → closing −35, breach.
     const y1 = waterfallYear({
       opening_cash: 5,
@@ -822,7 +822,7 @@ const taxYearArb = fc.record({
   uncapped_deductions: money(0, 50),
 });
 
-describe('kernel/taxstate — SPEC §6', () => {
+describe('kernel/taxstate: SPEC §6', () => {
   it('§6.1 pool conservation: deductible + carryforward_end = capped pool + carryforward_open (when §163(j) applies and interest is deductible); cap = max(0, ati_pct × ATI). Domain: any valid config', () => {
     fc.assert(
       fc.property(policyArb, taxStateArb, taxYearArb, (p, s, y) => {
@@ -916,7 +916,7 @@ describe('kernel/taxstate — SPEC §6', () => {
     );
   });
 
-  it('§6.3 [v1.0.3] aggregate bound: acquired + post-close usage NEVER exceeds taxable income — in BOTH pre-2018 and post-2017 branches. Domain: profitable years', () => {
+  it('§6.3 [v1.0.3] aggregate bound: acquired + post-close usage NEVER exceeds taxable income; in BOTH pre-2018 and post-2017 branches. Domain: profitable years', () => {
     fc.assert(
       fc.property(policyArb, taxStateArb, taxYearArb, (p, s, y) => {
         const out = taxYear(p, s, y);
@@ -988,7 +988,7 @@ describe('kernel/taxstate — SPEC §6', () => {
     );
   });
 
-  it('§6.4 floor on the PRE-NOL base: cash tax = max(regular, min_rate × taxable) ≥ 0; NOL usage is UNCHANGED by the floor (consumed in full — no usage optimization). Domain: profitable years', () => {
+  it('§6.4 floor on the PRE-NOL base: cash tax = max(regular, min_rate × taxable) ≥ 0; NOL usage is UNCHANGED by the floor (consumed in full; no usage optimization). Domain: profitable years', () => {
     fc.assert(
       fc.property(policyArb, taxStateArb, taxYearArb, pct(0.3), (p, s, y, altMinRate) => {
         const out = taxYear(p, s, y);

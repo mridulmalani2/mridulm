@@ -102,6 +102,8 @@ const LABELS: Record<string, string> = {
   'tax.interest_deductible': 'Is interest tax-deductible?',
   'tax.s163j.applies': 'Does an interest-deduction cap (US §163(j)) apply?',
   'tax.s163j.ati_pct': 'Interest cap (% of ATI)',
+  'structure.surplus_distribution.start': 'Surplus cash: pay out every year, or only once debt is repaid',
+  'tax.s163j.ati_basis': 'Interest cap: ATI basis (EBITDA or EBIT)',
   'tax.nol.acquired_opening': 'Acquired NOLs at close (0 if none)',
   'tax.nol.acquired_usable': 'Are acquired NOLs usable?',
   'tax.minimum_rate': 'Minimum tax rate (0 = none)',
@@ -126,6 +128,9 @@ const LABELS: Record<string, string> = {
   'warrant': 'Warrant',
   'fund': 'Fund overlay',
   'valuation': 'Valuation',
+  'valuation.terminal': 'Terminal year (N+1): carry year N, or state a steady state',
+  'valuation.terminal.capex_pct_of_da': 'Terminal capex ÷ D&A',
+  'valuation.terminal.delta_nwc_before_growth': 'Terminal increase in NWC (before growth)',
   'fees.monitoring': 'Monitoring fee',
   'structure.selldown.year': 'Partial exit: year of the sale',
   'structure.selldown.fraction': 'Partial exit: share of the sponsor’s stake sold',
@@ -138,7 +143,7 @@ export function labelFor(path: string): string {
   const year = /\.(\d+)$/.exec(path);
   if (year) {
     const parent = path.slice(0, year.index);
-    return `${labelFor(parent)} — year ${Number(year[1]) + 1}`;
+    return `${labelFor(parent)}, year ${Number(year[1]) + 1}`;
   }
   const parts = path.split('.');
   for (let k = parts.length - 1; k > 0; k--) {
@@ -147,7 +152,7 @@ export function labelFor(path: string): string {
       // a list item reads as "<label> 2 — share pct", 1-based, never "<label> — 1 share_pct"
       const rest = parts.slice(k);
       const idx = /^\d+$/.test(rest[0]) ? ` ${Number(rest.shift()) + 1}` : '';
-      return `${LABELS[p]}${idx}${rest.length ? ` — ${rest.join(' ').replace(/_/g, ' ')}` : ''}`;
+      return `${LABELS[p]}${idx}${rest.length ? `, ${rest.join(' ').replace(/_/g, ' ')}` : ''}`;
     }
   }
   return path;

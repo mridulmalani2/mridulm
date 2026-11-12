@@ -13,7 +13,7 @@ import rollupSample from './fixtures/esef-report-rollup-sample.json';
 
 const report = sample as unknown as XbrlJsonReport;
 
-describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
+describe('mapIfrsReport: headline figures (Europa SA, FY2023, €m)', () => {
   const r = mapIfrsReport(report, { entityName: 'Europa Manufacturing SA', reportUrl: 'https://filings.xbrl.org/x/view' });
 
   it('maps the face-statement IFRS concepts, scaled to millions', () => {
@@ -37,7 +37,7 @@ describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
     expect(r.currency).toBe('EUR');
   });
 
-  it('excludes dimensional (segment) facts — uses the consolidated total', () => {
+  it('excludes dimensional (segment) facts: uses the consolidated total', () => {
     expect(r.fy_revenue?.value).not.toBeCloseTo(500, 3);   // the segment member fact is ignored
     expect(r.fy_revenue?.value).not.toBeCloseTo(1700, 3);  // and not double-counted
   });
@@ -50,7 +50,7 @@ describe('mapIfrsReport — headline figures (Europa SA, FY2023, €m)', () => {
   });
 });
 
-describe('mapIfrsReport — D6 currency honesty (review 2026-07-24: no silent EUR fallback)', () => {
+describe('mapIfrsReport: D6 currency honesty (review 2026-07-24: no silent EUR fallback)', () => {
   const reKey = (code: string): XbrlJsonReport => {
     const clone = JSON.parse(JSON.stringify(sample).replace(/iso4217:EUR/g, `iso4217:${code}`));
     return clone as XbrlJsonReport;
@@ -70,7 +70,7 @@ describe('mapIfrsReport — D6 currency honesty (review 2026-07-24: no silent EU
   });
 });
 
-describe('rankEsefMatches — searches the ESEF-filer universe (surfaces the listed parent)', () => {
+describe('rankEsefMatches: searches the ESEF-filer universe (surfaces the listed parent)', () => {
   const ENTITIES: EsefTickerEntry[] = [
     { lei: '549300MKFYEKVRWML317', name: 'UNILEVER PLC' },
     { lei: 'AAAA0000000000000001', name: 'UNILEVER FRANCE SAS' },
@@ -88,7 +88,7 @@ describe('rankEsefMatches — searches the ESEF-filer universe (surfaces the lis
   });
 });
 
-describe('mapIfrsReport — deep extraction (notes / extension / dimensional)', () => {
+describe('mapIfrsReport: deep extraction (notes / extension / dimensional)', () => {
   // Fixture: D&A only via the cash-flow adjustment tag (layer b); net debt only via an issuer
   // extension with a trap ratio sibling (layer c); current assets only via component
   // reconstruction (layer d); capex genuinely absent (→ gap).
@@ -112,7 +112,7 @@ describe('mapIfrsReport — deep extraction (notes / extension / dimensional)', 
     expect(ext.nwc?.provenance.detail).toMatch(/reconstructed/);
   });
 
-  it('leaves a genuinely-absent field (capex) as a gap — never a guess', () => {
+  it('leaves a genuinely-absent field (capex) as a gap, never a guess', () => {
     expect(ext.capex).toBeNull();
     expect(ext.capex_pct_revenue).toBeNull();
     expect(ext.gaps).toContain('Capex %');
@@ -137,7 +137,7 @@ describe('mapIfrsReport — deep extraction (notes / extension / dimensional)', 
   });
 });
 
-describe('mapIfrsReport — adversarial-review regressions', () => {
+describe('mapIfrsReport: adversarial-review regressions', () => {
   const DUR = '2024-01-01T00:00:00/2025-01-01T00:00:00';   // FY2024 full year
   const INST = '2025-01-01T00:00:00';                       // FY2024 closing instant
   type F = { value: string; dimensions: Record<string, string> };
@@ -182,7 +182,7 @@ describe('mapIfrsReport — adversarial-review regressions', () => {
     expect(r.gaps).toContain('Net debt at entry');
   });
 
-  it('roll-up requires reconciliation to a reported total member — a partial set stays a gap', () => {
+  it('roll-up requires reconciliation to a reported total member: a partial set stays a gap', () => {
     // Only one leaf member, no domain/total member → cannot validate completeness → gap.
     const r = mapIfrsReport(report({ ...anchor,
       m1: f('ifrs-full:Borrowings', 100_000_000, INST, { 'ifrs-full:ClassesOfBorrowingsAxis': 'company:BankLoansMember' }),
@@ -246,7 +246,7 @@ describe('mapIfrsReport — adversarial-review regressions', () => {
   });
 });
 
-describe('mapIfrsReport — realistic ESEF sparsity (notes often untagged)', () => {
+describe('mapIfrsReport: realistic ESEF sparsity (notes often untagged)', () => {
   it('surfaces gaps for D&A / EBITDA / net debt / NWC and leaves an underivable tax rate null', () => {
     const sparse: XbrlJsonReport = {
       facts: {

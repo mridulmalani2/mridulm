@@ -137,12 +137,12 @@ def stitch(fixture):
         pr = at(pts, k["prior"])
         if pr is None: continue  # component absence handled by completeness below
         if pr["vintage_count"] < 2:
-            return fy_fallback("prior-YTD single vintage — restatement check un-evaluable (fail-closed)", k)
+            return fy_fallback("prior-YTD single vintage: restatement check un-evaluable (fail-closed)", k)
     for pts, nm in ((rev, "Revenue"), (oi, "OperInc"), (da, "D&A")):
         for span_name, key in (("FY", k["fy"]), ("YTD_current", k["cur"]), ("YTD_prior", k["prior"])):
             p = at(pts, key)
             if p and p["note"]:
-                return fy_fallback(f"{nm} {span_name} restated >1% vs original — cross-vintage basis mix ({p['note']})", k)
+                return fy_fallback(f"{nm} {span_name} restated >1% vs original: cross-vintage basis mix ({p['note']})", k)
 
     # ── availability on the canonical spans ──
     rev_ltm = ltm_at(rev, k)                         # revenue: single tag

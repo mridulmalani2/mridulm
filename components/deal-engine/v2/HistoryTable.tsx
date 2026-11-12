@@ -4,14 +4,13 @@
  * All numbers pass through lib/format — engine floats never reach the DOM raw.
  */
 import React from 'react';
-import { money, moneyIso, num, pct, staleness, stalenessTier } from '../../../lib/format';
+import { money, moneyIso, pct, staleness, stalenessTier } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 import type { DealFacts } from '../../../lib/engine2/types';
 
-const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const label = { color: 'rgba(17,17,17,0.62)', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' } as const;
+const label = { color: 'var(--de-ink-3)' } as const;
 // §1.1 staleness tiers — the sizing as-of's age vs import date (fresh ≤4.5m / aging ≤14.5m / stale).
-const STALE_COLOR: Record<'fresh' | 'aging' | 'stale', string> = { fresh: '#2e7d32', aging: '#b26a00', stale: '#c62828' };
+const STALE_COLOR: Record<'fresh' | 'aging' | 'stale', string> = { fresh: 'var(--de-pos)', aging: 'var(--de-warn)', stale: 'var(--de-accent)' };
 
 const HistoryTable: React.FC<{
   facts: DealFacts;
@@ -36,11 +35,11 @@ const HistoryTable: React.FC<{
       </p>
     );
   }
-  const cell = (v: number | null, fmt: (x: number) => string) => (v === null ? '—' : fmt(v));
+  const cell = (v: number | null, fmt: (x: number) => string) => (v === null ? '–' : fmt(v));
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-[12px] tracking-wider uppercase" style={label}>{sourceNoun === 'entered' ? 'Entered history' : 'Filing history'}</span>
+        <span className="text-[13px] font-semibold text-[color:var(--de-ink)]">{sourceNoun === 'entered' ? 'Entered history' : 'Filing history'}</span>
         <span className="flex flex-col items-end gap-0.5">
           <span className="text-[12px]" style={label}>{staleness(facts.fiscal_year ?? undefined, facts.period_end ?? undefined, today)}</span>
           {/* §1.1: the SIZING basis (leverage + entry EBITDA) — the LTM quarter-stitch when interim
@@ -50,7 +49,7 @@ const HistoryTable: React.FC<{
             const tier = stalenessTier(facts.sizing_as_of, today); // view-relative, uniform across all filer paths
             return (
               <span className="text-[12px] flex items-center gap-1" style={label}
-                title="Sizing basis for leverage & entry EBITDA (SPEC §1.1)">
+                title="Sizing basis for leverage & entry EBITDA">
                 <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: STALE_COLOR[tier ?? 'fresh'] }} />
                 {facts.sizing_basis === 'LTM' ? `sizing: LTM ending ${facts.sizing_as_of}` : 'sizing: FY'}
                 {tier ? ` · ${tier}` : ''}
@@ -59,28 +58,30 @@ const HistoryTable: React.FC<{
           })()}
         </span>
       </div>
-      <table className="w-full text-[13px]" style={{ fontFamily: mono, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ color: 'rgba(17,17,17,0.45)' }}>
-            <th className="text-left font-normal py-1">FY end</th>
-            <th className="text-right font-normal">Revenue</th>
-            <th className="text-right font-normal">EBITDA</th>
-            <th className="text-right font-normal">Margin</th>
-            <th className="text-right font-normal">Capex</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((h) => (
-            <tr key={h.period_end} style={{ borderTop: '1px solid rgba(17,17,17,0.08)', color: '#111' }}>
-              <td className="py-1">{h.period_end}</td>
-              <td className="text-right">{cell(h.revenue, fmtMoney)}</td>
-              <td className="text-right">{cell(h.ebitda, fmtMoney)}</td>
-              <td className="text-right">{h.revenue !== null && h.ebitda !== null && h.revenue > 0 ? pct(h.ebitda / h.revenue) : '—'}</td>
-              <td className="text-right">{cell(h.capex, (x) => num(x, 0))}</td>
+      <div className="de-scroll-x">
+        <table className="de-table">
+          <thead>
+            <tr>
+              <th>FY end</th>
+              <th>Revenue</th>
+              <th>EBITDA</th>
+              <th>Margin</th>
+              <th>Capex</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((h) => (
+              <tr key={h.period_end}>
+                <td>{h.period_end}</td>
+                <td>{cell(h.revenue, fmtMoney)}</td>
+                <td>{cell(h.ebitda, fmtMoney)}</td>
+                <td>{h.revenue !== null && h.ebitda !== null && h.revenue > 0 ? pct(h.ebitda / h.revenue) : '–'}</td>
+                <td>{cell(h.capex, fmtMoney)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

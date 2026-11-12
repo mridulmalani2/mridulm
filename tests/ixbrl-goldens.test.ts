@@ -14,7 +14,7 @@ import { join } from 'path';
 const ROOT = join(__dirname, '..');
 const FIXTURES = ['synthetic-min.xhtml', 'aapl-10k-trimmed.htm', 'ch-real.xhtml', 'esef-mini.zip'];
 
-describe('ixbrl goldens — the committed expected JSONs regenerate byte-identically', () => {
+describe('ixbrl goldens: the committed expected JSONs regenerate byte-identically', () => {
   for (const f of FIXTURES) {
     it(`${f}`, () => {
       const name = f.split('.')[0];

@@ -98,7 +98,7 @@ describe('§22 engine vs the adjudicated goldens (G9-SWEET / G10-RATCHET)', () =
   });
 });
 
-describe('§22.13 directed fixtures — golden-uncovered by design', () => {
+describe('§22.13 directed fixtures: golden-uncovered by design', () => {
   it('(i) mip.ratchet [] ≡ null ≡ v1 §10; a length-1 UNREACHED tier is also v1-identical', () => {
     const g3 = GOLDEN_DEALS.G3;
     const base = runModel(g3.facts, g3.assumptions);
@@ -144,7 +144,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     expect(exit.management_ordinary_share).toBeCloseTo(5.0, 12);
   });
 
-  it('(iv) the cliff counterexample produces the MARGINAL answer — no cliff branch smuggled in', () => {
+  it('(iv) the cliff counterexample produces the MARGINAL answer: no cliff branch smuggled in', () => {
     // §22.5's no-fixed-point inputs: V₀ = 100, T = 120, P = 25, 20% below / 36% at-or-above.
     // A cliff has NO solution here; the marginal rule answers M = 5.0, count 0, continuously.
     const { equity_strip } = buildExitWaterfall(
@@ -280,29 +280,29 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     };
     const v = (over: Parameters<typeof validateSweetEquity>[0]) => () => validateSweetEquity(over);
     // (i) promote ∧ strip
-    expect(v({ sweet_equity: sweet, warrant: null, mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: null }, rollover_equity: 0 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: sweet, warrant: null, mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: null }, rollover_equity: 0 })).toThrow(/may not coexist: together/);
     // (ii) strip ∧ rollover
-    expect(v({ sweet_equity: sweet, warrant: null, mip: null, rollover_equity: 10 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: sweet, warrant: null, mip: null, rollover_equity: 10 })).toThrow(/may not coexist with a rollover/);
     // (iii) domain violation: hurdle_moic ≤ 0
-    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 0, share_pct: 0.15 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 0, share_pct: 0.15 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/hurdle_moic must be > 0/);
     // (iv) non-ascending hurdles / decreasing share / share = 1
-    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 2, share_pct: 0.15 }, { hurdle_moic: 2, share_pct: 0.2 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
-    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 1.5, share_pct: 0.2 }, { hurdle_moic: 2, share_pct: 0.15 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
-    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 1.5, share_pct: 1.0 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 2, share_pct: 0.15 }, { hurdle_moic: 2, share_pct: 0.2 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/strictly ascending/);
+    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 1.5, share_pct: 0.2 }, { hurdle_moic: 2, share_pct: 0.15 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/non-decreasing/);
+    expect(v({ sweet_equity: { ...sweet, ratchet: [{ hurdle_moic: 1.5, share_pct: 1.0 }] }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/below 100%/);
     // the §22.4 side: a first tier NOT strictly above the base hurdle
-    expect(v({ sweet_equity: null, warrant: null, mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: [{ hurdle_moic: 1.5, share_pct: 0.2 }] }, rollover_equity: 0 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: null, warrant: null, mip: { pool_pct: 0.15, hurdle_moic: 1.5, ratchet: [{ hurdle_moic: 1.5, share_pct: 0.2 }] }, rollover_equity: 0 })).toThrow(/strictly ascending/);
     // (v) out-of-domain warrant
-    expect(v({ sweet_equity: null, warrant: { holder_label: 'w', pct_of_ordinary: 1.5, strike_total: 2 }, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
-    expect(v({ sweet_equity: null, warrant: { holder_label: 'w', pct_of_ordinary: 0.05, strike_total: -1 }, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: null, warrant: { holder_label: 'w', pct_of_ordinary: 1.5, strike_total: 2 }, mip: null, rollover_equity: 0 })).toThrow(/share of the ordinary equity/);
+    expect(v({ sweet_equity: null, warrant: { holder_label: 'w', pct_of_ordinary: 0.05, strike_total: -1 }, mip: null, rollover_equity: 0 })).toThrow(/strike must be 0 or more/);
     // (vi) a subscription driving the plug ≤ 0 — thrown at Build inside sourcesUses
     expect(() =>
       runModel(GOLDEN_DEALS.G9SWEET.facts, {
         ...GOLDEN_DEALS.G9SWEET.assumptions,
         sweet_equity: { ...GOLDEN_DEALS.G9SWEET.assumptions.sweet_equity!, management_subscription: 1e6 },
       }),
-    ).toThrow(/§22.3\(vi\)/);
+    ).toThrow(/non-positive sponsor plug/);
     // (vii) a paid-for zero ordinary share
-    expect(v({ sweet_equity: { ...sweet, management_ordinary_pct: 0, management_subscription: 2 }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/§22.3/);
+    expect(v({ sweet_equity: { ...sweet, management_ordinary_pct: 0, management_subscription: 2 }, warrant: null, mip: null, rollover_equity: 0 })).toThrow(/ZERO ordinary share/);
     // legality guard: the all-institutional strip (zero share, ZERO subscription) stays legal
     expect(v({ sweet_equity: { ...sweet, management_ordinary_pct: 0, management_subscription: 0 }, warrant: null, mip: null, rollover_equity: 0 })).not.toThrow();
   });
@@ -319,7 +319,7 @@ describe('§22.13 directed fixtures — golden-uncovered by design', () => {
     expect(Math.abs(wd.sweet_equity_delta + wd.warrant_payout_net)).toBeLessThan(29.5);
   });
 
-  it('(x) §11 NON-contamination: with vs without the strip — credit/tranches/waterfall/tax/goodwill byte-identical', () => {
+  it('(x) §11 NON-contamination: with vs without the strip; credit/tranches/waterfall/tax/goodwill byte-identical', () => {
     const withStrip = runModel(GOLDEN_DEALS.G9SWEET.facts, GOLDEN_DEALS.G9SWEET.assumptions);
     const without = runModel(GOLDEN_DEALS.G9SWEET.facts, {
       ...GOLDEN_DEALS.G9SWEET.assumptions,

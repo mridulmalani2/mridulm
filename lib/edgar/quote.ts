@@ -60,7 +60,7 @@ export function computeTradingAnchor(
     price,
     shares_millions: sharesM,
     multi_class: multiClass,
-    detail: `Finnhub delayed quote × dei shares${multiClass ? ' (MULTI-CLASS sum — approximate)' : ''} + net debt ÷ FY EBITDA`,
+    detail: `Finnhub delayed quote × dei shares${multiClass ? ' (MULTI-CLASS sum: approximate)' : ''} + net debt ÷ FY EBITDA`,
   };
 }
 

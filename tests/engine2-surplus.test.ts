@@ -17,7 +17,7 @@ const senior = (outstanding: number) => ({
   name: 'TL', outstanding, scheduled_amort: 0, cash_interest: 0, sweep_participates: true, sweep_priority: 1,
 });
 
-describe('kernel/waterfall — §3.8 surplus policy', () => {
+describe('kernel/waterfall: §3.8 surplus policy', () => {
   it('pays payout × the cash above the floor AFTER the sweep; nothing is ever revolver-funded or below the floor', () => {
     fc.assert(fc.property(
       fc.double({ min: 0, max: 1, noNaN: true }), fc.double({ min: -50, max: 200, noNaN: true }), fc.double({ min: 0, max: 1, noNaN: true }),
@@ -43,7 +43,7 @@ describe('kernel/waterfall — §3.8 surplus policy', () => {
   // from ALL cash above the floor before step 7, and step 6 draws only below it — so a revolver
   // still drawn at step 7 always means a zero surplus (the gate-ignores-revolver mutant is
   // equivalent by construction). This fixture pins the observable consequence.
-  it("a drawn revolver is repaid before any surplus exists — nothing is paid while it is drawn", () => {
+  it("a drawn revolver is repaid before any surplus exists: nothing is paid while it is drawn", () => {
     const rcf = { beginning_drawn: 30, commitment: 50, cash_interest: 0, commitment_fee: 0 };
     const out = waterfallYear(year({ fcf_pre_debt: 20, revolver: rcf, surplus: { payout_pct: 1, after_debt_repaid: true } }));
     expect(out.revolver_ending_drawn).toBe(10);
@@ -67,7 +67,7 @@ describe('kernel/waterfall — §3.8 surplus policy', () => {
   });
 });
 
-describe('engine — §3.8 Build rejections and equivalences', () => {
+describe('engine: §3.8 Build rejections and equivalences', () => {
   const g5 = GOLDEN_DEALS.G5;
   const withPolicy = (sd: DealAssumptions['structure']['surplus_distribution'], distributions: number[] | null = null): DealAssumptions => ({
     ...g5.assumptions, structure: { ...g5.assumptions.structure, distributions, surplus_distribution: sd },

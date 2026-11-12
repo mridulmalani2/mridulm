@@ -194,29 +194,160 @@ a:focus-visible {
   }
 }
 
-/* ── Deal Engine design tokens ──────────────────────────────────────────────────────────────
-   The deal-engine screens take every colour from these variables (components carry no hex).
-   Paper, ink and the red accent are the existing identity; the rest are the working tones a
-   financial model needs: input blue, a positive, a caution and a rule. */
+/* ── Deal Engine design system ──────────────────────────────────────────────────────────────
+   Every deal-engine screen takes colour, type and shape from these variables; components carry
+   no hex values. The one idea carried through the whole product is the spreadsheet convention
+   an analyst already reads without thinking: BLUE is a number someone typed, INK is a number
+   the model calculated. Red is kept for what still needs attention, green for favourable. */
 .de-root {
-  --de-paper: #F9F9F7;
+  --de-paper: #F4F5F2;
   --de-surface: #FFFFFF;
-  --de-sunken: #F2F2EE;
-  --de-ink: #111111;
-  --de-ink-2: rgba(17, 17, 17, 0.72);
-  --de-ink-3: rgba(17, 17, 17, 0.58);
-  --de-rule: rgba(17, 17, 17, 0.12);
-  --de-rule-strong: rgba(17, 17, 17, 0.82);
-  --de-accent: #CC0000;
-  --de-accent-soft: rgba(204, 0, 0, 0.06);
-  --de-input: #1D3FBF;
-  --de-input-soft: rgba(29, 63, 191, 0.07);
-  --de-pos: #166E45;
-  --de-pos-soft: rgba(22, 110, 69, 0.09);
-  --de-warn: #8A5A00;
-  --de-warn-soft: rgba(180, 120, 0, 0.09);
+  --de-sunken: #ECEEE9;
+  --de-hover: #F7F8F5;
+  --de-ink: #14171A;
+  --de-ink-2: #474D54;
+  --de-ink-3: #767C84;
+  --de-rule: #E0E3DC;
+  --de-rule-strong: #A9AFA6;
+  --de-accent: #B3261E;
+  --de-accent-soft: #FBEFEE;
+  --de-input: #2346C7;
+  --de-input-soft: #EEF2FD;
+  --de-pos: #1B7A4B;
+  --de-pos-soft: #EAF5EE;
+  --de-warn: #8F5B06;
+  --de-warn-soft: #FBF3E2;
+  --de-ai: #6B3FC4;
+  --de-ai-soft: #F3EEFC;
+  --de-ink-hover: #2A2F35;
+  --de-scrim: rgba(20, 23, 26, 0.28);
+  --de-shadow-sm: 0 1px 2px rgba(20, 23, 26, 0.12);
+  --de-r-sm: 6px;
+  --de-r: 10px;
+  --de-shadow-pop: 0 12px 32px -8px rgba(20, 23, 26, 0.22), 0 2px 6px rgba(20, 23, 26, 0.06);
+  --de-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --de-display: 'Fraunces', 'Playfair Display', Georgia, serif;
+  --de-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
   background: var(--de-paper);
   color: var(--de-ink);
+  font-family: var(--de-sans);
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-.de-root .de-num { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-.de-root :focus-visible { outline: 2px solid var(--de-input); outline-offset: 1px; }
+.de-root .font-sans { font-family: var(--de-sans); }
+.de-root .font-mono { font-family: var(--de-mono); }
+/* Figures: the text face with tabular, lining numerals, so columns align and nothing reads as code. */
+.de-root .de-num { font-family: var(--de-sans); font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.005em; }
+.de-root .de-display, .de-root .font-playfair { font-family: var(--de-display); font-optical-sizing: auto; font-weight: 500; letter-spacing: -0.015em; }
+.de-root :focus-visible { outline: 2px solid var(--de-input); outline-offset: 2px; border-radius: 4px; }
+.de-root ::selection { background: var(--de-input-soft); }
+.de-root button, .de-root input, .de-root select, .de-root textarea { font-family: inherit; }
+
+/* Controls */
+.de-root .de-control {
+  height: 34px; border-radius: var(--de-r-sm); border: 1px solid var(--de-rule); background: var(--de-surface);
+  transition: border-color 120ms, box-shadow 120ms, background-color 120ms;
+}
+.de-root .de-control:hover { border-color: var(--de-rule-strong); }
+.de-root .de-control:focus, .de-root .de-control:focus-within { outline: none; border-color: var(--de-input); box-shadow: 0 0 0 3px var(--de-input-soft); }
+.de-root .de-control[data-blank='true'] { border-color: transparent; background: var(--de-accent-soft); box-shadow: inset 0 -2px 0 var(--de-accent); border-radius: var(--de-r-sm) var(--de-r-sm) 2px 2px; }
+.de-root .de-control[data-blank='true']:focus, .de-root .de-control[data-blank='true']:focus-within { box-shadow: inset 0 -2px 0 var(--de-accent), 0 0 0 3px var(--de-accent-soft); }
+.de-root .de-control[data-invalid='true'] { border-color: var(--de-accent); }
+/* a field inside a control: the control shows the focus, so the field itself draws no second ring */
+.de-root .de-control input:focus-visible, .de-root .de-control textarea:focus-visible { outline: none; }
+
+/* One row of the input sheet: a label and its control on a shared grid. */
+.de-root .de-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: center; column-gap: 16px; min-height: 44px; padding: 4px 12px; margin: 0 -12px; border-radius: var(--de-r-sm); }
+.de-root .de-row:hover { background: var(--de-hover); }
+/* On a narrow screen the control sits under its label. */
+@media (max-width: 640px) { .de-root .de-row { grid-template-columns: minmax(0, 1fr); row-gap: 6px; padding-top: 8px; padding-bottom: 8px; } .de-root .de-row > :last-child { justify-content: flex-start; } }
+.de-root .de-row[data-flash='true'] { animation: de-flash 1.4s ease-out 1; }
+@keyframes de-flash { 0% { background: var(--de-input-soft); } 100% { background: transparent; } }
+
+/* Tables of figures */
+.de-root .de-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.de-root .de-table th { font-weight: 500; color: var(--de-ink-3); font-size: 12px; text-align: right; padding: 8px 10px; white-space: nowrap; border-bottom: 1px solid var(--de-rule-strong); }
+.de-root .de-table th:first-child, .de-root .de-table td:first-child { text-align: left; }
+.de-root .de-table td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--de-rule); font-variant-numeric: tabular-nums lining-nums; }
+.de-root .de-table tbody tr:hover td { background: var(--de-hover); }
+.de-root .de-table tr[data-total='true'] td { font-weight: 600; border-top: 1px solid var(--de-rule-strong); }
+/* In a table wider than its card the row labels stay in view while the years scroll under them. */
+.de-root .de-scroll-x .de-table:not([data-free]) th:first-child, .de-root .de-scroll-x .de-table:not([data-free]) td:first-child { position: sticky; left: 0; z-index: 1; background: var(--de-surface); }
+.de-root .de-scroll-x .de-table:not([data-free]) tbody tr:hover td:first-child { background: var(--de-hover); }
+
+/* A figure that can be traced back to its formula. */
+.de-root .de-trace { cursor: pointer; border-radius: 3px; text-decoration: underline dotted transparent; text-underline-offset: 3px; transition: text-decoration-color 120ms, background-color 120ms; }
+.de-root .de-trace:hover { text-decoration-color: var(--de-ink-3); background: var(--de-sunken); }
+
+.de-root .de-scroll-x { overflow-x: auto; scrollbar-width: thin; }
+.de-root .de-kbd { font-family: var(--de-mono); font-size: 11px; padding: 1px 5px; border: 1px solid var(--de-rule); border-bottom-width: 2px; border-radius: 4px; color: var(--de-ink-2); background: var(--de-surface); }
+@keyframes de-pop-in { from { opacity: 0; transform: translateY(4px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes de-drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.de-root .de-pop { animation: de-pop-in 140ms ease-out; }
+.de-root .de-drawer { animation: de-drawer-in 180ms ease-out; }
+.de-root .de-drawer:focus { outline: none; }
+/* Motion. One short ease for everything that appears; nothing loops except a wait indicator, and
+   all of it is switched off for a reader who asks for reduced motion. */
+@keyframes de-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes de-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes de-swap { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+@keyframes de-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes de-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes de-dot { 0%, 60%, 100% { opacity: 0.25; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
+@keyframes de-spin { to { transform: rotate(360deg); } }
+@keyframes de-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.de-root .de-scrim { animation: de-fade-in 160ms ease-out; }
+.de-root .de-enter { animation: de-enter 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.de-root .de-swap { animation: de-swap 180ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.de-root .de-toast { animation: de-toast-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.de-root .de-skeleton { background: var(--de-sunken); border-radius: var(--de-r-sm); animation: de-pulse 1.4s ease-in-out infinite; }
+.de-root .de-dots > span { display: inline-block; width: 5px; height: 5px; margin-right: 4px; border-radius: 50%; background: var(--de-ink-3); animation: de-dot 1.2s ease-in-out infinite; }
+.de-root .de-dots > span:nth-child(2) { animation-delay: 0.15s; }
+.de-root .de-dots > span:nth-child(3) { animation-delay: 0.3s; }
+.de-root .de-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: de-spin 0.7s linear infinite; }
+.de-root .de-grow { transform-origin: left center; animation: de-grow 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.de-root .de-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--de-ink); transition: width 320ms cubic-bezier(0.2, 0.7, 0.2, 1), background-color 200ms; }
+
+/* A short label for a control that shows only a glyph. It appears after a pause, never on a tap. */
+.de-root .de-tip { position: relative; }
+.de-root .de-tip::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translate(-50%, -2px);
+  padding: 4px 8px; border-radius: 6px; background: var(--de-ink); color: #fff; font: 500 12px/1.3 var(--de-sans); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 100ms, transform 100ms; z-index: 70;
+}
+.de-root .de-tip[data-tip-side='end']::after { left: auto; right: 0; transform: translate(0, -2px); }
+.de-root .de-tip[aria-expanded='true']::after { display: none; }
+@media (hover: hover) {
+  .de-root .de-tip:hover::after, .de-root .de-tip:focus-visible::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 400ms; }
+  .de-root .de-tip[data-tip-side='end']:hover::after, .de-root .de-tip[data-tip-side='end']:focus-visible::after { transform: none; }
+}
+
+/* A wide table shows a soft edge where more of it lies off screen, and keeps its row labels in view. */
+.de-root .de-scroll-x {
+  background:
+    linear-gradient(to right, var(--de-surface) 30%, transparent) left center / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--de-surface) 30%, transparent) right center / 28px 100% no-repeat local,
+    linear-gradient(to right, rgba(20, 23, 26, 0.10), transparent) left center / 10px 100% no-repeat scroll,
+    linear-gradient(to left, rgba(20, 23, 26, 0.10), transparent) right center / 10px 100% no-repeat scroll;
+}
+
+/* A reference inside a formula: reads as part of the sentence, opens like a link. */
+.de-root .de-ref { display: inline; padding: 1px 5px; margin: 0 1px; border-radius: 4px; background: var(--de-sunken); color: var(--de-ink); font-family: var(--de-sans); font-size: 12.5px; cursor: pointer; transition: background-color 120ms, box-shadow 120ms; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.de-root .de-ref[data-input='true'] { background: var(--de-input-soft); color: var(--de-input); }
+.de-root .de-ref:hover, .de-root .de-ref[data-hot='true'] { box-shadow: 0 0 0 1.5px var(--de-ink); }
+.de-root .de-ref[data-input='true']:hover, .de-root .de-ref[data-input='true'][data-hot='true'] { box-shadow: 0 0 0 1.5px var(--de-input); }
+
+@media (prefers-reduced-motion: reduce) {
+  .de-root .de-pop, .de-root .de-drawer, .de-root .de-row[data-flash='true'], .de-root .de-scrim, .de-root .de-enter, .de-root .de-swap, .de-root .de-toast, .de-root .de-grow { animation: none; }
+  .de-root .de-skeleton, .de-root .de-dots > span { animation: none; opacity: 0.7; }
+  .de-root .de-meter > span { transition: none; }
+}
+
+/* Print: the one-pager prints as a clean sheet with no application chrome. */
+@media print {
+  .de-root .de-no-print { display: none !important; }
+  .de-root { background: #fff; }
+  .de-root .de-print-page { box-shadow: none !important; border: 0 !important; margin: 0 !important; max-width: none !important; }
+  @page { size: A4 portrait; margin: 12mm; }
+}

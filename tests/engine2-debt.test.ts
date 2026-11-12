@@ -76,9 +76,9 @@ function sized(golden: string) {
   return sizeStructure(structure, spec.fy_ebitda);
 }
 
-describe('debt.ts chained year loop reproduces the golden debt blocks — FCF injected (C4 gate)', () => {
+describe('debt.ts chained year loop reproduces the golden debt blocks: FCF injected (C4 gate)', () => {
   for (const golden of ['G2', 'G2D', 'G3', 'G4', 'G5']) {
-    it(`${golden}: tranche schedule, revolver cycle, waterfall — balances chained at full precision`, () => {
+    it(`${golden}: tranche schedule, revolver cycle, waterfall; balances chained at full precision`, () => {
       const g = load(golden);
       const spec = SPECS[golden];
       const s = sized(golden);
@@ -175,11 +175,11 @@ describe('debt.ts chained year loop reproduces the golden debt blocks — FCF in
   });
 });
 
-describe('debt.ts §3.5 sweep grid (golden-uncovered by design — hand fixtures on the DR-4 grid)', () => {
+describe('debt.ts §3.5 sweep grid (golden-uncovered by design: hand fixtures on the DR-4 grid)', () => {
   const grid = { tiers: [{ above_net_leverage: 4.5, pct: 0.75 }, { above_net_leverage: 3.5, pct: 0.5 }], else_pct: 0 };
   const sweep = { base_pct: 0.99, grid }; // base MUST be ignored when a grid is set
 
-  it('75% above 4.5x, 50% in (3.5, 4.5], 0% at or below 3.5x — thresholds are strict "exceeds"', () => {
+  it('75% above 4.5x, 50% in (3.5, 4.5], 0% at or below 3.5x: thresholds are strict "exceeds"', () => {
     // leverage = (gross − cash)/EBITDA
     expect(resolveSweepPct(sweep, 550, 50, 100)).toBe(0.75); // 5.0x
     expect(resolveSweepPct(sweep, 460, 10, 100)).toBe(0.5); // 4.5x — NOT > 4.5

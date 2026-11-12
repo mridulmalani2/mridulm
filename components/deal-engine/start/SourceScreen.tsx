@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { useDealEngineStore } from '../../../store/dealEngine';
 import { searchCompanies, parseEdgarUrl } from '../../../lib/edgar/client';
 import { searchEsefByName } from '../../../lib/edgar/esef';
 import { uploadedFilingToRaw } from '../../../lib/edgar/ixbrl';
-import ApiKeyInline from './ApiKeyInline';
+import { dealUiStore } from '../../../store/dealUi';
+import { Button, Segmented } from '../ui/kit';
 
 /**
  * Screen 1 — Source. Three honest paths, framed the way targets are actually sourced:
@@ -23,51 +23,30 @@ import ApiKeyInline from './ApiKeyInline';
  * Facts carry provenance; gaps stay gaps.
  */
 
-const mono = "'JetBrains Mono', monospace";
-const paper = '#F9F9F7';
-const inputStyle: React.CSSProperties = { background: '#fff', border: '1px solid rgba(17,17,17,0.15)', color: '#111', fontFamily: mono, outline: 'none' };
-const labelStyle: React.CSSProperties = { color: 'rgba(17,17,17,0.4)', fontFamily: mono };
-
 type Mode = 'sec' | 'esef';
 interface Match { id: string; title: string; tag: string; onPick: () => void }
 const LEI_RE = /^[A-Za-z0-9]{18,20}$/;
 
-const PathCard: React.FC<{
-  tag: string; tagColor?: string; title: string; body: string;
-  action?: () => void; actionLabel?: string; active?: boolean; disabled?: boolean;
-  fileAccept?: string; onFile?: (f: File) => void;
-}> = ({ tag, tagColor = 'rgba(17,17,17,0.35)', title, body, action, actionLabel, active, disabled, fileAccept, onFile }) => {
+/** A secondary way in: a title, one sentence, and the whole tile is the control. */
+const PathTile: React.FC<{ title: string; body: string; action?: () => void; cta: string; fileAccept?: string; onFile?: (f: File) => void }> = ({ title, body, action, cta, fileAccept, onFile }) => {
   const inner = (
     <>
-      <span className="text-[9px] tracking-widest uppercase" style={{ color: tagColor, fontFamily: mono }}>{tag}</span>
-      <span className="text-[15px] font-bold" style={{ color: disabled ? 'rgba(17,17,17,0.45)' : '#111', fontFamily: 'Playfair Display, serif' }}>{title}</span>
-      <span className="text-[11.5px]" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', lineHeight: 1.65 }}>{body}</span>
-      {actionLabel && (
-        <span className="mt-1 text-[10px] tracking-widest uppercase" style={{ color: disabled ? 'rgba(17,17,17,0.3)' : '#CC0000', fontFamily: mono }}>{actionLabel}</span>
-      )}
+      <span className="text-[15px] font-semibold">{title}</span>
+      <span className="text-[13px] leading-relaxed text-[color:var(--de-ink-2)]">{body}</span>
+      <span className="mt-auto pt-2 text-[13px] font-medium text-[color:var(--de-input)]">{cta}</span>
     </>
   );
-  const frame: React.CSSProperties = {
-    background: active ? '#fff' : 'transparent',
-    border: active ? '1px solid #111' : disabled ? '1px dashed rgba(17,17,17,0.15)' : '1px solid rgba(17,17,17,0.15)',
-    cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.75 : 1,
-  };
+  const frame = 'text-left p-5 flex flex-col gap-1.5 rounded-[var(--de-r)] bg-[var(--de-surface)] border border-[color:var(--de-rule)] hover:border-[color:var(--de-rule-strong)] transition-colors cursor-pointer';
   if (onFile) {
     return (
-      <label className="text-left p-4 flex flex-col gap-2 transition-colors" style={frame}>
-        <input type="file" accept={fileAccept} className="hidden"
+      <label className={frame}>
+        <input type="file" accept={fileAccept} className="sr-only"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
         {inner}
       </label>
     );
   }
-  return (
-    <button type="button" onClick={action} disabled={disabled || !action}
-      className="text-left p-4 flex flex-col gap-2 transition-colors" style={frame}>
-      {inner}
-    </button>
-  );
+  return <button type="button" onClick={action} className={frame}>{inner}</button>;
 };
 
 const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
@@ -77,7 +56,6 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const isCalculating = useDealEngineStore((s) => s.isCalculating);
   const error = useDealEngineStore((s) => s.error);
 
-  const [filingsOpen, setFilingsOpen] = useState(true);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
   const loadFromHistoricals = useDealEngineStore((st) => st.loadFromHistoricals);
@@ -122,7 +100,7 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const submitUrl = () => {
     if (mode === 'sec') {
       const parsed = parseEdgarUrl(urlInput);
-      if (!parsed) { setSearchErr('Could not parse a CIK — paste an EDGAR URL, a 10-digit CIK, or a number.'); return; }
+      if (!parsed) { setSearchErr('Could not read a CIK from that. Paste an EDGAR link, a 10-digit CIK, or a number.'); return; }
       importFromEdgar(parsed.cik10);
     } else {
       const lei = urlInput.trim().toUpperCase();
@@ -135,130 +113,80 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
   const sourceLabel = isSec ? 'SEC EDGAR' : 'ESEF (filings.xbrl.org)';
 
   return (
-    <div className="flex items-center justify-center min-h-screen" style={{ background: paper }}>
-      <div className="relative z-10 w-full max-w-3xl mx-auto px-6 py-12">
-        <div className="mb-5">
-          <Link to="/" className="text-[10px] tracking-widest uppercase" style={{ ...labelStyle, textDecoration: 'none' }}>← mridulmalani.com</Link>
+    <div className="max-w-[60rem] mx-auto px-6 pt-14 pb-24">
+      <h1 className="de-display text-[44px] lg:text-[56px] leading-[1.05]">Source the target</h1>
+      <p className="text-[16px] text-[color:var(--de-ink-2)] mt-3 max-w-[56ch]">
+        Start from a listed company’s filed figures, or enter a private company’s numbers yourself. Either way the figures arrive with their source, and a gap stays a gap.
+      </p>
+
+      {/* The search is the page: a name in, filed financials out. */}
+      <div className="mt-9 p-6 rounded-[14px] bg-[var(--de-surface)] border border-[color:var(--de-rule)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <label htmlFor="de-company" className="text-[14px] font-semibold">{isSec ? 'Company name or ticker' : 'Company name (Europe)'}</label>
+          <Segmented ariaLabel="Filing source" value={mode} onChange={switchMode} options={[{ value: 'sec', label: 'US · SEC' }, { value: 'esef', label: 'Europe · ESEF' }]} />
         </div>
-        <div className="border-t-[3px] border-[#111] mb-6" />
-        <h1 className="font-playfair text-4xl lg:text-5xl font-bold mb-3" style={{ color: '#111' }}>Source the target</h1>
-        <p className="mb-7" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: 'Lora, serif', fontSize: 14, lineHeight: 1.8, maxWidth: 560 }}>
-          Most buyouts are of <em>private</em> companies — a founder sale, a sponsor-to-sponsor secondary, a
-          carve-out — underwritten from a CIM and dataroom, so manual entry is the realistic path. Listed
-          companies get bought too (take-privates; every bank runs an “LBO floor” on public names), and their
-          filings are free and structured — which also makes them the fastest way to try the engine.
-        </p>
-
-        {/* The three paths */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-          <PathCard
-            tag="private target · the realistic path"
-            title="Manual entry"
-            body="Type the numbers from a CIM, dataroom, or management accounts — multi-year history, every figure provenance-tagged as yours, gaps stay gaps."
-            action={onManual} actionLabel="enter the facts →"
+        <div className="relative">
+          <input
+            id="de-company" type="text" value={query} autoFocus autoComplete="off"
+            placeholder={isSec ? 'Apple, AAPL, Hasbro' : 'Vinci, SAP, Unilever'}
+            onChange={(e) => { setQuery(e.target.value); runSearch(e.target.value, mode); }}
+            className="de-control w-full !h-14 px-4 text-[18px] placeholder:text-[color:var(--de-ink-3)]"
           />
-          <PathCard
-            tag="take-private screen · fastest demo" tagColor="#CC0000"
-            title="Public filings"
-            body="Pull a listed company's actual financials from SEC EDGAR (US) or ESEF (EU/UK) — the workflow behind take-private screens, and the quickest full demo."
-            action={() => setFilingsOpen((o) => !o)} actionLabel={filingsOpen ? 'search below ↓' : 'open the search →'}
-            active={filingsOpen}
-          />
-          <PathCard
-            tag="annual ixbrl · parsed in your browser" tagColor="#CC0000"
-            title="Upload a filing"
-            body="Drop in an annual iXBRL filing — a 10-K/20-F from EDGAR, an ESEF package (.zip), or Companies House accounts (UK private companies file these). Parsed entirely in your browser: the file never leaves your machine. PDF CIMs are next."
-            fileAccept=".htm,.html,.xhtml,.zip" onFile={onUploadFile}
-            actionLabel={uploadBusy ? 'parsing…' : 'choose a file →'}
-          />
-        </div>
-
-        {uploadErr && (
-          <p className="mb-4 text-xs" style={{ color: '#b91c1c', fontFamily: mono, lineHeight: 1.6 }}>Upload: {uploadErr}</p>
-        )}
-
-        {filingsOpen && (
-        <div className="p-6 lg:p-8" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.1)' }}>
-          <div className="border-t-[2px] border-[#111] mb-5" />
-
-          {/* Source toggle */}
-          <div className="mb-4 flex" style={{ border: '1px solid rgba(17,17,17,0.15)', width: 'fit-content' }}>
-            {([['sec', 'US · SEC'], ['esef', 'Europe · ESEF']] as [Mode, string][]).map(([m, label]) => (
-              <button key={m} onClick={() => switchMode(m)}
-                className="px-3 py-1 text-[10px] tracking-widest uppercase transition-colors"
-                style={{ background: mode === m ? '#111' : 'transparent', color: mode === m ? '#fff' : 'rgba(17,17,17,0.45)', fontFamily: mono }}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Company autocomplete */}
-          <label className="block mb-1 text-[10px] tracking-widest uppercase" style={labelStyle}>{isSec ? 'Company name or ticker' : 'Company name (Europe)'}</label>
-          <div className="relative">
-            <input
-              type="text" value={query} autoFocus
-              placeholder={isSec ? 'e.g. Apple, AAPL, Microsoft…' : 'e.g. Vinci, SAP, Unilever…'}
-              onChange={(e) => { setQuery(e.target.value); runSearch(e.target.value, mode); }}
-              className="w-full px-3 py-2 text-sm" style={inputStyle}
-            />
-            {(matches.length > 0 || searching) && (
-              <div className="absolute left-0 right-0 z-20 mt-1 max-h-72 overflow-y-auto" style={{ background: '#fff', border: '1px solid rgba(17,17,17,0.15)' }}>
-                {searching && <div className="px-3 py-2 text-[11px]" style={labelStyle}>Searching {isSec ? 'EDGAR' : 'ESEF filers'}…</div>}
-                {matches.map((m) => (
-                  <button key={m.id} onClick={m.onPick}
-                    className="w-full text-left px-3 py-2 transition-colors hover:bg-[rgba(17,17,17,0.03)] flex items-center justify-between">
-                    <span className="text-[13px] truncate" style={{ color: '#111', fontFamily: 'Lora, serif' }}>{m.title}</span>
-                    <span className="text-[10px] ml-3 flex-shrink-0" style={{ color: '#CC0000', fontFamily: mono }}>{m.tag}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* URL / CIK / LEI */}
-          <div className="mt-5">
-            <label className="block mb-1 text-[10px] tracking-widest uppercase" style={labelStyle}>{isSec ? '…or paste an EDGAR URL / CIK' : '…or paste a 20-char LEI'}</label>
-            <div className="flex gap-2">
-              <input
-                type="text" value={urlInput}
-                placeholder={isSec ? 'https://www.sec.gov/…  or  0000320193' : '969500…  (search.gleif.org)'}
-                onChange={(e) => setUrlInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') submitUrl(); }}
-                className="flex-1 px-3 py-2 text-sm" style={inputStyle}
-              />
-              <button onClick={submitUrl} disabled={isCalculating || !urlInput.trim()}
-                className="px-4 py-2 text-[11px] tracking-widest uppercase"
-                style={{ background: urlInput.trim() ? '#111' : 'rgba(17,17,17,0.05)', color: urlInput.trim() ? '#fff' : 'rgba(17,17,17,0.3)', fontFamily: mono, border: 'none' }}>
-                Go
-              </button>
+          {(matches.length > 0 || searching) && (
+            <div className="de-pop absolute left-0 right-0 z-20 mt-1.5 max-h-80 overflow-y-auto p-1.5 bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] shadow-[var(--de-shadow-pop)]">
+              {searching && <div className="px-3 py-2 text-[13px] text-[color:var(--de-ink-3)]">Searching {isSec ? 'EDGAR' : 'ESEF filers'}</div>}
+              {matches.map((m) => (
+                <button key={m.id} onClick={m.onPick}
+                  className="w-full text-left px-3 h-11 rounded-[var(--de-r-sm)] hover:bg-[var(--de-sunken)] flex items-center justify-between gap-3">
+                  <span className="text-[15px] truncate">{m.title}</span>
+                  <span className="de-num text-[12px] text-[color:var(--de-ink-3)] shrink-0">{m.tag}</span>
+                </button>
+              ))}
             </div>
-          </div>
-
-          {(error || searchErr) && <p className="text-xs mt-4" style={{ color: '#b91c1c', fontFamily: mono, lineHeight: 1.6 }}>{error || searchErr}</p>}
-          {isCalculating && <p className="text-xs mt-4" style={{ color: 'rgba(17,17,17,0.5)', fontFamily: mono }}>Fetching filings from {sourceLabel}…</p>}
-
-          <p className="mt-5 text-[10px]" style={{ color: 'rgba(17,17,17,0.3)', fontFamily: mono, lineHeight: 1.7 }}>
-            Here the listed-company pull doubles as the demo path: filings are free and structured, so you see the
-            whole engine on real numbers in seconds. {isSec
-              ? 'US issuers file with the SEC. Foreign private issuers (20-F) may have sparse XBRL — gaps are surfaced for you to fill.'
-              : 'EU/UK-listed issuers file ESEF (IFRS). D&A, debt and working-capital coverage is often sparser than US filings — gaps are surfaced for you to fill.'}
-          </p>
+          )}
         </div>
-        )}
 
-        {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is
-            deleted — tag pre-deletion-lib-engine). Selecting one surfaces the honest
-            retirement notice + the re-import path. */}
-        <label className="block mt-4 text-[10px] tracking-widest uppercase text-center cursor-pointer"
-          style={{ color: 'rgba(17,17,17,0.35)', fontFamily: mono }}>
-          <input type="file" accept=".json" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadModel(f); e.target.value = ''; }} />
-          open a saved model (.json — previous engine)
-        </label>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <label htmlFor="de-ref" className="text-[13px] text-[color:var(--de-ink-2)]">{isSec ? 'or paste an EDGAR link or CIK' : 'or paste a 20-character LEI'}</label>
+          <input
+            id="de-ref" type="text" value={urlInput}
+            placeholder={isSec ? 'https://www.sec.gov/…  or  0000320193' : '969500…'}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitUrl(); }}
+            className="de-control flex-1 min-w-[14rem] px-3 text-[13px]"
+          />
+          <Button size="sm" variant="primary" onClick={submitUrl} disabled={isCalculating || !urlInput.trim()}>Fetch</Button>
+        </div>
 
-        {/* Optional AI key — reused by AI-suggest on the next screen */}
-        <ApiKeyInline />
+        {(error || searchErr) && <p className="text-[13px] mt-3 text-[color:var(--de-accent)]">{error || searchErr}</p>}
+        {isCalculating && <p className="text-[13px] mt-3 text-[color:var(--de-ink-2)]">Fetching filings from {sourceLabel}</p>}
+        <p className="mt-4 text-[12px] leading-relaxed text-[color:var(--de-ink-3)] max-w-[72ch]">
+          {isSec
+            ? 'US issuers file with the SEC. Foreign private issuers (20-F) may have sparse data; gaps are shown for you to fill.'
+            : 'EU and UK listed issuers file ESEF reports under IFRS. D&A, debt and working capital are often sparser than in US filings; gaps are shown for you to fill.'}
+        </p>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <PathTile title="Manual entry" cta="Enter the facts"
+          body="A private company, from a CIM, a dataroom or management accounts. Every figure is tagged as yours."
+          action={onManual} />
+        <PathTile title="Upload a filing" cta={uploadBusy ? 'Reading the file' : 'Choose a file'}
+          body="An annual iXBRL filing: a 10-K or 20-F, an ESEF package, or UK Companies House accounts. Read in your browser; the file never leaves your machine."
+          fileAccept=".htm,.html,.xhtml,.zip" onFile={onUploadFile} />
+        <PathTile title="Deal library" cta="Open the library"
+          body="Deals you saved in this browser, and deal files sent to you by a colleague."
+          action={() => dealUiStore.getState().setOverlay('library')} />
+      </div>
+      {uploadErr && <p className="mt-3 text-[13px] text-[color:var(--de-accent)]">Upload: {uploadErr}</p>}
+
+      {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is deleted).
+          Selecting one surfaces the honest retirement notice and the re-import path. */}
+      <label className="inline-block mt-6 text-[12px] text-[color:var(--de-ink-3)] underline underline-offset-2 decoration-dotted cursor-pointer hover:text-[color:var(--de-ink)]">
+        <input type="file" accept=".json" className="sr-only"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadModel(f); e.target.value = ''; }} />
+        open a saved model from the previous engine (.json)
+      </label>
     </div>
   );
 };

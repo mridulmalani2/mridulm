@@ -190,11 +190,11 @@ def parse_file(data, filename, out):
                 if fmt is not None:
                     fpfx, floc = fmt.split(":", 1)
                     if (nsmap.get(fpfx, ""), floc) not in DATE_TRANSFORMS:
-                        out["notes"].append(f"unsupported date transform {fmt} on {cname} — identity read skipped")
+                        out["notes"].append(f"unsupported date transform {fmt} on {cname}, identity read skipped")
                         continue
                 d = parse_date(None, raw)
                 if d is None:
-                    out["notes"].append(f"unreadable date on {cname} — identity read skipped")
+                    out["notes"].append(f"unreadable date on {cname}, identity read skipped")
                 else:
                     out["identity"][IDENTITY_DATES[cname]] = d
             continue
@@ -203,7 +203,7 @@ def parse_file(data, filename, out):
         ctx = contexts.get(el.attrib.get("contextRef"))
         unit = units.get(el.attrib.get("unitRef"))
         if ctx is None or unit is None:
-            out["notes"].append(f"unresolved contextRef/unitRef on {cname} — fact dropped")
+            out["notes"].append(f"unresolved contextRef/unitRef on {cname}, fact dropped")
             continue
         fmt = el.attrib.get("format")
         if fmt is None:
@@ -212,13 +212,13 @@ def parse_file(data, filename, out):
             fpfx, floc = fmt.split(":", 1)
             key = (nsmap.get(fpfx, ""), floc)
             if key not in NUMERIC_TRANSFORMS:
-                out["notes"].append(f"unsupported transform {fmt} on {cname} — fact dropped")
+                out["notes"].append(f"unsupported transform {fmt} on {cname}, fact dropped")
                 continue
             tkind = NUMERIC_TRANSFORMS[key]
         raw = text_minus_exclude(el)
         n = parse_number(tkind, raw)
         if n is None:
-            out["notes"].append(f"untransformable text on {cname} — fact dropped")
+            out["notes"].append(f"untransformable text on {cname}, fact dropped")
             continue
         if el.attrib.get("sign") == "-":
             n = -n
@@ -249,7 +249,7 @@ def dedupe(out):
         if len(rounded) > 1:
             vals = sorted({x["value"] for x in g})
             out["notes"].append(
-                f"inconsistent duplicate {concept} @ {period}: {vals[0]} vs {vals[-1]} — dropped to gap")
+                f"inconsistent duplicate {concept} @ {period}: {vals[0]} vs {vals[-1]}, dropped to gap")
             continue
         best = sorted(g, key=lambda x: (-(x["decimals"] if x["decimals"] is not None else 10 ** 9), x["file"]))[0]
         if len({x["value"] for x in g}) > 1:
@@ -266,7 +266,7 @@ def dedupe(out):
 def finish(out):
     dedupe(out)
     if len(out.get("entities", set())) > 1:
-        out["notes"].append("multiple entity identifiers in one upload — out of scope; facts merged per §1a note")
+        out["notes"].append("multiple entity identifiers in one upload, out of scope; facts merged per §1a note")
     out.pop("entities", None)
     free = [f for f in out["facts"] if not f["dims"]]
     ug = {f["concept"] for f in free if f["concept"].startswith("us-gaap:")}

@@ -7,7 +7,7 @@
   "value": 250.0
  },
  "notes": [],
- "refusal_reason": "prior-YTD single vintage \u2014 restatement check un-evaluable (fail-closed)",
+ "refusal_reason": "prior-YTD single vintage: restatement check un-evaluable (fail-closed)",
  "revenue": {
   "as_of": "2024-12-31",
   "basis": "fy",

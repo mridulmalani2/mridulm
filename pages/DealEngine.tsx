@@ -11,6 +11,8 @@ import CleanScreen from '../components/deal-engine/clean/CleanScreen';
 import ResultsScreen from '../components/deal-engine/results/ResultsScreen';
 import { blockers } from '../lib/cleaning/checks';
 import { startSessionPersistence } from '../store/session';
+import { startWorkspacePersistence, workspaceStore } from '../store/workspace';
+import { dealUiStore } from '../store/dealUi';
 import type { StepItem } from '../components/deal-engine/ui/kit';
 
 /**
@@ -43,7 +45,7 @@ export function resolveStep(requested: Step | null, s: FlowState): Step {
 
 const DealEngine: React.FC = () => {
   // a deal in progress is kept in this browser and comes back after a reload (store/session)
-  if (typeof window !== 'undefined' && !import.meta.env.VITEST) startSessionPersistence();
+  if (typeof window !== 'undefined' && !import.meta.env.VITEST) { startSessionPersistence(); startWorkspacePersistence(); }
   const location = useLocation();
   const navigate = useNavigate();
   const facts = useEngine2Model((s) => s.facts);
@@ -86,10 +88,20 @@ const DealEngine: React.FC = () => {
     if (sourced && sourced !== lastSourced.current) { setManualEntry(false); navigate(stepPath('clean')); }
     lastSourced.current = sourced;
   }, [sourced, navigate]);
-  const hadOutput = useRef(output !== null);
+  // a case entered directly (no sourced figures) has nothing to clean: it lands on Assumptions
+  const hadFacts = useRef(facts !== null);
   useEffect(() => {
-    if (output && !hadOutput.current && step === 'assumptions') navigate(stepPath('results'));
-    hadOutput.current = output !== null;
+    if (facts && !hadFacts.current && sourced === null) { setManualEntry(false); navigate(stepPath('assumptions')); }
+    hadFacts.current = facts !== null;
+  }, [facts, sourced, navigate]);
+  // every build produces a new output object, so a rebuild with unchanged inputs still opens Results
+  const lastOutput = useRef(output);
+  useEffect(() => {
+    if (output && output !== lastOutput.current) {
+      workspaceStore.getState().recordVersion(); // every build is kept, so a later one can be compared with it
+      if (step === 'assumptions') { dealUiStore.getState().setResultsView('overview'); navigate(stepPath('results')); }
+    }
+    lastOutput.current = output;
   }, [output, step, navigate]);
 
   const openClean = blockers(cleanFlags).length;
@@ -102,27 +114,31 @@ const DealEngine: React.FC = () => {
   const noteOf = (s: Step): string | undefined => {
     if (stateOf(s) !== 'locked') return undefined;
     if (!state.hasFacts) return 'Source a company first.';
-    if (!state.cleanDone) return openClean ? `Finish the Clean step first — ${openClean} item${openClean === 1 ? '' : 's'} open.` : 'Finish the Clean step first.';
-    return missingFacts.length ? 'Build the model first — some inputs are still blank.' : 'Build the model first.';
+    if (!state.cleanDone) return openClean ? `Finish the Clean step first: ${openClean} item${openClean === 1 ? '' : 's'} open.` : 'Finish the Clean step first.';
+    return missingFacts.length ? 'Build the model first. Some inputs are still blank.' : 'Build the model first.';
   };
   const steps: StepItem[] = STEPS.map((s) => ({ id: s, label: STEP_LABEL[s], state: stateOf(s), note: noteOf(s) }));
-  const newDeal = () => { resetModel(); resetCleaning(); setManualEntry(false); navigate(stepPath('source')); };
+  const newDeal = () => {
+    // the deal on screen is kept in the library before it is cleared: starting another never loses work
+    workspaceStore.getState().saveToLibrary();
+    resetModel(); resetCleaning(); workspaceStore.getState().resetDeal(); setManualEntry(false); navigate(stepPath('source'));
+  };
 
   return (
-    <DealShell steps={steps} onGo={(id) => navigate(stepPath(id as Step))} entity={facts?.entity_name ?? null} currency={facts ? facts.currency : null} onNewDeal={newDeal}>
+    <DealShell steps={steps} step={step} onGo={(id) => navigate(stepPath(id as Step))} entity={facts?.entity_name ?? null} currency={facts ? facts.currency : null} onNewDeal={newDeal}>
       {step === 'source' && (
         <div>
           {legacySaveNotice && (
-            <div className="flex items-center justify-between px-6 py-2 bg-[var(--de-warn-soft)] border-b border-[color:var(--de-rule)]">
-              <p className="font-sans text-[13px] text-[color:var(--de-warn)]">
-                This .json was saved by the previous engine, which has been retired — re-import the company from source to rebuild it here.
+            <div className="flex items-center justify-between px-6 py-2.5 bg-[var(--de-warn-soft)]">
+              <p className="text-[13px] text-[color:var(--de-warn)]">
+                This file was saved by the previous engine, which has been retired. Source the company again to rebuild it here.
               </p>
-              <button onClick={dismissLegacySaveNotice} className="font-sans text-[12px] underline text-[color:var(--de-warn)] px-2">dismiss</button>
+              <button onClick={dismissLegacySaveNotice} className="text-[13px] underline text-[color:var(--de-warn)] px-2">Dismiss</button>
             </div>
           )}
           {facts && (
-            <p className="px-6 py-2 font-sans text-[13px] text-[color:var(--de-ink-2)] bg-[var(--de-sunken)] border-b border-[color:var(--de-rule)]">
-              {facts.entity_name} is loaded. Sourcing another company here replaces it and everything entered for it.
+            <p className="px-6 py-2.5 text-[13px] text-[color:var(--de-ink-2)] bg-[var(--de-sunken)]">
+              {facts.entity_name} is open. Sourcing another company here replaces it; save it to the deal library first if you want to keep it.
             </p>
           )}
           {manualEntry

@@ -20,7 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { compsBucket, sectorCompsFor } from '../lib/edgar/comps';
 
-describe('§21.11(x) — THE ORDERING PIN: most-specific-wins, not ascending scan', () => {
+describe('§21.11(x): THE ORDERING PIN: most-specific-wins, not ascending scan', () => {
   it('SIC 6798 (REITs) and 6512 bucket to Real Estate, NOT the 6000–6999 financial default', () => {
     // The round-2 sign-off found `inferSector` sending every EDGAR REIT to Financial Services
     // via /invest/ before /reit/ — a 2× wrong band on the canonical real-estate issuer code.
@@ -38,7 +38,7 @@ describe('§21.11(x) — THE ORDERING PIN: most-specific-wins, not ascending sca
   });
 });
 
-describe('§21.11(viii) — the three outcomes are DISTINGUISHABLE, not merely non-crashing', () => {
+describe('§21.11(viii): the three outcomes are DISTINGUISHABLE, not merely non-crashing', () => {
   it('a mapped code ⇒ a bucket (the sector basis)', () => {
     const b = sectorCompsFor({ currency: 'USD', sicCode: '7372' })!; // prepackaged software
     expect(b.bucket).toBe('Technology');
@@ -55,7 +55,7 @@ describe('§21.11(viii) — the three outcomes are DISTINGUISHABLE, not merely n
     expect([b.low, b.median, b.high]).toEqual([16.95, 16.95, 16.95]);
   });
 
-  it('NO code at all ⇒ null bucket ⇒ null band — "we know nothing" is NOT "we looked"', () => {
+  it('NO code at all ⇒ null bucket ⇒ null band: "we know nothing" is NOT "we looked"', () => {
     for (const absent of [null, undefined, '', '   ']) {
       expect(compsBucket(absent as string | null | undefined), String(absent)).toBeNull();
     }
@@ -70,7 +70,7 @@ describe('§21.11(viii) — the three outcomes are DISTINGUISHABLE, not merely n
   });
 });
 
-describe('§21.11(vi) — region selection across the five modelled currencies', () => {
+describe('§21.11(vi): region selection across the five modelled currencies', () => {
   it('USD→US, EUR→Europe, GBP→Europe, JPY→Japan, INR→India', () => {
     const region = (c: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'INR') =>
       sectorCompsFor({ currency: c, sicCode: '7372' })!.region;
@@ -90,7 +90,7 @@ describe('§21.11(vi) — region selection across the five modelled currencies',
   });
 });
 
-describe('§21.11 — the SIC table routes the cases the sign-off measured', () => {
+describe('§21.11: the SIC table routes the cases the sign-off measured', () => {
   it('the round-2/3 defect set all bucket correctly (each was a live misroute or fall-through)', () => {
     const cases: [string, string][] = [
       ['2911', 'Energy'],            // Petroleum Refining — fell through to 'Other' (16.95x) in r3
@@ -118,7 +118,7 @@ describe('§21.11 — the SIC table routes the cases the sign-off measured', () 
   });
 });
 
-describe('§21.11(iv) — the honest-null rule has a directed fixture (no live case exists)', () => {
+describe('§21.11(iv): the honest-null rule has a directed fixture (no live case exists)', () => {
   it('a bucket with no band in a region returns null, never a fallback to another bucket', () => {
     // Every vendored (region, bucket) pair currently HAS a band — both adjudication passes
     // confirmed no null exists in the committed set — so the rule is exercised here directly.
@@ -126,7 +126,7 @@ describe('§21.11(iv) — the honest-null rule has a directed fixture (no live c
   });
 });
 
-describe('audit hardening — the mutants that survived the first cut', () => {
+describe('audit hardening: the mutants that survived the first cut', () => {
   it('M-b: NO silent CROSS-REGION fallback (a bucket missing here must not borrow the US band)', () => {
     for (const c of ['USD', 'EUR', 'JPY', 'INR'] as const) {
       const b = sectorCompsFor({ currency: c, sicCode: '7372' })!;

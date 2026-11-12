@@ -23,7 +23,7 @@ const render = (golden: keyof typeof GOLDEN_DEALS) => {
   return { o, html: renderToStaticMarkup(React.createElement(Debt, { o, ccy: 'USD' as const })) };
 };
 
-describe('§20 PIK toggle display surface — Debt tab', () => {
+describe('§20 PIK toggle display surface: Debt tab', () => {
   it('G8-PIKT: every year carries its ELECTION marker, in schedule order, beside the elected leg', () => {
     const { o, html } = render('G8PIKT');
     // the marker set matches the committed schedule [pik,pik,cash,cash,pik] exactly
@@ -50,17 +50,17 @@ describe('§20 PIK toggle display surface — Debt tab', () => {
 
   it('G8-PIKT: the §20 convention footnote states the WHOLE-coupon rule and the scenario freeze', () => {
     const { html } = render('G8PIKT');
-    expect(html).toContain('PIK toggle (§20)');
+    expect(html).toContain('PIK toggle');
     expect(html).toContain('WHOLE coupon');
     expect(html).toContain('Never both legs in one year');
     expect(html).toContain('frozen across scenarios');
   });
 
-  it('G3 (FIXED note, elections null): NO election markers and NO §20 footnote — the fixed shape says nothing', () => {
+  it('G3 (FIXED note, elections null): NO election markers and NO §20 footnote; the fixed shape says nothing', () => {
     const { o, html } = render('G3');
     expect(html).not.toContain('· cash');
     expect(html).not.toContain('· PIK');
-    expect(html).not.toContain('PIK toggle (§20)');
+    expect(html).not.toContain('PIK toggle');
     // …while the note itself still runs BOTH legs, which is exactly why no marker is honest
     const noteIdx = o.assumptions.structure.tranches.filter((t) => t.type !== 'revolver').findIndex((t) => t.type === 'pik_note');
     expect(o.tranches[noteIdx][0].pik_accrual).toBeGreaterThan(0);
@@ -73,10 +73,10 @@ describe('§20 PIK toggle display surface — Debt tab', () => {
   });
 });
 
-describe('§20.8 — the PIK-toggle disclosure row is on the Methodology surface (SPEC §15)', () => {
+describe('§20.8: the PIK-toggle disclosure row is on the Methodology surface (SPEC §15)', () => {
   it('the Disclosures table carries the row with its load-bearing clauses (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('PIK toggle (§20)');
+    expect(html).toContain('PIK toggle');
     // the load-bearing clauses — a paraphrase drift reddens here
     expect(html).toContain('WHOLE-coupon election only');
     expect(html).toContain('frozen across scenarios');

@@ -138,5 +138,5 @@ export type ProvenanceMap = Record<string, Provenance>;
  */
 export const missingProv = (label: string): Provenance => ({
   source: 'missing',
-  detail: `${label}: not reported in the filing — enter to confirm`,
+  detail: `${label}: not reported in the filing; enter to confirm`,
 });

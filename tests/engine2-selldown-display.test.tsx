@@ -17,7 +17,7 @@ describe('§23 display surface', () => {
     const o = runModel(GOLDEN_DEALS.G11SELL.facts, GOLDEN_DEALS.G11SELL.assumptions);
     const s = o.selldown!;
     const html = renderToStaticMarkup(React.createElement(Selldown, { o, ccy: 'USD' as const }));
-    expect(html).toContain('Partial exit — secondary selldown');
+    expect(html).toContain('Partial exit: secondary selldown');
     expect(html).toContain('>Y3<');
     expect(html).toContain(pct(s.fraction));
     expect(html).toContain(money(s.implied_event_ev, 'USD'));
@@ -29,15 +29,15 @@ describe('§23 display surface', () => {
     expect(html).toContain('count toward DPI and payback');
     expect(html).toContain('balance sheet are');
   });
-  it('absent without an event — never a zero table', () => {
+  it('absent without an event, never a zero table', () => {
     const o = runModel(GOLDEN_DEALS.G2DIST.facts, GOLDEN_DEALS.G2DIST.assumptions);
     expect(renderToStaticMarkup(React.createElement(Selldown, { o, ccy: 'USD' as const }))).toBe('');
     expect(renderToStaticMarkup(React.createElement(Returns, { o, ccy: 'USD' as const }))).not.toContain('secondary selldown');
   });
   it('the Methodology tab carries the §23 and §3.8 disclosures', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Partial exits (§23)');
+    expect(html).toContain('Partial exits');
     expect(html).toContain('SECONDARY selldowns only');
-    expect(html).toContain('Surplus-cash distributions (§3.8)');
+    expect(html).toContain('Surplus-cash distributions');
   });
 });

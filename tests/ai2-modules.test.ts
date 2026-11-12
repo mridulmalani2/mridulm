@@ -15,7 +15,7 @@ import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 
 const { facts: g2facts, assumptions: g2a } = GOLDEN_DEALS.G2;
 
-describe('E4 — AI-suggest guardrails', () => {
+describe('E4: AI-suggest guardrails', () => {
   it('accepts whitelisted proposals with AI bases; an out-of-rail value is DROPPED with a note, never clamped (v2.0.0)', () => {
     const raw = JSON.stringify({ suggestions: [
       { path: 'exit.multiple', value: 8.0, basis: 'trading anchor sits below entry' },
@@ -70,7 +70,7 @@ describe('E4 — AI-suggest guardrails', () => {
   });
 });
 
-describe('E4 — redline + memo', () => {
+describe('E4: redline + memo', () => {
   it('parses strict-JSON challenges; degrades to a single raw-text item', () => {
     const items = parseRedline(JSON.stringify({ items: [{ path: 'exit.multiple', challenge: 'Why flat when the anchor is 15% lower?' }] }));
     expect(items).toEqual([{ path: 'exit.multiple', challenge: 'Why flat when the anchor is 15% lower?' }]);
@@ -92,7 +92,7 @@ describe('E4 — redline + memo', () => {
     expect(md).not.toContain('NTM');
   });
 
-  it('§11 memo NTM entry: the price line states NTM and adds the FY/LTM-canonical multiple (directed — NTM golden-uncovered)', () => {
+  it('§11 memo NTM entry: the price line states NTM and adds the FY/LTM-canonical multiple (directed; NTM golden-uncovered)', () => {
     const ntm = { ...g2a, entry: { ...g2a.entry, basis: 'ntm' as const } };
     const md = memoSkeleton(runModel(g2facts, ntm), 'USD');
     const price = md.slice(md.indexOf('## Purchase price'), md.indexOf('## Sources'));
@@ -103,7 +103,7 @@ describe('E4 — redline + memo', () => {
     expect(price).not.toMatch(/at \d[\d.]*x FY EBITDA/);
   });
 
-  it('§1.1 memo LTM sizing basis: an LTM-stitched deal labels the sizing EBITDA "LTM", never "FY" [audit fix — 4-surface mislabel]', () => {
+  it('§1.1 memo LTM sizing basis: an LTM-stitched deal labels the sizing EBITDA "LTM", never "FY" [audit fix, 4-surface mislabel]', () => {
     // the standalone memo deliverable travels WITHOUT the HistoryTable badge, so its basis label must be right
     const ltmFacts = { ...g2facts, fy_ebitda: 328, fy_revenue: 1320, fy_ebitda_margin: 328 / 1320, sizing_basis: 'LTM' as const };
     const md = memoSkeleton(runModel(ltmFacts, g2a), 'USD');
@@ -128,11 +128,11 @@ describe('E4 — redline + memo', () => {
     expect(credit).not.toMatch(/\bdo not present\b|\byou (must|should)\b|\bnote that\b/i);
     const caveats = md.slice(md.indexOf('## Caveats'));
     expect(caveats).toContain('Entry leverage is GROSS');
-    expect(caveats).toContain('SPEC §11');
+    expect(caveats).toContain('the quoted sizing basis');
   });
 });
 
-describe('E4 — goal-seek (pure, true inputs only)', () => {
+describe('E4: goal-seek (pure, true inputs only)', () => {
   const base = runModel(g2facts, g2a);
 
   it('solves entry multiple for a reachable target and verifies by re-run', () => {
@@ -151,7 +151,7 @@ describe('E4 — goal-seek (pure, true inputs only)', () => {
     expect(Math.abs(r.achieved_irr - target)).toBeLessThan(5e-5);
   });
 
-  it('an unreachable target returns null — N/A, never a clamped answer', () => {
+  it('an unreachable target returns null: N/A, never a clamped answer', () => {
     expect(solveForIrr(g2facts, g2a, 'exit_multiple', 5.0)).toBeNull(); // 500% IRR
   });
 

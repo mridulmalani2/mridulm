@@ -15,10 +15,12 @@ import type {
   CashPayTrancheAssumption, DealAssumptions, ForecastLines, FundOverlayAssumption, LineSpec,
   PikNoteAssumption, RefinancingEvent, RevolverAssumption, TrancheAssumption, TranchePricing,
 } from '../../../lib/engine2/types';
-import { ChoiceField, Label, labelStyle, mono, NumBox, NumField, Section, SmallButton, SuggestionChips, YearGrid, isSet } from './fields';
+import { ChoiceField, Derived, Line, NumBox, NumField, PlainChoice, Section, SectionCounts, SmallButton, SubHead, SuggestionChips, Toggle, YearGrid, isSet } from './fields';
+import { Segmented } from '../ui/kit';
+import { sectionOf } from './sections';
 import { entryGrossLeverageFromAssumptions } from '../../../lib/engine2/sourcesUses';
-import { allInRate } from '../../../lib/engine2/kernel/rates';
-import { multiple, toPctInput } from '../../../lib/format';
+import DebtTable from './DebtTable';
+import { multiple } from '../../../lib/format';
 import { sizingBasisLabel } from '../../../lib/engine2/display';
 
 const U = Number.NaN;
@@ -34,16 +36,20 @@ const AssumptionsPanel: React.FC = () => {
   const edit = useEngine2Model((s) => s.editAssumptions);
   const editWithChoices = useEngine2Model((s) => s.editWithChoices);
   const setHold = useEngine2Model((s) => s.setHoldYears);
+  // the Build gate, read here so each section can say how many inputs it still needs
+  const missing = useEngine2Model.getState().missing();
   if (!facts) return null;
 
   if (!a) {
     return (
-      <Section title="Start" note="The holding period sizes every per-year input, so it comes first.">
-        <div className="flex items-center justify-between gap-2">
-          <Label>Holding period</Label>
-          <NumBox value={null} unit="years" ariaLabel="Holding period" onCommit={(v) => setHold(v)} />
-        </div>
-      </Section>
+      <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] px-6">
+        <Section title="Start" note="The holding period sizes every per-year input, so it comes first.">
+          <Line label="Holding period">
+            <SuggestionChips path="entry.hold_years" render={(v) => `${String(v)} yrs`} />
+            <NumBox value={null} unit="years" ariaLabel="Holding period" onCommit={(v) => setHold(v)} />
+          </Line>
+        </Section>
+      </div>
     );
   }
 
@@ -60,7 +66,9 @@ const AssumptionsPanel: React.FC = () => {
     set({ ...a, operations: { ...a.operations, lines: allDriver ? null : next } }, [`operations.lines.${key}`]);
   };
   const spec = (mode: 'explicit' | 'grown'): LineSpec => (mode === 'explicit' ? { mode, values: blanks(N) } : { mode, year1: U, growth: blanks(N - 1) });
-  const LineValues: React.FC<{ k: LineKey; s: LineSpec; label: string }> = ({ k, s, label }) =>
+  // A plain render helper, NOT a component: a component declared inside this render gets a new
+  // identity on every store edit, which remounts its inputs and drops focus mid-entry.
+  const lineValues = (k: LineKey, s: LineSpec, label: string) =>
     s.mode === 'explicit' ? (
       <YearGrid path={`operations.lines.${k}.values`} label={`${label} by year`} unit="money" values={s.values} />
     ) : (
@@ -113,34 +121,6 @@ const AssumptionsPanel: React.FC = () => {
         <NumField path={`${base}.spread`} label={`${who}: spread`} unit="pct" value={p.spread} />
       </>
     );
-  const sizeFields = (base: string, size: { x_ebitda?: number; amount?: number }, who: string, what = "size") => {
-    const isX = size.x_ebitda !== undefined;
-    return (
-      <>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <Label>{who}: {what} basis</Label>
-          <select aria-label={`${who} ${what} basis`} value={isX ? 'x' : 'amt'} className="px-1 py-1 text-[13px]"
-            style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
-            onChange={(e) => set(at(base, e.target.value === 'x' ? { x_ebitda: U } : { amount: U }), [base])}>
-            <option value="amt">amount</option>
-            {hasLtm && <option value="x">× historical EBITDA</option>}
-          </select>
-        </div>
-        {isX
-          ? <NumField path={`${base}.x_ebitda`} label={`${who}: ${what} (× EBITDA)`} unit="mult" value={size.x_ebitda} />
-          : <NumField path={`${base}.amount`} label={`${who}: ${what} (amount)`} unit="money" value={size.amount} />}
-      </>
-    );
-  };
-
-  // ── feature toggles (each brings its fields in BLANK) ────────────────────────────────
-  const Toggle: React.FC<{ on: boolean; label: string; onOn: () => void; onOff: () => void; hint?: string }> = ({ on, label, onOn, onOff, hint }) => (
-    <label className="flex items-center justify-between gap-2 mb-2 cursor-pointer" title={hint}>
-      <Label>{label}</Label>
-      <input type="checkbox" aria-label={label} checked={on} onChange={(e) => (e.target.checked ? onOn() : onOff())} />
-    </label>
-  );
-
   const fund = a.fund;
   const v = a.valuation;
   // which §7 drivers the facts can support (§24.3 R1–R3) — an unsupported driver is never offered
@@ -148,10 +128,14 @@ const AssumptionsPanel: React.FC = () => {
   const marginDriverOk = facts.fy_ebitda_margin !== null && revenueAvailable;
   const nwcDriverOk = facts.fy_revenue !== null && revenueAvailable;
 
+  const counts: Record<string, number> = {};
+  for (const m of missing) counts[sectionOf(m.path)] = (counts[sectionOf(m.path)] ?? 0) + 1;
+
   return (
-    <div>
-      {/* ═══ 1. Transaction ═══ */}
-      <Section title="1 · Transaction">
+    <SectionCounts.Provider value={counts}>
+    <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] px-6">
+      {/* ═══ Transaction ═══ */}
+      <Section id="transaction" title="Transaction">
         <NumField path="entry.hold_years" label="Holding period" unit="years" value={N} onCommit={(x) => setHold(x)} />
         <ChoiceField path="entry.driver" label="Entry priced by" value={a.entry.driver}
           options={[{ value: 'multiple', label: 'multiple × EBITDA' }, { value: 'ev', label: 'purchase price (EV)' }]}
@@ -160,7 +144,7 @@ const AssumptionsPanel: React.FC = () => {
           ? <NumField path="entry.entry_multiple" label="Entry multiple" unit="mult" value={a.entry.entry_multiple} />
           : <NumField path="entry.enterprise_value" label="Purchase price (enterprise value)" unit="money" value={a.entry.enterprise_value} />}
         {facts.implied_trading_ev_ebitda !== null && (
-          <p className="text-[12px] mb-2 text-right" style={labelStyle}>
+          <p className="text-[12px] text-[color:var(--de-ink-3)] text-right pb-1">
             trades at ~{multiple(facts.implied_trading_ev_ebitda)} {sizingBasisLabel(facts.sizing_basis)} EBITDA (read-only anchor)
           </p>
         )}
@@ -176,61 +160,22 @@ const AssumptionsPanel: React.FC = () => {
         <NumField path="rollover_equity" label="Rollover equity (0 if none)" unit="money" value={a.rollover_equity} />
       </Section>
 
-      {/* ═══ 2. Debt ═══ */}
-      <Section title="2 · Debt" note="Add each tranche as the term sheet states it. Interest accrues on the opening balance; the sweep runs after mandatory amortization, by priority.">
+      {/* ═══ Debt ═══ */}
+      <Section id="debt" title="Debt" note="Each facility is a column, entered as the term sheet states it.">
         {pending.includes('structure.tranches') && (
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[12px]" style={{ ...labelStyle, color: '#CC0000' }}>add tranches, or confirm an all-equity deal</span>
-            <SmallButton onClick={() => editWithChoices({ ...a, structure: { ...a.structure, tranches: [] } }, ['structure.tranches'], [])}>no debt</SmallButton>
-          </div>
+          <Line path="structure.tranches" label={<span className="text-[color:var(--de-accent)]">Add facilities, or confirm the deal has no debt</span>}>
+            <SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} />
+            <SmallButton onClick={() => editWithChoices({ ...a, structure: { ...a.structure, tranches: [] } }, ['structure.tranches'], [])}>No debt</SmallButton>
+          </Line>
         )}
-        <SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} />
-        {tranches.map((t, i) => {
-          const base = `structure.tranches.${i}`;
-          return (
-            <div key={i} className="mb-3 p-2" style={{ border: '1px solid rgba(17,17,17,0.08)' }}>
-              <div className="flex items-center justify-between mb-2">
-                <input aria-label={`tranche ${i + 1} name`} value={t.name} className="text-[13px] px-1 py-0.5" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.12)' }}
-                  onChange={(e) => set(at(`${base}.name`, e.target.value), [`${base}.name`])} />
-                <span className="flex gap-1 items-center">
-                  <span className="text-[12px]" style={labelStyle}>{t.type.replace('_', ' ')}</span>
-                  <SmallButton danger onClick={() => removeTranche(i)}>remove</SmallButton>
-                </span>
-              </div>
-              {t.type === 'revolver' ? (
-                <>
-                  {sizeFields(`${base}.commitment`, t.commitment, t.name, 'commitment')}
-                  {pricingFields(`${base}.pricing`, t.pricing, t.name)}
-                  <NumField path={`${base}.commitment_fee`} label={`${t.name}: commitment fee (undrawn)`} unit="pct" value={t.commitment_fee} />
-                  <NumField path={`${base}.maturity_years`} label={`${t.name}: maturity`} unit="years" value={t.maturity_years} />
-                </>
-              ) : (
-                <>
-                  {t.type !== 'pik_note' && (
-                    <ChoiceField path={`${base}.type`} label={`${t.name}: ranking`} value={t.type}
-                      options={[{ value: 'senior', label: 'senior' }, { value: 'unitranche', label: 'unitranche' }, { value: 'mezzanine', label: 'mezzanine' }]} />
-                  )}
-                  {sizeFields(`${base}.size`, t.size, t.name)}
-                  {t.type === 'pik_note' ? (
-                    <>
-                      <NumField path={`${base}.cash_coupon`} label={`${t.name}: cash coupon`} unit="pct" value={t.cash_coupon} />
-                      <NumField path={`${base}.pik_coupon`} label={`${t.name}: PIK coupon`} unit="pct" value={t.pik_coupon} />
-                    </>
-                  ) : pricingFields(`${base}.pricing`, t.pricing, t.name)}
-                  <NumField path={`${base}.amort_pct_of_face`} label={`${t.name}: mandatory amortization (% face / yr)`} unit="pct" value={t.amort_pct_of_face} />
-                  <NumField path={`${base}.oid_pct`} label={`${t.name}: OID (% of par)`} unit="pct" value={t.oid_pct} />
-                  <NumField path={`${base}.maturity_years`} label={`${t.name}: maturity (must exceed the hold)`} unit="years" value={t.maturity_years} />
-                  <ChoiceField path={`${base}.sweep.participates`} label={`${t.name}: takes the cash sweep?`} value={t.sweep.participates}
-                    options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
-                  {t.sweep.participates && <NumField path={`${base}.sweep.priority`} label={`${t.name}: sweep priority (1 = first)`} unit="ratio" value={t.sweep.priority} />}
-                </>
-              )}
-            </div>
-          );
-        })}
-        <div className="flex flex-wrap gap-1 justify-end mb-2">
-          <SmallButton onClick={() => addTranche(newTerm('senior', true))}>+ floating term loan</SmallButton>
-          <SmallButton onClick={() => addTranche(newTerm('senior', false))}>+ fixed-rate debt</SmallButton>
+        {/* once facilities exist the template is no longer offered: accepting it again would replace them */}
+        {!pending.includes('structure.tranches') && tranches.length === 0 && <div className="flex justify-end"><SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} /></div>}
+        {tranches.length > 0 && (
+          <DebtTable tranches={tranches} hasLtm={hasLtm} pending={pending} onSet={(path, value) => set(at(path, value), [path])} onRemove={removeTranche} />
+        )}
+        <div className="flex flex-wrap gap-2 mt-3 mb-2">
+          <SmallButton onClick={() => addTranche(newTerm('senior', true))}>+ Floating term loan</SmallButton>
+          <SmallButton onClick={() => addTranche(newTerm('senior', false))}>+ Fixed-rate debt</SmallButton>
           <SmallButton onClick={() => addTranche({
             name: `PIK note ${termCount + 1}`, type: 'pik_note', size: { amount: U }, cash_coupon: U, pik_coupon: U,
             amort_pct_of_face: U, maturity_years: U, oid_pct: U, sweep: { participates: false, priority: U }, elections: null,
@@ -238,21 +183,16 @@ const AssumptionsPanel: React.FC = () => {
           {!hasRevolver && <SmallButton onClick={() => addTranche({
             name: 'Revolver', type: 'revolver', commitment: { amount: U }, pricing: { kind: 'floating', base_rate: U, spread: U, floor: U },
             commitment_fee: U, maturity_years: U, drawn_at_close: 0,
-          } as RevolverAssumption)}>+ revolver</SmallButton>}
+          } as RevolverAssumption)}>+ Revolver</SmallButton>}
         </div>
         {termCount > 0 && (() => {
           const grid = a.structure.sweep.grid;
           return (
             <>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <Label hint="Excess-cash sweeps commonly step down as leverage falls (e.g. 75% above 4.5×, 50% above 3.5×, 0% below).">Cash sweep</Label>
-                <select aria-label="Cash sweep basis" className="px-1 py-1 text-[13px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
-                  value={grid ? 'grid' : 'flat'}
-                  onChange={(e) => set(at('structure.sweep.grid', e.target.value === 'grid' ? { tiers: [{ above_net_leverage: U, pct: U }], else_pct: U } : null), ['structure.sweep.grid'])}>
-                  <option value="flat">one % every year</option>
-                  <option value="grid">steps down with opening net leverage</option>
-                </select>
-              </div>
+              <PlainChoice label="Cash sweep" ariaLabel="Cash sweep basis" value={grid ? 'grid' : 'flat'}
+                hint="Excess-cash sweeps commonly step down as leverage falls (for example 75% above 4.5x, 50% above 3.5x, nil below)."
+                options={[{ value: 'flat', label: 'one % every year' }, { value: 'grid', label: 'steps down with opening net leverage' }]}
+                onChange={(v) => set(at('structure.sweep.grid', v === 'grid' ? { tiers: [{ above_net_leverage: U, pct: U }], else_pct: U } : null), ['structure.sweep.grid'])} />
               {!grid && <NumField path="structure.sweep.base_pct" label="Cash sweep (% of cash above the minimum)" unit="pct" value={a.structure.sweep.base_pct} />}
               {grid && (
                 <>
@@ -263,9 +203,9 @@ const AssumptionsPanel: React.FC = () => {
                     </div>
                   ))}
                   <NumField path="structure.sweep.grid.else_pct" label="Sweep % below every threshold" unit="pct" value={grid.else_pct} />
-                  <div className="flex justify-end gap-1 mb-2">
-                    <SmallButton onClick={() => set(at('structure.sweep.grid.tiers', [...grid.tiers, { above_net_leverage: U, pct: U }]), ['structure.sweep.grid.tiers'])}>+ step</SmallButton>
-                    {grid.tiers.length > 1 && <SmallButton danger onClick={() => set(at('structure.sweep.grid.tiers', grid.tiers.slice(0, -1)), ['structure.sweep.grid.tiers'])}>− step</SmallButton>}
+                  <div className="flex justify-end gap-2 my-1">
+                    <SmallButton onClick={() => set(at('structure.sweep.grid.tiers', [...grid.tiers, { above_net_leverage: U, pct: U }]), ['structure.sweep.grid.tiers'])}>+ Step</SmallButton>
+                    {grid.tiers.length > 1 && <SmallButton danger onClick={() => set(at('structure.sweep.grid.tiers', grid.tiers.slice(0, -1)), ['structure.sweep.grid.tiers'])}>Remove step</SmallButton>}
                   </div>
                 </>
               )}
@@ -273,37 +213,23 @@ const AssumptionsPanel: React.FC = () => {
           );
         })()}
         {(() => {
-          // §11 previews through the SAME pure helpers the engine uses (never re-derived here):
-          // GROSS total leverage across ALL term tranches, and each floating tranche's all-in rate.
+          // §11 preview through the SAME pure helper the engine uses (never re-derived here):
+          // GROSS total leverage across ALL term tranches.
           const terms = tranches.filter((t): t is CashPayTrancheAssumption | PikNoteAssumption => t.type !== 'revolver');
           const sizesSet = terms.every((t) => isSet(t.size.x_ebitda ?? t.size.amount));
           const lev = hasLtm && terms.length > 0 && sizesSet ? entryGrossLeverageFromAssumptions(facts, a) : null;
-          return (
-            <>
-              {lev !== null && (
-                <p className="text-[12px] mb-1 text-right" style={labelStyle}>
-                  Total leverage (gross, x {sizingBasisLabel(facts.sizing_basis)} EBITDA): {multiple(lev)}
-                </p>
-              )}
-              {terms.map((t, i) => {
-                if (t.type === 'pik_note' || t.pricing.kind !== 'floating') return null;
-                const p = t.pricing;
-                if (!isSet(p.base_rate) || !isSet(p.floor) || !isSet(p.spread)) return null;
-                return <p key={i} className="text-[12px] mb-1 text-right" style={labelStyle}>{t.name}: all-in rate {toPctInput(allInRate(p))}%</p>;
-              })}
-            </>
-          );
+          return lev !== null ? <Derived label={`Total leverage (gross, x ${sizingBasisLabel(facts.sizing_basis)} EBITDA)`} value={multiple(lev)} /> : null;
         })()}
       </Section>
 
-      {/* ═══ 3. Operating forecast ═══ */}
-      <Section title="3 · Operating forecast" note="Each line is a driver, or entered exactly as the case states it (by year, or a year-1 amount plus growth).">
+      {/* ═══ Operating forecast ═══ */}
+      <Section id="operating" title="Operating forecast" note="Each line is driven from history, or entered exactly as the case states it.">
         {/* Revenue */}
         <LineMode label="Revenue" value={lines?.revenue ? lines.revenue.mode : 'driver'}
           options={[...(facts.fy_revenue !== null ? [{ value: 'driver', label: 'grow historical revenue' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }, { value: 'not_modelled', label: 'not modelled' }]}
           onChoose={(m) => setLine('revenue', m === 'driver' ? null : m === 'not_modelled' ? { mode: 'not_modelled' } : spec(m as 'explicit' | 'grown'))} />
         {!lines?.revenue && facts.fy_revenue !== null && <YearGrid path="operations.growth" label="Revenue growth" unit="pct" values={a.operations.growth} />}
-        {lines?.revenue && lines.revenue.mode !== 'not_modelled' && <LineValues k="revenue" s={lines.revenue} label="Revenue" />}
+        {lines?.revenue && lines.revenue.mode !== 'not_modelled' && lineValues('revenue', lines.revenue, 'Revenue')}
 
         {/* EBITDA */}
         <LineMode label="EBITDA" value={lines?.ebitda ? `${lines.ebitda.measure}_${lines.ebitda.mode}` : 'driver'}
@@ -322,13 +248,13 @@ const AssumptionsPanel: React.FC = () => {
               options={[{ value: 'linear', label: 'linear' }, { value: 'front_loaded', label: 'front-loaded (√t)' }, { value: 'back_loaded', label: 'back-loaded (t²)' }]} />
           </>
         )}
-        {lines?.ebitda && <LineValues k="ebitda" s={lines.ebitda} label={lines.ebitda.measure === 'ebit' ? 'EBIT' : 'EBITDA'} />}
+        {lines?.ebitda && lineValues('ebitda', lines.ebitda, lines.ebitda.measure === 'ebit' ? 'EBIT' : 'EBITDA')}
 
         {/* D&A */}
         <LineMode label="D&A" value={lines?.da ? lines.da.mode : 'driver'}
           options={[...(revenueAvailable ? [{ value: 'driver', label: '% of revenue' }] : []), { value: 'explicit', label: 'by year' }, { value: 'grown', label: 'year 1 + growth' }]}
           onChoose={(m) => setLine('da', m === 'driver' ? null : spec(m as 'explicit' | 'grown'))} />
-        {!lines?.da ? revenueAvailable && <NumField path="operations.da_pct_revenue" label="D&A (% of revenue)" unit="pct" value={a.operations.da_pct_revenue} /> : <LineValues k="da" s={lines.da} label="D&A" />}
+        {!lines?.da ? revenueAvailable && <NumField path="operations.da_pct_revenue" label="D&A (% of revenue)" unit="pct" value={a.operations.da_pct_revenue} /> : lineValues('da', lines.da, 'D&A')}
 
         {/* Capex */}
         <LineMode label="Capex" value={lines?.capex ? lines.capex.mode : 'driver'}
@@ -341,7 +267,7 @@ const AssumptionsPanel: React.FC = () => {
           </>
         )}
         {lines?.capex && lines.capex.mode === 'pct_of_da' && <NumField path="operations.lines.capex.pct" label="Capex ÷ D&A (1.00 = equals depreciation)" unit="ratio" value={lines.capex.pct} />}
-        {lines?.capex && lines.capex.mode !== 'pct_of_da' && <LineValues k="capex" s={lines.capex} label="Capex" />}
+        {lines?.capex && lines.capex.mode !== 'pct_of_da' && lineValues('capex', lines.capex, 'Capex')}
 
         {/* NWC */}
         <LineMode label="Working capital" value={lines?.delta_nwc ? lines.delta_nwc.mode : 'driver'}
@@ -352,7 +278,7 @@ const AssumptionsPanel: React.FC = () => {
             <ChoiceField path="operations.nwc.method" label="NWC method" value={a.operations.nwc.method}
               options={[{ value: 'pct', label: '% of revenue' }, { value: 'days', label: 'days (DSO / DIO / DPO)' }]}
               onChoose={(mth) => set({ ...a, operations: { ...a.operations, nwc: mth === 'pct' ? { method: 'pct', pct_revenue: U } : { method: 'days', dso: U, dio: U, dpo: U } } }, ['operations.nwc.method', 'operations.nwc'])} />
-            <SuggestionChips path="operations.nwc" render={(x) => ((x as { method: string }).method === 'days' ? 'filing days' : 'filing % of revenue')} />
+            {(pending.includes('operations.nwc.method') || (a.operations.nwc.method === 'pct' ? !isSet(a.operations.nwc.pct_revenue) : !(isSet(a.operations.nwc.dso) && isSet(a.operations.nwc.dio) && isSet(a.operations.nwc.dpo)))) && <SuggestionChips path="operations.nwc" render={(x) => ((x as { method: string }).method === 'days' ? 'filing days' : 'filing % of revenue')} />}
             {a.operations.nwc.method === 'pct'
               ? <NumField path="operations.nwc.pct_revenue" label="Operating NWC (% of revenue)" unit="pct" value={a.operations.nwc.pct_revenue} />
               : <>
@@ -362,7 +288,7 @@ const AssumptionsPanel: React.FC = () => {
                 </>}
           </>
         )}
-        {lines?.delta_nwc && <LineValues k="delta_nwc" s={lines.delta_nwc} label="Increase in NWC" />}
+        {lines?.delta_nwc && lineValues('delta_nwc', lines.delta_nwc, 'Increase in NWC')}
 
         {lines && (
           <NumField path="operations.lines.year_n_plus_1_growth" label="Growth into year N+1 (NTM exit, terminal value)" unit="pct"
@@ -371,13 +297,20 @@ const AssumptionsPanel: React.FC = () => {
       </Section>
 
       {/* ═══ 4. Tax ═══ */}
-      <Section title="4 · Tax">
+      <Section id="tax" title="Tax">
         <NumField path="tax.rate" label="Tax rate" unit="pct" value={a.tax.rate} />
-        <ChoiceField path="tax.interest_deductible" label="Interest tax-deductible?" value={a.tax.interest_deductible} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
+        <ChoiceField path="tax.interest_deductible" label="Interest tax-deductible?" value={a.tax.interest_deductible} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]}
+          onChoose={(d) => (d
+            ? set(at('tax.interest_deductible', true), ['tax.interest_deductible'])
+            // not deductible ⇒ the cap question is moot: clear it, and ask again if this is switched back
+            : editWithChoices({ ...a, tax: { ...a.tax, interest_deductible: false, s163j: { applies: false, ati_basis: 'ebitda', ati_pct: U } } },
+              ['tax.interest_deductible'], ['tax.s163j.applies'], ['tax.s163j']))} />
         {a.tax.interest_deductible && (
-          <ChoiceField path="tax.s163j.applies" label="Interest-deduction cap (e.g. US §163(j))?" value={a.tax.s163j.applies} options={[{ value: true, label: 'applies' }, { value: false, label: 'does not apply' }]} />
+          <ChoiceField path="tax.s163j.applies" label="Interest-deduction cap (e.g. US §163(j))?" value={a.tax.s163j.applies} options={[{ value: true, label: 'applies' }, { value: false, label: 'does not apply' }]}
+            // the ATI basis is the analyst's choice too: it stays open (gating Build) until made, never a silent EBITDA
+            onChoose={(ap) => editWithChoices(at('tax.s163j.applies', ap), ['tax.s163j.applies'], ap ? ['tax.s163j.ati_basis'] : [], ['tax.s163j.ati_basis'])} />
         )}
-        <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />
+        {a.tax.interest_deductible && (pending.includes('tax.s163j.applies') || (a.tax.s163j.applies && (!isSet(a.tax.s163j.ati_pct) || pending.includes('tax.s163j.ati_basis')))) && <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />}
         {a.tax.interest_deductible && a.tax.s163j.applies && (
           <>
             <NumField path="tax.s163j.ati_pct" label="Cap (% of adjusted taxable income)" unit="pct" value={a.tax.s163j.ati_pct} />
@@ -392,18 +325,14 @@ const AssumptionsPanel: React.FC = () => {
             {a.tax.nol.acquired_usable && (
               <>
                 <ChoiceField path="tax.nol.arose_pre_2018" label="Arose before 2018 (100% cap, not 80%)?" value={a.tax.nol.arose_pre_2018} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <Label>§382 annual limit</Label>
-                  <span className="flex items-center gap-1">
-                    <label className="text-[12px]" style={labelStyle}>
-                      <input type="checkbox" checked={a.tax.nol.s382_annual_limit === null}
-                        onChange={(e) => set(at('tax.nol.s382_annual_limit', e.target.checked ? null : U), ['tax.nol.s382_annual_limit'])} /> none
-                    </label>
-                    {a.tax.nol.s382_annual_limit !== null && (
-                      <NumBox value={a.tax.nol.s382_annual_limit} unit="money" ariaLabel="§382 annual limit" onCommit={(x) => set(at('tax.nol.s382_annual_limit', x), ['tax.nol.s382_annual_limit'])} />
-                    )}
-                  </span>
-                </div>
+                <Line path="tax.nol.s382_annual_limit" label="§382 annual limit">
+                  <Segmented ariaLabel="§382 annual limit" value={a.tax.nol.s382_annual_limit === null ? 'none' : 'limit'}
+                    options={[{ value: 'none', label: 'none' }, { value: 'limit', label: 'limited to' }]}
+                    onChange={(v) => set(at('tax.nol.s382_annual_limit', v === 'none' ? null : U), ['tax.nol.s382_annual_limit'])} />
+                  {a.tax.nol.s382_annual_limit !== null && (
+                    <NumBox value={a.tax.nol.s382_annual_limit} unit="money" ariaLabel="§382 annual limit" onCommit={(x) => set(at('tax.nol.s382_annual_limit', x), ['tax.nol.s382_annual_limit'])} />
+                  )}
+                </Line>
               </>
             )}
           </>
@@ -412,9 +341,9 @@ const AssumptionsPanel: React.FC = () => {
       </Section>
 
       {/* ═══ 5. Valuation (flow to equity) ═══ */}
-      <Section title="5 · Valuation — flow to equity" note="Values the equity by discounting its own cash flows at a cost of equity re-levered every year (CAPM), and reconciles it with the LBO IRR.">
+      <Section id="valuation" optional title="Valuation" note="Values the equity by discounting its own cash flows at a cost of equity re-levered every year, and reconciles it with the LBO return.">
         <Toggle on={v !== null} label="Value the equity (flow to equity)"
-          onOn={() => editWithChoices({ ...a, valuation: { risk_free: U, mrp: U, asset_beta: U, debt_beta: U, long_run_growth: U, leverage_timing: 'end_of_year' } }, ['valuation'], ['valuation.leverage_timing'])}
+          onOn={() => editWithChoices({ ...a, valuation: { risk_free: U, mrp: U, asset_beta: U, debt_beta: U, long_run_growth: U, leverage_timing: 'end_of_year', terminal: null } }, ['valuation'], ['valuation.leverage_timing', 'valuation.terminal'])}
           onOff={() => editWithChoices({ ...a, valuation: null }, ['valuation'], [], ['valuation'])} />
         {v && (
           <>
@@ -425,15 +354,28 @@ const AssumptionsPanel: React.FC = () => {
             <NumField path="valuation.long_run_growth" label="Long-run growth after exit" unit="pct" value={v.long_run_growth} />
             <ChoiceField path="valuation.leverage_timing" label="Leverage for year t's cost of equity" value={v.leverage_timing}
               options={[{ value: 'end_of_year', label: 'end of year t (no circularity)' }, { value: 'start_of_year', label: 'start of year t (closed form)' }]} />
+            {/* §28: the terminal value capitalises year N+1 for ever, so the analyst says what that year is —
+                the final forecast year carried forward, or a stated steady state. An open choice until made. */}
+            <ChoiceField path="valuation.terminal" label="Terminal year (N+1) capex and working capital" value={v.terminal ? 'stated' : 'carried'}
+              hint="The fundamentals exit values year N+1's cash flow in perpetuity. A forecast year often runs capex below D&A or releases working capital, which cannot last for ever."
+              options={[{ value: 'carried', label: 'as in the final forecast year' }, { value: 'stated', label: 'stated for a steady state' }]}
+              onChoose={(c) => set(at('valuation.terminal', c === 'stated' ? { capex_pct_of_da: U, delta_nwc_before_growth: U } : null), ['valuation.terminal'])} />
+            {v.terminal && (
+              <>
+                <NumField path="valuation.terminal.capex_pct_of_da" label="Terminal capex ÷ D&A (1.00 = spend what wears out)" unit="ratio" value={v.terminal.capex_pct_of_da} />
+                <NumField path="valuation.terminal.delta_nwc_before_growth" label="Terminal increase in NWC, before growth (negative = inflow)" unit="money" value={v.terminal.delta_nwc_before_growth}
+                  hint="In final-forecast-year terms; it is grown into year N+1 with every other line." />
+              </>
+            )}
           </>
         )}
       </Section>
 
       {/* ═══ 6. Management & equity instruments ═══ */}
-      <Section title="6 · Management & equity instruments">
+      <Section id="equity" optional title="Management and equity">
         <Toggle on={a.mip !== null} label="Management promote (MIP)"
           onOn={() => set({ ...a, mip: { pool_pct: U, hurdle_moic: U, ratchet: null }, sweet_equity: null }, ['mip', ...(a.sweet_equity ? ['sweet_equity'] : [])])}
-          onOff={() => set({ ...a, mip: null }, ['mip'])} hint="A promote and a sweet-equity strip may not coexist (§22.3)." />
+          onOff={() => set({ ...a, mip: null }, ['mip'])} hint="A promote and a sweet-equity strip may not coexist." />
         {a.mip && (
           <>
             <SuggestionChips path="mip" render={() => 'cited pool / hurdle'} />
@@ -445,15 +387,15 @@ const AssumptionsPanel: React.FC = () => {
                 <NumField path={`mip.ratchet.${j}.share_pct`} label={`Ratchet tier ${j + 1}: share above it`} unit="pct" value={r.share_pct} />
               </div>
             ))}
-            <div className="flex justify-end gap-1 mb-2">
-              <SmallButton onClick={() => set({ ...a, mip: { ...a.mip!, ratchet: [...(a.mip!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['mip.ratchet'])}>+ ratchet tier</SmallButton>
-              {(a.mip.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, mip: { ...a.mip!, ratchet: (a.mip!.ratchet ?? []).slice(0, -1).length ? (a.mip!.ratchet ?? []).slice(0, -1) : null } }, ['mip.ratchet'])}>− tier</SmallButton>}
+            <div className="flex justify-end gap-2 my-1">
+              <SmallButton onClick={() => set({ ...a, mip: { ...a.mip!, ratchet: [...(a.mip!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['mip.ratchet'])}>+ Ratchet tier</SmallButton>
+              {(a.mip.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, mip: { ...a.mip!, ratchet: (a.mip!.ratchet ?? []).slice(0, -1).length ? (a.mip!.ratchet ?? []).slice(0, -1) : null } }, ['mip.ratchet'])}>Remove tier</SmallButton>}
             </div>
           </>
         )}
         <Toggle on={a.sweet_equity !== null} label="Sweet-equity strip (loan notes + ordinaries)"
           onOn={() => set({ ...a, sweet_equity: { sponsor_ordinary_pct: U, loan_note_rate: U, management_subscription: U, management_ordinary_pct: U, ratchet: null }, mip: null }, ['sweet_equity', ...(a.mip ? ['mip'] : [])])}
-          onOff={() => set({ ...a, sweet_equity: null }, ['sweet_equity'])} hint="Replaces the promote; rollover must be 0 (§22.3)." />
+          onOff={() => set({ ...a, sweet_equity: null }, ['sweet_equity'])} hint="Replaces the promote; rollover must be 0." />
         {a.sweet_equity && (
           <>
             <NumField path="sweet_equity.sponsor_ordinary_pct" label="Institution's strip in ordinaries" unit="pct" value={a.sweet_equity.sponsor_ordinary_pct} />
@@ -466,9 +408,9 @@ const AssumptionsPanel: React.FC = () => {
                 <NumField path={`sweet_equity.ratchet.${j}.share_pct`} label={`Sweet ratchet tier ${j + 1}: management share of ordinaries`} unit="pct" value={r.share_pct} />
               </div>
             ))}
-            <div className="flex justify-end gap-1 mb-2">
-              <SmallButton onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: [...(a.sweet_equity!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['sweet_equity.ratchet'])}>+ ratchet tier</SmallButton>
-              {(a.sweet_equity.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: (a.sweet_equity!.ratchet ?? []).slice(0, -1).length ? (a.sweet_equity!.ratchet ?? []).slice(0, -1) : null } }, ['sweet_equity.ratchet'])}>− tier</SmallButton>}
+            <div className="flex justify-end gap-2 my-1">
+              <SmallButton onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: [...(a.sweet_equity!.ratchet ?? []), { hurdle_moic: U, share_pct: U }] } }, ['sweet_equity.ratchet'])}>+ Ratchet tier</SmallButton>
+              {(a.sweet_equity.ratchet ?? []).length > 0 && <SmallButton danger onClick={() => set({ ...a, sweet_equity: { ...a.sweet_equity!, ratchet: (a.sweet_equity!.ratchet ?? []).slice(0, -1).length ? (a.sweet_equity!.ratchet ?? []).slice(0, -1) : null } }, ['sweet_equity.ratchet'])}>Remove tier</SmallButton>}
             </div>
           </>
         )}
@@ -490,11 +432,11 @@ const AssumptionsPanel: React.FC = () => {
           return (
             <>
               <Toggle on={sd !== null} label="Partial exit before the final exit (secondary selldown)"
-                hint={blockedBy ? `Not available beside ${blockedBy} (SPEC §23.3) — how the buyer ranks is negotiated.` : 'The sponsor sells part of its stake at the end of a year before the exit, at a multiple of that year’s EBITDA less net debt. The company itself is unaffected.'}
+                hint={blockedBy ? `Not available beside ${blockedBy}: how the buyer ranks is negotiated.` : 'The sponsor sells part of its stake at the end of a year before the exit, at a multiple of that year’s EBITDA less net debt. The company itself is unaffected.'}
                 onOn={() => { if (!blockedBy) set(at('structure.selldown', { year: U, fraction: U, event_multiple: U }), ['structure.selldown']); }}
                 onOff={() => set(at('structure.selldown', null), ['structure.selldown'])} />
               {blockedBy && sd === null && (
-                <p className="text-[12px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>Unavailable while the deal has {blockedBy}.</p>
+                <p className="text-[12px] text-[color:var(--de-ink-3)] pb-1">Unavailable while the deal has {blockedBy}.</p>
               )}
               {sd && (
                 <>
@@ -509,35 +451,27 @@ const AssumptionsPanel: React.FC = () => {
       </Section>
 
       {/* ═══ 7. Cash policy, covenants, fees ═══ */}
-      <Section title="7 · Distributions, covenants, monitoring fee">
+      <Section id="policy" optional title="Distributions and covenants">
         {/* §3.8: ONE distribution policy per deal — none (cash builds), a requested schedule, or
             the surplus-cash policy. Every policy pays only from cash above the minimum, after
             debt service and the sweep, and is still subject to the restricted-payment trap. */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <Label>Distributions to equity during the hold</Label>
-          <select aria-label="Distribution policy" className="px-1 py-1 text-[13px]"
-            style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
-            value={a.structure.surplus_distribution ? 'surplus' : a.structure.distributions ? 'scheduled' : 'none'}
-            onChange={(e) => {
-              const p = e.target.value;
-              const structure = {
-                ...a.structure,
-                distributions: p === 'scheduled' ? blanks(N) : null,
-                surplus_distribution: p === 'surplus' ? { payout_pct: 1, start: 'immediately' as const } : null,
-              };
-              set({ ...a, structure }, ['structure.distributions', 'structure.surplus_distribution']);
-            }}>
-            <option value="none">none — cash stays in the business</option>
-            <option value="scheduled">fixed amounts by year</option>
-            <option value="surplus">surplus cash (a % of cash above the minimum)</option>
-          </select>
-        </div>
+        <PlainChoice label="Distributions to equity during the hold" ariaLabel="Distribution policy"
+          value={a.structure.surplus_distribution ? 'surplus' : a.structure.distributions ? 'scheduled' : 'none'}
+          options={[{ value: 'none', label: 'none: cash stays in the business' }, { value: 'scheduled', label: 'fixed amounts by year' }, { value: 'surplus', label: 'surplus cash (a % of cash above the minimum)' }]}
+          onChange={(p) => {
+            const structure = {
+              ...a.structure,
+              distributions: p === 'scheduled' ? blanks(N) : null,
+              // blank until entered, like every other input: the payout share is unset and the
+              // timing is an open choice (both gate Build); no "common case" is assumed
+              surplus_distribution: p === 'surplus' ? { payout_pct: U, start: 'immediately' as const } : null,
+            };
+            editWithChoices({ ...a, structure }, ['structure.distributions', 'structure.surplus_distribution'],
+              p === 'surplus' ? ['structure.surplus_distribution.start'] : [], ['structure.surplus_distribution']);
+          }} />
         {a.structure.distributions && <YearGrid path="structure.distributions" label="Requested distribution" unit="money" values={a.structure.distributions} />}
         {a.structure.surplus_distribution && (
           <>
-            <p className="text-[12px] mb-2" style={{ color: 'rgba(17,17,17,0.55)' }}>
-              Pre-filled with the common case — 100% of the surplus, every year. Change either setting to match your deal’s restricted-payments terms.
-            </p>
             <NumField path="structure.surplus_distribution.payout_pct" label="Share of surplus cash paid out" unit="pct" value={a.structure.surplus_distribution.payout_pct}
               hint="Cash above the minimum after interest, amortization, the revolver and the sweep. Below 100%, the rest stays on the balance sheet." />
             <ChoiceField path="structure.surplus_distribution.start" label="Pay surplus out" value={a.structure.surplus_distribution.start}
@@ -555,15 +489,10 @@ const AssumptionsPanel: React.FC = () => {
             <div key={k}>
               <Toggle on={val !== null} label={label} onOn={() => set(at(`covenants.${k}`, U), [`covenants.${k}`])} onOff={() => set(at(`covenants.${k}`, null), [`covenants.${k}`])} />
               {val !== null && (
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <Label hint="Leverage covenants usually step down over the life of the loan.">{label}: level</Label>
-                  <select aria-label={`${label} schedule`} className="px-1 py-1 text-[13px]" style={{ fontFamily: mono, border: '1px solid rgba(17,17,17,0.14)' }}
-                    value={Array.isArray(val) ? 'year' : 'flat'}
-                    onChange={(e) => set(at(`covenants.${k}`, e.target.value === 'year' ? blanks(N) : U), [`covenants.${k}`])}>
-                    <option value="flat">same every year</option>
-                    <option value="year">set by year</option>
-                  </select>
-                </div>
+                <PlainChoice label={`${label}: level`} ariaLabel={`${label} schedule`} value={Array.isArray(val) ? 'year' : 'flat'}
+                  hint="Leverage covenants usually step down over the life of the loan."
+                  options={[{ value: 'flat', label: 'same every year' }, { value: 'year', label: 'set by year' }]}
+                  onChange={(v) => set(at(`covenants.${k}`, v === 'year' ? blanks(N) : U), [`covenants.${k}`])} />
               )}
               {val !== null && !Array.isArray(val) && <NumField path={`covenants.${k}`} label={`${label} level`} unit="mult" value={val} />}
               {val !== null && Array.isArray(val) && <YearGrid path={`covenants.${k}`} label={`${label} by year`} unit="mult" values={val} />}
@@ -573,7 +502,7 @@ const AssumptionsPanel: React.FC = () => {
         {hasRevolver && (
           <>
             <Toggle on={a.covenants.springing !== null} label="Springing leverage test (revolver)"
-              hint="Tested only in years when the revolver is drawn above the trigger — the usual covenant-lite revolver protection."
+              hint="Tested only in years when the revolver is drawn above the trigger, the usual covenant-lite revolver protection."
               onOn={() => set(at('covenants.springing', { metric: 'leverage', max: U, revolver_draw_trigger_pct: U }), ['covenants.springing'])}
               onOff={() => set(at('covenants.springing', null), ['covenants.springing'])} />
             {a.covenants.springing && !Array.isArray(a.covenants.springing.max) && (
@@ -601,7 +530,7 @@ const AssumptionsPanel: React.FC = () => {
 
       {/* ═══ 8. Refinancing & PIK toggle ═══ */}
       {tranches.some((t) => t.type !== 'revolver') && (
-        <Section title="8 · Refinancing & PIK elections">
+        <Section id="refinancing" optional title="Refinancing and PIK">
           {tranches.map((t, i) => {
             if (t.type === 'revolver') return null;
             if (t.type === 'pik_note') {
@@ -648,7 +577,7 @@ const AssumptionsPanel: React.FC = () => {
       )}
 
       {/* ═══ 9. Fund overlay ═══ */}
-      <Section title="9 · Fund / LP overlay">
+      <Section id="fund" optional title="Fund overlay">
         <Toggle on={fund !== null} label="Net-to-LP returns (fees and carry)"
           onOn={() => editWithChoices({ ...a, fund: { committed_capital: U, mgmt_fee_pct: U, fee_basis: 'invested', carry_pct: U, pref_rate: U, catchup_pct: U, waterfall: 'european', fee_offset_pct: U } as FundOverlayAssumption }, ['fund'], ['fund.fee_basis', 'fund.waterfall'])}
           onOff={() => editWithChoices({ ...a, fund: null }, ['fund'], [], ['fund'])} />
@@ -667,27 +596,24 @@ const AssumptionsPanel: React.FC = () => {
       </Section>
 
       {/* ═══ Display ═══ */}
-      <Section title="Display">
+      <Section id="display" optional title="Display">
         <Toggle on={a.mid_year_irr} label="Headline the mid-year IRR (both are always computed)"
           onOn={() => set({ ...a, mid_year_irr: true }, ['mid_year_irr'])} onOff={() => set({ ...a, mid_year_irr: false }, ['mid_year_irr'])} />
       </Section>
     </div>
+    </SectionCounts.Provider>
   );
 };
 
 /** The mode selector for one forecast line. */
 const LineMode: React.FC<{ label: string; value: string; options: { value: string; label: string }[]; onChoose: (m: string) => void }> = ({ label, value, options, onChoose }) => {
-  // a driver the facts cannot support is never displayed as if chosen — "choose…" until a valid mode is picked
+  // a driver the facts cannot support is never displayed as if chosen: it stays open until a valid mode is picked
   const valid = options.some((o) => o.value === value);
   return (
-    <div className="flex items-center justify-between gap-2 mb-1.5 mt-2">
-      <span className="text-[12px] tracking-wider uppercase font-semibold" style={{ ...labelStyle, color: '#111' }}>{label}</span>
-      <select aria-label={`${label} input mode`} value={valid ? value : ''} onChange={(e) => e.target.value && onChoose(e.target.value)} className="px-1 py-1 text-[13px]"
-        style={{ fontFamily: mono, border: valid ? '1px solid rgba(17,17,17,0.14)' : '1px solid rgba(204,0,0,0.55)', background: valid ? '#fff' : 'rgba(204,0,0,0.03)' }}>
-        {!valid && <option value="">choose…</option>}
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
+    <>
+      <SubHead>{label}</SubHead>
+      <PlainChoice label="Entered as" ariaLabel={`${label} input mode`} value={value} blank={!valid} options={options} onChange={onChoose} />
+    </>
   );
 };
 

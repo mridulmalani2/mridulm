@@ -1,146 +1,231 @@
 /**
- * v2 Workbench (PHASE_E §E1 shell): facts strip (staleness + history table + MISSING
- * confirm bar) → AssumptionsPanel → Build (gated exactly like today) → the E1 output
- * smoke (hero IRR/MOIC + coherence banner; the full tab set is E2). Reads ONLY the
- * engine2 store — the old ModelState cannot reach this tree.
+ * v2 Workbench — step 3, Assumptions. Three columns: a rail of the sheet's sections (each saying
+ * how many inputs it still needs), the input sheet, and a live panel that shows what the current
+ * inputs return and what still blocks the build.
+ *
+ * The live figures are a run of the one engine on the inputs as they stand, recomputed on every
+ * edit, so they are never stale; while any input is blank there is no run and the panel lists
+ * the blanks instead. Reads ONLY the engine2 store.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
-import { money, multiple, pct } from '../../../lib/format';
+import { useWorkspace } from '../../../store/workspace';
+import { useDealEngineStore } from '../../../store/dealEngine';
+import { dealUiStore, useDealUi } from '../../../store/dealUi';
+import { money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
+import { headlineOf, tryRun, type Headline } from '../../../lib/analysis';
+import { entryLeverageDisplay, headlineNotMeaningful } from '../../../lib/engine2/display';
 import AssumptionsPanel from './AssumptionsPanel';
 import HistoryTable from './HistoryTable';
 import BasisBadge from './BasisBadge';
 import OutputTabs from './OutputTabs';
-import { headlineNotMeaningful } from '../../../lib/engine2/display';
+import { SECTIONS, plainLabel, sectionOf } from './sections';
 import { factLabel } from '../ui/labels';
+import { Button, Callout, Meter, cx } from '../ui/kit';
 
-const mono = "'JetBrains Mono', 'SF Mono', Menlo, monospace";
-const labelStyle = { color: 'rgba(17,17,17,0.62)', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' } as const;
+/** Deals for which AI proposals have already been requested in this session (one request each). */
+const aiAsked = new Set<string>();
 
 export const MissingBar: React.FC = () => {
   const missing = useEngine2Model((s) => s.missingFacts);
   const confirm = useEngine2Model((s) => s.confirmFact);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
   if (!missing.length) return null;
   return (
-    <div className="p-3 mb-4" style={{ border: '1px solid rgba(204,0,0,0.35)', background: 'rgba(204,0,0,0.04)' }}>
-      <p className="text-[12px] tracking-widest uppercase mb-2" style={{ color: '#b91c1c', fontFamily: mono }}>
-        The filing lacks these facts — confirm to build
-      </p>
+    <div className="mb-5 px-5 py-4 rounded-[var(--de-r)] bg-[var(--de-accent-soft)]">
+      <p className="text-[14px] font-semibold text-[color:var(--de-accent)] mb-2">The source lacks these figures: confirm to build</p>
       {missing.filter((p) => p !== 'currency_unsupported').map((path) => (
-        <div key={path} className="flex items-center gap-2 mb-1.5">
+        <div key={path} className="flex flex-wrap items-center gap-2 py-1">
           <BasisBadge kind="required" />
-          <span className="text-[13px]" style={{ fontFamily: mono, color: '#111' }}>{factLabel(path)}</span>
+          <span className="text-[14px]">{factLabel(path)}</span>
           <input
             value={drafts[path] ?? ''}
+            aria-label={factLabel(path)}
             onChange={(e) => setDrafts((d) => ({ ...d, [path]: e.target.value }))}
             placeholder="enter to confirm"
-            className="w-28 px-1.5 py-1 text-[13px] text-right ml-auto"
-            style={{ background: '#fff', border: '1px solid rgba(204,0,0,0.35)', fontFamily: mono, outline: 'none' }}
+            className="de-control de-num w-36 px-2 text-[14px] text-right ml-auto text-[color:var(--de-input)]"
           />
-          <button
-            onClick={() => { const v = Number((drafts[path] ?? '').replace(/[,\s]/g, '')); if (Number.isFinite(v)) confirm(path, v); }}
-            className="px-2 py-1 text-[12px] uppercase tracking-widest"
-            style={{ background: '#111', color: '#fff', fontFamily: mono }}
-          >
+          <Button size="sm" variant="primary"
+            onClick={() => { const t = (drafts[path] ?? '').trim(); const v = Number(t.replace(/,/g, '')); if (t !== '' && !/\s/.test(t) && Number.isFinite(v)) confirm(path, v); }}>
             Confirm
-          </button>
+          </Button>
         </div>
       ))}
       {missing.includes('currency_unsupported') && (
-        <p className="text-[13px]" style={{ color: '#b91c1c', fontFamily: mono }}>
-          Reporting currency not supported — the engine models USD, EUR, GBP, JPY, INR.
-        </p>
+        <p className="text-[13px] text-[color:var(--de-accent)]">Reporting currency not supported. The engine models USD, EUR, GBP, JPY and INR.</p>
       )}
     </div>
   );
 };
 
-/** E4 toolbar: AI-suggest, Redline, Memo download, and the PURE goal-seek. When no key
- *  is saved the AI buttons stay visibly OFF (the phase rule) — goal-seek always works. */
-export const AiToolbar: React.FC = () => {
-  const facts = useEngine2Model((s) => s.facts);
-  const assumptions = useEngine2Model((s) => s.assumptions);
-  const output = useEngine2Model((s) => s.output);
-  const aiBusy = useEngine2Model((s) => s.aiBusy);
-  const aiSuggest = useEngine2Model((s) => s.aiSuggest);
-  const runRedlineAction = useEngine2Model((s) => s.runRedlineAction);
-  const [target, setTarget] = useState('20');
-  const [lever, setLever] = useState<'entry_multiple' | 'exit_multiple' | 'leverage' | 'growth_shift'>('entry_multiple');
-  const [seek, setSeek] = useState<string | null>(null);
-  const hasKey = typeof window !== 'undefined' && !!localStorage.getItem('deal-engine-api-key');
-  if (!facts || !assumptions) return null;
+/** Scroll to an input, open its section, focus it and flash the line. */
+function useJump(): void {
+  const jump = useDealUi((s) => s.jump);
+  useEffect(() => {
+    if (!jump || typeof document === 'undefined') return;
+    const ui = dealUiStore.getState();
+    const section = jump.startsWith('section:') ? jump.slice(8) : sectionOf(jump);
+    ui.toggleSection(section, true);
+    const t = window.setTimeout(() => {
+      let el: HTMLElement | null = null;
+      if (jump.startsWith('section:')) el = document.getElementById(`sec-${section}`);
+      else {
+        // an array member (a year, a tranche term) may be drawn inside its parent's line
+        for (let p = jump; p && !el; p = p.includes('.') ? p.slice(0, p.lastIndexOf('.')) : '') {
+          el = document.querySelector<HTMLElement>(`[data-path="${p.replace(/"/g, '')}"]`);
+        }
+        el = el ?? document.getElementById(`sec-${section}`);
+      }
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: jump.startsWith('section:') ? 'start' : 'center' });
+        const line = el.closest<HTMLElement>('.de-row') ?? el;
+        line.setAttribute('data-flash', 'true');
+        window.setTimeout(() => line.removeAttribute('data-flash'), 1500);
+        const focusable = el.matches('input,button') ? el : el.querySelector<HTMLElement>('input,[role="combobox"],[role="radio"],[role="switch"]');
+        focusable?.focus({ preventScroll: true });
+      }
+      dealUiStore.getState().jumpTo(null);
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [jump]);
+}
 
-  const btn = { border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono } as const;
-  const downloadMemo = async () => {
-    if (!output) return;
-    const { memoSkeleton } = await import('../../../lib/ai2/memo');
-    const md = memoSkeleton(output, facts.currency as Engine2Currency);
-    const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_memo.md`; a.click();
-    URL.revokeObjectURL(url);
-  };
-  const runSeek = async () => {
-    const { solveForIrr } = await import('../../../lib/ai2/goalseek');
-    const t = Number(target) / 100;
-    if (!Number.isFinite(t)) { setSeek('enter a target IRR %'); return; }
-    const r = solveForIrr(facts, assumptions, lever, t);
-    if (!r) { setSeek(`target ${target}% is outside what ${lever} can reach — N/A`); return; }
-    setSeek(`${lever} = ${r.value.toFixed(3)} ⇒ IRR ${pct(r.achieved_irr)}`);
-  };
-
+const Rail: React.FC<{ counts: Record<string, number>; started: boolean }> = ({ counts, started }) => {
+  const jumpTo = useDealUi((s) => s.jumpTo);
+  // progress is counted in sections: how many have nothing left to enter
+  const complete = SECTIONS.filter((s) => !counts[s.id]).length;
   return (
-    <span className="flex items-center gap-1.5 flex-wrap justify-end">
-      <select value={lever} onChange={(e) => setLever(e.target.value as typeof lever)}
-        className="px-1 py-1 text-[12px] uppercase" style={btn}>
-        <option value="entry_multiple">entry ×</option>
-        <option value="exit_multiple">exit ×</option>
-        <option value="leverage">leverage</option>
-        <option value="growth_shift">growth Δ</option>
-      </select>
-      <input value={target} onChange={(e) => setTarget(e.target.value)} className="w-10 px-1 py-1 text-[12px] text-right" style={btn} />
-      <span className="text-[12px]" style={labelStyle}>%</span>
-      <button onClick={runSeek} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>Goal-seek</button>
-      {seek && <span className="text-[12px]" style={labelStyle}>{seek}</span>}
-      {output && <button onClick={downloadMemo} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>Memo ↓</button>}
-      {hasKey ? (
-        <>
-          <button onClick={aiSuggest} disabled={aiBusy} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>
-            {aiBusy ? 'AI…' : 'AI suggest'}
-          </button>
-          <button onClick={runRedlineAction} disabled={aiBusy} className="px-2 py-1 text-[12px] uppercase tracking-widest" style={btn}>Redline</button>
-        </>
-      ) : (
-        <span className="text-[12px] uppercase tracking-widest" style={labelStyle}>AI suggest · redline — OFF (no API key)</span>
-      )}
+    <nav aria-label="Sections" className="hidden lg:block sticky top-24 self-start">
+      <div className="px-3 mb-3">
+        <p className="flex items-baseline justify-between text-[12px] font-medium text-[color:var(--de-ink-3)] mb-1.5">
+          <span>Sections</span>
+          {started && <span className="de-num">{complete} of {SECTIONS.length} complete</span>}
+        </p>
+        {started && <Meter label="Sections complete" value={complete} total={SECTIONS.length} done={complete === SECTIONS.length} />}
+      </div>
+      <ul className="space-y-0.5">
+        {SECTIONS.map((s) => {
+          const n = counts[s.id] ?? 0;
+          return (
+            <li key={s.id}>
+              <button type="button" disabled={!started} onClick={() => jumpTo(`section:${s.id}`)}
+                className={cx('w-full flex items-center justify-between gap-2 h-9 px-3 rounded-[var(--de-r-sm)] text-left text-[13px] transition-colors',
+                  started ? 'text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)]' : 'text-[color:var(--de-ink-3)] cursor-not-allowed')}>
+                <span className="truncate">{s.title}</span>
+                {started && (n > 0
+                  ? <span className="de-num text-[12px] font-medium text-[color:var(--de-accent)]">{n}</span>
+                  : <span role="img" aria-label="complete" className="text-[color:var(--de-pos)]"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg></span>)}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+};
+
+const signed = (v: number, f: (x: number) => string) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${f(Math.abs(v))}`;
+
+const LiveRow: React.FC<{ label: string; value: string; change?: string | null }> = ({ label, value, change }) => (
+  <div className="flex items-baseline justify-between gap-3 py-1.5">
+    <span className="text-[13px] text-[color:var(--de-ink-2)]">{label}</span>
+    <span className="text-right">
+      <span className="de-num text-[14px] font-medium">{value}</span>
+      {change && <span className="de-num block text-[11px] text-[color:var(--de-ink-3)]">{change}</span>}
     </span>
-  );
-};
+  </div>
+);
 
-/** AI outcomes strip: what AI-suggest applied/dropped (auditable) + redline challenges. */
-export const AiResults: React.FC = () => {
-  const aiNotes = useEngine2Model((s) => s.aiNotes);
-  const redlineItems = useEngine2Model((s) => s.redlineItems);
-  if (!aiNotes.length && !redlineItems) return null;
+/** What the inputs return right now, and what still blocks the build. */
+const LivePanel: React.FC<{ blocked: boolean; onBuild: () => void }> = ({ blocked, onBuild }) => {
+  const facts = useEngine2Model((s) => s.facts)!;
+  const assumptions = useEngine2Model((s) => s.assumptions);
+  const pending = useEngine2Model((s) => s.pending);
+  const missingFacts = useEngine2Model((s) => s.missingFacts);
+  const error = useEngine2Model((s) => s.error);
+  const versions = useWorkspace((s) => s.versions);
+  const jumpTo = useDealUi((s) => s.jumpTo);
+  const setOverlay = useDealUi((s) => s.setOverlay);
+  const ccy = facts.currency as Engine2Currency;
+  const blank = assumptions ? useEngine2Model.getState().missing() : [];
+
+  const live = useMemo(() => (assumptions && !missingFacts.length ? tryRun(facts, assumptions, pending) : null), [facts, assumptions, pending, missingFacts.length]);
+  const last = versions[versions.length - 1];
+  const lastHead: Headline | null = useMemo(() => {
+    if (!last) return null;
+    const r = tryRun(facts, last.assumptions, last.pending);
+    return r.ok ? headlineOf(r.output) : null;
+  }, [facts, last]);
+  const head = live?.ok ? headlineOf(live.output) : null;
+  const changed = head && lastHead && (head.irr !== lastHead.irr || head.equity !== lastHead.equity);
+
   return (
-    <div className="mt-2 p-2.5" style={{ border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.04)' }}>
-      {aiNotes.map((n, i) => (
-        <p key={`n${i}`} className="text-[12px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>{n}</p>
-      ))}
-      {redlineItems?.map((r, i) => (
-        <p key={`r${i}`} className="text-[12px] mb-0.5" style={{ color: '#6d28d9', fontFamily: mono }}>
-          ✎ {r.path}: {r.challenge}
-        </p>
-      ))}
-    </div>
+    <aside className="lg:sticky lg:top-24 self-start space-y-4">
+      <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] p-5">
+        {head && live?.ok ? (
+          <>
+            <p className="text-[12px] font-medium text-[color:var(--de-ink-3)]">Sponsor IRR, on the inputs as they stand</p>
+            <p className={cx('de-num text-[40px] font-semibold leading-none mt-2 tracking-[-0.02em]', !head.meaningful && 'text-[color:var(--de-warn)]')}>{head.irr === null ? 'N/M' : pct(head.irr, 2)}</p>
+            {changed && head.irr !== null && lastHead!.irr !== null && (
+              <p className="de-num text-[12px] text-[color:var(--de-ink-3)] mt-1.5">{signed((head.irr - lastHead!.irr) * 100, (x) => num(x, 2))} pts since the last build</p>
+            )}
+            <div className="mt-4 divide-y divide-[color:var(--de-rule)]">
+              <LiveRow label="Money multiple" value={head.moic === null ? 'N/M' : multiple(head.moic, 2)}
+                change={changed && head.moic !== null && lastHead!.moic !== null ? signed(head.moic - lastHead!.moic, (x) => `${num(x, 2)}x`) : null} />
+              <LiveRow label="Equity cheque" value={money(head.equity, ccy, 0)}
+                change={changed && head.equity !== lastHead!.equity ? signed(head.equity - lastHead!.equity, (x) => num(x, 0)) : null} />
+              <LiveRow label={`Debt at close, x ${entryLeverageDisplay(live.output).basis_label} EBITDA`} value={multiple(entryLeverageDisplay(live.output).value, 2)} />
+              <LiveRow label="Lowest cash in the hold" value={money(head.min_cash, ccy, 0)} />
+              {head.min_leverage_headroom !== null && <LiveRow label="Tightest leverage headroom" value={`${num(head.min_leverage_headroom, 2)}x`} />}
+            </div>
+            {!head.meaningful && <p className="text-[12px] text-[color:var(--de-warn)] mt-3">The structure does not hold on these inputs. Build to see why.</p>}
+          </>
+        ) : (
+          <>
+            <p className="text-[12px] font-medium text-[color:var(--de-ink-3)]">Live result</p>
+            {!assumptions ? (
+              <p className="text-[14px] text-[color:var(--de-ink-2)] mt-2">Enter the holding period to open the sheet.</p>
+            ) : blank.length > 0 ? (
+              <>
+                <p className="mt-2"><span className="de-num text-[40px] font-semibold leading-none tracking-[-0.02em]">{blank.length}</span><span className="text-[14px] text-[color:var(--de-ink-2)] ml-2">input{blank.length === 1 ? '' : 's'} still blank</span></p>
+                <p className="text-[12px] text-[color:var(--de-ink-3)] mt-1.5">The return appears here as soon as the last one is entered. Nothing is assumed for you.</p>
+              </>
+            ) : (
+              <p className="text-[13px] text-[color:var(--de-accent)] mt-2">{live && !live.ok ? live.reason : 'Confirm the figures the source lacks.'}</p>
+            )}
+          </>
+        )}
+        <Button variant="primary" className="w-full mt-5" disabled={blocked} onClick={onBuild}>Build model</Button>
+        {error && <p className="text-[12px] text-[color:var(--de-accent)] mt-2">{error}</p>}
+        {assumptions && (
+          <button type="button" onClick={() => setOverlay('cases')} className="w-full mt-2 h-8 rounded-[var(--de-r-sm)] text-[13px] text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)]">Save or compare cases</button>
+        )}
+      </div>
+
+      {blank.length > 0 && (
+        <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] p-5">
+          <p className="text-[13px] font-semibold mb-2">Still to enter</p>
+          <ul className="space-y-0.5 -mx-2">
+            {blank.slice(0, 9).map((m) => (
+              <li key={m.path}>
+                <button type="button" onClick={() => jumpTo(m.path)}
+                  className="w-full text-left px-2 py-1.5 rounded-[var(--de-r-sm)] text-[13px] text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)] leading-snug">
+                  {plainLabel(m.label)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {blank.length > 9 && <p className="text-[12px] text-[color:var(--de-ink-3)] mt-2">and {blank.length - 9} more</p>}
+        </div>
+      )}
+    </aside>
   );
 };
 
 /**
- * `view="assumptions"` is step 3 of the flow (inputs and the Build button only — results live on
- * their own screen); the default renders inputs and outputs together.
+ * `view="assumptions"` is step 3 of the flow (inputs, the live panel and the Build button; the
+ * results live on their own screen); the default renders inputs and outputs together.
  */
 const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' }) => {
   const inputsOnly = view === 'assumptions';
@@ -151,124 +236,112 @@ const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' })
   const sourceCurrency = useEngine2Model((s) => s.sourceCurrency);
   const factNotes = useEngine2Model((s) => s.factNotes);
   const build = useEngine2Model((s) => s.buildWithExhibits);
-  const reset = useEngine2Model((s) => s.reset);
   // the Build gate (v2.0.0): every input the model will read must be entered
-  useEngine2Model((s) => s.assumptions);
+  const assumptions = useEngine2Model((s) => s.assumptions);
   useEngine2Model((s) => s.pending);
+  useJump();
+  // With a key saved, AI proposals for the blank inputs are fetched once per deal without being
+  // asked for. They arrive as proposals beside the fields; nothing is applied (store: aiSuggest).
+  const apiKey = useDealEngineStore((st) => st.apiKey);
+  const dealKey = facts && assumptions ? `${facts.entity_name}|${assumptions.entry.hold_years}` : null;
+  useEffect(() => {
+    if (!inputsOnly || !apiKey || !dealKey || aiAsked.has(dealKey)) return;
+    aiAsked.add(dealKey);
+    void useEngine2Model.getState().aiSuggest();
+  }, [inputsOnly, apiKey, dealKey]);
   const blankInputs = useEngine2Model.getState().missing();
+  const blocked = missing.length > 0 || blankInputs.length > 0 || assumptions === null;
+
+  // Ctrl/Cmd + Enter builds from anywhere on the sheet
+  useEffect(() => {
+    if (!inputsOnly || typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !(e.target as HTMLElement)?.closest?.('[data-de-line]') && !blocked) build();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [inputsOnly, blocked, build]);
+
   if (!facts) {
-    return <p className="text-[13px] p-6" style={labelStyle}>Import a company first (Screen 1) — the v2 workbench reads the engine2 store.</p>;
+    return <p className="text-[14px] p-6 text-[color:var(--de-ink-2)]">Source a company first. The workbench reads the figures it brings in.</p>;
   }
   const ccy = facts.currency as Engine2Currency;
-  const blocked = missing.length > 0 || blankInputs.length > 0 || useEngine2Model.getState().assumptions === null;
-  return (
-    // the v2 tree inks in near-black; it must supply its own paper (the site shell is
-    // dark — verified visually in the browser pane, 2026-07-24)
-    <div className={inputsOnly ? 'min-h-screen' : 'min-h-screen overflow-y-auto'} style={{ background: '#F9F9F7' }}>
-    <div className={`${inputsOnly ? 'max-w-4xl' : 'max-w-3xl'} mx-auto p-6`}>
-      {inputsOnly && (
-        <div className="mb-5">
-          <h1 className="font-playfair text-[30px] font-bold leading-tight" style={{ color: '#111' }}>Assumptions</h1>
-          <p className="text-[14px] mt-2 leading-relaxed" style={{ ...labelStyle, color: 'rgba(17,17,17,0.72)' }}>
-            Every input starts blank — nothing is assumed for you. Where the filing or a cited market source supports a value, a blue “use” chip offers it with its basis; it is applied only when you click it.
-          </p>
-        </div>
+  const counts: Record<string, number> = {};
+  for (const m of blankInputs) counts[sectionOf(m.path)] = (counts[sectionOf(m.path)] ?? 0) + 1;
+
+  const figures = (
+    <div className="mb-5 px-6 py-5 bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)]">
+      <HistoryTable facts={facts} isoOverride={missing.includes('currency_unsupported') ? sourceCurrency : null} />
+      {/* honest-degradation notes from extraction (currency, days gating, ROU inclusion, FPI history) */}
+      {factNotes.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {factNotes.map((n) => <li key={n} className="text-[12px] text-[color:var(--de-ink-3)]">{n}</li>)}
+        </ul>
       )}
-      <div className="flex items-baseline justify-between mb-1">
-        <h2 className="text-sm tracking-widest uppercase" style={{ fontFamily: mono, color: '#111' }}>{inputsOnly ? 'Figures the model reads' : facts.entity_name}</h2>
-        <span className="flex items-center gap-1.5">
-          {/* F2: the workbench is the default screen — this is the way back to Screen 1
-              (engine2 reset only; the page re-renders the source screen on empty facts). */}
-          {!inputsOnly && (
-            <button onClick={reset} className="px-2.5 py-1 text-[12px] uppercase tracking-widest"
-              style={{ border: '1px solid rgba(17,17,17,0.2)', color: 'rgba(17,17,17,0.55)', fontFamily: mono }}>
-              ← New import
-            </button>
-          )}
-        </span>
-      </div>
-      <div className="mb-4">
-        <HistoryTable
-          facts={facts}
-          isoOverride={missing.includes('currency_unsupported') ? sourceCurrency : null}
-        />
-        {/* honest-degradation notes from extraction (currency, days gating, ROU inclusion,
-            FPI history) — computed since D2/D6 but only now SHOWN (review 2026-07-24) */}
-        {factNotes.map((n) => (
-          <p key={n} className="text-[12px] mt-1" style={labelStyle}>◦ {n}</p>
-        ))}
-      </div>
-      <MissingBar />
-      <AssumptionsPanel />
-      {blankInputs.length > 0 && (
-        <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(204,0,0,0.25)', background: 'rgba(204,0,0,0.03)' }}>
-          <p className="text-[12px] uppercase tracking-widest mb-1" style={{ color: '#CC0000', fontFamily: mono }}>
-            {blankInputs.length} input{blankInputs.length === 1 ? '' : 's'} still blank — nothing is assumed for you
-          </p>
-          {blankInputs.slice(0, 12).map((m) => (
-            <p key={m.path} className="text-[12px]" style={labelStyle}>◦ {m.label}</p>
-          ))}
-          {blankInputs.length > 12 && <p className="text-[12px]" style={labelStyle}>◦ … and {blankInputs.length - 12} more</p>}
-        </div>
-      )}
-      {error && <p className="text-[13px] mt-3" style={{ color: '#b91c1c', fontFamily: mono }}>{error}</p>}
-      <div className={inputsOnly ? 'sticky bottom-0 -mx-6 px-6 py-3 mt-4 flex items-center justify-between' : 'mt-4 flex items-center justify-between'}
-        style={inputsOnly ? { background: '#fff', borderTop: '1px solid rgba(17,17,17,0.82)' } : undefined}>
-        <div className="text-[13px]" style={{ color: 'rgba(17,17,17,0.6)', fontFamily: mono }}>
-          {output ? (
-            <>
-              Sponsor IRR {headlineNotMeaningful(output) ? 'N/M' : pct(output.returns.sponsor_net.irr)} · MOIC {headlineNotMeaningful(output) ? 'N/M' : multiple(output.returns.sponsor_net.moic)} ·
-              Equity {money(output.sources_uses.sponsor_equity, ccy, 0)}
-            </>
-          ) : (
-            'Build to compute — outputs never render stale.'
-          )}
-        </div>
-        <button onClick={build} disabled={blocked}
-          className="px-8 py-2.5 text-sm tracking-widest uppercase"
-          style={{ background: blocked ? 'rgba(17,17,17,0.15)' : '#CC0000', color: '#fff', fontFamily: mono, cursor: blocked ? 'not-allowed' : 'pointer' }}>
-          Build →
-        </button>
-      </div>
-      {output && !inputsOnly && (
-        <div className="mt-2 flex items-center justify-between">
-          <button
-            onClick={async () => {
-              // SPEC §26: a live formula model. Unsupported features BLOCK the export by name.
-              const { buildFormulaWorkbook, formulaCoverageBlockers } = await import('../../../lib/engine2/workbook');
-              const blockers = formulaCoverageBlockers(output);
-              if (blockers.length) {
-                alert(`The Excel model does not yet implement: ${blockers.join(', ')}. Export is blocked rather than exporting pasted values.`);
-                return;
-              }
-              const buf = await buildFormulaWorkbook(output, { cachedResults: true }).wb.xlsx.writeBuffer();
-              const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `${facts.entity_name.replace(/[^\w-]+/g, '_')}_LBO_model.xlsx`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="px-2.5 py-1 text-[12px] uppercase tracking-widest"
-            style={{ border: '1px solid rgba(17,17,17,0.2)', color: '#111', fontFamily: mono }}
-          >
-            Export Excel
-          </button>
-          <AiToolbar />
-        </div>
-      )}
-      {!inputsOnly && <AiResults />}
-      {output && !inputsOnly && output.coherence.length > 0 && (
-        <div className="mt-3 p-2.5" style={{ border: '1px solid rgba(180,120,0,0.4)', background: 'rgba(180,120,0,0.05)' }}>
-          {output.coherence.map((f) => (
-            <p key={f.code + f.message} className="text-[12px] mb-0.5" style={{ color: f.severity === 'block' ? '#b91c1c' : '#92600a', fontFamily: mono }}>
-              {f.severity === 'block' ? '■' : '▲'} {f.message}
-            </p>
-          ))}
-        </div>
-      )}
-      {output && !inputsOnly && <OutputTabs output={output} currency={ccy} />}
     </div>
+  );
+
+  if (inputsOnly) {
+    return (
+      <div className="max-w-[1440px] mx-auto px-6 pt-8 pb-24 grid grid-cols-1 lg:grid-cols-[13.5rem_minmax(0,1fr)_19rem] gap-x-8 gap-y-6">
+        <Rail counts={counts} started={assumptions !== null} />
+        <div className="min-w-0">
+          <header className="mb-6">
+            <h1 className="de-display text-[34px] leading-tight">Assumptions</h1>
+            <p className="text-[14px] text-[color:var(--de-ink-2)] mt-1.5 max-w-[62ch]">
+              Every input starts blank. Where the source supports a value, a blue link offers it; nothing is applied until you click.
+            </p>
+          </header>
+          {figures}
+          <MissingBar />
+          <AssumptionsPanel />
+        </div>
+        <LivePanel blocked={blocked} onBuild={build} />
+        {/* on a narrow screen the live panel sits below the sheet, so the build stays in reach here */}
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-20 flex items-center justify-between gap-3 px-4 py-3 bg-[var(--de-surface)] border-t border-[color:var(--de-rule)]">
+          <span className="text-[13px] text-[color:var(--de-ink-2)]">{assumptions === null ? 'Enter the holding period' : blankInputs.length ? `${blankInputs.length} input${blankInputs.length === 1 ? '' : 's'} to go` : 'Ready to build'}</span>
+          <Button variant="primary" size="sm" disabled={blocked} onClick={build}>Build model</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen overflow-y-auto bg-[var(--de-paper)]">
+      <div className="max-w-4xl mx-auto p-6">
+        <h2 className="text-[17px] font-semibold mb-3">{facts.entity_name}</h2>
+        {figures}
+        <MissingBar />
+        <AssumptionsPanel />
+        {blankInputs.length > 0 && (
+          <Callout tone="block" title={`${blankInputs.length} input${blankInputs.length === 1 ? '' : 's'} still blank. Nothing is assumed for you.`}>
+            <ul>
+              {blankInputs.slice(0, 12).map((m) => <li key={m.path}>{plainLabel(m.label)}</li>)}
+              {blankInputs.length > 12 && <li>and {blankInputs.length - 12} more</li>}
+            </ul>
+          </Callout>
+        )}
+        {error && <p className="text-[13px] mt-3 text-[color:var(--de-accent)]">{error}</p>}
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <div className="de-num text-[13px] text-[color:var(--de-ink-2)]">
+            {output ? (
+              <>
+                Sponsor IRR {headlineNotMeaningful(output) ? 'N/M' : pct(output.returns.sponsor_net.irr)} · MOIC {headlineNotMeaningful(output) ? 'N/M' : multiple(output.returns.sponsor_net.moic)} ·
+                Equity {money(output.sources_uses.sponsor_equity, ccy, 0)}
+              </>
+            ) : 'Build to compute. Outputs never render stale.'}
+          </div>
+          <Button variant="primary" disabled={blocked} onClick={build}>Build model</Button>
+        </div>
+        {output && output.coherence.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {output.coherence.map((f) => (
+              <Callout key={f.code + f.message} tone={f.severity === 'block' ? 'block' : 'warn'}>{f.severity === 'block' ? '■' : '▲'} {f.message}</Callout>
+            ))}
+          </div>
+        )}
+        {output && <OutputTabs output={output} currency={ccy} />}
+      </div>
     </div>
   );
 };

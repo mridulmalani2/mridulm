@@ -22,7 +22,7 @@ const render = (golden: keyof typeof GOLDEN_DEALS) => {
   return { o, html: renderToStaticMarkup(React.createElement(EquityStrip, { o, ccy: 'USD' as const })) };
 };
 
-describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
+describe('§22 display surface: the EquityStrip block (Returns tab)', () => {
   it('G9-SWEET: every displayed cell is a NAMED equity_strip field at its committed value', () => {
     const { o, html } = render('G9SWEET');
     const es = o.equity_strip!;
@@ -30,7 +30,7 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
     expect(html).toContain('Sweet equity strip');
     expect(html).toContain('Loan notes subscribed (institutional strip)');
     expect(html).toContain('Loan notes accrued at exit (pre-redemption)');
-    expect(html).toContain('Sweet-equity ratchet tiers reached (§22.5 basis');
+    expect(html).toContain('Sweet-equity ratchet tiers reached (on the institution’s own realised value');
     expect(html).toContain('REALIZED');
     // value provenance: the displayed strings are the named fields, formatted by lib/format
     expect(html).toContain(money(es.loan_notes_subscribed, 'USD'));   // 351.07
@@ -50,7 +50,7 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
     expect(html).toContain('REALIZED MOIC');
   });
 
-  it('G10-RATCHET and every v1 golden: the block is ABSENT (never a zero table) — §22.10 biconditional', () => {
+  it('G10-RATCHET and every v1 golden: the block is ABSENT (never a zero table); §22.10 biconditional', () => {
     for (const g of ['G10RATCHET', 'G3', 'G2'] as const) {
       const { html } = render(g);
       expect(html, g).toBe('');
@@ -60,14 +60,14 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
     const o = runModel(facts, assumptions);
     const returnsHtml = renderToStaticMarkup(React.createElement(Returns, { o, ccy: 'USD' as const }));
     expect(returnsHtml).not.toContain('Sweet equity strip');
-    expect(returnsHtml).not.toContain('SPEC §22');
+    expect(returnsHtml).not.toContain('>Warrant<');
   });
 
   it('WARRANT-ONLY shape: headed "Warrant", loan-note and ratchet rows ABSENT, N/A never a sentinel', () => {
     const { facts, assumptions } = GOLDEN_DEALS.G9SWEET;
     const o = runModel(facts, { ...assumptions, sweet_equity: null });
     const html = renderToStaticMarkup(React.createElement(EquityStrip, { o, ccy: 'USD' as const }));
-    expect(html).toContain('Warrant (SPEC §22)');
+    expect(html).toContain('>Warrant<');
     expect(html).not.toContain('Loan notes subscribed');
     expect(html).not.toContain('ratchet tiers');
     expect(html).not.toContain('NaN');
@@ -88,7 +88,7 @@ describe('§22 display surface — the EquityStrip block (Returns tab)', () => {
   });
 });
 
-describe('§22 display surface — the S&U tab (conformance B1 twin)', () => {
+describe('§22 display surface: the S&U tab (conformance B1 twin)', () => {
   it('the Sources table carries the subscription row on a strip deal and foots; absent when off', async () => {
     const { SU } = await import('../components/deal-engine/v2/OutputTabs');
     const { facts, assumptions } = GOLDEN_DEALS.G9SWEET;
@@ -102,10 +102,10 @@ describe('§22 display surface — the S&U tab (conformance B1 twin)', () => {
   });
 });
 
-describe('§22 methodology surface (React) — the §15 row', () => {
+describe('§22 methodology surface (React): the §15 row', () => {
   it('the §22.11 disclosure row is present and carries the load-bearing clauses', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Sweet equity / ratchets / warrants (§22)');
+    expect(html).toContain('Sweet equity / ratchets / warrants');
     for (const clause of [
       'EQUITY',                          // loan notes are equity, outside leverage
       'MARGINAL',                        // never cliffs

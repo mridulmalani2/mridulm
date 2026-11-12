@@ -114,7 +114,7 @@ function build(spec: GoldenSpec) {
 
 describe('operating.ts reproduces the golden operating columns (C1 gate)', () => {
   for (const golden of ['G1', 'G2', 'G2D', 'G3', 'G4', 'G5']) {
-    it(`${golden}: revenue, margin path, EBITDA/adj, D&A, EBIT, capex, NWC, OID & fee amortization — every year`, () => {
+    it(`${golden}: revenue, margin path, EBITDA/adj, D&A, EBIT, capex, NWC, OID & fee amortization; every year`, () => {
       const g = load(golden);
       const out = build(SPECS[golden]);
       expect(out.years).toHaveLength(g.operating.length);
@@ -210,7 +210,7 @@ describe('operating.ts §7 properties', () => {
     );
   });
 
-  it('§7 trajectory shapes pinned EXACTLY (C1 review): w(t) = t / √t / t² — any other monotone weight fails. Domain: base, target ∈ [1%, 60%], N ∈ [1, 12]', () => {
+  it('§7 trajectory shapes pinned EXACTLY (C1 review): w(t) = t / √t / t²; any other monotone weight fails. Domain: base, target ∈ [1%, 60%], N ∈ [1, 12]', () => {
     // The ordering property alone admits any monotone weight between the bounds
     // (e.g. w(t) = t^0.7 labeled front_loaded) — pin the §7 formula itself.
     fc.assert(

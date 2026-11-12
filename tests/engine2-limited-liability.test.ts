@@ -54,7 +54,7 @@ describe('§9.1 limited liability at exit', () => {
     expect(below.exit.debt_shortfall_at_exit).toBeLessThan(1e-3);
   });
 
-  it('valuation: the flow-to-equity exit value is the floored equity — the claim is worth zero at worst', () => {
+  it('valuation: the flow-to-equity exit value is the floored equity; the claim is worth zero at worst', () => {
     const v = { risk_free: 0.04, mrp: 0.06, asset_beta: 0.9, debt_beta: 0, long_run_growth: 0.025, leverage_timing: 'end_of_year' as const };
     const o = runModel(GOLDEN_DEALS.G2.facts, { ...GOLDEN_DEALS.G2.assumptions, exit: { ...GOLDEN_DEALS.G2.assumptions.exit, multiple: 0.5 }, valuation: v });
     expect(o.valuation!.assumed.exit_equity_total).toBe(0);

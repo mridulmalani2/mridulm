@@ -20,11 +20,11 @@ const render = (golden: keyof typeof GOLDEN_DEALS) => {
   return { o, html: renderToStaticMarkup(React.createElement(Debt, { o, ccy: 'USD' as const })) };
 };
 
-describe('§18 refi display surface — Debt tab', () => {
+describe('§18 refi display surface: Debt tab', () => {
   it('G6-REFI: the "Refinancing events" table renders with the SPEC-labelled columns and named-field values', () => {
     const { o, html } = render('G6REFI');
     // labels present (mutating any of these strings reddens this assertion — gate (c))
-    expect(html).toContain('Refinancing events (§18)');
+    expect(html).toContain('Refinancing events');
     expect(html).toContain('Cash cost (premium + new OID + fees)');
     expect(html).toContain('Old OID + fees written off');
     // value provenance: the displayed numbers are money(named field) — NOT a recomputation.
@@ -75,26 +75,26 @@ describe('§18 refi display surface — Debt tab', () => {
   });
 });
 
-describe('§18.8 — the v1 refi simplifications are LISTED on the methodology page (SPEC §15)', () => {
+describe('§18.8: the v1 refi simplifications are LISTED on the methodology page (SPEC §15)', () => {
   it('the Disclosures table carries the Refinancing row with the §18.5 tax wording (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Refinancing (§18)');
+    expect(html).toContain('Refinancing');
     // the load-bearing clauses of the §15 sentence — a paraphrase drift reddens here
     expect(html).toContain('par-for-par');
-    expect(html).toContain('deducted IN the refi year by tax character (§7.1)');
+    expect(html).toContain('deducted IN the refi year by tax character');
     // §7.1 [v2.4.0] the character/timing row for debt retired or refinanced
-    expect(html).toContain('Debt retired or refinanced (§7.1)');
+    expect(html).toContain('Debt retired or refinanced');
     expect(html).toContain('a sweep-driven early retirement deducts the FOLLOWING year');
     expect(html).toContain('no forward-curve or covenant-cure trigger');
   });
 });
 
-describe('§15 — the v1.1.0 interim-distributions simplifications are LISTED on the methodology page', () => {
+describe('§15: the v1.1.0 interim-distributions simplifications are LISTED on the methodology page', () => {
   // Same class as the §18.8 row above (hostile review 2026-08-07): the §15 SPEC sentence has
   // carried these clauses since v1.1.0 while neither methodology surface listed them.
   it('the Disclosures table carries the Interim distributions row (label mutation-tested)', () => {
     const html = renderToStaticMarkup(React.createElement(Methodology));
-    expect(html).toContain('Interim distributions (§3 step 7)');
+    expect(html).toContain('Interim distributions');
     expect(html).toContain('never revolver-funded');
     expect(html).toContain('blocked capacity does not accrue');
     expect(html).toContain('closed-form pro-forma net-leverage test');

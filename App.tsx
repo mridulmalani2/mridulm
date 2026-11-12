@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage';
 import NotFound from './pages/NotFound';
 import { motion, useScroll, useSpring, MotionConfig } from 'framer-motion';
 import { SHOW_RESEARCH } from './config/features';
+import DealEngineLoading from './components/deal-engine/shell/LoadingShell';
 
 // Secondary routes are code-split so the homepage payload no longer ships the
 // deal engine (exceljs, recharts, the LBO engine) or the research surfaces.
@@ -36,7 +37,7 @@ const App: React.FC = () => {
   return (
     <MotionConfig reducedMotion="user">
     <div
-      className={`relative min-h-screen ${isDealEngine ? 'bg-[#080b11]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-ink/10 selection:text-ink' : 'bg-black'}`}
+      className={`relative min-h-screen ${isDealEngine ? 'bg-[#F4F5F2]' : isResearchArticles ? 'bg-[#F9F9F7]' : isLight ? 'bg-canvas text-ink selection:bg-ink/10 selection:text-ink' : 'bg-black'}`}
     >
       {/* Skip to main content link */}
       <a
@@ -62,7 +63,7 @@ const App: React.FC = () => {
         </header>
       )}
 
-      <Suspense fallback={<div className="min-h-screen" aria-hidden="true" />}>
+      <Suspense fallback={isDealEngine ? <DealEngineLoading /> : <div className="min-h-screen" aria-hidden="true" />}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           {/* /deal-engine/lbo/<step> — the page reads the step from the URL and redirects to the

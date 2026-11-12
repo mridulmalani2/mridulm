@@ -17,7 +17,7 @@ const close = (a: number | null | undefined, b: number, what: string, tol = TOL)
   expect(Math.abs((a as number) - b), `${what}: ${a} vs ${b}`).toBeLessThan(tol * Math.max(1, Math.abs(b)));
 };
 
-describe('G12-PROF — the reference LBO + flow-to-equity workbook, through the ONE engine', () => {
+describe('G12-PROF: the reference LBO + flow-to-equity workbook, through the ONE engine', () => {
   const o = runModel(G12_FACTS, G12_ASSUMPTIONS);
   const v = o.valuation!;
 
@@ -25,7 +25,7 @@ describe('G12-PROF — the reference LBO + flow-to-equity workbook, through the 
     expect(missingInputs(G12_FACTS, G12_ASSUMPTIONS, [])).toEqual([]);
   });
 
-  it('operating lines reproduce the case (EBIT + D&A = EBITDA, capex = D&A, ΔNWC grown) — revenue is not modelled, never zero', () => {
+  it('operating lines reproduce the case (EBIT + D&A = EBITDA, capex = D&A, ΔNWC grown): revenue is not modelled, never zero', () => {
     for (let t = 0; t < 5; t++) {
       close(o.operating[t].ebit, expected.operating.ebit[t], `EBIT y${t + 1}`);
       close(o.operating[t].da, expected.operating.da[t], `D&A y${t + 1}`);
@@ -111,7 +111,7 @@ describe('G12-PROF — the reference LBO + flow-to-equity workbook, through the 
     close(atTyped.valuation!.fundamentals!.npv, 3.568, 'NPV at the typed 2.516%', 1e-3);
   });
 
-  it("start-of-year leverage convention: the reference's own note — about 231.9 for exit (b)", () => {
+  it("start-of-year leverage convention: the reference's own note: about 231.9 for exit (b)", () => {
     const s = runModel(G12_FACTS, { ...G12_ASSUMPTIONS, valuation: { ...G12_ASSUMPTIONS.valuation!, leverage_timing: 'start_of_year' } });
     close(s.valuation!.fundamentals!.equity_value_at_entry, 231.9055403, 'E0 start-of-year (b)', 1e-8);
   });

@@ -98,7 +98,7 @@ const SPECS: Record<string, DealSpec> = {
 
 describe('kernel/waterfall reproduces the golden debt blocks (B2 gate)', () => {
   for (const golden of ['G1', 'G2', 'G2D', 'G3', 'G4', 'G5']) {
-    it(`${golden}: per-tranche interest/amort/sweep, pool, revolver and closing cash — every year, inputs injected`, () => {
+    it(`${golden}: per-tranche interest/amort/sweep, pool, revolver and closing cash; every year, inputs injected`, () => {
       const g = load(golden);
       const spec = SPECS[golden];
       const years: number = g.waterfall.length;
@@ -285,7 +285,7 @@ function checkTaxBlock(golden: string, policy: KernelTaxPolicy, opening: KernelT
 }
 
 describe('kernel/taxstate reproduces the golden tax blocks (B2 gate)', () => {
-  it('G2: §163(j) never binds — full deduction, zero carryforward, no NOL activity', () => {
+  it('G2: §163(j) never binds; full deduction, zero carryforward, no NOL activity', () => {
     checkTaxBlock('G2', G_BASE_POLICY, { acquired_nol: 0, postclose_nol: 0, s163j_carryforward: 0 });
     const g = load('G2');
     for (let y = 0; y < g.tax.length; y++) {
@@ -322,7 +322,7 @@ describe('kernel/taxstate reproduces the golden tax blocks (B2 gate)', () => {
     expect(prevCf).toBeGreaterThan(0);
   });
 
-  it('G4: loss banking, acquired-first ordering, §382 cap at 3.0, 15% floor — the full §6 state machine (§17 asserts)', () => {
+  it('G4: loss banking, acquired-first ordering, §382 cap at 3.0, 15% floor; the full §6 state machine (§17 asserts)', () => {
     const policy: KernelTaxPolicy = {
       rate: 0.25,
       interest_deductible: true,
@@ -360,7 +360,7 @@ describe('kernel/taxstate reproduces the golden tax blocks (B2 gate)', () => {
 
 // ── irr vs golden return streams ─────────────────────────────────────────────
 
-describe('kernel/irr reproduces the golden IRRs (±0.1bp — SPEC §15)', () => {
+describe('kernel/irr reproduces the golden IRRs (±0.1bp: SPEC §15)', () => {
   for (const golden of ['G1', 'G2', 'G2D', 'G3', 'G4', 'G5']) {
     it(`${golden}: sponsor_net / pre_promote / unlevered IRRs from fixture cashflows`, () => {
       const g = load(golden);

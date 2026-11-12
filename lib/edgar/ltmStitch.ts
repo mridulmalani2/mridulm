@@ -65,7 +65,7 @@ function dedupeGroup(g: XbrlFactValue[], tag: string): Point {
   const original = sorted[0], winner = sorted[sorted.length - 1];
   let note: string | null = null;
   if (original.val !== 0 && Math.abs((winner.val - original.val) / original.val) > 0.01) {
-    note = `restated: ${original.val} (filed ${original.filed ?? '—'}) -> ${winner.val} (filed ${winner.filed ?? '—'})`;
+    note = `restated: ${original.val} (filed ${original.filed ?? '–'}) -> ${winner.val} (filed ${winner.filed ?? '–'})`;
   }
   return { start: winner.start, end: winner.end, val: winner.val, filed: winner.filed ?? null, tag, note, vintage_count: g.length };
 }
@@ -157,12 +157,12 @@ export function stitchLtm(facts: CompanyFacts, importDate: string, tags: StitchT
   if (dspan > 7) return fyFallback(`YTD span mismatch ${dspan}d > 7d (not a 53rd-week case)`, k);
   for (const [pts] of [[rev], [oi], [da]] as [PointMap][]) {
     const pr = at(pts, k.prior!);
-    if (pr && pr.vintage_count < 2) return fyFallback('prior-YTD single vintage — restatement check un-evaluable (fail-closed)', k);
+    if (pr && pr.vintage_count < 2) return fyFallback('prior-YTD single vintage: restatement check un-evaluable (fail-closed)', k);
   }
   for (const [pts, nm] of [[rev, 'Revenue'], [oi, 'OperInc'], [da, 'D&A']] as [PointMap, string][]) {
     for (const [spanName, kk] of [['FY', k.fy], ['YTD_current', k.cur!], ['YTD_prior', k.prior!]] as [string, [string | undefined, string]][]) {
       const p = at(pts, kk);
-      if (p && p.note) return fyFallback(`${nm} ${spanName} restated >1% vs original — cross-vintage basis mix (${p.note})`, k);
+      if (p && p.note) return fyFallback(`${nm} ${spanName} restated >1% vs original: cross-vintage basis mix (${p.note})`, k);
     }
     // Cross-span TAG consistency [§1.1 rule 1]: a stitching metric whose WINNING tag differs across
     // FY/YTD_c/YTD_p mixes definitions (Revenues vs RevenueFromContractWithCustomer…) — a basis
@@ -170,7 +170,7 @@ export function stitchLtm(facts: CompanyFacts, importDate: string, tags: StitchT
     // goldens use single canonical tags, so this only bites the production multi-tag path.
     const tags = [at(pts, k.fy), at(pts, k.cur!), at(pts, k.prior!)].filter(Boolean).map((p) => p!.tag);
     if (tags.length === 3 && new Set(tags).size > 1) {
-      return fyFallback(`${nm} tag differs across stitch spans (${[...new Set(tags)].join(' / ')}) — mixed-basis; fail-closed`, k);
+      return fyFallback(`${nm} tag differs across stitch spans (${[...new Set(tags)].join(' / ')}): mixed-basis; fail-closed`, k);
     }
   }
 

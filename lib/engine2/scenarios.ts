@@ -52,7 +52,7 @@ export function applyScenarioDeltas(base: DealAssumptions, deltas: ScenarioDelta
     for (const key of Object.keys(ops)) {
       const line = DRIVER_OF[key];
       if (line && line !== 'margin_driver' && lines[line] !== null) {
-        throw new RangeError(`scenarios: '${key}' moves a §7 driver, but that line is entered directly in this deal — shift the entered line instead (§24.3 R8)`);
+        throw new RangeError(`scenarios: '${key}' moves an operating driver, but that line is entered directly in this deal: shift the entered line instead`);
       }
     }
   }
@@ -133,7 +133,7 @@ export function applyAxis(
     case 'growth': // operating-side: per-year SHIFT vs the base path (delta; center = 0)
       // §24.3 R8: an axis that moves nothing is a defect, not a no-op.
       if (assumptions.operations.lines?.revenue) {
-        throw new RangeError('scenarios: the growth axis moves the revenue growth driver, but revenue is entered by year in this deal (§24.3 R8)');
+        throw new RangeError('scenarios: the growth axis moves the revenue growth driver, but revenue is entered by year in this deal');
       }
       return {
         ...assumptions,
@@ -144,7 +144,7 @@ export function applyAxis(
       };
     case 'margin': // operating-side (absolute target)
       if (assumptions.operations.lines?.ebitda) {
-        throw new RangeError('scenarios: the margin axis moves the EBITDA margin driver, but EBITDA/EBIT is entered by year in this deal (§24.3 R8)');
+        throw new RangeError('scenarios: the margin axis moves the EBITDA margin driver, but EBITDA/EBIT is entered by year in this deal');
       }
       return { ...assumptions, operations: { ...assumptions.operations, target_margin: value } };
   }

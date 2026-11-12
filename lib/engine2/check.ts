@@ -62,7 +62,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'loan_notes_unredeemed',
       severity: 'warn',
-      message: `Exit equity does not cover the accreted loan notes: $${b.toFixed(2)}m accrued vs $${r.toFixed(2)}m redeemed at exit. The ordinary pot is zero-or-negative to that extent and management's sweet equity is worthless on this run (SPEC §22.2/§14.23(g)).`,
+      message: `Exit equity does not cover the accreted loan notes: $${b.toFixed(2)}m accrued vs $${r.toFixed(2)}m redeemed at exit. The ordinary pot is zero-or-negative to that extent and management's sweet equity is worthless on this run.`,
     });
   }
 
@@ -75,7 +75,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'selldown_below_cost',
       severity: 'warn',
-      message: `The year-${s.year} selldown of ${(s.fraction * 100).toFixed(1)}% fetches $${s.selldown_proceeds.toFixed(2)}m — below that slice's share of the sponsor's entry cheque ($${(s.fraction * x.sources_uses.sponsor_equity).toFixed(2)}m) (SPEC §23/§14.24(f)).`,
+      message: `The year-${s.year} selldown of ${(s.fraction * 100).toFixed(1)}% fetches $${s.selldown_proceeds.toFixed(2)}m: below that slice's share of the sponsor's entry cheque ($${(s.fraction * x.sources_uses.sponsor_equity).toFixed(2)}m).`,
     });
   }
 
@@ -85,7 +85,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'exit_debt_shortfall',
       severity: 'warn',
-      message: `The exit does not cover the debt: lenders recover $${x.exit.debt_shortfall_at_exit.toFixed(2)}m less than they are owed. Equity is worth zero at exit (limited liability — no equity holder pays in) (SPEC §9.1).`,
+      message: `The exit does not cover the debt: lenders recover $${x.exit.debt_shortfall_at_exit.toFixed(2)}m less than they are owed. Equity is worth zero at exit (limited liability; no equity holder pays in).`,
     });
   }
 
@@ -103,7 +103,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
       flags.push({
         code: 'ahydo_shape',
         severity: 'warn',
-        message: `"${tr.name}" has the AHYDO shape (maturity ${tr.maturity_years}y > 5 with accruing PIK): under §163(e)(5)/§163(i) the accrued-PIK deduction can be DEFERRED until paid and a disqualified portion permanently disallowed. v1 deducts PIK as accrued and does NOT model this (SPEC §20.4/§20.8) — the assumed cure is the contractual AHYDO catch-up payment most such indentures carry. The yield leg (YTM ≥ AFR + 5pts) is NOT tested here (needs the monthly AFR) and the significant-OID leg is proxied, so this flag is structural and deliberately over-inclusive.`,
+        message: `"${tr.name}" has the AHYDO shape (maturity ${tr.maturity_years}y > 5 with accruing PIK): under §163(e)(5)/§163(i) the accrued-PIK deduction can be DEFERRED until paid and a disqualified portion permanently disallowed. The model deducts PIK as accrued and does NOT model this; the assumed cure is the contractual AHYDO catch-up payment most such indentures carry. The yield leg (YTM ≥ AFR + 5pts) is NOT tested here (needs the monthly AFR) and the significant-OID leg is proxied, so this flag is structural and deliberately over-inclusive.`,
       });
     }
   }
@@ -119,7 +119,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
         flags.push({
           code: 'refi_noop',
           severity: 'warn',
-          message: `Refinancing of "${r.name}" scheduled for year ${t + 1} is a no-op — the tranche entered the year at/below the §7 retired tolerance (already repaid); the stamped premium, new OID/fees and write-off are ~0 (§18.8)`,
+          message: `Refinancing of "${r.name}" scheduled for year ${t + 1} is a no-op: the tranche entered the year already repaid; the stamped premium, new OID/fees and write-off are ~0`,
         });
       }
     }
@@ -129,7 +129,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'negative_sponsor_equity',
       severity: 'block',
-      message: `Sponsor equity plug is ${x.sources_uses.sponsor_equity.toFixed(1)} — uses exceed debt + rollover capacity (§2 solvency check)`,
+      message: `Sponsor equity plug is ${x.sources_uses.sponsor_equity.toFixed(1)}: uses exceed debt + rollover capacity`,
     });
   }
 
@@ -138,7 +138,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'cash_floor_breach',
       severity: 'block',
-      message: `Cash floor breached in year ${breachYear + 1} with the revolver exhausted — post-breach years are not economically meaningful (§3 step 6, v1.0.3)`,
+      message: `Cash floor breached in year ${breachYear + 1} with the revolver exhausted: post-breach years are not economically meaningful`,
     });
   }
 
@@ -153,7 +153,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'distribution_blocked',
       severity: 'warn',
-      message: `Restricted-payment trap blocks distributions in year${blockedYears.length > 1 ? 's' : ''} ${blockedYears.join(', ')} — cash was available but the pro-forma net-leverage test was not met; blocked capacity does NOT carry forward (§3.7)`,
+      message: `Restricted-payment trap blocks distributions in year${blockedYears.length > 1 ? 's' : ''} ${blockedYears.join(', ')}: cash was available but the pro-forma net-leverage test was not met; blocked capacity does NOT carry forward`,
     });
   }
 
@@ -162,7 +162,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'negative_ppe',
       severity: 'warn',
-      message: `Net PP&E rolls negative from year ${negativePpeYear} — D&A outruns capex (§8 mechanical roll; revisit da_pct vs capex_pct)`,
+      message: `Net PP&E rolls negative from year ${negativePpeYear}: D&A outruns capex (PP&E rolls forward as opening balance + capex − D&A; revisit D&A and capex as a % of revenue)`,
     });
   }
 
@@ -174,7 +174,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'negative_goodwill',
       severity: 'warn',
-      message: `Goodwill plug is NEGATIVE (${x.balance_sheet[0].goodwill.toFixed(1)}) — entry price (incl. transaction costs) sits below the carrying value of net identifiable assets; bargain-purchase signal, shown unclamped (§8; ASC 805 gain recognition out of scope in v1)`,
+      message: `Goodwill plug is NEGATIVE (${x.balance_sheet[0].goodwill.toFixed(1)}): entry price (incl. transaction costs) sits below the carrying value of net identifiable assets; bargain-purchase signal, shown as calculated (the ASC 805 bargain-purchase gain is not modelled)`,
     });
   }
 
@@ -184,7 +184,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'ppe_seeded_at_zero',
       severity: 'warn',
-      message: 'Opening PP&E seeded at 0 — the filing/facts provided no net PP&E; the §8 roll and D&A basis start from zero (disclosed §8 fallback)',
+      message: 'Opening PP&E seeded at 0: the filing/facts provided no net PP&E; the PP&E roll-forward and the D&A basis start from zero',
     });
   }
 
@@ -193,7 +193,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'covenant_breach_base_case',
       severity: 'warn',
-      message: `Base case breaches a covenant in year ${covenantBreach} (signed headroom negative — §11)`,
+      message: `Base case breaches a covenant in year ${covenantBreach} (headroom is negative)`,
     });
   }
 
@@ -212,7 +212,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'basis_mismatch',
       severity: 'warn',
-      message: `Entry basis (${x.assumptions.entry.basis}) differs from exit basis (${x.assumptions.exit.basis}) — the multiple comparison is apples-to-oranges (§9/§11)`,
+      message: `Entry is priced on ${x.assumptions.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA and the exit on ${x.assumptions.exit.basis === 'ntm' ? 'the year after exit' : 'exit-year'} EBITDA. The two multiples are on different bases, so the change between them is not all multiple expansion`,
     });
   }
 
@@ -223,7 +223,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
       flags.push({
         code: 'implausible_days',
         severity: 'warn',
-        message: `NWC days outside plausible rails: ${bad.map((k) => `${k.toUpperCase()}=${nwc[k]}`).join(', ')} (§7)`,
+        message: `NWC days outside plausible rails: ${bad.map((k) => `${k.toUpperCase()}=${nwc[k]}`).join(', ')}`,
       });
     }
   }

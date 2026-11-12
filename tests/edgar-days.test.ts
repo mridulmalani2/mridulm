@@ -69,10 +69,10 @@ const SAAS: CompanyFacts = {
   },
 } as unknown as CompanyFacts;
 
-describe('D2 — operating NWC + days on a manufacturer (all components resolve)', () => {
+describe('D2: operating NWC + days on a manufacturer (all components resolve)', () => {
   const r = mapCompanyFacts(MAKER, { sicCode: '3711' });
 
-  it('operating NWC subtracts cash from CA and current debt from CL — one definition', () => {
+  it('operating NWC subtracts cash from CA and current debt from CL: one definition', () => {
     // (500 − 100) − (300 − 20) = 120
     expect(r.nwc?.value).toBeCloseTo(120, 9);
     expect(r.nwc?.provenance.detail).toContain('OPERATING NWC');
@@ -91,7 +91,7 @@ describe('D2 — operating NWC + days on a manufacturer (all components resolve)
   });
 });
 
-describe('D2 — gates', () => {
+describe('D2: gates', () => {
   it('bundled payables+accrued ⇒ DPO null with the %-fallback note; DSO/DIO still computed', () => {
     const r = mapCompanyFacts(BUNDLER, { sicCode: '2834' });
     expect(r.dpo).toBeNull();

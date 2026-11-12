@@ -95,7 +95,7 @@ because `mapIfrs`'s standard-vs-extension classification reads namespace URIs, r
     **Everything else — including TR4/TR5 `fixed-empty` and TR2/TR3 `nocontent` (registry
     semantics: empty STRING, not zero — mapping them to 0 would fabricate a number), all
     date/text transforms, and `ixt-sec:*` word-numbers — DROPS the fact WITH a note**
-    (`unsupported transform <qname> on <concept> — fact dropped`). A dropped fact can only
+    (`unsupported transform <qname> on <concept>, fact dropped`). A dropped fact can only
     ever produce a GAP (surfaced, user-fillable), never a wrong number.
   - `sign="-"` negates (after transform, before scale); absent `scale` → 0; `decimals`
     recorded verbatim (no re-rounding — SPEC §15).

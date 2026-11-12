@@ -53,12 +53,12 @@ function inputsFromFixture(g: any, golden: string, y: number): CreditYearInputs 
   };
 }
 
-describe('credit.ts — §11 formulas on the gospel golden columns (C7 gate)', () => {
+describe('credit.ts: §11 formulas on the gospel golden columns (C7 gate)', () => {
   // G8PIKT added at conformance step 5 [note 5]: §20.5's §11 claim (coverage reads CASH
   // interest only, so a 'pik' year raises it) deserves the same golden-vs-fixture gate every
   // other feature golden gets — credit.ts is untouched by §20, but its INPUT moves per election.
   for (const golden of ['G2', 'G2D', 'G3', 'G4', 'G5', 'G6REFI', 'G8PIKT']) {
-    it(`${golden}: leverage (net, senior-by-TYPE), ICR, FCCR, DSCR on scheduled service, deleveraging subtotals — every year`, () => {
+    it(`${golden}: leverage (net, senior-by-TYPE), ICR, FCCR, DSCR on scheduled service, deleveraging subtotals; every year`, () => {
       const g = load(golden);
       for (let y = 0; y < g.waterfall.length; y++) {
         const c = buildCreditYear(COV_LITE, y, inputsFromFixture(g, golden, y));
@@ -115,7 +115,7 @@ describe('credit.ts — §11 formulas on the gospel golden columns (C7 gate)', (
     expect(c.senior_net_leverage!).toBeLessThan(c.net_leverage!);
   });
 
-  it('G1 N/A semantics (§11): no debt ⇒ ICR/FCCR/DSCR/paydown null, net leverage SIGNED negative (net cash) — no sentinels anywhere', () => {
+  it('G1 N/A semantics (§11): no debt ⇒ ICR/FCCR/DSCR/paydown null, net leverage SIGNED negative (net cash); no sentinels anywhere', () => {
     const g = load('G1');
     const c = buildCreditYear(COV_LITE, 0, inputsFromFixture(g, 'G1', 0));
     expect(c.icr).toBeNull();
@@ -129,13 +129,13 @@ describe('credit.ts — §11 formulas on the gospel golden columns (C7 gate)', (
   });
 });
 
-describe('credit.ts — covenant machinery (golden-uncovered: hand fixtures)', () => {
+describe('credit.ts: covenant machinery (golden-uncovered: hand fixtures)', () => {
   const baseInputs = (): CreditYearInputs => {
     const g = load('G2');
     return inputsFromFixture(g, 'G2', 0); // Y1: net leverage ≈ (401.7 − 21.3)/116.6 ≈ 3.26x
   };
 
-  it('fcf_conversion denominator is EBITDA_adj, not raw EBITDA — pinned with monitoring ON [audit; golden-uncovered]', () => {
+  it('fcf_conversion denominator is EBITDA_adj, not raw EBITDA: pinned with monitoring ON [audit; golden-uncovered]', () => {
     // All §17 goldens run monitoring:null, so ebitda_adj ≡ ebitda and the two denominators are
     // indistinguishable. Turn monitoring ON so ebitda_adj < ebitda, and pin the §11 basis.
     const { facts, assumptions } = GOLDEN_DEALS.G2;

@@ -22,7 +22,7 @@ const breach = runModel(g2.facts, {
 });
 const healthy = runModel(g2.facts, g2.assumptions);
 
-describe('headline returns are withheld on a BLOCK run — and only then', () => {
+describe('headline returns are withheld on a BLOCK run, and only then', () => {
   it('the predicate reads the block severity and nothing else', () => {
     expect(breach.coherence.some((f) => f.code === 'cash_floor_breach' && f.severity === 'block')).toBe(true);
     expect(headlineNotMeaningful(breach)).toBe(true);

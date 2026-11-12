@@ -27,7 +27,7 @@ export function cleaningChecks(pack: StatementPack, ledger: CleaningLedger, clea
     if (!o.reason.trim()) block('override_reason', `Give a reason for restating ${o.line.replace(/_/g, ' ')} in ${periodLabel(pack, o.period)}.`);
     if (!restatableAt(pack, o.line, o.period)) {
       block('override_not_applicable', o.line === 'ebitda' && ebitdaHasComponents(pack, o.period)
-        ? `EBITDA in ${periodLabel(pack, o.period)} is operating income + D&A — restate those cells, not the total.`
+        ? `EBITDA in ${periodLabel(pack, o.period)} is operating income + D&A: restate those cells, not the total.`
         : `${o.line.replace(/_/g, ' ')} in ${periodLabel(pack, o.period)} cannot be restated: the model does not read that cell.`);
     }
   }
@@ -48,14 +48,14 @@ export function cleaningChecks(pack: StatementPack, ledger: CleaningLedger, clea
   for (const a of ledger.adjustments) {
     if (!a.included) continue;
     const name = a.label.trim() || 'an unnamed adjustment';
-    if (!a.label.trim()) block('adjustment_label', 'Name every adjustment — an unnamed row cannot be reviewed.');
+    if (!a.label.trim()) block('adjustment_label', 'Name every adjustment: an unnamed row cannot be reviewed.');
     if (a.target === 'ebitda' && a.forecast === null) {
       block('forecast_choice', `Say whether “${name}” stops or continues after the deal. A cost that continues is added back for the price, but stays in the forecast.`);
     }
     const p = mustHave[a.target];
     if (p === null) continue;
     if ((a.amounts[p] ?? null) === null) {
-      block('adjustment_amount', `Enter the ${periodLabel(pack, p)} amount for “${name}” — that is the period the model reads.`);
+      block('adjustment_amount', `Enter the ${periodLabel(pack, p)} amount for “${name}”: that is the period the model reads.`);
     } else if (a.target === 'nwc' ? raw.nwc === null : baseOf(a.target, p) === null) {
       block('adjustment_no_base', `“${name}” adjusts ${a.target === 'da' ? 'D&A' : a.target === 'nwc' ? 'operating NWC' : a.target} in ${periodLabel(pack, p)}, but the source gives no figure there. Enter the reported figure in the grid first.`);
     }
@@ -77,7 +77,7 @@ export function cleaningChecks(pack: StatementPack, ledger: CleaningLedger, clea
     if (nd.lease_choice === null) {
       block('lease_choice', 'Choose how lease liabilities are treated in net debt. There is no default: it has to match how rent is treated in EBITDA.');
     } else if (pack.gaap === 'us-gaap' && nd.lease_choice === 'all' && nd.leases.some((l) => l.line === 'operating_lease_liab')) {
-      warn('lease_basis', 'US GAAP EBITDA is after operating-lease rent. Counting operating-lease liabilities as debt without adding the rent back to EBITDA counts the leases twice — add the rent as an EBITDA adjustment, or leave operating leases out.');
+      warn('lease_basis', 'US GAAP EBITDA is after operating-lease rent. Counting operating-lease liabilities as debt without adding the rent back to EBITDA counts the leases twice: add the rent as an EBITDA adjustment, or leave operating leases out.');
     } else if (pack.gaap === 'ifrs' && nd.lease_choice !== 'all') {
       warn('lease_basis', 'IFRS 16 EBITDA is before lease cost (it sits in depreciation and interest). Leaving lease liabilities out of debt understates leverage against that EBITDA.');
     }
@@ -124,7 +124,7 @@ export function cleaningChecks(pack: StatementPack, ledger: CleaningLedger, clea
     }
   }
   if (eb && eb.adjusted !== null && eb.adjusted <= 0) {
-    warn('ebitda_not_positive', 'Adjusted EBITDA is not positive. The model cannot price a deal as a multiple of it — enter a purchase price directly on the Assumptions step.');
+    warn('ebitda_not_positive', 'Adjusted EBITDA is not positive. The model cannot price a deal as a multiple of it: enter a purchase price directly on the Assumptions step.');
   }
   return flags;
 }
