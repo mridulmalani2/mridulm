@@ -59,7 +59,7 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).toContain('disabled'); // no draft yet ⇒ Build gated
     useEngine2Model.getState().setHoldYears(5);
     html = renderToStaticMarkup(<Workbench />);
-    expect(html).toContain('still blank — nothing is assumed for you');
+    expect(html).toContain('still blank. Nothing is assumed for you.');
     expect(html).toContain('use '); // one-click proposals are OFFERED…
     expect(html).toContain('· history'); // …with their basis (growth: the filed CAGR)
     expect(html).toContain('· convention'); // (entry multiple: a cited median)
@@ -76,7 +76,8 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).not.toContain('still blank');
     expect(html).not.toContain('disabled');
     // §11 [v1.1.2]: the preview reads GROSS total leverage across ALL term tranches and says so
-    expect(html).toContain('Total leverage (gross, x FY EBITDA): 4.0x');
+    expect(html).toContain('Total leverage (gross, x FY EBITDA)');
+    expect(html).toContain('>4.0x<');
     expect(html).toContain('YOU'); // entered values wear the YOU badge
   });
 
@@ -176,11 +177,11 @@ describe('v2 Workbench — SSR smoke on the real store', () => {
     expect(html).not.toMatch(/\d\.\d{8,}/); // exhibits also cross the format boundary
   });
 
-  it('history cells that are gaps render as em-dashes, never zeros', () => {
+  it('history cells that are gaps render as dashes, never zeros', () => {
     importFixture(); // 2023/2024 have revenue only — EBITDA/capex cells are gaps
     const html = renderToStaticMarkup(<Workbench />);
-    expect(html).toContain('—');
-    expect((html.match(/—/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    // an en dash since the UI upgrade (em dashes were taken out of the interface)
+    expect((html.match(/<td>–<\/td>/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -363,7 +364,7 @@ describe('a run the engine calls not meaningful never headlines a return (advers
     expect(out.coherence.some((f) => f.severity === 'block')).toBe(true); // the premise
     const html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('Sponsor IRR N/M');
-    expect(html).toContain('not meaningful — see the ■ warning above');
+    expect(html).toContain('not meaningful: see the ■ warning above');
     expect(html).not.toContain(`Sponsor IRR ${(out.returns.sponsor_net.irr! * 100).toFixed(1)}%`);
     const warn = html.indexOf('■ Cash floor breached');
     expect(warn).toBeGreaterThan(-1);

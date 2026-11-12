@@ -149,3 +149,15 @@ export function impliedEquityDisplay(o: Pick<Engine2ModelOutput, 'derived' | 'fa
     premium_to_market: equity !== null && mcap !== null && mcap > 0 ? equity / mcap - 1 : null,
   };
 }
+
+/**
+ * How far EBITDA can fall before a maximum-net-leverage covenant is breached, holding that
+ * year's net debt as modelled: leverage is net debt ÷ EBITDA, so the test is met until EBITDA
+ * falls by 1 − leverage ÷ level. Null when either figure is absent or not positive (a net-cash
+ * year has no leverage to breach with). Display only; both operands are existing fields
+ * (`credit[t].net_leverage` and the covenant level entered for that year).
+ */
+export function covenantEbitdaCushion(netLeverage: number | null, level: number | null): number | null {
+  if (netLeverage === null || level === null || !(level > 0) || !(netLeverage > 0)) return null;
+  return 1 - netLeverage / level;
+}

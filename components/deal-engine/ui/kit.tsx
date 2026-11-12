@@ -1,9 +1,9 @@
 /**
- * Deal-engine UI kit: the few primitives every screen shares. Colours come from the `--de-*`
- * variables on `.de-root` (index.css) — no component carries a hex value. Figures are set in
- * tabular mono; prose and labels in the proportional face.
+ * Deal-engine UI kit: the primitives every screen shares. Colour, type and shape come from the
+ * `--de-*` variables on `.de-root` (index.css); no component carries a hex value. Figures are
+ * set in the text face with tabular numerals. Blue is a typed number, ink a calculated one.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' ');
 
@@ -29,68 +29,281 @@ export function parseAmount(text: string): number | null | undefined {
   return neg ? -n : n;
 }
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'dark' | 'ghost' | 'quiet'; size?: 'sm' | 'md' };
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'dark' | 'ghost' | 'quiet' | 'danger'; size?: 'sm' | 'md' };
 export const Button: React.FC<ButtonProps> = ({ variant = 'ghost', size = 'md', className, disabled, ...rest }) => (
   <button
     type="button"
     disabled={disabled}
     className={cx(
-      'inline-flex items-center justify-center gap-1.5 font-sans font-medium whitespace-nowrap transition-colors',
-      size === 'sm' ? 'px-2.5 py-1 text-[12px]' : 'px-4 py-2 text-[13px]',
+      'inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap rounded-[var(--de-r-sm)] transition-colors select-none',
+      size === 'sm' ? 'h-8 px-3 text-[13px]' : 'h-10 px-4 text-[14px]',
       disabled && 'opacity-40 cursor-not-allowed',
-      variant === 'primary' && 'bg-[var(--de-accent)] text-white hover:brightness-95',
-      variant === 'dark' && 'bg-[var(--de-ink)] text-white hover:opacity-90',
-      variant === 'ghost' && 'border border-[color:var(--de-rule)] bg-[var(--de-surface)] text-[color:var(--de-ink)] hover:border-[color:var(--de-rule-strong)]',
-      variant === 'quiet' && 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)] underline underline-offset-2 decoration-[color:var(--de-rule)]',
+      (variant === 'primary' || variant === 'dark') && 'bg-[var(--de-ink)] text-white hover:bg-[var(--de-ink-hover)]',
+      variant === 'ghost' && 'border border-[color:var(--de-rule)] bg-[var(--de-surface)] text-[color:var(--de-ink)] hover:border-[color:var(--de-rule-strong)] hover:bg-[var(--de-hover)]',
+      variant === 'quiet' && 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)] hover:bg-[var(--de-sunken)]',
+      variant === 'danger' && 'text-[color:var(--de-accent)] hover:bg-[var(--de-accent-soft)]',
       className,
     )}
     {...rest}
   />
 );
 
-export const Card: React.FC<{ title?: React.ReactNode; aside?: React.ReactNode; className?: string; flush?: boolean; children: React.ReactNode }> = ({ title, aside, className, flush, children }) => (
-  <section className={cx('bg-[var(--de-surface)] border border-[color:var(--de-rule)]', className)}>
+/** A square button that carries only a glyph; `label` is what a screen reader and the tooltip say. */
+export const IconButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }> = ({ label, active, className, children, ...rest }) => (
+  <button type="button" aria-label={label} title={label}
+    className={cx('inline-flex items-center justify-center w-8 h-8 rounded-[var(--de-r-sm)] text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)] hover:bg-[var(--de-sunken)] transition-colors',
+      active && 'bg-[var(--de-sunken)] text-[color:var(--de-ink)]', className)}
+    {...rest}>{children}</button>
+);
+
+export const Card: React.FC<{ title?: React.ReactNode; aside?: React.ReactNode; className?: string; flush?: boolean; children: React.ReactNode; id?: string }> = ({ title, aside, className, flush, children, id }) => (
+  <section id={id} className={cx('bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] min-w-0', className)}>
     {(title || aside) && (
-      <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[color:var(--de-rule)]">
-        <h3 className="font-sans text-[13px] font-semibold tracking-wide text-[color:var(--de-ink)]">{title}</h3>
+      <header className={cx('flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pt-4', flush ? 'pb-3' : 'pb-1')}>
+        <h3 className="text-[15px] font-semibold text-[color:var(--de-ink)]">{title}</h3>
         {aside}
       </header>
     )}
-    <div className={flush ? '' : 'p-4'}>{children}</div>
+    <div className={flush ? '' : 'px-5 pb-5 pt-3'}>{children}</div>
   </section>
 );
 
+/** A small label above a figure or a group. Sentence case, never tracked capitals. */
 export const Eyebrow: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
-  <p className={cx('font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--de-ink-3)]', className)}>{children}</p>
+  <p className={cx('text-[12px] font-medium text-[color:var(--de-ink-3)]', className)}>{children}</p>
 );
 
-export const Kpi: React.FC<{ label: string; value: string; sub?: React.ReactNode; tone?: 'neutral' | 'pos' | 'accent' | 'warn' }> = ({ label, value, sub, tone = 'neutral' }) => (
-  <div className="px-4 py-3 min-w-0">
+export const Kpi: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'neutral' | 'pos' | 'accent' | 'warn' }> = ({ label, value, sub, tone = 'neutral' }) => (
+  <div className="px-5 py-4 min-w-0">
     <Eyebrow>{label}</Eyebrow>
-    <p className={cx('de-num text-[24px] leading-tight mt-1',
+    <p className={cx('de-num text-[28px] font-semibold leading-tight mt-1 truncate',
       tone === 'pos' && 'text-[color:var(--de-pos)]', tone === 'accent' && 'text-[color:var(--de-accent)]', tone === 'warn' && 'text-[color:var(--de-warn)]')}>{value}</p>
-    {sub && <p className="font-sans text-[12px] text-[color:var(--de-ink-2)] mt-0.5">{sub}</p>}
+    {sub && <p className="text-[12px] text-[color:var(--de-ink-3)] mt-1 leading-snug">{sub}</p>}
   </div>
 );
 
-export const Tag: React.FC<{ tone?: 'neutral' | 'input' | 'pos' | 'warn' | 'accent'; children: React.ReactNode; title?: string }> = ({ tone = 'neutral', children, title }) => (
-  <span title={title} className={cx('inline-block px-1.5 py-0.5 font-sans text-[11px] font-medium whitespace-nowrap',
+export const Tag: React.FC<{ tone?: 'neutral' | 'input' | 'pos' | 'warn' | 'accent' | 'ai'; children: React.ReactNode; title?: string }> = ({ tone = 'neutral', children, title }) => (
+  <span title={title} className={cx('inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium whitespace-nowrap',
     tone === 'neutral' && 'bg-[var(--de-sunken)] text-[color:var(--de-ink-2)]',
     tone === 'input' && 'bg-[var(--de-input-soft)] text-[color:var(--de-input)]',
     tone === 'pos' && 'bg-[var(--de-pos-soft)] text-[color:var(--de-pos)]',
     tone === 'warn' && 'bg-[var(--de-warn-soft)] text-[color:var(--de-warn)]',
+    tone === 'ai' && 'bg-[var(--de-ai-soft)] text-[color:var(--de-ai)]',
     tone === 'accent' && 'bg-[var(--de-accent-soft)] text-[color:var(--de-accent)]')}>{children}</span>
 );
 
 export const Callout: React.FC<{ tone: 'block' | 'warn' | 'info'; title?: string; children: React.ReactNode }> = ({ tone, title, children }) => (
-  <div className={cx('px-3 py-2.5 border-l-2 font-sans text-[13px] leading-relaxed',
-    tone === 'block' && 'border-[color:var(--de-accent)] bg-[var(--de-accent-soft)]',
-    tone === 'warn' && 'border-[color:var(--de-warn)] bg-[var(--de-warn-soft)]',
-    tone === 'info' && 'border-[color:var(--de-rule-strong)] bg-[var(--de-sunken)]')}>
-    {title && <p className="font-semibold mb-0.5">{title}</p>}
+  <div className={cx('px-4 py-3 rounded-[var(--de-r-sm)] text-[13px] leading-relaxed',
+    tone === 'block' && 'bg-[var(--de-accent-soft)]',
+    tone === 'warn' && 'bg-[var(--de-warn-soft)]',
+    tone === 'info' && 'bg-[var(--de-sunken)]')}>
+    {title && <p className={cx('font-semibold mb-0.5', tone === 'block' && 'text-[color:var(--de-accent)]', tone === 'warn' && 'text-[color:var(--de-warn)]')}>{title}</p>}
     <div className="text-[color:var(--de-ink-2)]">{children}</div>
   </div>
 );
+
+const Chevron: React.FC = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className="shrink-0 text-[color:var(--de-ink-3)]"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+
+export interface Option<T extends string = string> { value: T; label: string; note?: string }
+
+/**
+ * A drop-down list. A button shows the choice; the list opens beneath it and is driven by the
+ * arrow keys, Enter and Esc. With no value it reads `placeholder` and is marked as still open.
+ */
+export function Dropdown<T extends string>({ value, options, onChange, ariaLabel, placeholder = 'Choose', blank, className, align = 'right' }: {
+  value: T | '';
+  options: Option<T>[];
+  onChange: (v: T) => void;
+  ariaLabel: string;
+  placeholder?: string;
+  /** The choice has not been made yet: drawn as a blank that still needs an answer. */
+  blank?: boolean;
+  className?: string;
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const current = options.find((o) => o.value === value);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (root.current && !root.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  const openList = () => { const at = options.findIndex((o) => o.value === value); setActive(at < 0 ? 0 : at); setOpen(true); };
+  const choose = (o: Option<T>) => { setOpen(false); if (o.value !== value) onChange(o.value); };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openList(); }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => (i < options.length - 1 ? i + 1 : i)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => (i > 0 ? i - 1 : 0)); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (options[active]) choose(options[active]); }
+    else if (e.key === 'Tab') setOpen(false);
+    else if (e.key.length === 1) {
+      const i = options.findIndex((o) => o.label.toLowerCase().startsWith(e.key.toLowerCase()));
+      if (i >= 0) setActive(i);
+    }
+  };
+  return (
+    <div ref={root} className={cx('relative inline-block text-left', className)}>
+      <button type="button" role="combobox" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} aria-controls={id}
+        data-blank={blank || undefined}
+        onClick={() => (open ? setOpen(false) : openList())} onKeyDown={onKey}
+        className={cx('de-control inline-flex items-center justify-between gap-2 pl-3 pr-2.5 text-[13px] max-w-full w-full', current && !blank ? 'text-[color:var(--de-ink)]' : 'text-[color:var(--de-accent)]')}>
+        <span className="truncate">{current && !blank ? current.label : placeholder}</span>
+        <Chevron />
+      </button>
+      <ul id={id} role="listbox" aria-label={ariaLabel} hidden={!open}
+        className={cx('de-pop absolute z-40 mt-1 min-w-full w-max max-w-[min(26rem,80vw)] max-h-72 overflow-auto p-1 bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] shadow-[var(--de-shadow-pop)]', align === 'right' ? 'right-0' : 'left-0')}>
+        {options.map((o, i) => (
+          <li key={o.value} role="option" aria-selected={o.value === value}
+            onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); choose(o); }}
+            className={cx('flex items-center justify-between gap-4 px-2.5 py-2 rounded-[var(--de-r-sm)] text-[13px] cursor-pointer', i === active && 'bg-[var(--de-sunken)]')}>
+            <span>
+              <span className={o.value === value ? 'font-medium' : ''}>{o.label}</span>
+              {o.note && <span className="block text-[12px] text-[color:var(--de-ink-3)]">{o.note}</span>}
+            </span>
+            {o.value === value && !blank && <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-5.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Two to four short options shown side by side: one click, and every option is visible. */
+export function Segmented<T extends string>({ value, options, onChange, ariaLabel, blank, size = 'md' }: {
+  value: T | '';
+  options: Option<T>[];
+  onChange: (v: T) => void;
+  ariaLabel: string;
+  blank?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  return (
+    <div role="radiogroup" aria-label={ariaLabel} data-blank={blank || undefined}
+      className={cx('inline-flex p-0.5 rounded-[var(--de-r-sm)] max-w-full', blank ? 'bg-[var(--de-accent-soft)] shadow-[inset_0_-2px_0_var(--de-accent)]' : 'bg-[var(--de-sunken)]')}>
+      {options.map((o) => {
+        const on = !blank && o.value === value;
+        return (
+          <button key={o.value} type="button" role="radio" aria-checked={on} title={o.note}
+            onClick={() => { if (!on) onChange(o.value); }}
+            className={cx('px-3 rounded-[5px] text-[13px] whitespace-nowrap transition-colors', size === 'sm' ? 'h-7' : 'h-[30px]',
+              on ? 'bg-[var(--de-surface)] text-[color:var(--de-ink)] font-medium shadow-[var(--de-shadow-sm)]' : 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)]')}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export const Switch: React.FC<{ on: boolean; onChange: (on: boolean) => void; ariaLabel: string; disabled?: boolean }> = ({ on, onChange, ariaLabel, disabled }) => (
+  <button type="button" role="switch" aria-checked={on} aria-label={ariaLabel} disabled={disabled}
+    onClick={() => onChange(!on)}
+    className={cx('relative inline-flex w-9 h-5 rounded-full transition-colors shrink-0', on ? 'bg-[var(--de-ink)]' : 'bg-[var(--de-rule-strong)]', disabled && 'opacity-40 cursor-not-allowed')}>
+    <span className={cx('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', on && 'translate-x-4')} />
+  </button>
+);
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad = (n: number) => String(n).padStart(2, '0');
+const iso = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
+
+/** A date, picked from a small calendar. The value is an ISO date (YYYY-MM-DD). */
+export const DateField: React.FC<{ value: string; onChange: (v: string) => void; ariaLabel: string }> = ({ value, onChange, ariaLabel }) => {
+  const [y0, m0, d0] = value.split('-').map(Number);
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState({ y: y0, m: m0 - 1 });
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (root.current && !root.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  const days = new Date(view.y, view.m + 1, 0).getDate();
+  const lead = (new Date(view.y, view.m, 1).getDay() + 6) % 7; // weeks start on Monday
+  const step = (by: number) => setView((v) => { const d = new Date(v.y, v.m + by, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const nav = 'inline-flex items-center justify-center w-7 h-7 rounded-[var(--de-r-sm)] text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)]';
+  return (
+    <div ref={root} className="relative inline-block">
+      <button type="button" aria-label={ariaLabel} aria-haspopup="dialog" aria-expanded={open}
+        onClick={() => { setView({ y: y0, m: m0 - 1 }); setOpen((o) => !o); }}
+        onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+        className="de-control de-num inline-flex items-center gap-2 px-3 text-[13px]">
+        {d0} {MONTHS[m0 - 1]} {y0}
+        <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true" className="text-[color:var(--de-ink-3)]"><rect x="1.5" y="2.5" width="11" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M1.5 5.5h11M4.5 1v3M9.5 1v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
+      </button>
+      {open && (
+        <div role="dialog" aria-label={ariaLabel} className="de-pop absolute right-0 z-40 mt-1 w-64 p-3 bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] shadow-[var(--de-shadow-pop)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="flex items-center gap-0.5">
+              <button type="button" aria-label="Previous year" className={nav} onClick={() => step(-12)}>«</button>
+              <button type="button" aria-label="Previous month" className={nav} onClick={() => step(-1)}>‹</button>
+            </span>
+            <span className="text-[13px] font-semibold">{MONTHS[view.m]} {view.y}</span>
+            <span className="flex items-center gap-0.5">
+              <button type="button" aria-label="Next month" className={nav} onClick={() => step(1)}>›</button>
+              <button type="button" aria-label="Next year" className={nav} onClick={() => step(12)}>»</button>
+            </span>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 text-center">
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <span key={i} className="text-[11px] text-[color:var(--de-ink-3)] py-1">{d}</span>)}
+            {Array.from({ length: lead }, (_, i) => <span key={`b${i}`} />)}
+            {Array.from({ length: days }, (_, i) => {
+              const day = i + 1;
+              const on = view.y === y0 && view.m === m0 - 1 && day === d0;
+              return (
+                <button key={day} type="button" onClick={() => { onChange(iso(view.y, view.m, day)); setOpen(false); }}
+                  className={cx('de-num h-8 rounded-[var(--de-r-sm)] text-[13px]', on ? 'bg-[var(--de-ink)] text-white font-medium' : 'hover:bg-[var(--de-sunken)]')}>
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          <button type="button" onClick={() => { onChange(iso(view.y, view.m, days)); setOpen(false); }}
+            className="w-full mt-2 h-8 rounded-[var(--de-r-sm)] text-[12px] text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)]">
+            Use the month end, {days} {MONTHS[view.m]} {view.y}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** A panel that slides in from the right over the page. Esc and a click on the backdrop close it. */
+export const Drawer: React.FC<{ open: boolean; onClose: () => void; title: React.ReactNode; width?: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ open, onClose, title, width = 'w-[28rem]', children, aside }) => {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="de-no-print fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-[var(--de-scrim)] cursor-default" onClick={onClose} />
+      <aside className={cx('de-drawer relative h-full max-w-[94vw] flex flex-col bg-[var(--de-surface)] shadow-[var(--de-shadow-pop)]', width)}>
+        <header className="flex items-center justify-between gap-3 px-5 h-14 border-b border-[color:var(--de-rule)] shrink-0">
+          <h2 className="text-[15px] font-semibold truncate">{title}</h2>
+          <span className="flex items-center gap-1">
+            {aside}
+            <IconButton label="Close" onClick={onClose}><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></IconButton>
+          </span>
+        </header>
+        <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
+      </aside>
+    </div>
+  );
+};
 
 /**
  * A number the analyst types. Commits on blur or Enter; Esc puts the old value back. Blank
@@ -128,52 +341,54 @@ export const AmountInput: React.FC<{
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         if (e.key === 'Escape') { setDraft(shown); setBad(false); }
       }}
-      className={cx('de-num w-full px-1.5 py-1 text-[13px] text-right bg-[var(--de-surface)] border text-[color:var(--de-input)] placeholder:text-[color:var(--de-ink-3)]',
-        bad || (required && value === null) ? 'border-[color:var(--de-accent)]' : 'border-[color:var(--de-rule)]', className)}
+      data-blank={(required && value === null) || undefined}
+      data-invalid={bad || undefined}
+      className={cx('de-control de-num w-full px-2 text-[13px] text-right text-[color:var(--de-input)] placeholder:text-[color:var(--de-ink-3)]', className)}
     />
   );
 };
 
 export const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }> = ({ className, invalid, ...rest }) => (
   <input
-    className={cx('w-full px-2 py-1 font-sans text-[13px] bg-[var(--de-surface)] border text-[color:var(--de-ink)] placeholder:text-[color:var(--de-ink-3)]',
-      invalid ? 'border-[color:var(--de-accent)]' : 'border-[color:var(--de-rule)]', className)}
+    data-invalid={invalid || undefined}
+    className={cx('de-control w-full px-3 text-[14px] text-[color:var(--de-ink)] placeholder:text-[color:var(--de-ink-3)]', className)}
     {...rest}
   />
 );
 
 export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ className, ...rest }) => (
-  <select className={cx('px-1.5 py-1 font-sans text-[12px] bg-[var(--de-surface)] border border-[color:var(--de-rule)] text-[color:var(--de-ink)]', className)} {...rest} />
+  <select className={cx('de-control px-2 text-[13px] text-[color:var(--de-ink)]', className)} {...rest} />
 );
 
 export interface StepItem { id: string; label: string; state: 'done' | 'current' | 'open' | 'locked'; note?: string }
 /** The four steps and where the deal stands. A locked step says what it is waiting for. */
 export const Stepper: React.FC<{ steps: StepItem[]; onGo: (id: string) => void }> = ({ steps, onGo }) => (
-  <nav aria-label="Steps" className="flex items-stretch">
+  <nav aria-label="Steps" className="flex items-center gap-1">
     {steps.map((s, i) => {
       const reachable = s.state !== 'locked';
       return (
-        <button
-          key={s.id}
-          type="button"
-          disabled={!reachable}
-          aria-current={s.state === 'current' ? 'step' : undefined}
-          title={s.note}
-          onClick={() => reachable && onGo(s.id)}
-          className={cx('group flex items-center gap-2 px-3 py-2 font-sans text-[13px] border-b-2 -mb-px',
-            s.state === 'current' ? 'border-[color:var(--de-accent)] text-[color:var(--de-ink)] font-semibold' : 'border-transparent',
-            s.state === 'done' && 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)]',
-            s.state === 'open' && 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)]',
-            s.state === 'locked' && 'text-[color:var(--de-ink-3)] cursor-not-allowed')}
-        >
-          <span className={cx('de-num inline-flex items-center justify-center w-5 h-5 text-[11px] border',
-            s.state === 'current' && 'bg-[var(--de-accent)] border-[color:var(--de-accent)] text-white',
-            s.state === 'done' && 'bg-[var(--de-ink)] border-[color:var(--de-ink)] text-white',
-            (s.state === 'open' || s.state === 'locked') && 'border-[color:var(--de-rule)]')}>
-            {s.state === 'done' ? '✓' : i + 1}
-          </span>
-          {s.label}
-        </button>
+        <React.Fragment key={s.id}>
+          {i > 0 && <span aria-hidden="true" className={cx('w-5 h-px', s.state === 'locked' ? 'bg-[var(--de-rule)]' : 'bg-[var(--de-rule-strong)]')} />}
+          <button
+            type="button"
+            disabled={!reachable}
+            aria-current={s.state === 'current' ? 'step' : undefined}
+            title={s.note}
+            onClick={() => reachable && onGo(s.id)}
+            className={cx('flex items-center gap-2 h-8 pl-1.5 pr-3 rounded-full text-[13px] transition-colors',
+              s.state === 'current' && 'bg-[var(--de-ink)] text-white font-medium',
+              (s.state === 'done' || s.state === 'open') && 'text-[color:var(--de-ink-2)] hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)]',
+              s.state === 'locked' && 'text-[color:var(--de-ink-3)] opacity-60 cursor-not-allowed')}
+          >
+            <span className={cx('de-num inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-medium',
+              s.state === 'current' && 'bg-white text-[color:var(--de-ink)]',
+              s.state === 'done' && 'bg-[var(--de-pos-soft)] text-[color:var(--de-pos)]',
+              (s.state === 'open' || s.state === 'locked') && 'bg-[var(--de-sunken)]')}>
+              {s.state === 'done' ? '✓' : i + 1}
+            </span>
+            {s.label}
+          </button>
+        </React.Fragment>
       );
     })}
   </nav>

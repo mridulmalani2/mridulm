@@ -212,7 +212,7 @@ export function runCoherence(x: CoherenceInputs): CoherenceFlag[] {
     flags.push({
       code: 'basis_mismatch',
       severity: 'warn',
-      message: `Entry basis (${x.assumptions.entry.basis}) differs from exit basis (${x.assumptions.exit.basis}) — the multiple comparison is apples-to-oranges (§9/§11)`,
+      message: `Entry is priced on ${x.assumptions.entry.basis === 'ntm' ? 'forecast year-1' : 'historical'} EBITDA and the exit on ${x.assumptions.exit.basis === 'ntm' ? 'the year after exit' : 'exit-year'} EBITDA. The two multiples are on different bases, so the change between them is not all multiple expansion (§9/§11)`,
     });
   }
 

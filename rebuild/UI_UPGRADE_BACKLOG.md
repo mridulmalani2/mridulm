@@ -1,7 +1,43 @@
 # Deal Engine: UI upgrade backlog
 
 Recorded 2026-11-11. Financial accuracy comes first; this list is the work that follows it.
-Nothing here is built yet unless marked done.
+
+## Status (2026-11-12, branch `claude/ui-functionality-upgrade-ideas-e3173e`)
+
+The UI upgrade is BUILT on this branch (tests, type-check and `npm run build` green; checked in the
+browser at desktop and phone widths). No engine arithmetic changed. What it added, and where:
+
+- **Design system** — `index.css` (`.de-root` tokens: Geist for text and figures, Fraunces for
+  titles; blue = typed, ink = calculated), `components/deal-engine/ui/kit.tsx` (buttons, custom
+  drop-down, segmented choice, switch, calendar date field, drawer).
+- **Assumptions** — section rail with counts, the sheet, a live result panel
+  (`v2/Workbench.tsx`); the debt stack as a term sheet (`v2/DebtTable.tsx`); spreadsheet keyboard,
+  row paste, Ctrl+Enter fill-right, per-input notes (`v2/fields.tsx`).
+- **Shell** — command palette (Ctrl/Cmd+K), page guide, deal menu (`shell/`); cases, build history
+  with an IRR walk, the deal library and deal files (`store/workspace.ts`, `shell/WorkspaceDrawers.tsx`).
+- **Trace** — click a figure to see its formula and what feeds it, read from the exported
+  workbook's own formula graph (`lib/trace`, `shell/TraceDrawer.tsx`, `tests/trace-index.test.ts`).
+- **Results** — views in a rail; tornado, any-two-inputs grid, break-evens, covenant and cash
+  charts (`results/Analysis.tsx`, all through `lib/analysis`, pinned to the §13 primitives by
+  `tests/analysis.test.ts`); review view; one-page summary (print or PDF); copy any table; save
+  any chart as PNG or SVG; analyst notes exported on their own sheet of the Excel model.
+- **Source and manual entry** — rebuilt around the company search; the sector is now a required
+  choice (it selects the comps band), no longer pre-selected.
+
+Owner's requirements below: 1 partly (see "Not built"), 2 to 6 done, 7 observed.
+Defects below: all nine fixed, except that three labels quoted verbatim from the SPEC
+(§19.5 net-to-LP row and footnote, §23 selldown heading) keep their em dashes.
+
+**Not built / not verified:**
+
+- A recommendation on EVERY field: the catalogue of proposals is unchanged (`lib/engine2/suggest.ts`
+  is engine-side). The presentation is new (quiet link, source tag that explains itself, S to
+  accept), and AI proposals are now requested once per deal as soon as a key is saved.
+- Anything that needs an AI key (proposals, the challenge, "Ask about this deal") is wired but
+  was not exercised: no key was used.
+- Notes export to a separate "Analyst notes" sheet, not as comments on the Inputs cells.
+- Football field, segment / price × volume operating build, add-on acquisitions: left out by
+  owner direction (engine work).
 
 ## Owner's requirements
 

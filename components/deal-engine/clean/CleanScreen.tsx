@@ -75,7 +75,7 @@ const StatementsCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ p
       title="Statements as sourced"
       aside={<span className="font-sans text-[12px] text-[color:var(--de-ink-3)]">{pack.currency} millions · click a figure to see its source or restate it</span>}
     >
-      <div className="flex border-b border-[color:var(--de-rule)] px-2" role="tablist">
+      <div className="flex border-b border-[color:var(--de-rule)] px-3 mt-2" role="tablist">
         {STATEMENTS.map((s) => (
           <button key={s.id} type="button" role="tab" aria-selected={tab === s.id} onClick={() => { setTab(s.id); setSel(null); }}
             className={cx('px-3 py-2 font-sans text-[13px] border-b-2 -mb-px', tab === s.id ? 'border-[color:var(--de-ink)] font-semibold' : 'border-transparent text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)]')}>
@@ -87,7 +87,7 @@ const StatementsCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ p
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-[color:var(--de-rule-strong)]">
-              <th className="sticky left-0 bg-[var(--de-surface)] text-left font-sans text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--de-ink-3)] px-4 py-2 min-w-[15rem]">Line</th>
+              <th className="sticky left-0 bg-[var(--de-surface)] text-left font-sans text-[12px] font-medium text-[color:var(--de-ink-3)] px-5 py-2 min-w-[15rem]">Line</th>
               {pack.periods.map((p) => (
                 <th key={p.key} className="text-right font-sans text-[12px] font-semibold px-3 py-2 whitespace-nowrap">
                   {periodLabel(pack, p.key)}
@@ -103,7 +103,7 @@ const StatementsCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ p
               return (
                 <React.Fragment key={l.id}>
                   <tr className={cx('border-b border-[color:var(--de-rule)]', l.total && 'border-t border-t-[color:var(--de-rule-strong)]')}>
-                    <th scope="row" className={cx('sticky left-0 bg-[var(--de-surface)] text-left font-sans text-[13px] px-4 py-1.5', l.total ? 'font-semibold' : 'font-normal')}>
+                    <th scope="row" className={cx('sticky left-0 bg-[var(--de-surface)] text-left font-sans text-[13px] px-5 py-1.5', l.total ? 'font-semibold' : 'font-normal')}>
                       {l.label}
                       {l.hint && <span className="block text-[11px] font-normal text-[color:var(--de-ink-3)]">{l.hint}</span>}
                     </th>
@@ -118,7 +118,7 @@ const StatementsCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ p
                       return (
                         <td key={p.key} className={cx('px-1 py-0.5 text-right', active && 'bg-[var(--de-input-soft)]')}>
                           <button type="button" onClick={() => select(l.id, p.key)}
-                            title={o ? `Restated from ${cell ? acct(cell.value) : 'nothing in the source'} — ${o.reason}` : cell ? cell.provenance.detail : 'Not in the source — click to enter'}
+                            title={o ? `Restated from ${cell ? acct(cell.value) : 'nothing in the source'}: ${o.reason}` : cell ? cell.provenance.detail : 'Not in the source: click to enter'}
                             className={cx('de-num w-full px-2 py-1 text-[13px] text-right hover:bg-[var(--de-input-soft)]', l.total && 'font-semibold', o && 'text-[color:var(--de-input)]', !cell && !o && 'text-[color:var(--de-ink-3)] font-sans text-[12px]')}>
                             {o ? acct(o.value) : cell ? acct(cell.value) : 'not tagged'}
                             {o && <sup aria-label="restated" className="ml-0.5">r</sup>}
@@ -130,7 +130,7 @@ const StatementsCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ p
                   </tr>
                   {showAdjusted && bridge && (
                     <tr className="border-b border-[color:var(--de-rule)]">
-                      <th scope="row" className="sticky left-0 bg-[var(--de-surface)] text-left font-sans text-[13px] font-semibold px-4 py-1.5 pl-7 text-[color:var(--de-pos)]">Adjusted</th>
+                      <th scope="row" className="sticky left-0 bg-[var(--de-surface)] text-left font-sans text-[13px] font-semibold px-5 py-1.5 pl-8 text-[color:var(--de-pos)]">Adjusted</th>
                       {pack.periods.map((p) => {
                         const b = bridge.find((x) => x.period === p.key);
                         const blank = !b || b.adjusted === null;
@@ -189,7 +189,7 @@ const StatementsCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ p
           ) : (
             <p className="font-sans text-[12px] text-[color:var(--de-ink-3)] mt-2">
               {sel.line === 'ebitda'
-                ? 'Reported EBITDA here is operating income plus D&A — restate those cells, or add an adjustment row below.'
+                ? 'Reported EBITDA here is operating income plus D&A: restate those cells, or add an adjustment row below.'
                 : 'This line is shown for reference. The model does not read it, so it cannot be restated here.'}
             </p>
           )}
@@ -224,7 +224,7 @@ const AdjustmentsCard: React.FC<{ pack: StatementPack }> = ({ pack }) => {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="border-b border-[color:var(--de-rule-strong)] font-sans text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--de-ink-3)]">
+              <tr className="border-b border-[color:var(--de-rule-strong)] font-sans text-[12px] font-medium text-[color:var(--de-ink-3)]">
                 <th className="px-3 py-2 w-8"><span className="sr-only">Include</span></th>
                 <th className="text-left px-2 py-2 min-w-[12rem]">Adjustment</th>
                 <th className="text-left px-2 py-2">Line</th>
@@ -282,7 +282,7 @@ const AdjustmentsCard: React.FC<{ pack: StatementPack }> = ({ pack }) => {
                     </td>
                     {pack.periods.map((p) => (
                       <td key={p.key} className="px-1 py-1.5 min-w-[6.25rem]">
-                        <AmountInput ariaLabel={`${a.label || 'Adjustment'} — ${periodLabel(pack, p.key)}`} value={a.amounts[p.key] ?? null}
+                        <AmountInput ariaLabel={`${a.label || 'Adjustment'}, ${periodLabel(pack, p.key)}`} value={a.amounts[p.key] ?? null}
                           required={a.included && p.key === need}
                           onCommit={(v) => edit((l) => setAdjustmentAmount(l, a.id, p.key, v))} />
                       </td>
@@ -314,7 +314,7 @@ const ProposalsCard: React.FC<{ pack: StatementPack }> = ({ pack }) => {
   const open = pack.candidates.filter((c) => !dismissed.includes(c.id) && !candidateAccepted(ledger, c));
   const amounts = (c: AdjustmentCandidate) => pack.periods.filter((p) => p.key in c.amounts).map((p) => `${periodLabel(pack, p.key)} ${delta(c.amounts[p.key])}`).join(' · ');
   return (
-    <Card title="Found in the filing" aside={<span className="font-sans text-[12px] text-[color:var(--de-ink-3)]">proposals only — nothing is applied until you add it</span>}>
+    <Card title="Found in the filing" aside={<span className="font-sans text-[12px] text-[color:var(--de-ink-3)]">proposals only: nothing is applied until you add it</span>}>
       {open.length === 0 ? (
         <p className="font-sans text-[13px] text-[color:var(--de-ink-2)]">
           {pack.candidates.length ? 'Every item found in the filing has been added or dismissed.' : pack.notes.find((n) => n.startsWith('Detected')) ?? 'No tagged one-off or debt-like items were found in this source. Add adjustments by hand above.'}
@@ -414,7 +414,7 @@ const NetDebtCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ pack
         <Button size="sm" onClick={() => edit((l) => addNetDebtItem(l, 'cash_like'))}>+ Cash-like item</Button>
       </div>
       <p className="font-sans text-[12px] text-[color:var(--de-ink-3)] mt-3">
-        Net debt does not change the sponsor’s returns: the model prices the whole enterprise. It changes what the sellers receive — enterprise value less net debt — which the results show as implied equity value. For cash that is restricted or trapped, add a cash-like item with a negative amount.
+        Net debt does not change the sponsor’s returns: the model prices the whole enterprise. It changes what the sellers receive (enterprise value less net debt), which the results show as implied equity value. For cash that is restricted or trapped, add a cash-like item with a negative amount.
       </p>
     </Card>
   );
@@ -440,23 +440,23 @@ const CleanScreen: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
   const changed = (d: number | null) => d !== null && d !== 0;
 
   return (
-    <div className="max-w-[1440px] mx-auto px-6 py-6">
+    <div className="max-w-[1440px] mx-auto px-6 pt-8 pb-20">
       <div className="max-w-3xl">
-        <h1 className="font-playfair text-[30px] font-bold leading-tight">Clean the numbers</h1>
-        <p className="font-sans text-[14px] text-[color:var(--de-ink-2)] mt-2 leading-relaxed">
+        <h1 className="de-display text-[34px] leading-tight">Clean the numbers</h1>
+        <p className="text-[15px] text-[color:var(--de-ink-2)] mt-2 leading-relaxed">
           These are {pack.entityName}’s figures as sourced. Before they go into the model, decide what EBITDA and net debt mean for this company: restate a figure, add back one-offs, and say what counts as debt. Every change is itemised, reversible, and carried into the Excel model as a live bridge.
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 bg-[var(--de-surface)] border border-[color:var(--de-rule)] divide-x divide-[color:var(--de-rule)]">
+      <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] divide-x divide-[color:var(--de-rule)] overflow-hidden">
         <Kpi label={`Adjusted EBITDA · ${sizing}`} value={acct(impact.ebitda.adjusted)}
           tone={changed(impact.ebitda.delta) ? 'pos' : 'neutral'}
-          sub={impact.ebitda.adjusted === null ? 'not known yet — an amount is missing' : changed(impact.ebitda.delta) ? `${delta(impact.ebitda.delta)} vs reported ${acct(impact.ebitda.reported)}` : 'as reported'} />
+          sub={impact.ebitda.adjusted === null ? 'not known yet: an amount is missing' : changed(impact.ebitda.delta) ? `${delta(impact.ebitda.delta)} vs reported ${acct(impact.ebitda.reported)}` : 'as reported'} />
         <Kpi label="EBITDA margin" value={impact.margin.adjusted === null ? '–' : pct(impact.margin.adjusted)}
           sub={impact.margin.reported !== null && impact.margin.adjusted !== null && impact.margin.adjusted !== impact.margin.reported ? `reported ${pct(impact.margin.reported)}` : 'as reported'} />
         <Kpi label="Net debt" value={acct(impact.net_debt.adjusted)}
           tone={changed(impact.net_debt.delta) ? 'pos' : 'neutral'}
-          sub={cleaned.bridges.net_debt && cleaned.bridges.net_debt.adjusted === null && impact.net_debt.adjusted !== null ? 'as sourced — the lease treatment is not chosen yet' : impact.net_debt.adjusted === null ? (impact.net_debt.reported === null ? 'not in the source' : 'not known yet — an item is open') : changed(impact.net_debt.delta) ? `${delta(impact.net_debt.delta)} vs reported ${acct(impact.net_debt.reported)}` : impact.leverage.adjusted !== null ? `${multiple(impact.leverage.adjusted)} EBITDA` : 'as reported'} />
+          sub={cleaned.bridges.net_debt && cleaned.bridges.net_debt.adjusted === null && impact.net_debt.adjusted !== null ? 'as sourced: the lease treatment is not chosen yet' : impact.net_debt.adjusted === null ? (impact.net_debt.reported === null ? 'not in the source' : 'not known yet — an item is open') : changed(impact.net_debt.delta) ? `${delta(impact.net_debt.delta)} vs reported ${acct(impact.net_debt.reported)}` : impact.leverage.adjusted !== null ? `${multiple(impact.leverage.adjusted)} EBITDA` : 'as reported'} />
         <Kpi label="Open items" value={String(open.length)} tone={open.length ? 'accent' : 'neutral'}
           sub={open.length ? 'to finish before continuing with adjusted figures' : empty ? 'no adjustments made' : 'ready to continue'} />
       </div>
@@ -471,7 +471,7 @@ const CleanScreen: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
           ))}
         </div>
 
-        <aside className="space-y-5 xl:sticky xl:top-[7.5rem]">
+        <aside className="space-y-5 xl:sticky xl:top-24">
           <EbitdaBridgeCard pack={pack} bridges={cleaned.bridges} />
           <NetDebtCard pack={pack} bridges={cleaned.bridges} />
           <Card title="Before you continue">
@@ -488,11 +488,11 @@ const CleanScreen: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
             <div className="mt-4 flex flex-col gap-2">
               {!empty && (
                 <Button variant="primary" disabled={open.length > 0} onClick={() => { if (confirmAdjusted()) onContinue(); }}>
-                  Continue with adjusted figures →
+                  Continue with adjusted figures
                 </Button>
               )}
               <Button variant={empty ? 'primary' : 'ghost'} onClick={() => { leaveAsReported(); onContinue(); }}>
-                Use the figures as reported →
+                Use the figures as reported
               </Button>
               <Eyebrow className="normal-case tracking-normal font-normal">
                 {empty

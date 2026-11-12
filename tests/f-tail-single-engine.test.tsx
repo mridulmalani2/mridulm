@@ -96,7 +96,7 @@ describe('/deal-engine routing — Source → Clean → Assumptions → Results'
     const html = page();
     expect(html).toContain('The holding period sizes every per-year input');
     expect(html).not.toContain('Clean the numbers');
-    expect(html).toContain('New deal');
+    expect(html).toContain('Deal menu'); // "New deal" lives in the deal menu, closed until opened
     expect(page('/deal-engine/lbo/clean')).toContain('Clean the numbers'); // going back is always allowed
   });
 

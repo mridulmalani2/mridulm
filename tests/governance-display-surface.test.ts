@@ -107,9 +107,9 @@ const SANCTIONED_ENGINE_IMPORTS: { file: string; snippet: string; why: string }[
     why: 'INPUT panel single-sources the entry-leverage PREVIEW (entryGrossLeverageFromAssumptions / rescaleTermTranchesToLeverage) through the SAME pure helper the §13 leverage axis uses. No ModelOutput exists at input time; re-deriving leverage inline is what finding F7 caught.',
   },
   {
-    file: 'components/deal-engine/v2/AssumptionsPanel.tsx',
+    file: 'components/deal-engine/v2/DebtTable.tsx',
     snippet: "from '../../../lib/engine2/kernel/rates'",
-    why: 'INPUT panel single-sources the §4 all-in-rate PREVIEW (allInRate) — the SAME primitive debt.ts charges interest with. Re-implementing max(base,floor)+spread inline (the prior code, R3-1) WAS the second path this guard exists to stop.',
+    why: 'the debt term sheet (the part of the INPUT panel that holds the tranches, split out of AssumptionsPanel.tsx in the UI upgrade) single-sources the §4 all-in-rate PREVIEW (allInRate) — the SAME primitive debt.ts charges interest with. Re-implementing max(base,floor)+spread inline (the prior code, R3-1) WAS the second path this guard exists to stop.',
   },
 ];
 
@@ -137,6 +137,16 @@ const ALLOWED_AGGREGATIONS: { file: string; snippet: string; why: string }[] = [
     file: 'lib/format/index.ts',
     snippet: 'Math.max(0, Math.floor((today.getTime() - endMs) / (30.44 * 86_400_000)))',
     why: 'a DATE formatter (months-elapsed for a staleness/"N months ago" label) — arithmetic on dates, not on any ModelOutput financial value; lib/format is the formatting-primitive layer where presentational math is expected',
+  },
+  {
+    file: 'components/deal-engine/results/Analysis.tsx',
+    snippet: 'const lo = Math.min(0, ...all); // y-axis extent: chart geometry',
+    why: 'the lower bound of a line chart\'s y axis (covenant and cash charts) — it positions the plotted points and is never rendered as a figure; every plotted value is a ModelOutput field or a covenant level as entered',
+  },
+  {
+    file: 'components/deal-engine/results/Analysis.tsx',
+    snippet: 'const hi = Math.max(...all) * 1.12 || 1; // y-axis extent: chart geometry',
+    why: 'the upper bound of the same y axis, with head-room above the highest point — chart geometry, never a displayed figure',
   },
   // v2.0.0: the four §22 input-editor clamps/defaults that sat here were DELETED with the
   // pre-fill panel — a typed value now reaches the engine as typed, and the §16 Build gates
