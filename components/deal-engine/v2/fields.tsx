@@ -169,6 +169,32 @@ export const Line: React.FC<{ path?: string; label: React.ReactNode; hint?: stri
 
 // ── suggestions ─────────────────────────────────────────────────────────────────────────────
 
+const KIND_WORD: Record<string, string> = { history: 'Worked out from the filing history', convention: 'A cited market convention or statute', facts: 'Read from the source', template: 'A cited template', ai: 'Proposed by the AI model you connected' };
+
+/** One proposal: "use X" applies it; the word after it opens how the value was reached. */
+const SuggestionLink: React.FC<{ text: string; kind: string; detail: string; onUse: () => void }> = ({ text, kind, detail, onUse }) => {
+  const [open, setOpen] = useState(false);
+  const [how, source] = detail.split(/\s*Source:\s*/);
+  const tone = kind === 'ai' ? 'text-[color:var(--de-ai)]' : 'text-[color:var(--de-input)]';
+  return (
+    <span className="relative inline-flex items-baseline text-[12px] whitespace-nowrap">
+      {/* out of the tab order: tabbing through the sheet moves between inputs only */}
+      <button type="button" tabIndex={-1} onClick={onUse} title={detail} className={cx('font-medium underline underline-offset-2 decoration-dotted rounded px-1 hover:bg-[var(--de-input-soft)]', tone)}>use {text}</button>
+      <button type="button" tabIndex={-1} onClick={() => setOpen((o) => !o)} onBlur={() => setOpen(false)} aria-expanded={open} title="How this value was reached"
+        className="text-[color:var(--de-ink-3)] hover:text-[color:var(--de-ink)] rounded pr-1"> · {kind}</button>
+      {open && (
+        <span role="dialog" aria-label="How this value was reached" className="de-pop absolute right-0 top-full z-30 mt-1.5 w-80 max-w-[80vw] p-4 rounded-[var(--de-r)] bg-[var(--de-surface)] border border-[color:var(--de-rule)] shadow-[var(--de-shadow-pop)] text-left whitespace-normal">
+          <span className="block text-[12px] text-[color:var(--de-ink-3)]">{KIND_WORD[kind] ?? kind}</span>
+          <span className={cx('de-num block text-[22px] font-semibold leading-tight mt-1', tone)}>{text}</span>
+          <span className="block text-[13px] leading-relaxed text-[color:var(--de-ink-2)] mt-2">{how}</span>
+          {source && <span className="block text-[12px] leading-relaxed text-[color:var(--de-ink-3)] mt-2">Source: {source}</span>}
+          <span className="block text-[12px] text-[color:var(--de-ink-3)] mt-3">Nothing is applied until you click “use”.</span>
+        </span>
+      )}
+    </span>
+  );
+};
+
 /** The one-click proposals for a path (the plain proposal and any variants, e.g. @ai). */
 export const SuggestionChips: React.FC<{ path: string; unit?: Unit; render?: (v: unknown) => string }> = ({ path, unit, render }) => {
   const suggestions = useEngine2Model((s) => s.suggestions);
@@ -176,7 +202,7 @@ export const SuggestionChips: React.FC<{ path: string; unit?: Unit; render?: (v:
   const keys = Object.keys(suggestions).filter((k) => k === path || k.startsWith(`${path}@`));
   if (keys.length === 0) return null;
   return (
-    <span className="inline-flex flex-wrap gap-x-3 gap-y-1 justify-end">
+    <span className="inline-flex flex-wrap gap-x-2 gap-y-1 justify-end">
       {keys.map((k) => {
         const s = suggestions[k];
         const text = render
@@ -184,14 +210,7 @@ export const SuggestionChips: React.FC<{ path: string; unit?: Unit; render?: (v:
           : typeof s.value === 'number' && unit
             ? `${show(s.value, unit)}${SUFFIX[unit]}`
             : 'template';
-        // out of the tab order: tabbing through the sheet moves between inputs only
-        return (
-          <button key={k} type="button" tabIndex={-1} onClick={() => accept(k)} title={s.basis.detail}
-            className="text-[12px] whitespace-nowrap rounded px-1 hover:bg-[var(--de-input-soft)]">
-            <span className={cx('font-medium underline underline-offset-2 decoration-dotted', s.basis.kind === 'ai' ? 'text-[color:var(--de-ai)]' : 'text-[color:var(--de-input)]')}>use {text}</span>
-            <span className="text-[color:var(--de-ink-3)]"> · {s.basis.kind}</span>
-          </button>
-        );
+        return <SuggestionLink key={k} text={text} kind={s.basis.kind} detail={s.basis.detail} onUse={() => accept(k)} />;
       })}
     </span>
   );
@@ -311,8 +330,10 @@ export function ChoiceField<T extends string | boolean>({ path, label, value, op
     if (opt) (onChoose ? onChoose(opt.value) : setField(path, opt.value));
   };
   const compact = options.length <= 3 && options.map((o) => o.label).join('').length <= 34;
+  const said = (v: unknown) => options.find((o) => String(o.value) === String(v))?.label ?? String(v);
   return (
     <Line path={path} label={label} hint={hint}>
+      {pending && <SuggestionChips path={path} render={said} />}
       {compact
         ? <Segmented ariaLabel={label} value={pending ? '' : String(value)} options={opts} onChange={choose} blank={pending} />
         : <Dropdown ariaLabel={label} value={pending ? '' : String(value)} options={opts} onChange={choose} blank={pending} placeholder="Choose" className="w-64 max-w-full" />}

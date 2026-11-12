@@ -9,7 +9,8 @@ import type { TrancheAssumption } from '../../../lib/engine2/types';
 import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { pct } from '../../../lib/format';
 import { Dropdown, Segmented } from '../ui/kit';
-import { NumBox, isSet, type Unit } from './fields';
+import { useEngine2Model } from '../../../store/engine2Model';
+import { NumBox, isSet, show, type Unit } from './fields';
 
 const NA = <span className="text-[color:var(--de-ink-3)]">–</span>;
 
@@ -23,11 +24,22 @@ const DebtTable: React.FC<{
   onSet: (path: string, value: unknown) => void;
   onRemove: (i: number) => void;
 }> = ({ tranches, hasLtm, pending, onSet, onRemove }) => {
-  const numCell = (path: string, label: string, unit: Unit, value: number | null | undefined) => (
-    <span data-path={path} className="inline-flex">
-      <NumBox value={value} unit={unit} compact width="w-full" ariaLabel={label} onCommit={(v) => onSet(path, v)} />
-    </span>
-  );
+  const suggestions = useEngine2Model((s) => s.suggestions);
+  const accept = useEngine2Model((s) => s.acceptSuggestion);
+  const numCell = (path: string, label: string, unit: Unit, value: number | null | undefined) => {
+    const sug = !isSet(value) ? suggestions[path] : undefined;
+    return (
+      <span data-path={path} className="inline-flex flex-col items-end gap-0.5 w-full">
+        <NumBox value={value} unit={unit} compact width="w-full" ariaLabel={label} onCommit={(v) => onSet(path, v)} onUseSuggestion={sug ? () => accept(path) : undefined} />
+        {sug && typeof sug.value === 'number' && (
+          <button type="button" tabIndex={-1} onClick={() => accept(path)} title={sug.basis.detail}
+            className="text-[11px] text-[color:var(--de-input)] underline underline-offset-2 decoration-dotted rounded px-1 hover:bg-[var(--de-input-soft)]">
+            use {show(sug.value, unit)}{unit === 'pct' ? '%' : unit === 'mult' ? 'x' : ''}
+          </button>
+        )}
+      </span>
+    );
+  };
   const sizeOf = (t: TrancheAssumption) => (t.type === 'revolver' ? t.commitment : t.size);
   const sizePath = (t: TrancheAssumption, i: number) => `structure.tranches.${i}.${t.type === 'revolver' ? 'commitment' : 'size'}`;
   const what = (t: TrancheAssumption) => (t.type === 'revolver' ? 'commitment' : 'size');

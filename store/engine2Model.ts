@@ -15,7 +15,10 @@ import { createStore } from 'zustand/vanilla';
 import { adaptRawHistoricals } from '../lib/engine2/factsAdapter';
 import { runModel, type Engine2ModelOutput } from '../lib/engine2/facade';
 import { runModelWithScenarios } from '../lib/engine2/scenarios';
-import { suggestionsFor, type SuggestionBasis, type SuggestionCatalogue } from '../lib/engine2/suggest';
+import { holdSuggestion, suggestionsFor, type SuggestionBasis, type SuggestionCatalogue } from '../lib/engine2/suggest';
+
+/** Before the draft exists the one thing that can be proposed is the holding period itself. */
+const holdOnly = (): SuggestionCatalogue => { const h = holdSuggestion(); return h ? { 'entry.hold_years': h } : {}; };
 import { blankAssumptions, CHOICE_PATHS, missingInputs, resizeHold, setPath, type MissingInput } from '../lib/engine2/draft';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts, NormalisationFacts } from '../lib/engine2/types';
@@ -123,7 +126,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       // v2.0.0: NOTHING pre-filled — a blank draft plus a catalogue of proposals.
       assumptions: N === null ? null : blankAssumptions(`${facts.entity_name} LBO`, N),
       pending: [...CHOICE_PATHS],
-      suggestions: N === null ? {} : suggestionsFor(facts, N),
+      suggestions: N === null ? holdOnly() : suggestionsFor(facts, N),
       basis: {},
       output: null, error: null,
       // AI notes/redlines describe assumptions that no longer exist after ANY re-import
@@ -158,7 +161,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const a = prev.assumptions;
     set({
       facts, missingFacts: missing, factNotes: adapted.notes,
-      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a, prev.pending) : {},
+      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a, prev.pending) : holdOnly(),
       output: null, error: null,
     });
   },
@@ -191,9 +194,12 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   acceptSuggestion: (key) => {
     const { assumptions, suggestions, basis, pending } = get();
     const sug = suggestions[key];
+    if (sug && !assumptions && key === 'entry.hold_years' && typeof sug.value === 'number') { get().setHoldYears(sug.value); return; }
     if (!assumptions || !sug) return;
     // catalogue keys may carry a variant (`entry.entry_multiple@ai`) — the target is the path
     const path = key.split('@')[0];
+    // the holding period resizes every per-year line: it goes through its own action
+    if (path === 'entry.hold_years') { if (typeof sug.value === 'number') get().setHoldYears(sug.value); return; }
     let next = setPath(assumptions, path, sug.value);
     if (path === 'entry.entry_multiple') next = { ...next, entry: { ...next.entry, driver: 'multiple', enterprise_value: null } };
     set({

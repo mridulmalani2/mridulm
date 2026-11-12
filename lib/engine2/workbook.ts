@@ -63,6 +63,8 @@ export interface ParityCell {
 export interface FormulaWorkbook {
   wb: ExcelJS.Workbook;
   parity: ParityCell[];
+  /** Inputs sheet: row key → row number, so a caller can find an input's cell (e.g. to attach a note). */
+  inputRows: Record<string, number>;
 }
 
 /**
@@ -1604,5 +1606,5 @@ export function buildFormulaWorkbook(o: Engine2ModelOutput, opts: { cachedResult
   }
   // print areas: the whole used block of each sheet, landscape, one page wide
   for (const b of [S, I, M, X, C]) b.ws.pageSetup.printArea = `A1:${colLetter(b.ws.columnCount)}${b.ws.rowCount}`;
-  return { wb, parity };
+  return { wb, parity, inputRows: Object.fromEntries(I.rows) };
 }

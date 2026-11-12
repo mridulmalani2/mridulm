@@ -45,6 +45,7 @@ const AssumptionsPanel: React.FC = () => {
       <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] px-6">
         <Section title="Start" note="The holding period sizes every per-year input, so it comes first.">
           <Line label="Holding period">
+            <SuggestionChips path="entry.hold_years" render={(v) => `${String(v)} yrs`} />
             <NumBox value={null} unit="years" ariaLabel="Holding period" onCommit={(v) => setHold(v)} />
           </Line>
         </Section>
