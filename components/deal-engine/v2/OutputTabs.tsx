@@ -12,6 +12,7 @@
  */
 import { DISCLOSURES } from '../../../lib/engine2/disclosures';
 import React, { useRef, useState } from 'react';
+import { dealUiStore } from '../../../store/dealUi';
 import Fig from '../ui/Fig';
 import { copyTable } from '../results/exportModel';
 import { type Engine2ModelOutput } from '../../../lib/engine2/facade';
@@ -45,12 +46,11 @@ const TABS: { id: Tab; label: string }[] = [
 /** A table of figures. Hovering shows a button that copies it as cells for Excel or PowerPoint. */
 export const Table: React.FC<{ head: string[]; children: React.ReactNode }> = ({ head, children }) => {
   const ref = useRef<HTMLTableElement>(null);
-  const [copied, setCopied] = useState(false);
   return (
     <div className="group/table relative">
-      <button type="button" onClick={async () => { if (ref.current && (await copyTable(ref.current))) { setCopied(true); window.setTimeout(() => setCopied(false), 1400); } }}
+      <button type="button" onClick={async () => { if (ref.current) dealUiStore.getState().notify((await copyTable(ref.current)) ? 'Table copied. Paste it into Excel or a slide' : 'Copying is blocked in this browser'); }}
         className="de-no-print absolute -top-7 right-0 h-6 px-2 rounded text-[12px] text-[color:var(--de-ink-3)] opacity-0 group-hover/table:opacity-100 focus:opacity-100 hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)] transition-opacity">
-        {copied ? 'Copied' : 'Copy table'}
+        Copy table
       </button>
       <div className="de-scroll-x">
         <table ref={ref} className="de-table de-num">

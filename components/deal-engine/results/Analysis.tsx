@@ -315,7 +315,8 @@ export const CovenantCards: React.FC<{ o: Engine2ModelOutput; ccy: Engine2Curren
       {tests.length > 0 && (
         <Card title="Covenant headroom by year" className="xl:col-span-2">
           <div className="de-scroll-x">
-            <table className="de-table de-num">
+            {/* a label spans several rows here, so the first cell of a row is not always the first column */}
+            <table className="de-table de-num" data-free="">
               <thead><tr><th>Test</th><th />{years.map((i) => <th key={i}>Y{i + 1}</th>)}</tr></thead>
               <tbody>
                 {tests.map((t) => (

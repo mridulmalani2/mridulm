@@ -17,8 +17,9 @@ import CommandPalette, { type Command } from './CommandPalette';
 import InfoDrawer from './InfoDrawer';
 import TraceDrawer from './TraceDrawer';
 import { CasesDrawer, HistoryDrawer, LibraryDrawer } from './WorkspaceDrawers';
-import { AssistantDrawer, ToolsDrawer } from './ToolsDrawer';
-import { IconButton, Stepper, cx, type StepItem } from '../ui/kit';
+import { ToolsDrawer } from './ToolsDrawer';
+import AssistantDrawer from './AssistantDrawer';
+import { IconButton, Stepper, ToastHost, cx, type StepItem } from '../ui/kit';
 
 /** Every input on the sheet as a dotted path; a per-year line is one entry, not one per year. */
 function inputPaths(node: unknown, prefix = '', out: string[] = []): string[] {
@@ -143,11 +144,16 @@ const DealShell: React.FC<{
               Search or jump
               <span className="de-kbd">{isMac ? '⌘K' : 'Ctrl K'}</span>
             </button>
+            {entity && (
+              <IconButton label="Ask about this deal" onClick={() => setOverlay('assistant')}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.6 2.75h8.8a1.6 1.6 0 0 1 1.6 1.6v5.3a1.6 1.6 0 0 1-1.6 1.6H8.3l-3.2 2.4v-2.4H3.6a1.6 1.6 0 0 1-1.6-1.6v-5.3a1.6 1.6 0 0 1 1.6-1.6Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+              </IconButton>
+            )}
             <IconButton label="Guide to this page" onClick={() => setOverlay('info')}>
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M8 7.2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><circle cx="8" cy="4.9" r=".9" fill="currentColor" /></svg>
             </IconButton>
             <div ref={menuRef} className="relative">
-              <IconButton label="Deal menu" active={menu} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+              <IconButton label="Deal menu" tipSide="end" active={menu} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
               </IconButton>
               {menu && (
@@ -167,7 +173,7 @@ const DealShell: React.FC<{
         </div>
         <div className="sm:hidden px-4 pb-2 overflow-x-auto"><Stepper steps={steps} onGo={onGo} /></div>
       </header>
-      <main id="main-content">{children}</main>
+      <main id="main-content" key={step} className="de-enter">{children}</main>
 
       <CommandPalette open={overlay === 'palette'} onClose={close} commands={commands} />
       <InfoDrawer open={overlay === 'info'} onClose={close} step={step} />
@@ -177,6 +183,7 @@ const DealShell: React.FC<{
       <ToolsDrawer open={overlay === 'tools'} onClose={close} />
       <AssistantDrawer open={overlay === 'assistant'} onClose={close} />
       <TraceDrawer />
+      <ToastHost />
     </div>
   );
 };

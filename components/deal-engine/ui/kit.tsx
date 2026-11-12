@@ -4,6 +4,7 @@
  * set in the text face with tabular numerals. Blue is a typed number, ink a calculated one.
  */
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { dealUiStore, useDealUi } from '../../../store/dealUi';
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' ');
 
@@ -29,15 +30,20 @@ export function parseAmount(text: string): number | null | undefined {
   return neg ? -n : n;
 }
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'dark' | 'ghost' | 'quiet' | 'danger'; size?: 'sm' | 'md' };
-export const Button: React.FC<ButtonProps> = ({ variant = 'ghost', size = 'md', className, disabled, ...rest }) => (
+/** A small turning ring: something is being worked on and will finish by itself. */
+export const Spinner: React.FC<{ className?: string }> = ({ className }) => <span aria-hidden="true" className={cx('de-spinner inline-block shrink-0', className)} />;
+
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'dark' | 'ghost' | 'quiet' | 'danger'; size?: 'sm' | 'md'; /** Working: shows a spinner and cannot be pressed again. */ busy?: boolean };
+export const Button: React.FC<ButtonProps> = ({ variant = 'ghost', size = 'md', className, disabled, busy, children, ...rest }) => (
   <button
     type="button"
-    disabled={disabled}
+    disabled={disabled || busy}
+    aria-busy={busy || undefined}
     className={cx(
       'inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap rounded-[var(--de-r-sm)] transition-colors select-none',
       size === 'sm' ? 'h-8 px-3 text-[13px]' : 'h-10 px-4 text-[14px]',
-      disabled && 'opacity-40 cursor-not-allowed',
+      disabled && !busy && 'opacity-40 cursor-not-allowed',
+      busy && 'cursor-progress',
       (variant === 'primary' || variant === 'dark') && 'bg-[var(--de-ink)] text-white hover:bg-[var(--de-ink-hover)]',
       variant === 'ghost' && 'border border-[color:var(--de-rule)] bg-[var(--de-surface)] text-[color:var(--de-ink)] hover:border-[color:var(--de-rule-strong)] hover:bg-[var(--de-hover)]',
       variant === 'quiet' && 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)] hover:bg-[var(--de-sunken)]',
@@ -45,13 +51,13 @@ export const Button: React.FC<ButtonProps> = ({ variant = 'ghost', size = 'md', 
       className,
     )}
     {...rest}
-  />
+  >{busy && <Spinner />}{children}</button>
 );
 
 /** A square button that carries only a glyph; `label` is what a screen reader and the tooltip say. */
-export const IconButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }> = ({ label, active, className, children, ...rest }) => (
-  <button type="button" aria-label={label} title={label}
-    className={cx('inline-flex items-center justify-center w-8 h-8 rounded-[var(--de-r-sm)] text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)] hover:bg-[var(--de-sunken)] transition-colors',
+export const IconButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean; /** Where the label opens: centred under the button, or flush with its right edge. */ tipSide?: 'center' | 'end' }> = ({ label, active, className, children, tipSide = 'center', ...rest }) => (
+  <button type="button" aria-label={label} data-tip={label} data-tip-side={tipSide}
+    className={cx('de-tip inline-flex items-center justify-center w-8 h-8 rounded-[var(--de-r-sm)] text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)] hover:bg-[var(--de-sunken)] transition-colors',
       active && 'bg-[var(--de-sunken)] text-[color:var(--de-ink)]', className)}
     {...rest}>{children}</button>
 );
@@ -287,16 +293,25 @@ export const Drawer: React.FC<{ open: boolean; onClose: () => void; title: React
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+  // Focus moves into the panel when it opens (unless something inside has already taken it) and
+  // goes back to the control that opened it when it closes, so the keyboard never loses its place.
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const from = document.activeElement as HTMLElement | null;
+    if (panel.current && !panel.current.contains(document.activeElement)) panel.current.focus({ preventScroll: true });
+    return () => { if (from && document.contains(from)) from.focus({ preventScroll: true }); };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="de-no-print fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-[var(--de-scrim)] cursor-default" onClick={onClose} />
-      <aside className={cx('de-drawer relative h-full max-w-[94vw] flex flex-col bg-[var(--de-surface)] shadow-[var(--de-shadow-pop)]', width)}>
+      <button type="button" aria-label="Close" className="de-scrim absolute inset-0 bg-[var(--de-scrim)] cursor-default" onClick={onClose} />
+      <aside ref={panel} tabIndex={-1} className={cx('de-drawer outline-none relative h-full max-w-[94vw] flex flex-col bg-[var(--de-surface)] shadow-[var(--de-shadow-pop)]', width)}>
         <header className="flex items-center justify-between gap-3 px-5 h-14 border-b border-[color:var(--de-rule)] shrink-0">
           <h2 className="text-[15px] font-semibold truncate">{title}</h2>
           <span className="flex items-center gap-1">
             {aside}
-            <IconButton label="Close" onClick={onClose}><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></IconButton>
+            <IconButton label="Close" tipSide="end" onClick={onClose}><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></IconButton>
           </span>
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
@@ -384,7 +399,7 @@ export const Stepper: React.FC<{ steps: StepItem[]; onGo: (id: string) => void }
               s.state === 'current' && 'bg-white text-[color:var(--de-ink)]',
               s.state === 'done' && 'bg-[var(--de-pos-soft)] text-[color:var(--de-pos)]',
               (s.state === 'open' || s.state === 'locked') && 'bg-[var(--de-sunken)]')}>
-              {s.state === 'done' ? '✓' : i + 1}
+              {s.state === 'done' ? <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg> : i + 1}
             </span>
             {s.label}
           </button>
@@ -393,5 +408,56 @@ export const Stepper: React.FC<{ steps: StepItem[]; onGo: (id: string) => void }
     })}
   </nav>
 );
+
+/** A grey bar standing in for text or a figure that is on its way. */
+export const Skeleton: React.FC<{ className?: string }> = ({ className }) => <span aria-hidden="true" className={cx('de-skeleton block', className)} />;
+
+/** How much of something is done, as a thin bar. */
+export const Meter: React.FC<{ value: number; total: number; label: string; done?: boolean }> = ({ value, total, label, done }) => (
+  <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total} aria-valuenow={value} className="de-meter h-1 rounded-full bg-[var(--de-sunken)] overflow-hidden">
+    <span style={{ width: total > 0 ? `${(value / total) * 100}%` : '0%', background: done ? 'var(--de-pos)' : undefined }} />
+  </div>
+);
+
+/** Copy text to the clipboard and say so. Returns false when the browser refuses. */
+export async function copyText(text: string, said: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    dealUiStore.getState().notify(said);
+    return true;
+  } catch {
+    dealUiStore.getState().notify('Copying is blocked in this browser');
+    return false;
+  }
+}
+
+/** A small "copy" control beside something worth taking elsewhere (a cell reference, a formula, an answer). */
+export const CopyButton: React.FC<{ text: string; said: string; label: string; className?: string }> = ({ text, said, label, className }) => (
+  <button type="button" aria-label={label} data-tip={label} onClick={() => void copyText(text, said)}
+    className={cx('de-tip inline-flex items-center justify-center w-6 h-6 rounded text-[color:var(--de-ink-3)] hover:text-[color:var(--de-ink)] hover:bg-[var(--de-sunken)] transition-colors', className)}>
+    <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><rect x="4.5" y="4.5" width="7.5" height="7.5" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9.5 4.5V3.2A1.2 1.2 0 0 0 8.3 2H3.2A1.2 1.2 0 0 0 2 3.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
+  </button>
+);
+
+/** The one place a short confirmation appears: bottom centre, read out politely, gone after a few seconds. */
+export const ToastHost: React.FC = () => {
+  const toast = useDealUi((s) => s.toast);
+  const dismiss = useDealUi((s) => s.dismissToast);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(dismiss, 3200);
+    return () => window.clearTimeout(t);
+  }, [toast, dismiss]);
+  return (
+    <div aria-live="polite" role="status" className="de-no-print fixed bottom-6 inset-x-0 z-[80] flex justify-center pointer-events-none px-4">
+      {toast && (
+        <p key={toast.id} className="de-toast pointer-events-auto inline-flex items-center gap-2 h-10 pl-3 pr-4 rounded-full bg-[var(--de-ink)] text-white text-[13px] font-medium shadow-[var(--de-shadow-pop)]">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.5 6 10.5l5-6.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          {toast.text}
+        </p>
+      )}
+    </div>
+  );
+};
 
 export { cx };

@@ -33,12 +33,27 @@ export interface TraceNode {
   precedents: string[];
 }
 
+/** One piece of a formula: plain text (functions, operators, constants) or a reference to cells. */
+export type TracePart =
+  | { kind: 'text'; text: string }
+  | { kind: 'ref'; /** The cells referenced; a range lists its corners when it is long. */ keys: string[]; label: string; /** "Year 2", or "Close to Year 5" for a range along the year axis. */ span: string | null };
+
+/** The cells one row contributes to a formula: a single figure, or a run of years of the same row. */
+export interface TraceGroup { label: string; sheet: string; cells: TraceNode[] }
+
 export interface TraceIndex {
   node: (key: string) => TraceNode | null;
   /** Find a figure by its row label (and year, for a yearly row). `sheet` defaults to the Model. */
   find: (label: string, year?: number, sheet?: string) => TraceNode | null;
   /** The formula with each reference replaced by the referenced row's label. */
   readable: (node: TraceNode) => string | null;
+  /** The formula split into text and references, in the order written, for display. */
+  parts: (node: TraceNode) => TracePart[];
+  /** The precedents grouped by the row they sit on, in the order the formula reads them. */
+  groups: (node: TraceNode) => TraceGroup[];
+  /** The typed inputs the figure ultimately rests on, nearest first. `complete` is false when the
+   *  walk stopped at its limit, so the list is then a part of them. */
+  inputsBehind: (node: TraceNode, limit?: number) => { inputs: TraceNode[]; complete: boolean };
 }
 
 const COL = (n: number): string => { let s = ''; for (let x = n; x > 0; x = Math.floor((x - 1) / 26)) s = String.fromCharCode(65 + ((x - 1) % 26)) + s; return s; };
@@ -176,7 +191,73 @@ export function buildTraceIndex(output: Engine2ModelOutput): TraceIndex {
     });
   };
 
-  return { node, find, readable };
+  const parts = (n: TraceNode): TracePart[] => {
+    if (!n.formula) return [];
+    let text = n.formula;
+    for (const [name, target] of names) text = text.replace(new RegExp(`\\b${name}\\b`, 'g'), target);
+    // quoted strings are text, never references: split them out first
+    const out: TracePart[] = [];
+    const push = (t: string) => { if (!t) return; const last = out[out.length - 1]; if (last && last.kind === 'text') last.text += t; else out.push({ kind: 'text', text: t }); };
+    for (const chunk of text.split(/("[^"]*")/)) {
+      if (chunk.startsWith('"')) { push(chunk); continue; }
+      let at = 0;
+      for (const m of chunk.matchAll(REF)) {
+        const explicit = m[1] ?? m[2];
+        const before = chunk[m.index! - 1];
+        const after = chunk[m.index! + m[0].length];
+        const sh = explicit ?? n.sheet;
+        if ((m[2] && !m[0].includes('!')) || (before && /[A-Za-z0-9_.]/.test(before) && !explicit) || after === '(' || !sheetOf(sh)) continue;
+        const a = node(`${sh}!${m[3].replace(/\$/g, '')}`);
+        const b = m[4] ? node(`${sh}!${m[4].replace(/\$/g, '')}`) : null;
+        if (!a) continue;
+        push(chunk.slice(at, m.index!));
+        at = m.index! + m[0].length;
+        const keys = precedentsOf(n.sheet, m[0]);
+        const sameRow = b !== null && b.label === a.label;
+        out.push({
+          kind: 'ref', keys: keys.length ? keys : [a.key],
+          label: b && !sameRow ? `${a.label} to ${b.label}` : a.label,
+          span: b && sameRow && a.period && b.period ? `${a.period} to ${b.period}` : !b && a.period && a.period !== n.period ? a.period : null,
+        });
+      }
+      push(chunk.slice(at));
+    }
+    return out;
+  };
+
+  const groups = (n: TraceNode): TraceGroup[] => {
+    const out: TraceGroup[] = [];
+    for (const k of n.precedents) {
+      const p = node(k);
+      if (!p) continue;
+      const row = p.addr.replace(/^[A-Z]+/, '');
+      const last = out[out.length - 1];
+      if (last && last.sheet === p.sheet && last.cells[0].addr.replace(/^[A-Z]+/, '') === row && p.period !== null) last.cells.push(p);
+      else out.push({ label: p.label, sheet: p.sheet, cells: [p] });
+    }
+    return out;
+  };
+
+  const inputsBehind = (n: TraceNode, limit = 1500): { inputs: TraceNode[]; complete: boolean } => {
+    const seen = new Set<string>([n.key]);
+    const inputs: TraceNode[] = [];
+    let queue = [...n.precedents];
+    while (queue.length && seen.size < limit) {
+      const next: string[] = [];
+      for (const k of queue) {
+        if (seen.has(k) || seen.size >= limit) continue;
+        seen.add(k);
+        const p = node(k);
+        if (!p) continue;
+        if (p.is_input) inputs.push(p);
+        else next.push(...p.precedents);
+      }
+      queue = next;
+    }
+    return { inputs, complete: queue.length === 0 };
+  };
+
+  return { node, find, readable, parts, groups, inputsBehind };
 }
 
 const indexes = new WeakMap<Engine2ModelOutput, TraceIndex>();

@@ -16,7 +16,7 @@ import type { Engine2Currency } from '../../../lib/format';
 import type { DealAssumptions } from '../../../lib/engine2/types';
 import type { GoalSeekLever } from '../../../lib/ai2/goalseek';
 import ApiKeyInline from '../start/ApiKeyInline';
-import { Button, Drawer, Dropdown, Tag, TextInput } from '../ui/kit';
+import { Button, Drawer, Dropdown, Tag } from '../ui/kit';
 import { download, fileStem } from '../results/exportModel';
 
 const LEVERS: { value: GoalSeekLever; label: string; show: (v: number) => string }[] = [
@@ -139,75 +139,6 @@ export const ToolsDrawer: React.FC<{ open: boolean; onClose: () => void }> = ({ 
         <p className="text-[13px] text-[color:var(--de-ink-2)] mt-1">Optional. Every step works without one.</p>
         <ApiKeyInline />
       </section>
-    </Drawer>
-  );
-};
-
-interface Turn { who: 'you' | 'ai'; text: string }
-
-/** Questions about the deal on screen, answered from its own figures. Needs an AI key. */
-export const AssistantDrawer: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
-  const facts = useEngine2Model((s) => s.facts);
-  const output = useEngine2Model((s) => s.output);
-  const assumptions = useEngine2Model((s) => s.assumptions);
-  const apiKey = useDealEngineStore((s) => s.apiKey);
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [q, setQ] = useState('');
-  const [busy, setBusy] = useState(false);
-  const ask = async () => {
-    const question = q.trim();
-    if (!question || busy || !facts) return;
-    setQ('');
-    const next: Turn[] = [...turns, { who: 'you', text: question }];
-    setTurns(next);
-    setBusy(true);
-    try {
-      const { makeAiText, savedAiConfig } = await import('../../../lib/ai2/textCall');
-      const cfg = savedAiConfig();
-      if (!cfg) throw new Error('Add an AI key first.');
-      const { memoSkeleton } = await import('../../../lib/ai2/memo');
-      const context = output ? memoSkeleton(output, facts.currency as Engine2Currency) : `The model has not been built. Inputs entered so far: ${JSON.stringify(assumptions)}`;
-      const system = `You answer questions about ONE leveraged buyout model for ${facts.entity_name}. Use ONLY the figures below; never invent a number. If the answer is not in them, say what is missing. Be brief and specific, and name the figure you rely on.\n\n${context}`;
-      const user = next.map((t) => `${t.who === 'you' ? 'Analyst' : 'You'}: ${t.text}`).join('\n\n');
-      const text = await makeAiText(cfg.provider, cfg.apiKey)(system, user);
-      setTurns([...next, { who: 'ai', text: text.trim() }]);
-    } catch (e: unknown) {
-      setTurns([...next, { who: 'ai', text: `Could not answer: ${(e as Error).message}` }]);
-    } finally { setBusy(false); }
-  };
-  return (
-    <Drawer open={open} onClose={onClose} title="Ask about this deal" width="w-[30rem]">
-      {!apiKey ? (
-        <>
-          <p className="text-[14px] text-[color:var(--de-ink-2)]">Ask questions in plain words and get answers drawn from this model's own figures. It needs an AI key, which stays in your browser and goes straight to the provider.</p>
-          <ApiKeyInline />
-        </>
-      ) : (
-        <div className="flex flex-col min-h-full">
-          <div className="flex-1 space-y-3">
-            {turns.length === 0 && (
-              <div>
-                <p className="text-[14px] text-[color:var(--de-ink-2)] mb-3">Answers come from the model's own figures{output ? '' : ' (build the model for fuller answers)'}.</p>
-                <div className="flex flex-col items-start gap-1.5">
-                  {['What drives the return in this deal?', 'Where is the structure most exposed?', 'Summarise the deal in three sentences.'].map((s) => (
-                    <button key={s} type="button" onClick={() => setQ(s)} className="text-left text-[13px] px-3 py-2 rounded-[var(--de-r-sm)] bg-[var(--de-paper)] hover:bg-[var(--de-sunken)]">{s}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {turns.map((t, i) => (
-              <div key={i} className={t.who === 'you' ? 'flex justify-end' : ''}>
-                <p className={t.who === 'you' ? 'max-w-[85%] px-3 py-2 rounded-[var(--de-r)] bg-[var(--de-ink)] text-white text-[14px]' : 'text-[14px] leading-relaxed whitespace-pre-wrap'}>{t.text}</p>
-              </div>
-            ))}
-            {busy && <p className="text-[13px] text-[color:var(--de-ink-3)]">Reading the model</p>}
-          </div>
-          <div className="sticky bottom-0 pt-4 pb-1 bg-[var(--de-surface)] flex gap-2">
-            <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask a question" aria-label="Question" onKeyDown={(e) => { if (e.key === 'Enter') ask(); }} />
-            <Button variant="primary" disabled={!q.trim() || busy} onClick={ask}>Ask</Button>
-          </div>
-        </div>
-      )}
     </Drawer>
   );
 };

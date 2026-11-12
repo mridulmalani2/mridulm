@@ -2,7 +2,8 @@
  * Charts of the Results step. Colours are the design tokens, so the charts follow the theme, and
  * any chart can be saved as a picture (SVG for slides, or PNG) from its frame.
  */
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
+import { dealUiStore } from '../../../store/dealUi';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Engine2ModelOutput } from '../../../lib/engine2/facade';
 import { operatingChartSeries } from '../../../lib/engine2/display';
@@ -13,24 +14,20 @@ import { saveChart } from './exportModel';
 /** A card holding one chart, with "save as" actions that appear on hover. */
 export const ChartFrame: React.FC<{ title: string; name: string; aside?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, name, aside, children, className }) => {
   const body = useRef<HTMLDivElement>(null);
-  const [note, setNote] = useState<string | null>(null);
   const save = async (as: 'svg' | 'png') => {
     const svg = body.current?.querySelector('svg');
     if (!svg) return;
-    try { await saveChart(svg as SVGSVGElement, name, as); setNote('Saved'); } catch { setNote('Could not save'); }
-    window.setTimeout(() => setNote(null), 1400);
+    try { await saveChart(svg as SVGSVGElement, name, as); dealUiStore.getState().notify(`Chart saved as ${as.toUpperCase()}`); } catch { dealUiStore.getState().notify('The chart could not be saved'); }
   };
   return (
     <Card title={title} className={`group/chart ${className ?? ''}`} aside={
       <span className="flex items-center gap-3">
         {aside}
         <span className="de-no-print flex items-center gap-1 opacity-0 group-hover/chart:opacity-100 focus-within:opacity-100 transition-opacity">
-          {note ? <span className="text-[12px] text-[color:var(--de-ink-3)]">{note}</span> : (
-            <>
+          <>
               <button type="button" onClick={() => save('png')} className="h-6 px-2 rounded text-[12px] text-[color:var(--de-ink-3)] hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)]">PNG</button>
               <button type="button" onClick={() => save('svg')} className="h-6 px-2 rounded text-[12px] text-[color:var(--de-ink-3)] hover:bg-[var(--de-sunken)] hover:text-[color:var(--de-ink)]">SVG</button>
-            </>
-          )}
+          </>
         </span>
       </span>
     }>

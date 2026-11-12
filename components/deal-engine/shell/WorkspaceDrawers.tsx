@@ -3,6 +3,7 @@
  * every figure shown beside one is computed now, by the one engine, on the deal's current facts.
  */
 import React, { useMemo, useRef, useState } from 'react';
+import { dealUiStore } from '../../../store/dealUi';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { useWorkspace, type InputSet } from '../../../store/workspace';
 import { diffInputs, headlineOf, irrWalk, tryRun, type Headline, type InputChange } from '../../../lib/analysis';
@@ -140,8 +141,8 @@ export const SaveCase: React.FC = () => {
     <div>
       <div className="flex gap-2">
         <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Name this case" aria-label="Case name"
-          onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { saveCase(name); setName(''); } }} />
-        <Button variant="primary" disabled={!name.trim()} onClick={() => { saveCase(name); setName(''); }}>{taken ? 'Replace' : 'Save case'}</Button>
+          onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { saveCase(name); dealUiStore.getState().notify(`Case saved: ${name.trim()}`); setName(''); } }} />
+        <Button variant="primary" disabled={!name.trim()} onClick={() => { saveCase(name); dealUiStore.getState().notify(`Case saved: ${name.trim()}`); setName(''); }}>{taken ? 'Replace' : 'Save case'}</Button>
       </div>
       <div className="flex flex-wrap gap-1.5 mt-2">
         {['Management', 'Base', 'Downside', 'Lender'].map((n) => (

@@ -46,6 +46,43 @@ describe('trace index', () => {
     });
   }
 
+  it('the formula splits into text and named references; a row across years is one group; the typed inputs behind a figure are found', () => {
+    const d = Object.values(GOLDEN_DEALS)[0];
+    const o = runModel(d.facts, d.assumptions);
+    const ix = buildTraceIndex(o);
+    const irr = ix.find('Sponsor IRR')!;
+
+    // the parts put back together are the formula as written, with each reference replaced by its row
+    const parts = ix.parts(irr);
+    const refs = parts.filter((p) => p.kind === 'ref');
+    expect(refs.length).toBeGreaterThan(0);
+    for (const r of refs) if (r.kind === 'ref') { expect(r.label).toBe('Sponsor cash flows'); for (const k of r.keys) expect(irr.precedents).toContain(k); }
+    expect(parts.filter((p) => p.kind === 'text').map((p) => (p.kind === 'text' ? p.text : '')).join('')).toContain('IRR(');
+    expect(refs.some((r) => r.kind === 'ref' && r.span === `Close to Year ${d.assumptions.entry.hold_years}`)).toBe(true);
+    // a quoted string in a formula is text, never a reference
+    expect(parts.some((p) => p.kind === 'text' && p.text.includes('"N/A"'))).toBe(true);
+
+    // every precedent sits in exactly one group, in order; the cash-flow row is one group across the years
+    const groups = ix.groups(irr);
+    expect(groups.flatMap((g) => g.cells.map((c) => c.key))).toEqual(irr.precedents);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].cells.map((c) => c.period)).toEqual(['Close', ...Array.from({ length: d.assumptions.entry.hold_years }, (_, i) => `Year ${i + 1}`)]);
+
+    // the inputs behind the IRR are all typed inputs, none twice, and include the exit multiple
+    const behind = ix.inputsBehind(irr, 100000);
+    expect(behind.complete).toBe(true);
+    expect(behind.inputs.length).toBeGreaterThan(5);
+    expect(behind.inputs.every((n) => n.is_input)).toBe(true);
+    expect(new Set(behind.inputs.map((n) => n.key)).size).toBe(behind.inputs.length);
+    expect(behind.inputs.some((n) => /exit multiple/i.test(n.label))).toBe(true);
+    // a walk cut short says so
+    expect(ix.inputsBehind(irr, 5).complete).toBe(false);
+    // a typed input has nothing behind it and no formula to split
+    const input = behind.inputs[0];
+    expect(ix.parts(input)).toEqual([]);
+    expect(ix.groups(input)).toEqual([]);
+  });
+
   it('formats a traced value as the workbook does', () => {
     expect(formatTraced({ value: 0.2123, format: '0.00%' })).toBe('21.23%');
     expect(formatTraced({ value: 4.5, format: '0.00"x"' })).toBe('4.50x');

@@ -9,7 +9,7 @@
 import React, { useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { useWorkspace } from '../../../store/workspace';
-import { useDealUi } from '../../../store/dealUi';
+import { dealUiStore, useDealUi } from '../../../store/dealUi';
 import { money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
 import { entryBasisText, entryLeverageDisplay, entryMultipleDisplay, exitMultipleDisplay, headlineNotMeaningful, impliedEquityDisplay } from '../../../lib/engine2/display';
@@ -298,8 +298,10 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
 
   const exportExcel = async () => {
     setExporting(true);
-    setExportError(await exportExcelModel(output, notes));
+    const failed = await exportExcelModel(output, notes);
+    setExportError(failed);
     setExporting(false);
+    if (!failed) dealUiStore.getState().notify('Excel model saved to your downloads');
   };
 
   const groups = ['Answer', 'Model', 'Analysis', 'Reference'] as const;
@@ -355,7 +357,7 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
             </>
           )}
           {view === 'onepager' && <Button onClick={() => window.print()}>Print or save as PDF</Button>}
-          <Button variant="primary" disabled={exporting} onClick={exportExcel}>{exporting ? 'Building the workbook' : 'Export Excel model'}</Button>
+          <Button variant="primary" busy={exporting} onClick={exportExcel}>{exporting ? 'Building the workbook' : 'Export Excel model'}</Button>
         </div>
       </div>
       {exportError && <div className="mb-5"><Callout tone="block">{exportError}</Callout></div>}
@@ -387,7 +389,7 @@ const ResultsScreen: React.FC<{ onEdit: () => void }> = ({ onEdit }) => {
                 ))}
               </div>
             </nav>
-            <div className="min-w-0">{body}</div>
+            <div key={view} className="de-enter min-w-0">{body}</div>
           </div>
         )}
     </div>

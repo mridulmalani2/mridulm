@@ -28,6 +28,10 @@ export interface DealUiStore {
    *  analysis view that reads it, so the grid and the break-evens can never disagree. */
   hurdle: string;
   setHurdle: (v: string) => void;
+  /** A short confirmation of something the analyst just did (copied, saved). One at a time. */
+  toast: { id: number; text: string } | null;
+  notify: (text: string) => void;
+  dismissToast: () => void;
 }
 
 export const dealUiStore = createStore<DealUiStore>()((set, get) => ({
@@ -43,6 +47,9 @@ export const dealUiStore = createStore<DealUiStore>()((set, get) => ({
   setResultsView: (resultsView) => set({ resultsView }),
   hurdle: '',
   setHurdle: (hurdle) => set({ hurdle }),
+  toast: null,
+  notify: (text) => set({ toast: { id: (get().toast?.id ?? 0) + 1, text } }),
+  dismissToast: () => set({ toast: null }),
 }));
 
 export function useDealUi<T>(selector: (s: DealUiStore) => T): T {

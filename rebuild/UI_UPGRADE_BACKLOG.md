@@ -51,11 +51,34 @@ the figures are LTM (`entryBasisText` in `lib/engine2/display.ts`); group propos
 applied; sweep priority shows as a whole number. Trace, tornado, break-evens and the Excel note
 comments were checked and work.
 
-Left for the owner after that review: internal references in user-visible sources and warnings
-("owner decision", "DR-4", "SPEC §9", "§8 mechanical roll"); a reload on Results drops the built
-model and lands on Clean; the Sensitivity page has two unshared hurdle boxes, shows the entry and
-exit grid twice, and mixes two colour rules once a hurdle is set; the filing-history table mixes
-number formats; a dark flash before the page loads; a double underscore in the export file name.
+**Review follow-ups (2026-11-12, branch `claude/new-session-4febe2`, on top of PR #128):** the six
+items left after that review are closed.
+
+- **Internal references** are gone from everything a user reads: no "SPEC", no section mark that
+  points into the specification, no research-note ids, no "owner decision", no build-phase names.
+  Statute citations stay (IRC §163(j), §382). Research-note ids in `conventions.json` citations
+  were replaced by the published sources those notes recorded. Held by
+  `tests/no-internal-references.test.ts`. Field names inside deep validation messages
+  (`hurdle_moic must be > 0`) and module prefixes (`sourcesUses:`) are NOT yet reworded.
+- **Reload on Results** stays on Results: the session saves only the fact that the deal was built
+  and runs the build again on restore (`store/session.ts`); no output is ever read from storage.
+- **Sensitivity**: one hurdle shared by the grid and the break-evens (`store/dealUi.ts`); one
+  colour rule at a time (against the hurdle once set, against the base case until then); the
+  entry and exit grid is shown once (a test pins that the interactive grid opens on exactly the
+  exported one).
+- **Figures**: one minus sign in every formatter (`lib/format`), capex in the history table
+  formatted as money; inputs accept the typographic minus; a copied table carries plain hyphens.
+- **Dark flash** gone (the page behind the deal engine is the paper colour, and a loading shell
+  shows while the code arrives); **file name** has no doubled underscore.
+
+**Polish pass (same branch):** trace panel rebuilt (formula with named, clickable references;
+a row across years as one strip; feeds that open in place; the typed inputs behind a figure;
+back and Alt + Left); chat window rebuilt in `shell/AssistantDrawer.tsx` (starter questions,
+formatted answers with copy, typing indicator, growing composer, retry); kit additions in
+`ui/kit.tsx` and `index.css`: toasts, tooltips, skeletons, busy buttons, copy buttons, a section
+progress meter, soft edges and pinned row labels on wide tables, short enter transitions (all
+off under reduced motion), focus returned to the opener when a panel closes. The chat window was
+checked with a stubbed answer only: no real AI key has been used.
 
 **Still open:**
 

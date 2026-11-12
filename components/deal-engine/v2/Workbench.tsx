@@ -22,7 +22,7 @@ import BasisBadge from './BasisBadge';
 import OutputTabs from './OutputTabs';
 import { SECTIONS, plainLabel, sectionOf } from './sections';
 import { factLabel } from '../ui/labels';
-import { Button, Callout, cx } from '../ui/kit';
+import { Button, Callout, Meter, cx } from '../ui/kit';
 
 /** Deals for which AI proposals have already been requested in this session (one request each). */
 const aiAsked = new Set<string>();
@@ -93,9 +93,17 @@ function useJump(): void {
 
 const Rail: React.FC<{ counts: Record<string, number>; started: boolean }> = ({ counts, started }) => {
   const jumpTo = useDealUi((s) => s.jumpTo);
+  // progress is counted in sections: how many have nothing left to enter
+  const complete = SECTIONS.filter((s) => !counts[s.id]).length;
   return (
     <nav aria-label="Sections" className="hidden lg:block sticky top-24 self-start">
-      <p className="text-[12px] font-medium text-[color:var(--de-ink-3)] px-3 mb-2">Sections</p>
+      <div className="px-3 mb-3">
+        <p className="flex items-baseline justify-between text-[12px] font-medium text-[color:var(--de-ink-3)] mb-1.5">
+          <span>Sections</span>
+          {started && <span className="de-num">{complete} of {SECTIONS.length} complete</span>}
+        </p>
+        {started && <Meter label="Sections complete" value={complete} total={SECTIONS.length} done={complete === SECTIONS.length} />}
+      </div>
       <ul className="space-y-0.5">
         {SECTIONS.map((s) => {
           const n = counts[s.id] ?? 0;
@@ -107,7 +115,7 @@ const Rail: React.FC<{ counts: Record<string, number>; started: boolean }> = ({ 
                 <span className="truncate">{s.title}</span>
                 {started && (n > 0
                   ? <span className="de-num text-[12px] font-medium text-[color:var(--de-accent)]">{n}</span>
-                  : <span aria-label="complete" className="text-[12px] text-[color:var(--de-pos)]">✓</span>)}
+                  : <span role="img" aria-label="complete" className="text-[color:var(--de-pos)]"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg></span>)}
               </button>
             </li>
           );
