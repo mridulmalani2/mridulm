@@ -60,9 +60,9 @@ describe('v2 Workbench: SSR smoke on the real store', () => {
     useEngine2Model.getState().setHoldYears(5);
     html = renderToStaticMarkup(<Workbench />);
     expect(html).toContain('still blank. Nothing is assumed for you.');
-    expect(html).toContain('use '); // one-click proposals are OFFERED…
-    expect(html).toContain('· history'); // …with their basis (growth: the filed CAGR)
-    expect(html).toContain('· convention'); // (entry multiple: a cited median)
+    expect(html).toContain('data-suggested="true"'); // proposals are OFFERED inside their cells, in grey…
+    expect(html).toMatch(/placeholder="[\d.]+"/); // …as a placeholder, never as the cell's value
+    expect(html).toContain('Enter shows why, Enter again accepts'); // …with Excel's keys named for a screen reader
     expect(html).not.toContain('SUGGESTED · HISTORY'); // …and NOT applied (no badge on a blank field)
     expect(html).toContain('trades at ~8.2x'); // the D5 read-only anchor line
     expect(html).toContain('disabled');
@@ -78,7 +78,7 @@ describe('v2 Workbench: SSR smoke on the real store', () => {
     // §11 [v1.1.2]: the preview reads GROSS total leverage across ALL term tranches and says so
     expect(html).toContain('Total leverage (gross, x FY EBITDA)');
     expect(html).toContain('>4.0x<');
-    expect(html).toContain('YOU'); // entered values wear the YOU badge
+    expect(html).toContain('data-basis="user"'); // entered values are marked as the analyst's own
   });
 
   it('after build: hero IRR/MOIC render FORMATTED (no raw engine floats in the DOM)', () => {

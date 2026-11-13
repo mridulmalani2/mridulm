@@ -1,8 +1,8 @@
 /**
- * Tools: solve for a target return, draft the memo, and the two optional AI helpers. Each tool
- * says what it gives and what it needs. The solver and the memo need no key; the AI helpers
- * propose and challenge, and never change an input themselves. Questions about the deal have
- * their own panel (AssistantDrawer) rather than sitting among the tools.
+ * Tools: solve for a target return, draft the memo, and the optional AI challenge. Each tool
+ * says what it gives and what it needs. The solver and the memo need no key; the challenge asks
+ * questions and never changes an input. Suggestions and questions about the deal live in the
+ * assistant panel (AssistantDock), not among the tools.
  */
 import React, { useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
@@ -96,9 +96,7 @@ export const ToolsDrawer: React.FC<{ open: boolean; onClose: () => void }> = ({ 
   const facts = useEngine2Model((s) => s.facts);
   const output = useEngine2Model((s) => s.output);
   const aiBusy = useEngine2Model((s) => s.aiBusy);
-  const aiSuggest = useEngine2Model((s) => s.aiSuggest);
   const runRedline = useEngine2Model((s) => s.runRedlineAction);
-  const aiNotes = useEngine2Model((s) => s.aiNotes);
   const redline = useEngine2Model((s) => s.redlineItems);
   const error = useEngine2Model((s) => s.error);
   const apiKey = useDealEngineStore((s) => s.apiKey);
@@ -116,10 +114,6 @@ export const ToolsDrawer: React.FC<{ open: boolean; onClose: () => void }> = ({ 
         needs={!output ? <Tag>build the model first</Tag> : undefined}>
         <Button size="sm" disabled={!output} onClick={memo}>Download the memo</Button>
       </Tool>
-      <Tool title="AI proposals for blank inputs" gives="Asks the model you have connected to propose values for inputs the filing cannot support. Proposals appear as purple links beside the fields. Nothing is applied until you click one." needs={keyTag}>
-        <Button size="sm" disabled={!apiKey || aiBusy} onClick={aiSuggest}>{aiBusy ? 'Working' : 'Get proposals'}</Button>
-        {aiNotes.length > 0 && <ul className="mt-3 space-y-1">{aiNotes.map((n, i) => <li key={i} className="text-[12px] text-[color:var(--de-ink-2)]">{n}</li>)}</ul>}
-      </Tool>
       <Tool title="Challenge my assumptions" gives="A hostile read of the inputs, as a sceptical committee member would give it: one hard question per weak assumption. It edits nothing." needs={keyTag}>
         <Button size="sm" disabled={!apiKey || aiBusy} onClick={runRedline}>{aiBusy ? 'Working' : 'Run the challenge'}</Button>
         {redline && redline.length > 0 && (
@@ -136,7 +130,7 @@ export const ToolsDrawer: React.FC<{ open: boolean; onClose: () => void }> = ({ 
       {error && <p className="text-[13px] text-[color:var(--de-accent)]">{error}</p>}
       <section className="pt-6 border-t border-[color:var(--de-rule)]">
         <h3 className="text-[15px] font-semibold">AI key</h3>
-        <p className="text-[13px] text-[color:var(--de-ink-2)] mt-1">Optional. Every step works without one.</p>
+        <p className="text-[13px] text-[color:var(--de-ink-2)] mt-1 mb-3">Optional. Every step works without one. A key adds a suggested value for the inputs no filing or cited source covers, and answers to your own questions. A paid key gives fuller, company-specific suggestions than a free one.</p>
         <ApiKeyInline />
       </section>
     </Drawer>

@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { Drawer, cx } from '../ui/kit';
+import { EDIT_KEY, chord, isMac } from '../ui/platform';
 
 type StepId = 'source' | 'clean' | 'assumptions' | 'results';
 interface Guide { title: string; lede: string; cards: { title: string; body: string; art: React.ReactNode }[] }
@@ -54,8 +55,9 @@ const GUIDES: Record<StepId, Guide> = {
     lede: 'The input sheet of the model. Blue is a number you entered; ink is a number the model worked out.',
     cards: [
       { title: 'Every input starts blank', body: 'A blank has a red underline and holds the build back. The panel on the right lists what is left; click an item to go straight to it.', art: ART.blank },
-      { title: 'Suggestions wait for you', body: 'A blue “use” link offers a value drawn from the filing history or a cited convention. Click it, or press S in the blank field. Click the small source tag to read how the value was reached.', art: ART.choice },
-      { title: 'It works like a spreadsheet', body: 'Enter moves to the next input and the arrow keys move between cells. Paste a row copied from Excel into a by-year line. Ctrl + Enter copies a value to the years on its right.', art: ART.keys },
+      { title: 'A grey value is a suggestion', body: 'A blank input may show a value in grey with a star. It comes from the filing, from a cited convention or, where neither exists and you added a key, from the AI model. It is not an entry: the model waits until you accept it or type your own.', art: ART.choice },
+      { title: 'Enter, Enter', body: `In a cell with a suggestion, Enter shows how the value was reached and Enter again accepts it and moves to the next input. ${EDIT_KEY} accepts it for editing, Space or Delete clears it, and typing a number replaces it. Clicking the words beside an input opens the same explanation.`, art: ART.keys },
+      { title: 'No mouse needed', body: `Enter moves on and the arrow keys move between cells, choices and switches included. Space changes a choice or a switch. Paste a row copied from Excel into a by-year line; ${chord('Enter')} copies a value to the years on its right. ${chord('Z')} undoes the last step.`, art: ART.sheet },
       { title: 'The return updates as you type', body: 'Once the sheet is complete the panel shows the return on the inputs as they stand, and how far it has moved since the last build.', art: ART.live },
       { title: 'Keep the basis with the number', body: 'Hover a line and add a note, such as “CIM p.14”. Notes are saved with the deal and exported with the Excel model.', art: ART.sheet },
       { title: 'Cases', body: 'Save the inputs as a named case, such as Management or Downside, then switch between cases or compare them side by side.', art: ART.cases },
@@ -74,13 +76,32 @@ const GUIDES: Record<StepId, Guide> = {
   },
 };
 
-const SHORTCUTS: [string, string][] = [
-  ['Ctrl / Cmd + K', 'Search and jump anywhere'],
-  ['Enter', 'Next input'],
-  ['Arrow keys', 'Move between cells'],
-  ['Ctrl / Cmd + Enter', 'Fill right in a by-year line'],
-  ['S', 'Use the suggestion in a blank field'],
-  ['?', 'Open this guide'],
+/** The keys as this machine names them (Command on a Mac, Ctrl elsewhere). */
+const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
+  { group: 'In a cell with a suggestion', keys: [
+    ['Enter', 'Show how the value was reached'],
+    ['Enter again', 'Accept it and move to the next input'],
+    [EDIT_KEY, 'Accept it for editing'],
+    ['Space or Delete', 'Clear the suggestion'],
+    ['Type a number', 'Replace it with your own'],
+    [chord(isMac ? '⇧' : 'Shift', 'Enter'), 'Accept every suggestion left in the section'],
+    ['Esc', 'Close the explanation'],
+  ] },
+  { group: 'Moving and editing', keys: [
+    ['Enter', 'Next input'],
+    [isMac ? '⇧ Enter' : 'Shift + Enter', 'Previous input'],
+    ['Arrow keys or Tab', 'Move between cells without accepting'],
+    ['Space', 'Change a choice or a switch'],
+    [EDIT_KEY, 'Edit the value in a cell, or open a list'],
+    [chord('Enter'), 'Fill right in a by-year line'],
+    [chord('Z'), 'Undo'],
+    [isMac ? chord('⇧', 'Z') : chord('Y'), 'Redo'],
+  ] },
+  { group: 'Anywhere', keys: [
+    [chord('K'), 'Search and jump anywhere'],
+    [chord('Enter'), 'Build the model, away from the sheet'],
+    ['?', 'Open this guide'],
+  ] },
 ];
 
 const InfoDrawer: React.FC<{ open: boolean; onClose: () => void; step: string }> = ({ open, onClose, step }) => {
@@ -101,14 +122,19 @@ const InfoDrawer: React.FC<{ open: boolean; onClose: () => void; step: string }>
       </ul>
       <div className="mt-8">
         <p className="text-[13px] font-semibold mb-2">Keyboard</p>
-        <dl className="divide-y divide-[color:var(--de-rule)]">
-          {SHORTCUTS.map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between gap-4 py-2">
-              <dt className="text-[13px] text-[color:var(--de-ink-2)]">{v}</dt>
-              <dd className="de-kbd whitespace-nowrap">{k}</dd>
-            </div>
-          ))}
-        </dl>
+        {SHORTCUTS.map((g) => (
+          <div key={g.group} className="mb-4">
+            <p className="text-[12px] text-[color:var(--de-ink-3)] mb-1">{g.group}</p>
+            <dl className="divide-y divide-[color:var(--de-rule)]">
+              {g.keys.map(([k, v]) => (
+                <div key={k + v} className="flex items-center justify-between gap-4 py-2">
+                  <dt className="text-[13px] text-[color:var(--de-ink-2)]">{v}</dt>
+                  <dd className="de-kbd whitespace-nowrap">{k}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
       </div>
       <p className="text-[12px] text-[color:var(--de-ink-3)] leading-relaxed mt-8">
         Everything you enter stays in this browser. One engine produces the figures on screen and the formulas in the Excel model.

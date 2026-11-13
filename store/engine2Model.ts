@@ -20,14 +20,24 @@ import { holdSuggestion, suggestionsFor, type SuggestionBasis, type SuggestionCa
 /** Before the draft exists the one thing that can be proposed is the holding period itself. */
 const holdOnly = (): SuggestionCatalogue => { const h = holdSuggestion(); return h ? { 'entry.hold_years': h } : {}; };
 /**
- * A refreshed catalogue keeps the AI proposals already on screen (keys `<path>@ai`): they came
- * from a call the analyst made, and an edit elsewhere on the sheet must not make them vanish.
+ * The catalogue the sheet reads: the cited proposals, plus the AI's proposals for the inputs the
+ * cited ones do not cover. A cited value always wins, and a proposal the analyst cleared stays
+ * cleared.
  */
-const keepAi = (fresh: SuggestionCatalogue, prev: SuggestionCatalogue): SuggestionCatalogue => {
-  const out = { ...fresh };
-  for (const k of Object.keys(prev)) if (k.includes('@')) out[k] = prev[k];
+const withAi = (fresh: SuggestionCatalogue, ai: SuggestionCatalogue, dismissed: readonly string[]): SuggestionCatalogue => {
+  const out: SuggestionCatalogue = {};
+  for (const [k, v] of Object.entries(ai)) {
+    const parent = k.replace(/\.\d+$/, '');
+    if (parent !== k && Array.isArray(fresh[parent]?.value)) continue; // the cited by-year proposal covers it
+    out[k] = v;
+  }
+  Object.assign(out, fresh);
+  for (const d of dismissed) delete out[d];
   return out;
 };
+/** What an undo restores: the draft and everything that describes it. Never an output. */
+interface Snapshot { assumptions: DealAssumptions | null; basis: Record<string, FieldBasis>; pending: string[]; dismissed: string[] }
+const UNDO_DEPTH = 100;
 import { blankAssumptions, CHOICE_PATHS, missingInputs, resizeHold, setPath, type MissingInput } from '../lib/engine2/draft';
 import type { RawHistoricals } from '../lib/edgar/types';
 import type { DealAssumptions, DealFacts, NormalisationFacts } from '../lib/engine2/types';
@@ -75,8 +85,33 @@ export interface Engine2ModelStore {
   startForecastOnly: (p: { entity_name: string; currency: DealFacts['currency']; hold_years: number }) => void;
   /** Recompute the suggestion catalogue (never touches the assumptions). */
   resuggest: () => void;
-  /** Apply ONE proposal from the catalogue: the value lands with the proposal's basis badge. */
-  acceptSuggestion: (path: string) => void;
+  /** Apply ONE proposal from the catalogue: the value lands with the proposal's basis badge.
+   *  With `index`, one year of a by-year proposal. */
+  acceptSuggestion: (path: string, index?: number) => void;
+  /** Clear a proposal from its cell (`path`, or `path#year` for one year of a by-year proposal).
+   *  It does not come back; the cell is an ordinary blank again. */
+  dismissSuggestion: (key: string) => void;
+  /** Accept every proposal still open among the inputs `inScope` selects (one undo step).
+   *  Only blanks the build is waiting for are filled; returns how many were. */
+  acceptAll: (inScope: (path: string) => boolean) => number;
+  /** The AI's proposals for inputs with no cited basis. Merged into `suggestions`, where a cited
+   *  value always wins. */
+  aiProposals: SuggestionCatalogue;
+  /** Inputs the AI has already been asked about for this deal: never asked twice. */
+  aiAsked: string[];
+  /** Proposals the analyst cleared. */
+  dismissed: string[];
+  /** Where the AI request stands. `note` is set when a request stopped early (a limit, a bad key)
+   *  and holds further automatic requests back until the analyst asks again. */
+  aiState: { busy: boolean; done: number; total: number; note: string | null; tier: 'free' | 'full' | null };
+  /** Ask the model on the analyst's key for the blank numbers the cited catalogue does not cover.
+   *  Proposals only: nothing is applied. `again` clears an earlier stop. */
+  aiPropose: (again?: boolean) => Promise<void>;
+  /** Step back / forward through edits, accepts and clears on the sheet. */
+  past: Snapshot[];
+  future: Snapshot[];
+  undo: () => boolean;
+  redo: () => boolean;
   /** Change the holding period: kept years keep values, new years are unset. */
   setHoldYears: (n: number) => void;
   /** The inputs still blank — Build is disabled while this is non-empty. */
@@ -99,19 +134,34 @@ export interface Engine2ModelStore {
    *  downside, and a 5×5 entry×exit sensitivity centered on base. Same gate as build. */
   buildWithExhibits: () => void;
 
-  // ── E4 AI (key/provider shared with the old store's localStorage) ──
+  // ── AI (key/provider shared through localStorage). The challenge asks questions; `aiPropose`
+  //    above proposes values, which are never applied until the analyst accepts them. ──
   aiBusy: boolean;
   redlineItems: import('../lib/ai2/redline').RedlineItem[] | null;
-  aiNotes: string[];
-  /** AI-suggest: Class-B PROPOSALS only (catalogue keys '<path>@ai'); out-of-rail values dropped, never clamped; nothing applied. */
-  aiSuggest: () => Promise<void>;
   /** Redline: hostile challenges over assumptions + bases + coherence; edits nothing. */
   runRedlineAction: () => Promise<void>;
   reset: () => void;
 }
 
 
-export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
+const AI_IDLE = { busy: false, done: 0, total: 0, note: null, tier: null } as const;
+const FRESH_SHEET = { aiProposals: {}, aiAsked: [], dismissed: [], past: [], future: [], aiState: AI_IDLE };
+/** > 0 while one action is made of several edits: they are remembered as a single undo step. */
+let holding = 0;
+
+export const engine2Store = createStore<Engine2ModelStore>()((set, get) => {
+  const snapshot = (): Snapshot => { const s = get(); return { assumptions: s.assumptions, basis: s.basis, pending: s.pending, dismissed: s.dismissed }; };
+  const remember = () => { if (holding === 0) set({ past: [...get().past.slice(-(UNDO_DEPTH - 1)), snapshot()], future: [] }); };
+  const restore = (sn: Snapshot) => {
+    const { facts, aiProposals } = get();
+    const a = sn.assumptions;
+    set({
+      assumptions: a, basis: sn.basis, pending: sn.pending, dismissed: sn.dismissed, output: null, error: null,
+      suggestions: facts && a ? withAi(suggestionsFor(facts, a.entry.hold_years, a, sn.pending), aiProposals, sn.dismissed) : withAi(holdOnly(), {}, sn.dismissed),
+    });
+  };
+  return {
+  ...FRESH_SHEET,
   facts: null,
   sourceCurrency: null,
   missingFacts: [],
@@ -139,7 +189,8 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       basis: {},
       output: null, error: null,
       // AI notes/redlines describe assumptions that no longer exist after ANY re-import
-      aiNotes: [], redlineItems: null,
+      redlineItems: null,
+      ...FRESH_SHEET,
     });
   },
 
@@ -170,7 +221,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     const a = prev.assumptions;
     set({
       facts, missingFacts: missing, factNotes: adapted.notes,
-      suggestions: a ? suggestionsFor(facts, a.entry.hold_years, a, prev.pending) : holdOnly(),
+      suggestions: a ? withAi(suggestionsFor(facts, a.entry.hold_years, a, prev.pending), prev.aiProposals, prev.dismissed) : holdOnly(),
       output: null, error: null,
     });
   },
@@ -190,53 +241,163 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       facts, sourceCurrency: currency, missingFacts: [], factNotes: [],
       assumptions: blankAssumptions(`${entity_name} LBO`, hold_years),
       pending: [...CHOICE_PATHS], suggestions: {}, basis: {},
-      output: null, error: null, aiNotes: [], redlineItems: null,
+      output: null, error: null, redlineItems: null,
+      ...FRESH_SHEET,
     });
   },
 
   resuggest: () => {
     const { facts, assumptions } = get();
     if (!facts || !assumptions) return;
-    set({ suggestions: keepAi(suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending), get().suggestions) });
+    set({ suggestions: withAi(suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending), get().aiProposals, get().dismissed) });
   },
 
-  acceptSuggestion: (key) => {
+  acceptSuggestion: (key, index) => {
     const { assumptions, suggestions, basis, pending } = get();
     const sug = suggestions[key];
     if (sug && !assumptions && key === 'entry.hold_years' && typeof sug.value === 'number') { get().setHoldYears(sug.value); return; }
     if (!assumptions || !sug) return;
-    // catalogue keys may carry a variant (`entry.entry_multiple@ai`) — the target is the path
+    // catalogue keys may carry a variant (`entry.entry_multiple@ai`): the target is the path
     const path = key.split('@')[0];
     // the holding period resizes every per-year line: it goes through its own action
     if (path === 'entry.hold_years') { if (typeof sug.value === 'number') get().setHoldYears(sug.value); return; }
-    let next = setPath(assumptions, path, sug.value);
+    let next: DealAssumptions;
+    if (index !== undefined) {
+      // one year of a by-year proposal: the other years are left exactly as they are
+      const v = Array.isArray(sug.value) ? sug.value[index] : undefined;
+      if (typeof v !== 'number') return;
+      next = setPath(assumptions, `${path}.${index}`, v);
+    } else {
+      next = setPath(assumptions, path, sug.value);
+    }
+    remember();
     if (path === 'entry.entry_multiple') next = { ...next, entry: { ...next.entry, driver: 'multiple', enterprise_value: null } };
-    const stillPending = pending.filter((p) => p !== path && !p.startsWith(`${path}.`));
+    const stillPending = index !== undefined ? pending : pending.filter((p) => p !== path && !p.startsWith(`${path}.`));
     const { facts } = get();
     set({
       assumptions: next,
-      basis: { ...basis, [path]: sug.basis },
+      basis: { ...basis, [index !== undefined ? `${path}.${index}` : path]: sug.basis, ...(index !== undefined && !basis[path] ? { [path]: sug.basis } : {}) },
       pending: stillPending,
       output: null,
       // an accepted proposal is an input like any other: the proposals that follow it (each
       // facility's terms after the template, exit = entry after the entry multiple) refresh
-      suggestions: facts ? keepAi(suggestionsFor(facts, next.entry.hold_years, next, stillPending), suggestions) : suggestions,
+      suggestions: facts ? withAi(suggestionsFor(facts, next.entry.hold_years, next, stillPending), get().aiProposals, get().dismissed) : suggestions,
     });
+  },
+
+  dismissSuggestion: (key) => {
+    const { facts, assumptions, dismissed } = get();
+    if (dismissed.includes(key)) return;
+    remember();
+    const next = [...dismissed, key];
+    set({
+      dismissed: next,
+      suggestions: facts && assumptions ? withAi(suggestionsFor(facts, assumptions.entry.hold_years, assumptions, get().pending), get().aiProposals, next) : withAi(holdOnly(), {}, next),
+    });
+  },
+
+  acceptAll: (inScope) => {
+    if (!get().assumptions) return 0;
+    remember();
+    holding++;
+    let n = 0;
+    try {
+      // an accept can bring further proposals into reach (a facility's terms after the template),
+      // so the pass repeats until one adds nothing
+      for (let round = 0; round < 4; round++) {
+        let did = false;
+        for (const key of Object.keys(get().suggestions)) {
+          if (!inScope(key)) continue;
+          const sug = get().suggestions[key];
+          if (!sug) continue;
+          const need = new Set(get().missing().map((m) => m.path));
+          if (Array.isArray(sug.value)) {
+            sug.value.forEach((v, i) => {
+              if (typeof v === 'number' && need.has(`${key}.${i}`) && !get().dismissed.includes(`${key}#${i}`)) { get().acceptSuggestion(key, i); n++; did = true; }
+            });
+          } else if ((typeof sug.value === 'number' || typeof sug.value === 'string' || typeof sug.value === 'boolean') && need.has(key)) {
+            get().acceptSuggestion(key); n++; did = true;
+          }
+        }
+        if (!did) break;
+      }
+    } finally { holding--; }
+    if (n === 0) set({ past: get().past.slice(0, -1) });
+    return n;
+  },
+
+  undo: () => {
+    const { past, future } = get();
+    const last = past[past.length - 1];
+    if (!last) return false;
+    const now = snapshot();
+    restore(last);
+    set({ past: past.slice(0, -1), future: [...future, now] });
+    return true;
+  },
+
+  redo: () => {
+    const { past, future } = get();
+    const next = future[future.length - 1];
+    if (!next) return false;
+    const now = snapshot();
+    restore(next);
+    set({ past: [...past, now], future: future.slice(0, -1) });
+    return true;
+  },
+
+  aiPropose: async (again) => {
+    const start = get();
+    if (!start.facts || !start.assumptions || start.aiState.busy) return;
+    if (start.aiState.note && !again) return;
+    const { makeAiChat, savedAiConfig } = await import('../lib/ai2/textCall');
+    const cfg = savedAiConfig();
+    if (!cfg) return;
+    const { proposalFields, proposeValues } = await import('../lib/ai2/propose');
+    const { tierOf } = await import('../lib/ai2/gateway/providers');
+    const { facts, assumptions, pending, missingFacts } = get();
+    if (!facts || !assumptions || get().aiState.busy) return;
+    const cited = suggestionsFor(facts, assumptions.entry.hold_years, assumptions, pending);
+    const fields = proposalFields(get().missing(), assumptions, cited, new Set([...get().aiAsked, ...get().dismissed]));
+    if (fields.length === 0) { if (again) set({ aiState: { ...get().aiState, note: null } }); return; }
+    const tier = tierOf(cfg.provider);
+    const deal = facts;
+    set({ aiState: { busy: true, done: 0, total: fields.length, note: null, tier } });
+    const land = (proposals: SuggestionCatalogue) => {
+      const now = get();
+      if (now.facts !== deal && now.facts?.entity_name !== deal.entity_name) return false; // another deal was opened meanwhile
+      const aiProposals = { ...now.aiProposals, ...proposals };
+      const a = now.assumptions;
+      set({ aiProposals, suggestions: now.facts && a ? withAi(suggestionsFor(now.facts, a.entry.hold_years, a, now.pending), aiProposals, now.dismissed) : now.suggestions });
+      return true;
+    };
+    try {
+      const result = await proposeValues({
+        facts, assumptions, missingFacts, catalogue: cited, fields, provider: cfg.provider,
+        chat: makeAiChat(cfg.provider, cfg.apiKey), today: new Date().toISOString().slice(0, 10),
+        onProgress: (x) => { if (land(x.proposals)) set({ aiState: { busy: true, done: x.done, total: x.total, note: null, tier } }); },
+      });
+      if (get().facts?.entity_name !== deal.entity_name) return;
+      set({ aiAsked: [...new Set([...get().aiAsked, ...result.asked])], aiState: { busy: false, done: result.asked.length, total: fields.length, note: result.stopped, tier } });
+    } catch (e: unknown) {
+      set({ aiState: { busy: false, done: 0, total: fields.length, note: (e as Error).message, tier } });
+    }
   },
 
   setTradingAnchor: (entityName, anchor) => {
     const { facts, assumptions } = get();
     if (!facts || facts.entity_name !== entityName) return;
     const next = { ...facts, implied_trading_ev_ebitda: anchor };
-    set({ facts: next, suggestions: assumptions ? keepAi(suggestionsFor(next, assumptions.entry.hold_years, assumptions, get().pending), get().suggestions) : get().suggestions });
+    set({ facts: next, suggestions: assumptions ? withAi(suggestionsFor(next, assumptions.entry.hold_years, assumptions, get().pending), get().aiProposals, get().dismissed) : get().suggestions });
   },
 
   setHoldYears: (n) => {
     const { assumptions, facts } = get();
     if (!facts) return;
     if (!Number.isInteger(n) || n < 1) { set({ error: 'Holding period must be a whole number of years ≥ 1.' }); return; }
+    remember();
     const next = assumptions ? resizeHold(assumptions, n) : blankAssumptions(`${facts.entity_name} LBO`, n);
-    set({ assumptions: next, suggestions: keepAi(suggestionsFor(facts, n, next, get().pending), get().suggestions), output: null, error: null });
+    set({ assumptions: next, suggestions: withAi(suggestionsFor(facts, n, next, get().pending), get().aiProposals, get().dismissed), output: null, error: null });
   },
 
   missing: () => {
@@ -278,14 +439,19 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
   },
 
   editWithChoices: (next, editedPaths, newChoices, clearedPrefixes = []) => {
+    remember();
+    holding++;
+    try {
     const keep = get().pending.filter((p) => !clearedPrefixes.some((c) => p === c || p.startsWith(`${c}.`)));
     set({ pending: [...new Set([...keep, ...newChoices])] });
     get().editAssumptions(next, editedPaths);
     // editAssumptions removed edited paths from pending; re-add the brand-new choices
     set({ pending: [...new Set([...get().pending, ...newChoices.filter((c) => !editedPaths.includes(c))])] });
+    } finally { holding--; }
   },
 
   editAssumptions: (next, editedPaths) => {
+    remember();
     const marked = { ...get().basis };
     for (const p of editedPaths) marked[p] = { kind: 'user', detail: 'entered by you' };
     // an edit IS the choice: the path (and anything under it) leaves `pending`
@@ -294,7 +460,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     set({
       assumptions: next, basis: marked, pending, output: null,
       // proposals that follow other inputs (exit = entry) track what was entered
-      suggestions: facts ? keepAi(suggestionsFor(facts, next.entry.hold_years, next, pending), get().suggestions) : get().suggestions,
+      suggestions: facts ? withAi(suggestionsFor(facts, next.entry.hold_years, next, pending), get().aiProposals, get().dismissed) : get().suggestions,
     });
   },
 
@@ -364,33 +530,6 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
 
   aiBusy: false,
   redlineItems: null,
-  aiNotes: [],
-
-  aiSuggest: async () => {
-    const { facts, assumptions, missingFacts } = get();
-    if (!facts || !assumptions) return;
-    set({ aiBusy: true, error: null, aiNotes: [] });
-    try {
-      const { aiRefineAssumptions } = await import('../lib/ai2/suggest');
-      const { makeAiText, savedAiConfig } = await import('../lib/ai2/textCall');
-      const cfg = savedAiConfig();
-      if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use AI-suggest.', aiBusy: false }); return; }
-      const result = await aiRefineAssumptions(facts, assumptions, missingFacts, makeAiText(cfg.provider, cfg.apiKey));
-      // v2.0.0: AI values are PROPOSALS (catalogue keys `<path>@ai`), never applied.
-      const proposals: SuggestionCatalogue = {};
-      for (const a of result.applied) proposals[`${a.path}@ai`] = { value: a.value, basis: { kind: 'ai', detail: a.basis } };
-      set({
-        suggestions: { ...get().suggestions, ...proposals },
-        aiNotes: [
-          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value}, ${a.basis}`),
-          ...result.dropped.map((d) => `dropped: ${d}`),
-        ],
-        aiBusy: false,
-      });
-    } catch (e: unknown) {
-      set({ error: (e as Error).message, aiBusy: false });
-    }
-  },
 
   runRedlineAction: async () => {
     const { assumptions, basis, output } = get();
@@ -400,7 +539,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       const { runRedline } = await import('../lib/ai2/redline');
       const { makeAiText, savedAiConfig } = await import('../lib/ai2/textCall');
       const cfg = savedAiConfig();
-      if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use Redline.', aiBusy: false }); return; }
+      if (!cfg) { set({ error: 'Add an AI key first.', aiBusy: false }); return; }
       const items = await runRedline(assumptions, basis, output?.coherence ?? [], makeAiText(cfg.provider, cfg.apiKey));
       set({ redlineItems: items, aiBusy: false });
     } catch (e: unknown) {
@@ -408,8 +547,9 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
   },
 
-  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, pending: [], suggestions: {}, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
-}));
+  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, pending: [], suggestions: {}, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, ...FRESH_SHEET }),
+  };
+});
 
 /**
  * Selector hook over the vanilla store. The SERVER snapshot reads CURRENT state (not
@@ -427,3 +567,19 @@ export function useEngine2Model<T>(selector: (s: Engine2ModelStore) => T): T {
 useEngine2Model.getState = engine2Store.getState;
 useEngine2Model.setState = engine2Store.setState;
 useEngine2Model.subscribe = engine2Store.subscribe;
+
+/** The proposal a single cell shows: a scalar proposal for its path, or its year of a by-year one. */
+export interface CellSuggestion { key: string; index?: number; value: number; basis: SuggestionBasis }
+export function cellSuggestion(suggestions: SuggestionCatalogue, dismissed: readonly string[], path: string, index?: number): CellSuggestion | null {
+  if (index === undefined) {
+    const s = suggestions[path];
+    return s && typeof s.value === 'number' ? { key: path, value: s.value, basis: s.basis } : null;
+  }
+  const row = suggestions[path];
+  if (row && Array.isArray(row.value)) {
+    const v = row.value[index];
+    return typeof v === 'number' && !dismissed.includes(`${path}#${index}`) ? { key: path, index, value: v, basis: row.basis } : null;
+  }
+  const one = suggestions[`${path}.${index}`];
+  return one && typeof one.value === 'number' ? { key: `${path}.${index}`, value: one.value, basis: one.basis } : null;
+}

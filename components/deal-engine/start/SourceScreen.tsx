@@ -3,8 +3,10 @@ import { useDealEngineStore } from '../../../store/dealEngine';
 import { searchCompanies, parseEdgarUrl } from '../../../lib/edgar/client';
 import { searchEsefByName } from '../../../lib/edgar/esef';
 import { uploadedFilingToRaw } from '../../../lib/edgar/ixbrl';
-import { dealUiStore } from '../../../store/dealUi';
+import { dealUiStore, useDealUi, type AiFeatures } from '../../../store/dealUi';
 import { Button, Segmented } from '../ui/kit';
+import ApiKeyInline from './ApiKeyInline';
+import { PROVIDER_KEY_PAGES } from '../../../lib/ai2/gateway/providers';
 
 /**
  * Screen 1 — Source. Three honest paths, framed the way targets are actually sourced:
@@ -49,7 +51,26 @@ const PathTile: React.FC<{ title: string; body: string; action?: () => void; cta
   return <button type="button" onClick={action} className={frame}>{inner}</button>;
 };
 
+/** One thing the page can do for the analyst, switched on or off and remembered. */
+const FeatureBox: React.FC<{ name: keyof AiFeatures; title: string; body: string }> = ({ name, title, body }) => {
+  const on = useDealUi((s) => s.features[name]);
+  const setFeature = useDealUi((s) => s.setFeature);
+  return (
+    <li>
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" checked={on} onChange={(e) => setFeature(name, e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--de-ink)]" />
+        <span>
+          <span className="block text-[13px] font-medium">{title}</span>
+          <span className="block text-[12px] leading-relaxed text-[color:var(--de-ink-3)] mt-0.5 max-w-[56ch]">{body}</span>
+        </span>
+      </label>
+    </li>
+  );
+};
+
 const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
+  const assistantOpen = useDealUi((s) => s.assistant.open);
+  const setAssistant = useDealUi((s) => s.setAssistant);
   const importFromEdgar = useDealEngineStore((s) => s.importFromEdgar);
   const importFromEsef = useDealEngineStore((s) => s.importFromEsef);
   const loadModel = useDealEngineStore((s) => s.loadModel);
@@ -179,6 +200,51 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
           action={() => dealUiStore.getState().setOverlay('library')} />
       </div>
       {uploadErr && <p className="mt-3 text-[13px] text-[color:var(--de-accent)]">Upload: {uploadErr}</p>}
+
+      {/* What the page may do for the analyst, chosen before the first figure arrives. Nothing here
+          is a gate: every step works with every box cleared and with no key. */}
+      <section aria-labelledby="de-help" className="mt-4 p-6 rounded-[14px] bg-[var(--de-surface)] border border-[color:var(--de-rule)] grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] gap-x-10 gap-y-6 items-start">
+        <div>
+          <h2 id="de-help" className="text-[15px] font-semibold">You build the model. Choose what helps.</h2>
+          <p className="text-[13px] leading-relaxed text-[color:var(--de-ink-2)] mt-1.5 max-w-[58ch]">
+            Suggestions are offered, never applied: a suggested value sits in grey until you accept it, and the model is not built on it before then.
+          </p>
+          <ul className="mt-4 space-y-3">
+            <FeatureBox name="suggestAssumptions" title="Suggested values on Assumptions"
+              body="Each blank input shows a suggested value in grey, with its reasoning one key away. Filing figures and cited conventions need no key. An AI key adds a proposal for every other input." />
+            <FeatureBox name="flow" title="Keyboard flow on Assumptions"
+              body="The sheet opens in the first open input and moves on after each entry, so it is worked without the mouse. The keys are the ones Excel uses." />
+            <FeatureBox name="suggestClean" title="Adjustments found in the filing, on Clean"
+              body="Lists the one-off and debt-like items the filing reports, ready to add to the bridge." />
+            <li>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" checked={assistantOpen} onChange={(e) => setAssistant({ open: e.target.checked })} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--de-ink)]" />
+                <span>
+                  <span className="block text-[13px] font-medium">Assistant panel open beside the page</span>
+                  <span className="block text-[12px] leading-relaxed text-[color:var(--de-ink-3)] mt-0.5 max-w-[56ch]">Points to the next move and answers questions in your own words. Left clear, it stays closed until you open it from the header.</span>
+                </span>
+              </label>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="flex items-baseline justify-between gap-3 mb-2">
+            <span className="text-[13px] font-medium">AI key</span>
+            <span className="text-[12px] text-[color:var(--de-ink-3)]">Optional</span>
+          </p>
+          <ApiKeyInline bare />
+          <p className="mt-3 text-[12px] leading-relaxed text-[color:var(--de-ink-3)]">
+            <span className="font-medium text-[color:var(--de-ink-2)]">A paid key gives better suggestions.</span> With a key from Anthropic or OpenAI the whole sheet is reasoned in one pass from this company's own figures, with fuller reasoning, for a small charge per deal.
+          </p>
+          <p className="mt-2 text-[12px] leading-relaxed text-[color:var(--de-ink-3)]">
+            <span className="font-medium text-[color:var(--de-ink-2)]">A free key works, with plainer results.</span> A free key from{' '}
+            <a href={`https://${PROVIDER_KEY_PAGES.groq}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 decoration-dotted hover:text-[color:var(--de-ink)]">Groq</a> or{' '}
+            <a href={`https://${PROVIDER_KEY_PAGES.google}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 decoration-dotted hover:text-[color:var(--de-ink)]">Google AI Studio</a>{' '}
+            reaches a smaller model with a tight limit: suggestions arrive in batches, are more generic, and may stop when the limit is reached.
+          </p>
+          <p className="mt-2 text-[12px] leading-relaxed text-[color:var(--de-ink-3)]">The key is kept only in this browser and sent straight to the provider.</p>
+        </div>
+      </section>
 
       {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is deleted).
           Selecting one surfaces the honest retirement notice and the re-import path. */}

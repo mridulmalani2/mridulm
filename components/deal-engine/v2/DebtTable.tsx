@@ -10,7 +10,9 @@ import { allInRate } from '../../../lib/engine2/kernel/rates';
 import { pct } from '../../../lib/format';
 import { Dropdown, Segmented } from '../ui/kit';
 import { useEngine2Model } from '../../../store/engine2Model';
-import { NumBox, SuggestionLink, isSet, show, type Unit } from './fields';
+import { ChoiceCell, NumBox, isSet, type Unit } from './fields';
+import { cellSuggestion } from '../../../store/engine2Model';
+import { dealUiStore, useDealUi } from '../../../store/dealUi';
 
 const NA = <span className="text-[color:var(--de-ink-3)]">–</span>;
 
@@ -25,17 +27,23 @@ const DebtTable: React.FC<{
   onRemove: (i: number) => void;
 }> = ({ tranches, hasLtm, pending, onSet, onRemove }) => {
   const suggestions = useEngine2Model((s) => s.suggestions);
-  const accept = useEngine2Model((s) => s.acceptSuggestion);
+  const dismissed = useEngine2Model((s) => s.dismissed);
+  const offered = useDealUi((s) => s.features.suggestAssumptions);
+  // which inputs each row holds, so the row's label can explain the first suggestion in it
+  const rowPaths: Record<string, { path: string; set: boolean }[]> = {};
+  let drawing = '';
   const numCell = (path: string, label: string, unit: Unit, value: number | null | undefined) => {
-    const sug = !isSet(value) ? suggestions[path] : undefined;
+    (rowPaths[drawing] ??= []).push({ path, set: isSet(value) });
     return (
-      <span data-path={path} className="inline-flex flex-col items-end gap-0.5 w-full">
-        <NumBox value={value} unit={unit} compact width="w-full" ariaLabel={label} onCommit={(v) => onSet(path, v)} onUseSuggestion={sug ? () => accept(path) : undefined} />
-        {sug && typeof sug.value === 'number' && (
-          <SuggestionLink text={`${show(sug.value, unit)}${unit === 'pct' ? '%' : unit === 'mult' ? 'x' : ''}`} kind={sug.basis.kind} detail={sug.basis.detail} onUse={() => accept(path)} />
-        )}
+      <span data-path={path} className="inline-flex w-full">
+        <NumBox value={value} unit={unit} compact width="w-full" ariaLabel={label} sugPath={path} onCommit={(v) => onSet(path, v)} />
       </span>
     );
+  };
+  const explains = (label: string): string | null => {
+    if (!offered) return null;
+    const withSug = (rowPaths[label] ?? []).filter((c) => cellSuggestion(suggestions, dismissed, c.path));
+    return (withSug.find((c) => !c.set) ?? withSug[0])?.path ?? null;
   };
   const sizeOf = (t: TrancheAssumption) => (t.type === 'revolver' ? t.commitment : t.size);
   const sizePath = (t: TrancheAssumption, i: number) => `structure.tranches.${i}.${t.type === 'revolver' ? 'commitment' : 'size'}`;
@@ -49,18 +57,18 @@ const DebtTable: React.FC<{
         : t.type === 'pik_note' ? <span className="text-[13px] text-[color:var(--de-ink-2)]">PIK note</span>
         : (
           <span data-path={`structure.tranches.${i}.type`} className="block">
-            <Dropdown ariaLabel={`${t.name}: ranking`} value={t.type} className="w-full" align="left"
+            <ChoiceCell stamp={t.type} className="w-full"><Dropdown cell ariaLabel={`${t.name}: ranking`} value={t.type} className="w-full" align="left"
               options={[{ value: 'senior', label: 'senior' }, { value: 'unitranche', label: 'unitranche' }, { value: 'mezzanine', label: 'mezzanine' }]}
-              onChange={(v) => onSet(`structure.tranches.${i}.type`, v)} />
+              onChange={(v) => onSet(`structure.tranches.${i}.type`, v)} /></ChoiceCell>
           </span>
         )),
     },
     {
       label: 'Sized as',
       cell: (t, i) => (hasLtm ? (
-        <Segmented size="sm" ariaLabel={`${t.name} ${what(t)} basis`} value={sizeOf(t).x_ebitda !== undefined ? 'x' : 'amt'}
+        <ChoiceCell stamp={sizeOf(t).x_ebitda !== undefined ? 'x' : 'amt'}><Segmented cell size="sm" ariaLabel={`${t.name} ${what(t)} basis`} value={sizeOf(t).x_ebitda !== undefined ? 'x' : 'amt'}
           options={[{ value: 'amt', label: 'amount' }, { value: 'x', label: '× EBITDA' }]}
-          onChange={(v) => onSet(sizePath(t, i), v === 'x' ? { x_ebitda: Number.NaN } : { amount: Number.NaN })} />
+          onChange={(v) => onSet(sizePath(t, i), v === 'x' ? { x_ebitda: Number.NaN } : { amount: Number.NaN })} /></ChoiceCell>
       ) : <span className="text-[13px] text-[color:var(--de-ink-2)]">amount</span>),
     },
     {
@@ -92,10 +100,10 @@ const DebtTable: React.FC<{
       label: 'Takes the cash sweep',
       cell: (t, i) => (t.type === 'revolver' ? null : (
         <span data-path={`structure.tranches.${i}.sweep.participates`} className="inline-flex">
-          <Segmented size="sm" ariaLabel={`${t.name}: takes the cash sweep?`} blank={pending.includes(`structure.tranches.${i}.sweep.participates`)}
+          <ChoiceCell stamp={pending.includes(`structure.tranches.${i}.sweep.participates`) ? '' : String(t.sweep.participates)}><Segmented cell size="sm" ariaLabel={`${t.name}: takes the cash sweep?`} blank={pending.includes(`structure.tranches.${i}.sweep.participates`)}
             value={pending.includes(`structure.tranches.${i}.sweep.participates`) ? '' : String(t.sweep.participates)}
             options={[{ value: 'true', label: 'yes' }, { value: 'false', label: 'no' }]}
-            onChange={(v) => onSet(`structure.tranches.${i}.sweep.participates`, v === 'true')} />
+            onChange={(v) => onSet(`structure.tranches.${i}.sweep.participates`, v === 'true')} /></ChoiceCell>
         </span>
       )),
     },
@@ -103,7 +111,14 @@ const DebtTable: React.FC<{
   ];
 
   // a row is drawn only if at least one facility has that term
-  const cells = rows.map((r) => ({ r, cells: tranches.map((t, i) => r.cell(t, i)) })).filter((x) => x.cells.some((c) => c !== null));
+  const cells = rows.map((r) => { drawing = r.label; return { r, cells: tranches.map((t, i) => r.cell(t, i)) }; }).filter((x) => x.cells.some((c) => c !== null));
+  const explain = (label: string) => {
+    const id = explains(label);
+    if (!id) return;
+    const ui = dealUiStore.getState();
+    document.querySelector<HTMLElement>(`[data-why="${id}"] [data-de-cell]`)?.focus();
+    ui.setWhy(ui.why === id ? null : id);
+  };
 
   return (
     <div className="de-scroll-x -mx-1 px-1 pb-1">
@@ -123,7 +138,12 @@ const DebtTable: React.FC<{
         <tbody>
           {cells.map(({ r, cells: row }) => (
             <tr key={r.label} data-de-line className="group/row">
-              <th scope="row" title={r.hint} className="sticky left-0 z-10 bg-[var(--de-surface)] text-left font-normal text-[13px] text-[color:var(--de-ink-2)] py-1 pr-4 border-t border-[color:var(--de-rule)] whitespace-nowrap">{r.label}</th>
+              <th scope="row" title={r.hint} className="sticky left-0 z-10 bg-[var(--de-surface)] text-left font-normal text-[13px] text-[color:var(--de-ink-2)] py-1 pr-4 border-t border-[color:var(--de-rule)] whitespace-nowrap">
+                {explains(r.label)
+                  ? <button type="button" tabIndex={-1} data-why-toggle title="How the suggested value was reached" onMouseDown={(e) => e.preventDefault()} onClick={() => explain(r.label)}
+                      className="text-left rounded-sm underline decoration-dotted decoration-[color:var(--de-rule-strong)] underline-offset-4 hover:decoration-[color:var(--de-ink-2)]">{r.label}</button>
+                  : r.label}
+              </th>
               {row.map((c, i) => (
                 <td key={i} className="py-1 pl-2 border-t border-[color:var(--de-rule)] text-right">{c ?? NA}</td>
               ))}

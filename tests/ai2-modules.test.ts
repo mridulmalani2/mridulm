@@ -1,11 +1,10 @@
 /**
  * E4 — the AI modules against the new schema, LLM mocked (deterministic):
- * suggest (whitelist + rails that DROP, never clamp + AI bases + drop notes), redline parse + fallback,
+ * redline parse + fallback,
  * memo skeleton (R&P order, engine numbers only), goal-seek (pure bisection over
  * TRUE inputs; N/A outside reach).
  */
 import { describe, it, expect } from 'vitest';
-import { applyAiSuggestions, buildSuggestPrompt } from '../lib/ai2/suggest';
 import { parseRedline } from '../lib/ai2/redline';
 import { memoSkeleton } from '../lib/ai2/memo';
 import { solveForIrr } from '../lib/ai2/goalseek';
@@ -14,61 +13,6 @@ import { analystDeal } from './fixtures/entered-deal';
 import { GOLDEN_DEALS } from './fixtures/engine2-golden-deals';
 
 const { facts: g2facts, assumptions: g2a } = GOLDEN_DEALS.G2;
-
-describe('E4: AI-suggest guardrails', () => {
-  it('accepts whitelisted proposals with AI bases; an out-of-rail value is DROPPED with a note, never clamped (v2.0.0)', () => {
-    const raw = JSON.stringify({ suggestions: [
-      { path: 'exit.multiple', value: 8.0, basis: 'trading anchor sits below entry' },
-      { path: 'operations.target_margin', value: 0.95, basis: 'margin expansion story' }, // > rail 0.6
-    ] });
-    const r = applyAiSuggestions(g2a, raw);
-    expect(r.assumptions.exit.multiple).toBe(8.0);
-    expect(r.aiBasis['exit.multiple'].kind).toBe('ai');
-    expect(r.assumptions.operations.target_margin).toBe(g2a.operations.target_margin); // untouched — never a clamped number nobody proposed
-    expect(r.applied.find((a) => a.path === 'operations.target_margin')).toBeUndefined();
-    expect(r.dropped.some((d) => d.includes('operations.target_margin') && d.includes('dropped, not clamped'))).toBe(true);
-  });
-
-  it('drops non-whitelisted paths (a derived/output lever can never be applied) and basis-less items', () => {
-    const raw = JSON.stringify({ suggestions: [
-      { path: 'returns.sponsor_net.irr', value: 0.3, basis: 'wishful' },
-      { path: 'entry.enterprise_value', value: 2000, basis: 'reprice' },
-      { path: 'exit.multiple', value: 8.5 }, // no basis
-    ] });
-    const r = applyAiSuggestions(g2a, raw);
-    expect(r.applied).toHaveLength(0);
-    expect(r.dropped).toHaveLength(3);
-    expect(r.assumptions).toEqual(g2a); // untouched
-  });
-
-  it('a full-hold growth array is accepted only if EVERY year is on-rail; one off-rail year drops it; wrong length is dropped', () => {
-    const ok = applyAiSuggestions(g2a, JSON.stringify({ suggestions: [
-      { path: 'operations.growth', value: [0.06, 0.04, 0.04, 0.03, 0.03], basis: 'decelerating history' },
-    ] }));
-    expect(ok.assumptions.operations.growth).toEqual([0.06, 0.04, 0.04, 0.03, 0.03]);
-    const offRail = applyAiSuggestions(g2a, JSON.stringify({ suggestions: [
-      { path: 'operations.growth', value: [0.5, 0.04, 0.04, 0.03, 0.03], basis: 'hockey stick' },
-    ] }));
-    expect(offRail.applied).toHaveLength(0);
-    expect(offRail.assumptions.operations.growth).toEqual(g2a.operations.growth);
-    const bad = applyAiSuggestions(g2a, JSON.stringify({ suggestions: [
-      { path: 'operations.growth', value: [0.04, 0.04], basis: 'short array' },
-    ] }));
-    expect(bad.applied).toHaveLength(0);
-  });
-
-  it('unparseable AI text applies NOTHING (never a partial guess)', () => {
-    const r = applyAiSuggestions(g2a, 'sure! here are my thoughts...');
-    expect(r.applied).toHaveLength(0);
-    expect(r.assumptions).toEqual(g2a);
-    expect(r.dropped[0]).toContain('unparseable');
-  });
-
-  it('the prompt NEVER carries a MISSING fact (taint rule)', () => {
-    const { user } = buildSuggestPrompt({ ...g2facts, net_debt: 123.456 }, g2a, ['net_debt']);
-    expect(user).not.toContain('123.456');
-  });
-});
 
 describe('E4: redline + memo', () => {
   it('parses strict-JSON challenges; degrades to a single raw-text item', () => {

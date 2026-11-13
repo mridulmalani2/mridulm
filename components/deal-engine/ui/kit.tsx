@@ -118,7 +118,7 @@ export interface Option<T extends string = string> { value: T; label: string; no
  * A drop-down list. A button shows the choice; the list opens beneath it and is driven by the
  * arrow keys, Enter and Esc. With no value it reads `placeholder` and is marked as still open.
  */
-export function Dropdown<T extends string>({ value, options, onChange, ariaLabel, placeholder = 'Choose', blank, className, align = 'right' }: {
+export function Dropdown<T extends string>({ value, options, onChange, ariaLabel, placeholder = 'Choose', blank, className, align = 'right', cell, suggested }: {
   value: T | '';
   options: Option<T>[];
   onChange: (v: T) => void;
@@ -128,6 +128,10 @@ export function Dropdown<T extends string>({ value, options, onChange, ariaLabel
   blank?: boolean;
   className?: string;
   align?: 'left' | 'right';
+  /** A cell of the input sheet: the keyboard moves to it like any other input. */
+  cell?: boolean;
+  /** A suggested option not yet accepted: shown in grey with a star in place of the placeholder. */
+  suggested?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -160,10 +164,10 @@ export function Dropdown<T extends string>({ value, options, onChange, ariaLabel
   return (
     <div ref={root} className={cx('relative inline-block text-left', className)}>
       <button type="button" role="combobox" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} aria-controls={id}
-        data-blank={blank || undefined}
+        data-blank={(blank && !suggested) || undefined} data-suggested={(blank && !!suggested) || undefined} data-de-cell={cell || undefined}
         onClick={() => (open ? setOpen(false) : openList())} onKeyDown={onKey}
-        className={cx('de-control inline-flex items-center justify-between gap-2 pl-3 pr-2.5 text-[13px] max-w-full w-full', current && !blank ? 'text-[color:var(--de-ink)]' : 'text-[color:var(--de-accent)]')}>
-        <span className="truncate">{current && !blank ? current.label : placeholder}</span>
+        className={cx('de-control inline-flex items-center justify-between gap-2 pl-3 pr-2.5 text-[13px] max-w-full w-full', current && !blank ? 'text-[color:var(--de-ink)]' : suggested ? 'text-[color:var(--de-ink-3)]' : 'text-[color:var(--de-accent)]')}>
+        <span className="truncate">{current && !blank ? current.label : suggested ? <><span aria-hidden="true" className="de-star">★</span>{suggested}</> : placeholder}</span>
         <Chevron />
       </button>
       <ul id={id} role="listbox" aria-label={ariaLabel} hidden={!open}
@@ -185,25 +189,35 @@ export function Dropdown<T extends string>({ value, options, onChange, ariaLabel
 }
 
 /** Two to four short options shown side by side: one click, and every option is visible. */
-export function Segmented<T extends string>({ value, options, onChange, ariaLabel, blank, size = 'md' }: {
+export function Segmented<T extends string>({ value, options, onChange, ariaLabel, blank, size = 'md', cell, suggested }: {
   value: T | '';
   options: Option<T>[];
   onChange: (v: T) => void;
   ariaLabel: string;
   blank?: boolean;
   size?: 'sm' | 'md';
+  /** A cell of the input sheet: the keyboard moves to it like any other input. */
+  cell?: boolean;
+  /** A suggested option not yet accepted: marked in grey with a star until taken. */
+  suggested?: T;
 }) {
+  const ghost = blank && suggested !== undefined && options.some((o) => o.value === suggested);
+  // the one option the keyboard lands on: the choice made, else the suggestion, else the first
+  const home = !blank && options.some((o) => o.value === value) ? value : ghost ? suggested : options[0]?.value;
   return (
-    <div role="radiogroup" aria-label={ariaLabel} data-blank={blank || undefined}
-      className={cx('inline-flex p-0.5 rounded-[var(--de-r-sm)] max-w-full', blank ? 'bg-[var(--de-accent-soft)] shadow-[inset_0_-2px_0_var(--de-accent)]' : 'bg-[var(--de-sunken)]')}>
+    <div role="radiogroup" aria-label={ariaLabel} data-blank={(blank && !ghost) || undefined} data-suggested={ghost || undefined}
+      className={cx('inline-flex p-0.5 rounded-[var(--de-r-sm)] max-w-full', ghost ? 'bg-[var(--de-sunken)] shadow-[inset_0_-2px_0_var(--de-rule-strong)]' : blank ? 'bg-[var(--de-accent-soft)] shadow-[inset_0_-2px_0_var(--de-accent)]' : 'bg-[var(--de-sunken)]')}>
       {options.map((o) => {
         const on = !blank && o.value === value;
+        const offered = ghost && o.value === suggested;
         return (
           <button key={o.value} type="button" role="radio" aria-checked={on} title={o.note}
+            data-de-cell={(cell && o.value === home) || undefined} data-offered={offered || undefined}
             onClick={() => { if (!on) onChange(o.value); }}
             className={cx('px-3 rounded-[5px] text-[13px] whitespace-nowrap transition-colors', size === 'sm' ? 'h-7' : 'h-[30px]',
-              on ? 'bg-[var(--de-surface)] text-[color:var(--de-ink)] font-medium shadow-[var(--de-shadow-sm)]' : 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)]')}>
-            {o.label}
+              on ? 'bg-[var(--de-surface)] text-[color:var(--de-ink)] font-medium shadow-[var(--de-shadow-sm)]'
+                : offered ? 'text-[color:var(--de-ink-3)] border border-dashed border-[color:var(--de-rule-strong)]' : 'text-[color:var(--de-ink-2)] hover:text-[color:var(--de-ink)]')}>
+            {offered && <span aria-hidden="true" className="de-star">★</span>}{o.label}
           </button>
         );
       })}
@@ -211,8 +225,8 @@ export function Segmented<T extends string>({ value, options, onChange, ariaLabe
   );
 }
 
-export const Switch: React.FC<{ on: boolean; onChange: (on: boolean) => void; ariaLabel: string; disabled?: boolean }> = ({ on, onChange, ariaLabel, disabled }) => (
-  <button type="button" role="switch" aria-checked={on} aria-label={ariaLabel} disabled={disabled}
+export const Switch: React.FC<{ on: boolean; onChange: (on: boolean) => void; ariaLabel: string; disabled?: boolean; cell?: boolean }> = ({ on, onChange, ariaLabel, disabled, cell }) => (
+  <button type="button" role="switch" aria-checked={on} aria-label={ariaLabel} disabled={disabled} data-de-cell={(cell && !disabled) || undefined}
     onClick={() => onChange(!on)}
     className={cx('relative inline-flex w-9 h-5 rounded-full transition-colors shrink-0', on ? 'bg-[var(--de-ink)]' : 'bg-[var(--de-rule-strong)]', disabled && 'opacity-40 cursor-not-allowed')}>
     <span className={cx('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', on && 'translate-x-4')} />
