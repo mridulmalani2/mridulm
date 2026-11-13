@@ -29,6 +29,8 @@ export interface DealEngineStore {
   apiKey: string | null;
   aiProvider: AIProvider;
   setApiKey: (key: string) => void;
+  /** Correct the provider when the key's prefix does not identify it (Mistral keys have none). */
+  setAiProvider: (provider: AIProvider) => void;
   clearApiKey: () => void;
   /** A previous-engine .json was opened — the old engine is retired; prompt re-import. */
   legacySaveNotice: boolean;
@@ -85,6 +87,11 @@ export const dealEngineStore = createStore<DealEngineStore>()((set) => ({
     localStorage.setItem('deal-engine-api-key', key);
     localStorage.setItem('deal-engine-ai-provider', detected);
     set({ apiKey: key, aiProvider: detected });
+  },
+
+  setAiProvider: (provider) => {
+    localStorage.setItem('deal-engine-ai-provider', provider);
+    set({ aiProvider: provider });
   },
 
   clearApiKey: () => {

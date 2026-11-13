@@ -39,9 +39,11 @@ export function buildGoogleRequest(
     };
   }
   return {
-    url: `${config.apiUrl}/${config.model}:generateContent?key=${config.apiKey}`,
+    // the key travels in a header, never in the address: an address is kept in history and logs
+    url: `${config.apiUrl}/${config.model}:generateContent`,
     headers: {
       'Content-Type': 'application/json',
+      'x-goog-api-key': config.apiKey,
     },
     body,
   };

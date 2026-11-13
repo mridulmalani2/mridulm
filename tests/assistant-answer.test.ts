@@ -3,7 +3,7 @@
  * returns is read as plain text: nothing in it is treated as markup beyond these few shapes.
  */
 import { describe, expect, it } from 'vitest';
-import { answerBlocks } from '../components/deal-engine/shell/AssistantDrawer';
+import { answerBlocks } from '../components/deal-engine/shell/AssistantDock';
 
 describe('answerBlocks', () => {
   it('reads paragraphs, a heading, bullets and a numbered list in order', () => {

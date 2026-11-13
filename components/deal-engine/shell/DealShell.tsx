@@ -1,8 +1,9 @@
 /**
  * The deal-engine shell: one header for every step (where you are, which deal, search, the guide
  * and the deal menu) and the panels that open over any step: the command palette, the guide, the
- * trace panel, cases, build history, the deal library, tools and the assistant.
- * AI is never a gate: every step works with no key.
+ * trace panel, cases, build history, the deal library and tools. The assistant is not an overlay:
+ * it is docked beside the page (AssistantDock) so the analyst keeps working while it is open.
+ * AI is never a gate: every step, and the assistant itself, works with no key.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,7 +19,8 @@ import InfoDrawer from './InfoDrawer';
 import TraceDrawer from './TraceDrawer';
 import { CasesDrawer, HistoryDrawer, LibraryDrawer } from './WorkspaceDrawers';
 import { ToolsDrawer } from './ToolsDrawer';
-import AssistantDrawer from './AssistantDrawer';
+import AssistantDock from './AssistantDock';
+import type { AssistStep } from '../../../lib/assistant/types';
 import { IconButton, Stepper, ToastHost, cx, type StepItem } from '../ui/kit';
 
 /** Every input on the sheet as a dotted path; a per-year line is one entry, not one per year. */
@@ -48,6 +50,9 @@ const DealShell: React.FC<{
   const setOverlay = useDealUi((s) => s.setOverlay);
   const jumpTo = useDealUi((s) => s.jumpTo);
   const setResultsView = useDealUi((s) => s.setResultsView);
+  const assistant = useDealUi((s) => s.assistant);
+  const setAssistant = useDealUi((s) => s.setAssistant);
+  const docked = assistant.open && entity !== null && step !== 'source';
   const assumptions = useEngine2Model((s) => s.assumptions);
   const output = useEngine2Model((s) => s.output);
   const build = useEngine2Model((s) => s.buildWithExhibits);
@@ -87,7 +92,8 @@ const DealShell: React.FC<{
         { id: 'a-cases', group: 'Actions', label: 'Cases: save or compare', keywords: 'scenario management base downside lender', run: open('cases') },
         { id: 'a-history', group: 'Actions', label: 'Build history', keywords: 'versions changes walk', run: open('history') },
         { id: 'a-tools', group: 'Actions', label: 'Tools: solve for a return, memo, AI', keywords: 'goal seek redline memo key', run: open('tools') },
-        { id: 'a-ask', group: 'Actions', label: 'Ask about this deal', keywords: 'chat assistant question', run: open('assistant') },
+        { id: 'a-assist', group: 'Actions', label: 'Assistant: what to do next', keywords: 'assistant guide suggestions next help recommend', run: () => setAssistant({ open: true, tab: 'guide' }) },
+        { id: 'a-ask', group: 'Actions', label: 'Ask about this deal', keywords: 'chat assistant question', run: () => setAssistant({ open: true, tab: 'ask' }) },
         { id: 'a-new', group: 'Actions', label: 'New deal', keywords: 'reset start over', run: onNewDeal },
       );
     }
@@ -145,8 +151,8 @@ const DealShell: React.FC<{
               <span className="de-kbd">{isMac ? '⌘K' : 'Ctrl K'}</span>
             </button>
             {entity && (
-              <IconButton label="Ask about this deal" onClick={() => setOverlay('assistant')}>
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.6 2.75h8.8a1.6 1.6 0 0 1 1.6 1.6v5.3a1.6 1.6 0 0 1-1.6 1.6H8.3l-3.2 2.4v-2.4H3.6a1.6 1.6 0 0 1-1.6-1.6v-5.3a1.6 1.6 0 0 1 1.6-1.6Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+              <IconButton label={docked ? 'Hide the assistant' : 'Assistant'} active={docked} aria-pressed={docked} disabled={step === 'source'} onClick={() => setAssistant({ open: !assistant.open })}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.75" width="12" height="10.5" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M10 3v10" stroke="currentColor" strokeWidth="1.4" /><path d="M11.4 6h1.2M11.4 8h1.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
               </IconButton>
             )}
             <IconButton label="Guide to this page" onClick={() => setOverlay('info')}>
@@ -161,7 +167,7 @@ const DealShell: React.FC<{
                   {entity && menuItem('Cases', () => setOverlay('cases'))}
                   {entity && menuItem('Build history', () => setOverlay('history'))}
                   {entity && menuItem('Tools', () => setOverlay('tools'))}
-                  {entity && menuItem('Ask about this deal', () => setOverlay('assistant'))}
+                  {entity && step !== 'source' && menuItem(docked ? 'Hide the assistant' : 'Assistant', () => setAssistant({ open: !assistant.open }))}
                   {menuItem('Deal library', () => setOverlay('library'))}
                   {!entity && menuItem('AI key', () => setOverlay('tools'))}
                   {entity && <li aria-hidden="true" className="my-1 border-t border-[color:var(--de-rule)]" />}
@@ -173,7 +179,10 @@ const DealShell: React.FC<{
         </div>
         <div className="sm:hidden px-4 pb-2 overflow-x-auto"><Stepper steps={steps} onGo={onGo} /></div>
       </header>
-      <main id="main-content" key={step} className="de-enter">{children}</main>
+      {/* where there is room the assistant sits beside the page and the page makes way for it;
+          on a narrower window it lies over the right edge and the page keeps its width */}
+      <main id="main-content" key={step} className={cx('de-enter', docked && '2xl:pr-[22rem]')}>{children}</main>
+      <AssistantDock step={step as AssistStep} onGo={(s) => onGo(s)} />
 
       <CommandPalette open={overlay === 'palette'} onClose={close} commands={commands} />
       <InfoDrawer open={overlay === 'info'} onClose={close} step={step} />
@@ -181,7 +190,6 @@ const DealShell: React.FC<{
       <HistoryDrawer open={overlay === 'history'} onClose={close} />
       <LibraryDrawer open={overlay === 'library'} onClose={close} onOpened={() => onGo('assumptions')} />
       <ToolsDrawer open={overlay === 'tools'} onClose={close} />
-      <AssistantDrawer open={overlay === 'assistant'} onClose={close} />
       <TraceDrawer />
       <ToastHost />
     </div>

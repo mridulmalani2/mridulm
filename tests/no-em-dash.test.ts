@@ -9,7 +9,7 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 const ROOT = join(__dirname, '..');
-const ROOTS = ['components/deal-engine', 'pages/DealEngine.tsx', 'store', 'lib/engine2', 'lib/cleaning', 'lib/statements', 'lib/edgar', 'lib/format', 'lib/analysis', 'lib/trace', 'lib/ai2/memo.ts'];
+const ROOTS = ['components/deal-engine', 'pages/DealEngine.tsx', 'store', 'lib/engine2', 'lib/cleaning', 'lib/statements', 'lib/edgar', 'lib/format', 'lib/analysis', 'lib/trace', 'lib/ai2/memo.ts', 'lib/assistant'];
 
 function walk(rel: string): string[] {
   const abs = join(ROOT, rel);

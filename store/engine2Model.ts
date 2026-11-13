@@ -99,12 +99,10 @@ export interface Engine2ModelStore {
    *  downside, and a 5×5 entry×exit sensitivity centered on base. Same gate as build. */
   buildWithExhibits: () => void;
 
-  // ── E4 AI (key/provider shared with the old store's localStorage) ──
+  // ── AI (key/provider shared through localStorage). The AI never proposes a value: every
+  //    number on offer comes from the suggestion catalogue (a filing figure or a cited source). ──
   aiBusy: boolean;
   redlineItems: import('../lib/ai2/redline').RedlineItem[] | null;
-  aiNotes: string[];
-  /** AI-suggest: Class-B PROPOSALS only (catalogue keys '<path>@ai'); out-of-rail values dropped, never clamped; nothing applied. */
-  aiSuggest: () => Promise<void>;
   /** Redline: hostile challenges over assumptions + bases + coherence; edits nothing. */
   runRedlineAction: () => Promise<void>;
   reset: () => void;
@@ -139,7 +137,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       basis: {},
       output: null, error: null,
       // AI notes/redlines describe assumptions that no longer exist after ANY re-import
-      aiNotes: [], redlineItems: null,
+      redlineItems: null,
     });
   },
 
@@ -190,7 +188,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       facts, sourceCurrency: currency, missingFacts: [], factNotes: [],
       assumptions: blankAssumptions(`${entity_name} LBO`, hold_years),
       pending: [...CHOICE_PATHS], suggestions: {}, basis: {},
-      output: null, error: null, aiNotes: [], redlineItems: null,
+      output: null, error: null, redlineItems: null,
     });
   },
 
@@ -364,33 +362,6 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
 
   aiBusy: false,
   redlineItems: null,
-  aiNotes: [],
-
-  aiSuggest: async () => {
-    const { facts, assumptions, missingFacts } = get();
-    if (!facts || !assumptions) return;
-    set({ aiBusy: true, error: null, aiNotes: [] });
-    try {
-      const { aiRefineAssumptions } = await import('../lib/ai2/suggest');
-      const { makeAiText, savedAiConfig } = await import('../lib/ai2/textCall');
-      const cfg = savedAiConfig();
-      if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use AI-suggest.', aiBusy: false }); return; }
-      const result = await aiRefineAssumptions(facts, assumptions, missingFacts, makeAiText(cfg.provider, cfg.apiKey));
-      // v2.0.0: AI values are PROPOSALS (catalogue keys `<path>@ai`), never applied.
-      const proposals: SuggestionCatalogue = {};
-      for (const a of result.applied) proposals[`${a.path}@ai`] = { value: a.value, basis: { kind: 'ai', detail: a.basis } };
-      set({
-        suggestions: { ...get().suggestions, ...proposals },
-        aiNotes: [
-          ...result.applied.map((a) => `AI: ${a.path} → ${Array.isArray(a.value) ? 'per-year path' : a.value}, ${a.basis}`),
-          ...result.dropped.map((d) => `dropped: ${d}`),
-        ],
-        aiBusy: false,
-      });
-    } catch (e: unknown) {
-      set({ error: (e as Error).message, aiBusy: false });
-    }
-  },
 
   runRedlineAction: async () => {
     const { assumptions, basis, output } = get();
@@ -400,7 +371,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
       const { runRedline } = await import('../lib/ai2/redline');
       const { makeAiText, savedAiConfig } = await import('../lib/ai2/textCall');
       const cfg = savedAiConfig();
-      if (!cfg) { set({ error: 'Add an API key (Settings in the classic flow) to use Redline.', aiBusy: false }); return; }
+      if (!cfg) { set({ error: 'Add an AI key first.', aiBusy: false }); return; }
       const items = await runRedline(assumptions, basis, output?.coherence ?? [], makeAiText(cfg.provider, cfg.apiKey));
       set({ redlineItems: items, aiBusy: false });
     } catch (e: unknown) {
@@ -408,7 +379,7 @@ export const engine2Store = createStore<Engine2ModelStore>()((set, get) => ({
     }
   },
 
-  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, pending: [], suggestions: {}, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null, aiNotes: [] }),
+  reset: () => set({ facts: null, sourceCurrency: null, missingFacts: [], factNotes: [], assumptions: null, pending: [], suggestions: {}, basis: {}, output: null, error: null, aiBusy: false, redlineItems: null }),
 }));
 
 /**

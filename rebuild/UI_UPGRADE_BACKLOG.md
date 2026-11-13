@@ -80,13 +80,37 @@ progress meter, soft edges and pinned row labels on wide tables, short enter tra
 off under reduced motion), focus returned to the opener when a panel closes. The chat window was
 checked with a stubbed answer only: no real AI key has been used.
 
+**Assistant (2026-11-13, branch `claude/lbo-ai-chat-agent-408aec`):** the chat drawer is replaced
+by an assistant docked beside Clean, Assumptions and Results (`shell/AssistantDock.tsx`), driven by
+`lib/assistant`:
+
+- `advisor.ts` works out, by plain rules and with no AI call, the next move on each step, the
+  sourced values on offer and how each was reached; inside a field it explains the field and
+  predicts the one after it. On Clean it proposes the lease treatment from the accounting
+  framework, lists what the filing reports, and asks whether an added cost stops or continues.
+- `guidance.ts` holds the field notes (what an input is, how it is set, what to watch). A note
+  never states a figure (pinned by test).
+- `brief.ts` and `ask.ts` answer questions: the deal as short indexed notes, the few that match a
+  question, a prompt of about 500 tokens, and a check that marks any figure in an AI answer that
+  is not in its notes. With no key the notes answer as they are; a failed provider falls back to
+  them.
+- **The AI no longer proposes numbers.** `lib/ai2/suggest.ts`, the store's `aiSuggest` and the
+  automatic request on Assumptions are removed (owner decision 2026-11-13: engine numbers only).
+- `lib/ai2/textCall.ts` is sized for a free key: small answer budget, named failures (wrong key,
+  limit reached and the wait), a fallback model list per provider, the Google key in a header.
+- The optional key box is on the Source screen, with a provider picker and a "Try the key" call.
+
+Checked in the browser on a Hasbro import, Source to Results, at 1600, 1280 and phone widths. The
+AI path was exercised with a stubbed provider response only: no real key has been used, so the
+model names in `PROVIDER_MODELS` and real free-tier behaviour are unverified.
+
 **Still open:**
 
 - Fields with NO cited basis get no proposal without an AI key: minimum cash, maturities, exit
   fees, the revolver commitment fee, valuation inputs (risk-free, MRP, betas, long-run growth),
   fund terms, covenant levels. Adding them needs cited sources in `conventions.json` first.
-- Anything that needs an AI key (automatic proposals, the challenge, "Ask about this deal") is
-  wired but has never been exercised.
+- Anything that needs an AI key (the challenge, typed questions, "Put it in plain words") is
+  wired but has never been exercised against a real provider.
 - The new proposals were checked by test and by loading the page; the debt-table "use" links and
   the explanation pop-up were not clicked through by hand on a US filer import.
 - Football field, segment / price × volume operating build, add-on acquisitions: left out by

@@ -5,6 +5,8 @@ import { searchEsefByName } from '../../../lib/edgar/esef';
 import { uploadedFilingToRaw } from '../../../lib/edgar/ixbrl';
 import { dealUiStore } from '../../../store/dealUi';
 import { Button, Segmented } from '../ui/kit';
+import ApiKeyInline from './ApiKeyInline';
+import { PROVIDER_KEY_PAGES } from '../../../lib/ai2/gateway/providers';
 
 /**
  * Screen 1 — Source. Three honest paths, framed the way targets are actually sourced:
@@ -179,6 +181,32 @@ const SourceScreen: React.FC<{ onManual: () => void }> = ({ onManual }) => {
           action={() => dealUiStore.getState().setOverlay('library')} />
       </div>
       {uploadErr && <p className="mt-3 text-[13px] text-[color:var(--de-accent)]">Upload: {uploadErr}</p>}
+
+      {/* The assistant, introduced before the first figure arrives: what it does with no key, and
+          the one thing a key adds. Optional: nothing on any step waits for it. */}
+      <section aria-labelledby="de-assistant-key" className="mt-4 p-6 rounded-[14px] bg-[var(--de-surface)] border border-[color:var(--de-rule)] grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] gap-x-10 gap-y-5 items-start">
+        <div>
+          <h2 id="de-assistant-key" className="text-[15px] font-semibold">An assistant works beside you</h2>
+          <p className="text-[13px] leading-relaxed text-[color:var(--de-ink-2)] mt-1.5 max-w-[58ch]">
+            On every step it points to the next move, offers the values a filing or a cited source supports, and shows how each one was reached. It only suggests: nothing changes until you click. All of this works with no key.
+          </p>
+          <p className="text-[13px] leading-relaxed text-[color:var(--de-ink-2)] mt-2 max-w-[58ch]">
+            An AI key adds one thing: answers to your own questions in plain English. The figures still come from the model. The key only does the wording.
+          </p>
+        </div>
+        <div>
+          <p className="flex items-baseline justify-between gap-3 mb-2">
+            <span className="text-[13px] font-medium">AI key</span>
+            <span className="text-[12px] text-[color:var(--de-ink-3)]">Optional</span>
+          </p>
+          <ApiKeyInline bare />
+          <p className="mt-2 text-[12px] leading-relaxed text-[color:var(--de-ink-3)]">
+            Kept only in this browser and sent straight to the provider. A free key is enough:{' '}
+            <a href={`https://${PROVIDER_KEY_PAGES.groq}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 decoration-dotted hover:text-[color:var(--de-ink)]">Groq</a> or{' '}
+            <a href={`https://${PROVIDER_KEY_PAGES.google}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 decoration-dotted hover:text-[color:var(--de-ink)]">Google AI Studio</a>.
+          </p>
+        </div>
+      </section>
 
       {/* Previous-engine .json saves NO LONGER OPEN (the engine that ran them is deleted).
           Selecting one surfaces the honest retirement notice and the re-import path. */}

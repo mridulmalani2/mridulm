@@ -10,7 +10,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { useWorkspace } from '../../../store/workspace';
-import { useDealEngineStore } from '../../../store/dealEngine';
 import { dealUiStore, useDealUi } from '../../../store/dealUi';
 import { money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
@@ -23,9 +22,6 @@ import OutputTabs from './OutputTabs';
 import { SECTIONS, plainLabel, sectionOf } from './sections';
 import { factLabel } from '../ui/labels';
 import { Button, Callout, Meter, cx } from '../ui/kit';
-
-/** Deals for which AI proposals have already been requested in this session (one request each). */
-const aiAsked = new Set<string>();
 
 export const MissingBar: React.FC = () => {
   const missing = useEngine2Model((s) => s.missingFacts);
@@ -91,12 +87,12 @@ function useJump(): void {
   }, [jump]);
 }
 
-const Rail: React.FC<{ counts: Record<string, number>; started: boolean }> = ({ counts, started }) => {
+const Rail: React.FC<{ counts: Record<string, number>; started: boolean; docked: boolean }> = ({ counts, started, docked }) => {
   const jumpTo = useDealUi((s) => s.jumpTo);
   // progress is counted in sections: how many have nothing left to enter
   const complete = SECTIONS.filter((s) => !counts[s.id]).length;
   return (
-    <nav aria-label="Sections" className="hidden lg:block sticky top-24 self-start">
+    <nav aria-label="Sections" className={cx('hidden sticky top-24 self-start', docked ? 'lg:block 2xl:hidden min-[1800px]:block' : 'lg:block')}>
       <div className="px-3 mb-3">
         <p className="flex items-baseline justify-between text-[12px] font-medium text-[color:var(--de-ink-3)] mb-1.5">
           <span>Sections</span>
@@ -138,7 +134,7 @@ const LiveRow: React.FC<{ label: string; value: string; change?: string | null }
 );
 
 /** What the inputs return right now, and what still blocks the build. */
-const LivePanel: React.FC<{ blocked: boolean; onBuild: () => void }> = ({ blocked, onBuild }) => {
+const LivePanel: React.FC<{ blocked: boolean; onBuild: () => void; docked: boolean }> = ({ blocked, onBuild, docked }) => {
   const facts = useEngine2Model((s) => s.facts)!;
   const assumptions = useEngine2Model((s) => s.assumptions);
   const pending = useEngine2Model((s) => s.pending);
@@ -203,7 +199,7 @@ const LivePanel: React.FC<{ blocked: boolean; onBuild: () => void }> = ({ blocke
         )}
       </div>
 
-      {blank.length > 0 && (
+      {blank.length > 0 && !docked && (
         <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] p-5">
           <p className="text-[13px] font-semibold mb-2">Still to enter</p>
           <ul className="space-y-0.5 -mx-2">
@@ -240,15 +236,9 @@ const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' })
   const assumptions = useEngine2Model((s) => s.assumptions);
   useEngine2Model((s) => s.pending);
   useJump();
-  // With a key saved, AI proposals for the blank inputs are fetched once per deal without being
-  // asked for. They arrive as proposals beside the fields; nothing is applied (store: aiSuggest).
-  const apiKey = useDealEngineStore((st) => st.apiKey);
-  const dealKey = facts && assumptions ? `${facts.entity_name}|${assumptions.entry.hold_years}` : null;
-  useEffect(() => {
-    if (!inputsOnly || !apiKey || !dealKey || aiAsked.has(dealKey)) return;
-    aiAsked.add(dealKey);
-    void useEngine2Model.getState().aiSuggest();
-  }, [inputsOnly, apiKey, dealKey]);
+  // while the assistant is docked it lists what is left to enter, so the page gives it the room:
+  // the section rail waits for a wider window and the "still to enter" list is not drawn twice
+  const docked = useDealUi((st) => st.assistant.open);
   const blankInputs = useEngine2Model.getState().missing();
   const blocked = missing.length > 0 || blankInputs.length > 0 || assumptions === null;
 
@@ -283,8 +273,9 @@ const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' })
 
   if (inputsOnly) {
     return (
-      <div className="max-w-[1440px] mx-auto px-6 pt-8 pb-24 grid grid-cols-1 lg:grid-cols-[13.5rem_minmax(0,1fr)_19rem] gap-x-8 gap-y-6">
-        <Rail counts={counts} started={assumptions !== null} />
+      <div className={cx('max-w-[1440px] mx-auto px-6 pt-8 pb-24 grid grid-cols-1 gap-x-8 gap-y-6',
+        docked ? 'lg:grid-cols-[13.5rem_minmax(0,1fr)_19rem] 2xl:grid-cols-[minmax(0,1fr)_19rem] min-[1800px]:grid-cols-[13.5rem_minmax(0,1fr)_19rem]' : 'lg:grid-cols-[13.5rem_minmax(0,1fr)_19rem]')}>
+        <Rail counts={counts} started={assumptions !== null} docked={docked} />
         <div className="min-w-0">
           <header className="mb-6">
             <h1 className="de-display text-[34px] leading-tight">Assumptions</h1>
@@ -296,7 +287,7 @@ const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' })
           <MissingBar />
           <AssumptionsPanel />
         </div>
-        <LivePanel blocked={blocked} onBuild={build} />
+        <LivePanel blocked={blocked} onBuild={build} docked={docked} />
         {/* on a narrow screen the live panel sits below the sheet, so the build stays in reach here */}
         <div className="lg:hidden fixed bottom-0 inset-x-0 z-20 flex items-center justify-between gap-3 px-4 py-3 bg-[var(--de-surface)] border-t border-[color:var(--de-rule)]">
           <span className="text-[13px] text-[color:var(--de-ink-2)]">{assumptions === null ? 'Enter the holding period' : blankInputs.length ? `${blankInputs.length} input${blankInputs.length === 1 ? '' : 's'} to go` : 'Ready to build'}</span>

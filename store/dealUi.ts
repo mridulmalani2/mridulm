@@ -6,13 +6,30 @@
 import { useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 
-export type Overlay = null | 'palette' | 'info' | 'tools' | 'cases' | 'history' | 'library' | 'assistant';
+export type Overlay = null | 'palette' | 'info' | 'tools' | 'cases' | 'history' | 'library';
+/** The assistant panel: docked beside the page, never over it. 'guide' = what to do next and the
+ *  sourced values on offer; 'ask' = questions in the analyst's own words. */
+export interface AssistantUi { open: boolean; tab: 'guide' | 'ask' }
+const ASSISTANT_KEY = 'deal-engine-assistant-open';
+/** Open by default where there is room beside the page; the analyst's own choice is remembered. */
+function assistantOpenAtStart(): boolean {
+  if (typeof window === 'undefined') return false;
+  // on a phone the panel covers the page, so it opens only when asked for
+  if (window.innerWidth < 640) return false;
+  try {
+    const saved = window.localStorage.getItem(ASSISTANT_KEY);
+    if (saved !== null) return saved === '1';
+  } catch { /* storage is unavailable: fall through to the width rule */ }
+  return window.innerWidth >= 1536;
+}
 /** A figure to trace: the label of its row in the Excel model and, for a yearly row, the year. */
 export interface TraceTarget { label: string; year?: number; sheet?: string }
 
 export interface DealUiStore {
   overlay: Overlay;
   setOverlay: (o: Overlay) => void;
+  assistant: AssistantUi;
+  setAssistant: (patch: Partial<AssistantUi>) => void;
   trace: TraceTarget | null;
   setTrace: (t: TraceTarget | null) => void;
   /** Input sections the analyst has collapsed. */
@@ -37,6 +54,12 @@ export interface DealUiStore {
 export const dealUiStore = createStore<DealUiStore>()((set, get) => ({
   overlay: null,
   setOverlay: (overlay) => set({ overlay }),
+  assistant: { open: assistantOpenAtStart(), tab: 'guide' },
+  setAssistant: (patch) => {
+    const assistant = { ...get().assistant, ...patch };
+    if (patch.open !== undefined && typeof window !== 'undefined') { try { window.localStorage.setItem(ASSISTANT_KEY, patch.open ? '1' : '0'); } catch { /* not remembered */ } }
+    set({ assistant });
+  },
   trace: null,
   setTrace: (trace) => set({ trace }),
   collapsed: {},

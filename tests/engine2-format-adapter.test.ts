@@ -169,9 +169,8 @@ describe('E1 adapter: RawHistoricals → DealFacts (gaps stay gaps) → suggest 
     useEngine2Model.setState({ basis: { ...useEngine2Model.getState().basis, 'operations.growth': { kind: 'ai', detail: 'ai-refined' } } });
     expect(useEngine2Model.getState().importUntouched(raw.entityName)).toBe(false);
     // …and a re-import clears stale AI narration
-    useEngine2Model.setState({ aiNotes: ['AI: something → 1'], redlineItems: [{ path: 'x', challenge: 'y' }] as never });
+    useEngine2Model.setState({ redlineItems: [{ path: 'x', challenge: 'y' }] as never });
     useEngine2Model.getState().importFromRaw(raw);
-    expect(useEngine2Model.getState().aiNotes).toEqual([]);
     expect(useEngine2Model.getState().redlineItems).toBeNull();
   });
 
