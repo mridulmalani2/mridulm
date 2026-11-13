@@ -13,7 +13,7 @@
  */
 import { cleaningStore } from './cleaning';
 import { engine2Store, type FieldBasis } from './engine2Model';
-import { suggestionsFor } from '../lib/engine2/suggest';
+import { suggestionsFor, type SuggestionCatalogue } from '../lib/engine2/suggest';
 import type { DealAssumptions, DealFacts } from '../lib/engine2/types';
 
 const KEY = 'deal-engine-session-v1';
@@ -31,6 +31,9 @@ interface Saved {
   pending: string[];
   basis: Record<string, FieldBasis>;
   confirmed: Record<string, number>;
+  /** The AI's proposals, the inputs it was asked about and the suggestions the analyst cleared:
+   *  kept so a reload neither loses them nor asks (and pays) for them again. */
+  ai?: { proposals: SuggestionCatalogue; asked: string[]; dismissed: string[] };
   /** The model had been built when this was saved: it is run again on restore, never read back. */
   built?: boolean;
 }
@@ -58,6 +61,7 @@ export function serialiseSession(): string | null {
     cleaning: sourced ? { raw: c.raw!, pack: c.pack!, ledger: c.ledger, market: c.market, done: c.done, dismissed: c.dismissed } : null,
     ...(forecastOnly ? { forecastFacts: m.facts } : {}),
     assumptions: m.assumptions, pending: m.pending, basis: m.basis, confirmed,
+    ai: { proposals: m.aiProposals, asked: m.aiAsked, dismissed: m.dismissed },
     ...(m.output !== null ? { built: true } : {}),
   };
   return JSON.stringify(saved, (_k, v) => (typeof v === 'number' && Number.isNaN(v) ? NAN : v));
@@ -69,6 +73,13 @@ function rebuild(saved: Saved): void {
   if (!saved.built) return;
   engine2Store.getState().buildWithExhibits(); // the same build the Build button runs
   if (engine2Store.getState().output === null) engine2Store.setState({ error: null });
+}
+
+/** Put back the AI's proposals and the cleared suggestions, then merge them into the catalogue. */
+function restoreAi(saved: Saved): void {
+  if (!saved.ai) return;
+  engine2Store.setState({ aiProposals: saved.ai.proposals ?? {}, aiAsked: saved.ai.asked ?? [], dismissed: saved.ai.dismissed ?? [] });
+  engine2Store.getState().resuggest();
 }
 
 /** Rebuild both stores from a saved session. Returns false (and changes nothing) if it is not one. */
@@ -88,6 +99,7 @@ export function restoreSession(text: string | null): boolean {
       suggestions: suggestionsFor(f, saved.assumptions.entry.hold_years, saved.assumptions, saved.pending ?? []),
       output: null, error: null, // never restored: rebuilt below, on the current code
     });
+    restoreAi(saved);
     rebuild(saved);
     return true;
   }
@@ -102,6 +114,7 @@ export function restoreSession(text: string | null): boolean {
       suggestions: suggestionsFor(facts, saved.assumptions.entry.hold_years, saved.assumptions, saved.pending ?? []),
       output: null, // never restored: rebuilt below, on the current code
     });
+    restoreAi(saved);
     rebuild(saved);
   }
   return true;

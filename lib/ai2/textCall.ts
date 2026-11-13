@@ -15,7 +15,14 @@ import { buildOpenAIRequest, extractOpenAIText } from './gateway/adapters/openai
 import { buildGoogleRequest, extractGoogleText } from './gateway/adapters/google';
 
 export type AiTextFn = (system: string, user: string) => Promise<string>;
-export interface AiCallOptions { maxTokens?: number; temperature?: number }
+export interface AiCallOptions {
+  maxTokens?: number;
+  temperature?: number;
+  /** The models to try, in order, in place of the provider's small default. */
+  models?: string[];
+  /** How hard a Claude model should think before answering (it always thinks a little). */
+  effort?: 'low' | 'medium' | 'high';
+}
 export type AiTurnMessage = { role: 'user' | 'assistant'; content: string };
 export type AiChatFn = (system: string, turns: AiTurnMessage[], opts?: AiCallOptions) => Promise<string>;
 
@@ -53,7 +60,7 @@ function failure(provider: AIProvider, res: Response, body: string): AiError {
     const wait = retryAfter(res, body);
     return new AiError('limit', wait !== null && wait <= 120 ? `${who}'s limit for this key is reached. It frees up in about ${wait} seconds.` : `${who}'s limit for this key is reached for now. Free keys allow a small number of questions a minute and a day.`, wait);
   }
-  if (res.status === 404 || /model.*(not found|does not exist|decommissioned|not supported)/i.test(body)) return new AiError('model', `${who} no longer offers the model this page asks for.`);
+  if (res.status === 404 || /model.*(not[_ ]found|does not exist|decommissioned|not supported)/i.test(body)) return new AiError('model', `${who} no longer offers the model this page asks for.`);
   if (res.status >= 500) return new AiError('other', `${who} is having trouble answering (${res.status}). Try again in a moment.`);
   return new AiError('other', `${who} returned an error (${res.status}).`);
 }
@@ -69,8 +76,17 @@ async function callOnce(provider: AIProvider, apiKey: string, model: string, sys
     // newer Gemini models spend part of the output budget thinking, so a tight cap can return
     // nothing; the brevity is asked for in the prompt and the cap is left with room
     req.body.generationConfig = { maxOutputTokens: maxTokens + 1500, ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}) };
+  } else if (provider === 'anthropic') {
+    // Current Claude models think before they answer and that thinking counts against the cap, so
+    // the cap is given room and the depth is set by effort. They refuse a sampling temperature.
+    req.body.max_tokens = maxTokens + 4000;
+    req.body.output_config = { effort: opts.effort ?? 'low' };
   } else {
-    req.body.max_tokens = maxTokens;
+    // an open reasoning model (Groq's gpt-oss) also spends the cap on its thinking: keep that short
+    // and leave it room, or a tight cap returns no answer at all
+    const reasons = /gpt-oss|qwen3|deepseek-r/i.test(model);
+    req.body.max_tokens = maxTokens + (reasons ? 1200 : 0);
+    if (/gpt-oss/i.test(model)) req.body.reasoning_effort = 'low';
     if (opts.temperature !== undefined) req.body.temperature = opts.temperature;
   }
   let res: Response;
@@ -81,6 +97,7 @@ async function callOnce(provider: AIProvider, apiKey: string, model: string, sys
   }
   if (!res.ok) throw failure(provider, res, await res.text().catch(() => ''));
   const data = (await res.json()) as Record<string, unknown>;
+  if (provider === 'anthropic' && data.stop_reason === 'refusal') throw new AiError('other', `${name(provider)} declined to answer this request.`);
   const text =
     provider === 'anthropic' ? extractAnthropicText(data)
     : provider === 'google' ? extractGoogleText(data)
@@ -92,7 +109,7 @@ async function callOnce(provider: AIProvider, apiKey: string, model: string, sys
 /** A conversation call. A retired model name falls through to the provider's next one. */
 export function makeAiChat(provider: AIProvider, apiKey: string): AiChatFn {
   return async (system, turns, opts = {}) => {
-    const models = PROVIDER_MODELS[provider];
+    const models = opts.models ?? PROVIDER_MODELS[provider];
     let last: unknown = null;
     for (const model of models) {
       try { return await callOnce(provider, apiKey, model, system, turns, opts); }

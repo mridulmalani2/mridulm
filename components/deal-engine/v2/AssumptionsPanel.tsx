@@ -15,8 +15,9 @@ import type {
   CashPayTrancheAssumption, DealAssumptions, ForecastLines, FundOverlayAssumption, LineSpec,
   PikNoteAssumption, RefinancingEvent, RevolverAssumption, TrancheAssumption, TranchePricing,
 } from '../../../lib/engine2/types';
-import { ChoiceField, Derived, Line, NumBox, NumField, PlainChoice, Section, SectionCounts, SmallButton, SubHead, SuggestionChips, Toggle, YearGrid, isSet } from './fields';
+import { ChoiceCell, ChoiceField, Derived, GroupSuggestion, Line, NumBox, NumField, PlainChoice, Section, SectionCounts, SmallButton, SubHead, Toggle, YearGrid, isSet } from './fields';
 import { Segmented } from '../ui/kit';
+import { useDealUi } from '../../../store/dealUi';
 import { sectionOf } from './sections';
 import { entryGrossLeverageFromAssumptions } from '../../../lib/engine2/sourcesUses';
 import DebtTable from './DebtTable';
@@ -36,17 +37,18 @@ const AssumptionsPanel: React.FC = () => {
   const edit = useEngine2Model((s) => s.editAssumptions);
   const editWithChoices = useEngine2Model((s) => s.editWithChoices);
   const setHold = useEngine2Model((s) => s.setHoldYears);
+  const offered = useDealUi((s) => s.features.suggestAssumptions);
   // the Build gate, read here so each section can say how many inputs it still needs
   const missing = useEngine2Model.getState().missing();
+  const holdOffered = useEngine2Model((s) => 'entry.hold_years' in s.suggestions) && offered;
   if (!facts) return null;
 
   if (!a) {
     return (
       <div className="bg-[var(--de-surface)] border border-[color:var(--de-rule)] rounded-[var(--de-r)] px-6">
         <Section title="Start" note="The holding period sizes every per-year input, so it comes first.">
-          <Line label="Holding period">
-            <SuggestionChips path="entry.hold_years" render={(v) => `${String(v)} yrs`} />
-            <NumBox value={null} unit="years" ariaLabel="Holding period" onCommit={(v) => setHold(v)} />
+          <Line label="Holding period" whyId={holdOffered ? 'entry.hold_years' : null}>
+            <NumBox value={null} unit="years" ariaLabel="Holding period" sugPath="entry.hold_years" onCommit={(v) => setHold(v)} />
           </Line>
         </Section>
       </div>
@@ -164,12 +166,12 @@ const AssumptionsPanel: React.FC = () => {
       <Section id="debt" title="Debt" note="Each facility is a column, entered as the term sheet states it.">
         {pending.includes('structure.tranches') && (
           <Line path="structure.tranches" label={<span className="text-[color:var(--de-accent)]">Add facilities, or confirm the deal has no debt</span>}>
-            <SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} />
+            <GroupSuggestion path="structure.tranches" text="the cited debt structure" />
             <SmallButton onClick={() => editWithChoices({ ...a, structure: { ...a.structure, tranches: [] } }, ['structure.tranches'], [])}>No debt</SmallButton>
           </Line>
         )}
         {/* once facilities exist the template is no longer offered: accepting it again would replace them */}
-        {!pending.includes('structure.tranches') && tranches.length === 0 && <div className="flex justify-end"><SuggestionChips path="structure.tranches" render={() => 'the cited tranche template'} /></div>}
+        {!pending.includes('structure.tranches') && tranches.length === 0 && <div className="flex justify-end" data-de-line><GroupSuggestion path="structure.tranches" text="the cited debt structure" /></div>}
         {tranches.length > 0 && (
           <DebtTable tranches={tranches} hasLtm={hasLtm} pending={pending} onSet={(path, value) => set(at(path, value), [path])} onRemove={removeTranche} />
         )}
@@ -277,8 +279,8 @@ const AssumptionsPanel: React.FC = () => {
           <>
             <ChoiceField path="operations.nwc.method" label="NWC method" value={a.operations.nwc.method}
               options={[{ value: 'pct', label: '% of revenue' }, { value: 'days', label: 'days (DSO / DIO / DPO)' }]}
+              from={{ key: 'operations.nwc', pick: (g) => (g as { method?: string }).method }}
               onChoose={(mth) => set({ ...a, operations: { ...a.operations, nwc: mth === 'pct' ? { method: 'pct', pct_revenue: U } : { method: 'days', dso: U, dio: U, dpo: U } } }, ['operations.nwc.method', 'operations.nwc'])} />
-            {(pending.includes('operations.nwc.method') || (a.operations.nwc.method === 'pct' ? !isSet(a.operations.nwc.pct_revenue) : !(isSet(a.operations.nwc.dso) && isSet(a.operations.nwc.dio) && isSet(a.operations.nwc.dpo)))) && <SuggestionChips path="operations.nwc" render={(x) => ((x as { method: string }).method === 'days' ? 'filing days' : 'filing % of revenue')} />}
             {a.operations.nwc.method === 'pct'
               ? <NumField path="operations.nwc.pct_revenue" label="Operating NWC (% of revenue)" unit="pct" value={a.operations.nwc.pct_revenue} />
               : <>
@@ -307,10 +309,10 @@ const AssumptionsPanel: React.FC = () => {
               ['tax.interest_deductible'], ['tax.s163j.applies'], ['tax.s163j']))} />
         {a.tax.interest_deductible && (
           <ChoiceField path="tax.s163j.applies" label="Interest-deduction cap (e.g. US §163(j))?" value={a.tax.s163j.applies} options={[{ value: true, label: 'applies' }, { value: false, label: 'does not apply' }]}
+            from={{ key: 'tax.s163j', pick: (g) => (g as { applies?: boolean }).applies }}
             // the ATI basis is the analyst's choice too: it stays open (gating Build) until made, never a silent EBITDA
             onChoose={(ap) => editWithChoices(at('tax.s163j.applies', ap), ['tax.s163j.applies'], ap ? ['tax.s163j.ati_basis'] : [], ['tax.s163j.ati_basis'])} />
         )}
-        {a.tax.interest_deductible && (pending.includes('tax.s163j.applies') || (a.tax.s163j.applies && (!isSet(a.tax.s163j.ati_pct) || pending.includes('tax.s163j.ati_basis')))) && <SuggestionChips path="tax.s163j" render={() => '§163(j) 30% of EBITDA'} />}
         {a.tax.interest_deductible && a.tax.s163j.applies && (
           <>
             <NumField path="tax.s163j.ati_pct" label="Cap (% of adjusted taxable income)" unit="pct" value={a.tax.s163j.ati_pct} />
@@ -326,9 +328,9 @@ const AssumptionsPanel: React.FC = () => {
               <>
                 <ChoiceField path="tax.nol.arose_pre_2018" label="Arose before 2018 (100% cap, not 80%)?" value={a.tax.nol.arose_pre_2018} options={[{ value: true, label: 'yes' }, { value: false, label: 'no' }]} />
                 <Line path="tax.nol.s382_annual_limit" label="§382 annual limit">
-                  <Segmented ariaLabel="§382 annual limit" value={a.tax.nol.s382_annual_limit === null ? 'none' : 'limit'}
+                  <ChoiceCell stamp={a.tax.nol.s382_annual_limit === null ? 'none' : 'limit'}><Segmented cell ariaLabel="§382 annual limit" value={a.tax.nol.s382_annual_limit === null ? 'none' : 'limit'}
                     options={[{ value: 'none', label: 'none' }, { value: 'limit', label: 'limited to' }]}
-                    onChange={(v) => set(at('tax.nol.s382_annual_limit', v === 'none' ? null : U), ['tax.nol.s382_annual_limit'])} />
+                    onChange={(v) => set(at('tax.nol.s382_annual_limit', v === 'none' ? null : U), ['tax.nol.s382_annual_limit'])} /></ChoiceCell>
                   {a.tax.nol.s382_annual_limit !== null && (
                     <NumBox value={a.tax.nol.s382_annual_limit} unit="money" ariaLabel="§382 annual limit" onCommit={(x) => set(at('tax.nol.s382_annual_limit', x), ['tax.nol.s382_annual_limit'])} />
                   )}
@@ -378,7 +380,6 @@ const AssumptionsPanel: React.FC = () => {
           onOff={() => set({ ...a, mip: null }, ['mip'])} hint="A promote and a sweet-equity strip may not coexist." />
         {a.mip && (
           <>
-            <SuggestionChips path="mip" render={() => 'cited pool / hurdle'} />
             <NumField path="mip.pool_pct" label="Promote pool (% above hurdle)" unit="pct" value={a.mip.pool_pct} />
             <NumField path="mip.hurdle_moic" label="Hurdle (× invested equity)" unit="mult" value={a.mip.hurdle_moic} />
             {(a.mip.ratchet ?? []).map((r, j) => (

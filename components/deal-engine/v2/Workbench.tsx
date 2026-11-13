@@ -10,6 +10,10 @@
 import React, { useEffect, useMemo } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { useWorkspace } from '../../../store/workspace';
+import { useDealEngineStore } from '../../../store/dealEngine';
+import { PROVIDER_DEFAULTS, tierOf } from '../../../lib/ai2/gateway/providers';
+import { EDIT_KEY, chord } from '../ui/platform';
+import { firstOpenCell, focusCell } from './fields';
 import { dealUiStore, useDealUi } from '../../../store/dealUi';
 import { money, multiple, num, pct } from '../../../lib/format';
 import type { Engine2Currency } from '../../../lib/format';
@@ -86,6 +90,46 @@ function useJump(): void {
     return () => window.clearTimeout(t);
   }, [jump]);
 }
+
+/**
+ * One quiet line on where the suggestions stand: how many blank inputs carry one, whether the AI
+ * is still being asked for the rest, and what a free key means for them. The keys are named once
+ * here; the guide has the full list.
+ */
+const SuggestStatus: React.FC = () => {
+  const suggestions = useEngine2Model((s) => s.suggestions);
+  const ai = useEngine2Model((s) => s.aiState);
+  const assumptions = useEngine2Model((s) => s.assumptions);
+  useEngine2Model((s) => s.pending);
+  const offered = useDealUi((s) => s.features.suggestAssumptions);
+  const apiKey = useDealEngineStore((s) => s.apiKey);
+  const provider = useDealEngineStore((s) => s.aiProvider);
+  const setOverlay = useDealUi((s) => s.setOverlay);
+  if (!offered) return <p className="text-[13px] text-[color:var(--de-ink-3)] mt-2">Suggestions are switched off. Every input is yours to enter.</p>;
+  const blank = assumptions ? useEngine2Model.getState().missing() : [];
+  const has = (p: string) => p in suggestions || Array.isArray(suggestions[p.replace(/\.\d+$/, '')]?.value);
+  const withOne = blank.filter((m) => has(m.path));
+  const fromAi = withOne.filter((m) => suggestions[m.path]?.basis.kind === 'ai').length;
+  const who = PROVIDER_DEFAULTS[provider]?.displayName.replace(/\s*\(.*\)$/, '') ?? 'the AI model';
+  const link = 'underline underline-offset-2 decoration-dotted hover:text-[color:var(--de-ink)]';
+  return (
+    <div className="mt-2 text-[13px] leading-relaxed text-[color:var(--de-ink-2)] max-w-[70ch]" aria-live="polite">
+      <p>
+        <span aria-hidden="true" className="de-star">★</span>
+        {!assumptions ? 'The holding period comes first: it sizes every by-year input.' : blank.length === 0 ? 'Every input is entered.' : withOne.length === 0 ? 'No suggestions for the inputs still blank.' : `${withOne.length} of the ${blank.length} blank inputs carry a suggestion in grey${fromAi ? `, ${fromAi} of them from ${who}` : ''}.`}
+        {(withOne.length > 0 || !assumptions) && <> <span className="de-kbd">Enter</span> shows why, <span className="de-kbd">Enter</span> again accepts, <span className="de-kbd">{EDIT_KEY}</span> edits, <span className="de-kbd">Space</span> clears.</>}
+      </p>
+      {ai.busy && <p className="text-[color:var(--de-ink-3)]">Asking {who} about the inputs with no cited basis{ai.total > 12 && ai.done > 0 ? ` (${ai.done} of ${ai.total})` : ''}.</p>}
+      {!ai.busy && ai.note && (
+        <p className="text-[color:var(--de-ink-3)]">{ai.note} The cited suggestions are unaffected. <button type="button" className={link} onClick={() => void useEngine2Model.getState().aiPropose(true)}>Ask again</button></p>
+      )}
+      {!ai.busy && !ai.note && fromAi > 0 && tierOf(provider) === 'free' && <p className="text-[color:var(--de-ink-3)]">The AI values come from a free-tier model, so they are generic starting points. A paid key reasons from this company's own figures.</p>}
+      {!apiKey && assumptions && blank.length > withOne.length && (
+        <p className="text-[color:var(--de-ink-3)]">The other {blank.length - withOne.length} have no cited basis. <button type="button" className={link} onClick={() => setOverlay('tools')}>Add an AI key</button> to have a value proposed for those too.</p>
+      )}
+    </div>
+  );
+};
 
 const Rail: React.FC<{ counts: Record<string, number>; started: boolean; docked: boolean }> = ({ counts, started, docked }) => {
   const jumpTo = useDealUi((s) => s.jumpTo);
@@ -236,17 +280,53 @@ const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' })
   const assumptions = useEngine2Model((s) => s.assumptions);
   useEngine2Model((s) => s.pending);
   useJump();
+  // With suggestions switched on and a key saved, the AI is asked for the blank numbers the cited
+  // catalogue does not cover: once when the sheet opens, and again (for the new inputs only) when
+  // a choice brings more into scope. Every answer is a proposal in grey; nothing is applied.
+  const apiKey = useDealEngineStore((st) => st.apiKey);
+  const features = useDealUi((st) => st.features);
+  const pendingNow = useEngine2Model((s) => s.pending);
+  useEffect(() => {
+    if (!inputsOnly || !apiKey || !features.suggestAssumptions || !assumptions) return;
+    const t = window.setTimeout(() => void useEngine2Model.getState().aiPropose(), 900);
+    return () => window.clearTimeout(t);
+  }, [inputsOnly, apiKey, features.suggestAssumptions, assumptions, pendingNow]);
+  // keyboard flow: the sheet opens with the keyboard already in the first input still open
+  const started = assumptions !== null;
+  useEffect(() => {
+    if (!inputsOnly || !features.flow || typeof window === 'undefined') return;
+    const t = window.setTimeout(() => {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      const el = firstOpenCell();
+      if (el) focusCell(el);
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [inputsOnly, features.flow, started]);
   // while the assistant is docked it lists what is left to enter, so the page gives it the room:
   // the section rail waits for a wider window and the "still to enter" list is not drawn twice
   const docked = useDealUi((st) => st.assistant.open);
   const blankInputs = useEngine2Model.getState().missing();
   const blocked = missing.length > 0 || blankInputs.length > 0 || assumptions === null;
 
-  // Ctrl/Cmd + Enter builds from anywhere on the sheet
+  // Ctrl/Cmd + Enter builds from anywhere on the sheet; Ctrl/Cmd + Z and Ctrl + Y (Cmd + Shift + Z)
+  // step back and forward through the edits, accepts and clears made on it
   useEffect(() => {
     if (!inputsOnly || typeof window === 'undefined') return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !(e.target as HTMLElement)?.closest?.('[data-de-line]') && !blocked) build();
+      const mod = e.metaKey || e.ctrlKey;
+      const t = e.target as HTMLElement | null;
+      if (e.key === 'Enter' && mod && !e.shiftKey && !t?.closest?.('[data-de-line]') && !blocked) { build(); return; }
+      const z = e.key.toLowerCase() === 'z';
+      const y = e.key.toLowerCase() === 'y';
+      if (!mod || e.altKey || !(z || y)) return;
+      // text being typed keeps the browser's own undo: a note, a facility name, a number mid-entry
+      if (t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && (!t.hasAttribute('data-de-cell') || t.hasAttribute('data-editing'))))) return;
+      if (t?.closest?.('[role="dialog"]:not(.de-pop)')) return;
+      e.preventDefault();
+      const model = useEngine2Model.getState();
+      const redo = y || (z && e.shiftKey);
+      const done = redo ? model.redo() : model.undo();
+      dealUiStore.getState().notify(done ? (redo ? 'Redone.' : `Undone. ${chord('Y')} brings it back.`) : redo ? 'Nothing to redo.' : 'Nothing to undo.');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -280,8 +360,9 @@ const Workbench: React.FC<{ view?: 'all' | 'assumptions' }> = ({ view = 'all' })
           <header className="mb-6">
             <h1 className="de-display text-[34px] leading-tight">Assumptions</h1>
             <p className="text-[14px] text-[color:var(--de-ink-2)] mt-1.5 max-w-[62ch]">
-              Every input starts blank. Where the source supports a value, a blue link offers it; nothing is applied until you click.
+              Every input starts blank and is yours to enter. A value in grey is a suggestion, not an entry: the model waits until you accept it or type your own.
             </p>
+            <SuggestStatus />
           </header>
           {figures}
           <MissingBar />

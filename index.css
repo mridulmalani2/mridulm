@@ -254,6 +254,11 @@ a:focus-visible {
 .de-root .de-control[data-blank='true'] { border-color: transparent; background: var(--de-accent-soft); box-shadow: inset 0 -2px 0 var(--de-accent); border-radius: var(--de-r-sm) var(--de-r-sm) 2px 2px; }
 .de-root .de-control[data-blank='true']:focus, .de-root .de-control[data-blank='true']:focus-within { box-shadow: inset 0 -2px 0 var(--de-accent), 0 0 0 3px var(--de-accent-soft); }
 .de-root .de-control[data-invalid='true'] { border-color: var(--de-accent); }
+/* a suggested value not yet accepted: grey, starred, and plainly not an entry */
+.de-root .de-control[data-suggested='true'] { border-color: transparent; background: var(--de-sunken); box-shadow: inset 0 -2px 0 var(--de-rule-strong); border-radius: var(--de-r-sm) var(--de-r-sm) 2px 2px; }
+.de-root .de-control[data-suggested='true']:focus, .de-root .de-control[data-suggested='true']:focus-within { box-shadow: inset 0 -2px 0 var(--de-ink-3), 0 0 0 3px var(--de-input-soft); }
+.de-root .de-control[data-suggested='true'] input::placeholder { color: var(--de-ink-3); opacity: 1; }
+.de-root .de-star { font-size: 10px; line-height: 1; color: var(--de-ink-3); margin-right: 4px; }
 /* a field inside a control: the control shows the focus, so the field itself draws no second ring */
 .de-root .de-control input:focus-visible, .de-root .de-control textarea:focus-visible { outline: none; }
 

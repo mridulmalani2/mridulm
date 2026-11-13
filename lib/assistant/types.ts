@@ -4,7 +4,9 @@
  * The assistant is an analyst's assistant, not an author of the model. Everything here is built
  * from the model's own state by plain rules (no AI call): the next move for the step in view, the
  * sourced values on offer, and how each value was reached. An AI key, when present, only answers
- * typed questions and rewords these notes; it never supplies a figure.
+ * typed questions and rewords these notes; in this panel it never supplies a figure. (Values the AI
+ * proposes for inputs with no cited basis are a separate thing: they sit in the cells of the sheet,
+ * marked as AI, and come from lib/ai2/propose.)
  *
  * Nothing in this folder changes the model. An action is a description the interface carries out
  * when the analyst clicks it.

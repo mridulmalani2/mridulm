@@ -86,18 +86,20 @@ describe('engine2 store: the v2.0.0 lifecycle: blank until entered', () => {
     // nothing follows the entry multiple until one is entered or accepted
     expect(s().suggestions['exit.multiple']).toBeUndefined();
     expect(s().suggestions['structure.tranches.0.pricing.base_rate']).toBeUndefined();
-    // an AI proposal already on screen (catalogue key `<path>@ai`)
-    useEngine2Model.setState({ suggestions: { ...s().suggestions, 'tax.rate@ai': { value: 0.25, basis: { kind: 'ai', detail: 'test' } } } });
+    // an AI proposal already on screen, for an input the cited catalogue does not cover
+    useEngine2Model.setState({ aiProposals: { 'structure.min_cash': { value: 25, basis: { kind: 'ai', detail: 'test' } } } });
+    s().resuggest();
+    expect(s().suggestions['structure.min_cash']?.value).toBe(25);
     s().acceptSuggestion('entry.entry_multiple');
     expect(s().suggestions['exit.multiple']?.value).toBe(s().assumptions!.entry.entry_multiple);
     s().acceptSuggestion('structure.tranches');
     // each facility of the accepted template now has its own cited proposals
     expect(s().suggestions['structure.tranches.0.pricing.base_rate']?.basis.kind).toBe('convention');
-    expect(s().suggestions['tax.rate@ai']?.value).toBe(0.25);
+    expect(s().suggestions['structure.min_cash']?.value).toBe(25);
     // and an edit elsewhere does not drop the AI proposal either
     const a = s().assumptions!;
     s().editAssumptions({ ...a, rollover_equity: 0 }, ['rollover_equity']);
-    expect(s().suggestions['tax.rate@ai']?.value).toBe(0.25);
+    expect(s().suggestions['structure.min_cash']?.basis.kind).toBe('ai');
   });
 
   it('build = ONE runModel call once every input is entered; a later edit clears the output (no stale outputs)', () => {

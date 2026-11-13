@@ -282,9 +282,21 @@ describe('the AI call: built for a free key', () => {
   it('asks for a small answer, and names a rate limit with its wait', async () => {
     let sent: Record<string, unknown> = {};
     const text = await withFetch((_u, init) => { sent = JSON.parse(String(init.body)); return respond(200, { choices: [{ message: { content: 'ok' } }] }); },
-      () => makeAiChat('groq', 'gsk_x')('s', [{ role: 'user', content: 'q' }], { maxTokens: 450, temperature: 0.2 }));
+      () => makeAiChat('groq', 'gsk_x')('s', [{ role: 'user', content: 'q' }], { maxTokens: 450, temperature: 0.2, models: ['llama-3.3-70b-versatile'] }));
     expect(text).toBe('ok');
     expect(sent.max_tokens).toBe(450);
+    // a model that thinks before it answers spends the cap on that too: it is given room and told to keep it short
+    await withFetch((_u, init) => { sent = JSON.parse(String(init.body)); return respond(200, { choices: [{ message: { content: 'ok' } }] }); },
+      () => makeAiChat('groq', 'gsk_x')('s', [{ role: 'user', content: 'q' }], { maxTokens: 450 }));
+    expect(sent.model).toBe('openai/gpt-oss-20b'); // typed questions use the small model; proposals ask the large one first
+    expect(sent.max_tokens).toBe(1650);
+    expect(sent.reasoning_effort).toBe('low');
+    // a current Claude model refuses a sampling temperature and always thinks: depth is set by effort
+    await withFetch((_u, init) => { sent = JSON.parse(String(init.body)); return respond(200, { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'ok' }] }); },
+      () => makeAiChat('anthropic', 'sk-ant-x')('s', [{ role: 'user', content: 'q' }], { maxTokens: 450, temperature: 0.2 }));
+    expect(sent.temperature).toBeUndefined();
+    expect(sent.max_tokens).toBe(4450);
+    expect(sent.output_config).toEqual({ effort: 'low' });
     const err = await withFetch(() => respond(429, { error: { message: 'Rate limit reached. Please try again in 7.5s.' } }),
       () => makeAiChat('groq', 'gsk_x')('s', [{ role: 'user', content: 'q' }]).catch((e: unknown) => e));
     expect(err).toBeInstanceOf(AiError);

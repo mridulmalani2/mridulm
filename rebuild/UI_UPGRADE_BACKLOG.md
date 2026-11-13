@@ -2,6 +2,38 @@
 
 Recorded 2026-11-11. Financial accuracy comes first; this list is the work that follows it.
 
+## In-cell suggestions (2026-11-13, branch `claude/ai-suggestions-ui-e381dc`, on top of the assistant branch)
+
+Owner's direction: the analyst builds the model; a suggestion is offered for every number, inside
+its own cell, and Excel's keys decide what becomes of it. BUILT (tests, type-check, build green;
+keys, undo, pop-up and the debt table checked by hand in the browser).
+
+- **Where a value comes from**: the cited catalogue first (`lib/engine2/suggest.ts`); for a blank
+  number it does not cover, the AI on the analyst's key proposes one with its reasoning
+  (`lib/ai2/propose.ts`, basis kind `ai`). A proposal is never applied and Build still waits for it.
+  This REVISES the earlier "the AI never originates a number" answer; the assistant panel's own
+  rule (no figure in its answers) is unchanged.
+- **The cell** (`v2/fields.tsx`): grey value with a star. Enter shows why, Enter again accepts and
+  moves on; F2 (Control + U on a Mac too) accepts for editing; Space or Delete clears; typing
+  replaces; arrows and Tab move on. Clicking the input's label opens the same explanation.
+  Choices, switches and the cited debt structure are cells too, so the sheet needs no mouse.
+- **Store** (`store/engine2Model.ts`): `aiProposals`, `dismissed`, `acceptSuggestion(key, year)`,
+  `acceptAll` (Ctrl/Cmd + Shift + Enter, one section), `undo` / `redo` (Ctrl/Cmd + Z, Ctrl + Y or
+  Cmd + Shift + Z). AI proposals, what was asked and what was cleared are saved with the session,
+  so a reload asks for nothing twice.
+- **Tiers** (`lib/ai2/gateway/providers.ts` `tierOf`, `PROPOSAL_MODELS`): a paid key sends the
+  sheet once to the strongest model; a free key (Groq, Google) sends 12 inputs at a time with
+  one-line reasons, and the page says the results are generic. Groq's model names were refreshed
+  from its own list on 2026-11-13 (the Llama names it served before are gone).
+- **First screen**: checkboxes for suggestions on Assumptions, keyboard flow, the filing's
+  adjustments on Clean, and the assistant panel (now closed until opened). `store/dealUi.ts`.
+- **Guide**: the shortcut list is grouped and names the keys as the machine does (`ui/platform.ts`).
+
+Checked with a real key: Groq free tier only (17 of 17 inputs answered). NOT checked: a paid key
+(Anthropic, OpenAI); a physical Windows keyboard. Not built: an AI proposal for a CHOICE with no
+cited basis (margin path, for instance), and in-cell suggestions on the Clean step, whose items
+are whole adjustments, not cells; the checkbox there shows or hides the existing list.
+
 ## Status (2026-11-12, branch `claude/ui-functionality-upgrade-ideas-e3173e`)
 
 The UI upgrade is BUILT on this branch (tests, type-check and `npm run build` green; checked in the

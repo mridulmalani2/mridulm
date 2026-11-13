@@ -130,7 +130,7 @@ export const ToolsDrawer: React.FC<{ open: boolean; onClose: () => void }> = ({ 
       {error && <p className="text-[13px] text-[color:var(--de-accent)]">{error}</p>}
       <section className="pt-6 border-t border-[color:var(--de-rule)]">
         <h3 className="text-[15px] font-semibold">AI key</h3>
-        <p className="text-[13px] text-[color:var(--de-ink-2)] mt-1 mb-3">Optional. Every step works without one. A key lets the assistant answer your own questions in plain English; it never supplies a number.</p>
+        <p className="text-[13px] text-[color:var(--de-ink-2)] mt-1 mb-3">Optional. Every step works without one. A key adds a suggested value for the inputs no filing or cited source covers, and answers to your own questions. A paid key gives fuller, company-specific suggestions than a free one.</p>
         <ApiKeyInline />
       </section>
     </Drawer>

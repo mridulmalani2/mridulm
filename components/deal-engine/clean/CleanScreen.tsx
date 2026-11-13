@@ -6,6 +6,7 @@
  * every figure comes from `applyCleaning` (the bridges) or lib/cleaning/view (geometry and the
  * impact strip). Nothing is pre-ticked, nothing is defaulted, and a blank stays a blank.
  */
+import { useDealUi } from '../../../store/dealUi';
 import React, { useState } from 'react';
 import { useCleaning } from '../../../store/cleaning';
 import { LINES, LINE_META, type Statement } from '../../../lib/statements/lines';
@@ -422,6 +423,8 @@ const NetDebtCard: React.FC<{ pack: StatementPack; bridges: Bridges }> = ({ pack
 
 // ── the screen ────────────────────────────────────────────────────────────────────────────
 const CleanScreen: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
+  // the analyst chose on the first screen whether the items found in the filing are listed
+  const showFound = useDealUi((s) => s.features.suggestClean);
   const raw = useCleaning((s) => s.raw);
   const pack = useCleaning((s) => s.pack);
   const cleaned = useCleaning((s) => s.cleaned);
@@ -465,7 +468,7 @@ const CleanScreen: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
         <div className="space-y-5 min-w-0">
           <StatementsCard pack={pack} bridges={cleaned.bridges} />
           <AdjustmentsCard pack={pack} />
-          <ProposalsCard pack={pack} />
+          {showFound && <ProposalsCard pack={pack} />}
           {pack.notes.filter((n) => !n.startsWith('Detected')).map((n) => (
             <p key={n} className="font-sans text-[12px] text-[color:var(--de-ink-3)]">{n}</p>
           ))}
