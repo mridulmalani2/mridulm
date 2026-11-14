@@ -20,8 +20,14 @@ const KEY = 'deal-engine-session-v1';
 /** Blank inputs are NaN in the draft; JSON has no NaN, so it travels as this marker. */
 const NAN = '__blank__';
 
+/** Which kind of deal a save holds. The merger flow (rebuild/MA_MODEL_PLAN.md) keeps its own
+ *  stores; a save restores only into the flow it came from. */
+export type DealType = 'lbo' | 'merger';
+
 interface Saved {
   v: 1;
+  /** Absent in saves made before the merger model existed: those are all 'lbo'. */
+  dealType?: DealType;
   /** null ⇔ a forecast-only case (SPEC §24.2): no sourced figures, so nothing to clean. */
   cleaning: Parameters<ReturnType<typeof cleaningStore.getState>['hydrate']>[0] | null;
   /** The facts of a forecast-only case (name and currency; every figure null). Absent otherwise:
@@ -58,6 +64,7 @@ export function serialiseSession(): string | null {
   }
   const saved: Saved = {
     v: 1,
+    dealType: 'lbo',
     cleaning: sourced ? { raw: c.raw!, pack: c.pack!, ledger: c.ledger, market: c.market, done: c.done, dismissed: c.dismissed } : null,
     ...(forecastOnly ? { forecastFacts: m.facts } : {}),
     assumptions: m.assumptions, pending: m.pending, basis: m.basis, confirmed,
@@ -90,6 +97,7 @@ export function restoreSession(text: string | null): boolean {
     saved = JSON.parse(text, (_k, v) => (v === NAN ? Number.NaN : v)) as Saved;
   } catch { return false; }
   if (saved?.v !== 1) return false;
+  if ((saved.dealType ?? 'lbo') !== 'lbo') return false; // a merger save restores through the merger store
   if (saved.cleaning === null || saved.cleaning === undefined) {
     const f = saved.forecastFacts;
     if (!f || !saved.assumptions || f.source !== 'manual' || !Array.isArray(f.history) || f.history.length !== 0) return false;
@@ -118,6 +126,16 @@ export function restoreSession(text: string | null): boolean {
     rebuild(saved);
   }
   return true;
+}
+
+/** The deal type of a saved session, without restoring it (null = not a session). */
+export function sessionDealType(text: string | null): DealType | null {
+  if (!text) return null;
+  try {
+    const saved = JSON.parse(text) as Partial<Saved>;
+    if (saved?.v !== 1) return null;
+    return saved.dealType ?? 'lbo';
+  } catch { return null; }
 }
 
 let started = false;

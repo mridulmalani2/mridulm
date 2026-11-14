@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useEngine2Model } from '../../../store/engine2Model';
 import { useDealEngineStore } from '../../../store/dealEngine';
-import { useCleaning } from '../../../store/cleaning';
+import { useCleaning, useCleaningStore } from '../../../store/cleaning';
 import { useWorkspace, workspaceStore } from '../../../store/workspace';
 import { dealUiStore, useDealUi } from '../../../store/dealUi';
 import { tryRun } from '../../../lib/analysis';
@@ -205,6 +205,7 @@ const AssistantDock: React.FC<{ step: AssistStep; onGo: (step: AssistStep) => vo
   const missingFacts = useEngine2Model((s) => s.missingFacts);
   const suggestions = useEngine2Model((s) => s.suggestions);
   const output = useEngine2Model((s) => s.output);
+  const cleaningStore = useCleaningStore();
   const pack = useCleaning((s) => s.pack);
   const ledger = useCleaning((s) => s.ledger);
   const cleaned = useCleaning((s) => s.cleaned);
@@ -272,7 +273,7 @@ const AssistantDock: React.FC<{ step: AssistStep; onGo: (step: AssistStep) => vo
 
   const run = (a: AssistAction) => {
     const model = useEngine2Model.getState();
-    const cleaning = useCleaning.getState();
+    const cleaning = cleaningStore.getState();
     const dealUi = dealUiStore.getState();
     if (a.kind === 'accept') { model.acceptSuggestion(a.key); dealUi.notify('Applied. You can change it on the sheet.'); }
     else if (a.kind === 'jump') { onGo('assumptions'); dealUi.jumpTo(a.path); }
