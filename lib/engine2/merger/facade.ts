@@ -2,7 +2,7 @@
  * lib/engine2/merger/facade.ts — THE entry point of the merger model (SPEC §29). Every displayed
  * merger number comes from `runMerger`.
  */
-import { addBlocks, withRatios, type Amounts } from './rows';
+import { addBlocks, ratio, withRatios, type Amounts } from './rows';
 import { impactRows, type ImpactResult } from './adjustments';
 import { purchaseAccounting, rollBalanceSheet } from './ppa';
 import { maxSolvedDebt, mergerDeal } from './sourcesUses';
@@ -10,16 +10,19 @@ import { standaloneRows } from './standalone';
 import { validateMerger } from './validate';
 import type { MergerAssumptions, MergerBlock, MergerFacts, MergerFlag, MergerOutput, MergerYear, PpaResult } from './types';
 
-interface Core {
+interface Pass {
   deal: ReturnType<typeof mergerDeal>;
   ppa: PpaResult | null;
   impact: ImpactResult;
   raw: Record<MergerBlock, Amounts[]>;
+}
+interface Core extends Pass {
   blocks: Record<MergerBlock, MergerYear[]>;
 }
 
-/** One pass of the model with the open tranche fixed at `solvedDebt`. No solver inside (SPEC §5). */
-function core(facts: MergerFacts, a: MergerAssumptions, solvedDebt: number | null): Core {
+/** One pass of the model's amounts with the open tranche fixed at `solvedDebt`. No solver inside
+ *  (SPEC §5). Ratios are left to `core`, so the leverage solve does not pay for them on every step. */
+function pass(facts: MergerFacts, a: MergerAssumptions, solvedDebt: number | null): Pass {
   const n = a.horizon_years;
   const deal = mergerDeal(facts, a, solvedDebt);
   const ppa = a.ppa ? purchaseAccounting(facts, a, deal) : null;
@@ -35,24 +38,34 @@ function core(facts: MergerFacts, a: MergerAssumptions, solvedDebt: number | nul
   const impact = impactRows(a, deal, acquirer, target, ppa, n);
   const sum = addBlocks(acquirer, target);
   const combined: Amounts[] = addBlocks(sum, impact.rows);
+  return { deal, ppa, impact, raw: { acquirer, target, sum, impact: impact.rows, combined } };
+}
+
+function core(facts: MergerFacts, a: MergerAssumptions, solvedDebt: number | null): Core {
+  const p = pass(facts, a, solvedDebt);
+  // §29.17: in-block growth compares full years; under a part-year close the target and impact
+  // year 1 are owned for f of the year, so their growth is read on the full-year run
+  const f = a.timing.fraction_of_year_1;
+  const fullYear = f < 1 ? pass(facts, { ...a, timing: { fraction_of_year_1: 1 } }, solvedDebt).raw : p.raw;
+  const r = (b: MergerBlock, perShare: boolean) => withRatios(p.raw[b], perShare, fullYear[b]);
   return {
-    deal,
-    ppa,
-    impact,
-    raw: { acquirer, target, sum, impact: impact.rows, combined },
+    ...p,
     blocks: {
-      acquirer: withRatios(acquirer, true),
-      target: withRatios(target, false),
-      sum: withRatios(sum, false),
+      acquirer: r('acquirer', true),
+      target: r('target', false),
+      sum: r('sum', false),
       // the impact block's dividends include the target's income, so dividends / impact income is
       // not a payout ratio; the policy ratio is an input, shown as such (§29.6)
-      impact: withRatios(impact.rows, false).map((r) => ({ ...r, payout: null })),
-      combined: withRatios(combined, true),
+      impact: r('impact', false).map((x) => ({ ...x, payout: null })),
+      combined: r('combined', true),
     },
   };
 }
 
-const capMetric = (c: Core, testYear: number): number | null => c.blocks.combined[testYear].nd_ebitda;
+const capMetric = (c: Pass, testYear: number): number | null => {
+  const y = c.raw.combined[testYear];
+  return ratio(y.net_debt, y.ebitda);
+};
 
 /**
  * §29.7: the largest open-tranche debt that keeps combined net debt / EBITDA at the cap in the test
@@ -62,15 +75,17 @@ const capMetric = (c: Core, testYear: number): number | null => c.blocks.combine
 export function sizeDebtToCap(facts: MergerFacts, a: MergerAssumptions): { debt: number; binding: boolean; iterations: number } {
   const cap = a.funding.leverage_cap!;
   const g = (d: number): number => {
-    const m = capMetric(core(facts, a, d), cap.test_year);
+    const m = capMetric(pass(facts, a, d), cap.test_year);
     if (m === null) throw new RangeError('Combined EBITDA is zero in the leverage test year, so leverage has no meaning there.');
     return m - cap.max;
   };
   const hi0 = maxSolvedDebt(facts, a);
   const gLo = g(0);
+  if (gLo > 0) return { debt: 0, binding: false, iterations: 0 };
+  // no room for debt at all (the other sources cover the uses): zero is the only size
+  if (hi0 <= 1e-9) return { debt: 0, binding: false, iterations: 0 };
   const gHi = g(hi0);
   if (!(gHi > gLo)) throw new RangeError('Leverage does not rise with the debt raised, so the debt cannot be sized to the cap.');
-  if (gLo > 0) return { debt: 0, binding: false, iterations: 0 };
   if (gHi <= 0) return { debt: hi0, binding: false, iterations: 0 };
   let lo = 0;
   let hi = hi0;
@@ -82,8 +97,6 @@ export function sizeDebtToCap(facts: MergerFacts, a: MergerAssumptions): { debt:
   }
   return { debt: (lo + hi) / 2, binding: true, iterations: i };
 }
-
-const eps = (nig: number, shares: number): number | null => (Math.abs(shares) < 1e-12 ? null : nig / shares);
 
 export function runMerger(facts: MergerFacts, a: MergerAssumptions): MergerOutput {
   validateMerger(facts, a);
@@ -104,7 +117,7 @@ export function runMerger(facts: MergerFacts, a: MergerAssumptions): MergerOutpu
   // §29.18: adjusted EPS adds back after-tax amortisation of acquired intangibles and one-offs
   const combAdj = blocks.combined.map((r, t) => {
     const am = ppa ? ppa.schedule[t].intangible_amortisation : 0;
-    return eps(r.net_income_group + (1 - tr) * (am - r.one_offs), r.shares);
+    return ratio(r.net_income_group + (1 - tr) * (am - r.one_offs), r.shares);
   });
   const syn = a.synergies;
   const be = blocks.combined.map((r, t) => {
@@ -118,8 +131,8 @@ export function runMerger(facts: MergerFacts, a: MergerAssumptions): MergerOutpu
 
   let year1Full: MergerOutput['eps']['year1_full_year'] = null;
   if (a.timing.fraction_of_year_1 < 1) {
-    const full = core(facts, { ...a, timing: { fraction_of_year_1: 1 } }, solvedDebt);
-    const e = full.blocks.combined[1].eps;
+    const y1 = pass(facts, { ...a, timing: { fraction_of_year_1: 1 } }, solvedDebt).raw.combined[1];
+    const e = ratio(y1.net_income_group, y1.shares);
     year1Full = { combined: e, accretion: accr(e, 1) };
   }
 

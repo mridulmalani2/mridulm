@@ -316,12 +316,13 @@ def impact(F, A, D, acq, tgt, ppa):
     return out, debt_hist, fee_am_hist
 
 
-def ratios(rows, per_share):
+def ratios(rows, per_share, full):
+    """§29.6; growth compares FULL years (§29.17): `full` is the block from the f = 1 run."""
     def q(a, b):
         return None if abs(b) < 1e-12 else a / b
     res = []
     for t, r in enumerate(rows):
-        res.append(dict(growth=None if t == 0 or abs(rows[t - 1]["revenue"]) < 1e-12 else r["revenue"] / rows[t - 1]["revenue"] - 1,
+        res.append(dict(growth=None if t == 0 or abs(full[t - 1]["revenue"]) < 1e-12 else full[t]["revenue"] / full[t - 1]["revenue"] - 1,
                         margin=q(r["ebitda"], r["revenue"]), nd_ebitda=q(r["net_debt"], r["ebitda"]),
                         eps=q(r["net_income_group"], r["shares"]) if per_share else None,
                         dps=q(-r["dividends"], r["shares"]) if per_share else None))
@@ -352,7 +353,12 @@ def golden(folder):
     rate = A["adjustments_tax_rate"]
     D, ppa, acq, tgt, sm, imp, comb, debt_hist, fee_am = run(F, A)
     blocks = dict(acquirer=acq, target=tgt, sum=sm, impact=imp, combined=comb)
-    rq = {b: ratios(rows, b in ("acquirer", "combined")) for b, rows in blocks.items()}
+    if A["timing"]["fraction_of_year_1"] < 1:
+        _, _, fa, ft, fs, fi, fc, _, _ = run(F, A, 1.0)
+        full_blocks = dict(acquirer=fa, target=ft, sum=fs, impact=fi, combined=fc)
+    else:
+        full_blocks = blocks
+    rq = {b: ratios(rows, b in ("acquirer", "combined"), full_blocks[b]) for b, rows in blocks.items()}
 
     # §29.14 forecast balance sheet
     bs = [ppa["opening"]] if ppa else None

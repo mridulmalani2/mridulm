@@ -150,6 +150,11 @@ export type CleaningStoreApi = typeof cleaningStore;
  *  provider changes. The merger flow wraps the screen in a provider per company. */
 export const CleaningStoreContext = createContext<CleaningStoreApi>(cleaningStore);
 
+/** The cleaning store in scope: the provider's (one per company in the merger flow), else the Buyout one. */
+export function useCleaningStore(): CleaningStoreApi {
+  return useContext(CleaningStoreContext);
+}
+
 export function useCleaning<T>(selector: (s: CleaningStore) => T): T {
   const store = useContext(CleaningStoreContext);
   return useSyncExternalStore(
@@ -158,6 +163,8 @@ export function useCleaning<T>(selector: (s: CleaningStore) => T): T {
     () => selector(store.getState()),
   );
 }
+/** The BUYOUT store's state, for code outside React. A component that may render inside a merger
+ *  provider reads `useCleaningStore().getState()` instead, so it sees its own company. */
 useCleaning.getState = cleaningStore.getState;
 useCleaning.setState = cleaningStore.setState;
 useCleaning.subscribe = cleaningStore.subscribe;

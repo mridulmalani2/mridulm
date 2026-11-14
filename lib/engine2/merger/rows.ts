@@ -50,11 +50,19 @@ export function buildRow(x: RowInputs): Amounts {
 /** a / b, or null when b is zero (a ratio with no meaning is shown as n/a, never as 0). */
 export const ratio = (a: number, b: number): number | null => (Math.abs(b) < 1e-12 ? null : a / b);
 
-/** §29.6: ratios are recomputed inside each block from that block's own amounts. */
-export function withRatios(rows: Amounts[], perShare: boolean): MergerYear[] {
+/**
+ * §29.6: ratios are recomputed inside each block from that block's own amounts. Growth compares
+ * full years: `fullYear` is the same block at a full year 1 (§29.17), defaulting to `rows`.
+ */
+export function withRatios(rows: Amounts[], perShare: boolean, fullYear: Amounts[] = rows): MergerYear[] {
+  const growth = (t: number): number | null => {
+    if (t === 0) return null;
+    const g = ratio(fullYear[t].revenue, fullYear[t - 1].revenue);
+    return g === null ? null : g - 1;
+  };
   return rows.map((r, t) => ({
     ...r,
-    growth: t === 0 ? null : ratio(r.revenue, rows[t - 1].revenue) === null ? null : r.revenue / rows[t - 1].revenue - 1,
+    growth: growth(t),
     margin: ratio(r.ebitda, r.revenue),
     tax_rate: ratio(-r.tax, r.pbt),
     capex_pct: ratio(-r.capex, r.revenue),

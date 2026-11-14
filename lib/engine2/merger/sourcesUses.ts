@@ -2,9 +2,9 @@
  * lib/engine2/merger/sourcesUses.ts — price, consideration, sources and uses (SPEC §29.4, §29.11, §29.12).
  */
 import { priceTarget } from './consideration';
+import { ratio as r } from './rows';
 import type { MergerAssumptions, MergerDeal, MergerFacts } from './types';
 
-const r = (a: number, b: number): number | null => (Math.abs(b) < 1e-12 ? null : a / b);
 
 /** Index of the tranche without an amount (the debt plug or the tranche sized to the cap), or -1. */
 export const openTranche = (a: MergerAssumptions): number => a.funding.tranches.findIndex((t) => t.amount === null);

@@ -100,3 +100,27 @@ describe('every save names its deal type', () => {
     expect(engine2Store.getState().facts).toBeNull();
   });
 });
+
+describe('a merger deal never wipes the Buyout deal on screen', () => {
+  it('importing a merger deal file or opening a merger library entry is refused before anything is reset', async () => {
+    const { workspaceStore } = await import('../store/workspace');
+    const { raw, pack } = sourced();
+    cleaningStore.getState().load(raw, pack);
+    const session = JSON.stringify({ ...JSON.parse(serialiseSession()!), dealType: 'merger' });
+    const file = JSON.stringify({ kind: 'deal-engine-deal', v: 1, dealType: 'merger', name: 'M', savedAt: '', session, workspace: '{}' });
+    expect(workspaceStore.getState().importDealFile(file)).toBe(false);
+    expect(engine2Store.getState().facts?.entity_name).toBe(raw.entityName);
+    workspaceStore.setState({ library: [{ id: 'm1', name: 'M', savedAt: '', session, workspace: '{}', dealType: 'merger' }] });
+    expect(workspaceStore.getState().openFromLibrary('m1')).toBe(false);
+    expect(cleaningStore.getState().raw?.entityName).toBe(raw.entityName);
+  });
+
+  it('a component inside a merger provider reads its own company imperatively too', async () => {
+    const { useCleaningStore } = await import('../store/cleaning');
+    const side = createCleaningStore(recordingSink().sink);
+    const { raw, pack } = sourced();
+    side.getState().load({ ...raw, entityName: 'Target Co' }, pack);
+    const Name = () => <span>{useCleaningStore().getState().raw?.entityName ?? 'none'}</span>;
+    expect(renderToString(<CleaningStoreContext.Provider value={side}><Name /></CleaningStoreContext.Provider>)).toContain('Target Co');
+  });
+});

@@ -234,6 +234,35 @@ describe('GM1 is untouched by the Phase 2 settings at their neutral values', () 
   });
 });
 
+describe('review fixes', () => {
+  it('debt sized to the cap with no room for debt is zero, not a rejection', () => {
+    const a = structuredClone(GM1_ASSUMPTIONS);
+    a.target_debt = 'assume_all';
+    a.fees.advisory.value = 0;
+    a.consideration.pct_stock = 1;
+    a.funding.tranches[0].amount = null;
+    a.funding.solve = 'max_debt_at_cap';
+    const o = runMerger(GM1_FACTS, a);
+    expect(o.deal.debt_issued).toBe(0);
+    expect(o.leverage.solve!.binding).toBe(false);
+  });
+  it('growth after a part-year close compares full years', () => {
+    const part = runMerger(GM2.facts, GM2.assumptions);
+    const full = runMerger(GM2.facts, { ...GM2.assumptions, timing: { fraction_of_year_1: 1 } });
+    for (const b of ['target', 'sum', 'combined'] as const) for (const t of [1, 2]) {
+      expect(Math.abs(part.blocks[b][t].growth! - full.blocks[b][t].growth!), `${b} ${t}`).toBeLessThan(1e-12);
+    }
+    expect(part.blocks.target[1].growth!).toBeCloseTo(0.05, 12);
+  });
+  it('without a balance sheet, the acquirer cannot spend more cash than its year-0 roll leaves', () => {
+    const a = structuredClone(GM1_ASSUMPTIONS);
+    a.funding.acquirer_cash_used = 50000;
+    expect(() => runMerger(GM1_FACTS, a)).toThrow(/more cash than it has at the close/);
+    a.funding.acquirer_cash_used = 100;
+    expect(() => runMerger(GM1_FACTS, a)).not.toThrow();
+  });
+});
+
 describe('Build rejections added in Phase 2', () => {
   const rejects = (x: { facts: MergerFacts; assumptions: MergerAssumptions }, re: RegExp) => expect(() => runMerger(x.facts, x.assumptions)).toThrow(re);
   it('refuses, never defaults', () => {
@@ -244,7 +273,7 @@ describe('Build rejections added in Phase 2', () => {
     rejects(vary(GM2, (_f, a) => { a.year0_cash_carried = true; a.timing.fraction_of_year_1 = 1; }), /not carried/);
     rejects(vary(GM2, (_f, a) => { a.price = { driver: 'premium', premium: 0.3, premium_to: 'unaffected' }; a.unaffected_price = null; }), /unaffected share price/);
     rejects(vary(GM2, (f) => { f.target.shares = null; }), /needs the share count|need the basic share count/);
-    rejects(vary(GM2, (_f, a) => { a.funding.acquirer_cash_used = 5000; }), /more cash than it has/);
+    rejects(vary(GM2, (_f, a) => { a.funding.acquirer_cash_used = 5000; }), /more cash than it has at the close/);
     rejects(vary(GM2, (_f, a) => { a.synergies.cost_to_achieve = [80, 40, 10]; }), /negative amounts/);
     rejects(vary(GM2, (_f, a) => { a.funding.tranches[0].amount = null; }), /Enter every tranche amount/);
     rejects(vary(GM2, (_f, a) => { a.ppa!.debt_fair_value_adjustment = 10; }), /assumed/);

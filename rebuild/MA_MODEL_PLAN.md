@@ -5,7 +5,7 @@ Phases 3 to 6 not started. The engine lives in `lib/engine2/merger/` behind `run
 in SPEC §29 (v2.8.0; §29.10 to §29.21 are Phase 2; independent sign-off still pending for all of
 §29). GM1 matches every populated reference cell; GM2 and GM3 match an independent Python
 derivation (`scripts/goldens/merger_calc.py`) on every line; invariants 8 to 14 in
-`tests/merger-phase2.test.ts`; 27 named mutants in `scripts/adversarial/merger-phase2-mutants.json`,
+`tests/merger-phase2.test.ts`; 32 named mutants (27 + 5 from the first review) in `scripts/adversarial/merger-phase2-mutants.json`,
 all killed (`node scripts/adversarial/mutate.mjs tests/merger < that file`).
 Phase 2 departures from this plan, each written into the SPEC: one tax rate on all deal
 adjustments (no separate rate on write-ups, so the DTL unwinds exactly); costs to achieve are a

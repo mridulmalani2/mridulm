@@ -4500,9 +4500,11 @@ rejection naming the overfunding. New shares = (S + E) / issue price. Exchange r
 P / issue price. "% stock" stays the share of the equity value funded by new shares,
 (S + E) / equity value (GM1's definition). Ownership: acquirer holders, target holders (S / issue
 price) and the placing (E / issue price), each over acquirer shares + new shares; they sum to 1.
-Acquirer cash used cannot exceed the acquirer's balance sheet cash (when given).
+Acquirer cash used cannot exceed the acquirer's cash at the close: its balance sheet cash when
+given, else the end of its year-0 cash roll.
 `solve = 'max_debt_at_cap'` (§29.7) sizes the one tranche without an amount, with plug equity; its
-bracket upper end is the debt that makes E = 0.
+bracket upper end is the debt that makes E = 0. When that is 0 (the other sources already cover
+the uses) the size is 0, not a rejection.
 
 ### §29.13 Acquisition debt (`financing.ts`)
 Each tranche: amount, fixed rate, scheduled repayments per forecast year (capped at the
@@ -4582,7 +4584,8 @@ IMPACT block (synergies, dis-synergies, interest, fee and fair value amortisatio
 and their deferred tax) are × f; the target's year 2 grows from its FULL year 1 revenue. Year 1
 impact shares = f × new shares (weighted for EPS); year 2 on, all of them. Requires
 `year0_cash_carried = false`. The output also carries year 1 at a full year (the same run with
-f = 1 and the same debt), the figure analysts quote. f = 1 reproduces the start-of-year run
+f = 1 and the same debt), the figure analysts quote. In-block growth compares full years: it is
+read on that f = 1 run, so a part year is never shown as a fall in revenue. f = 1 reproduces the start-of-year run
 exactly (invariant 14).
 
 ### §29.18 Adjusted EPS and break-even synergies (`facade.ts`)
@@ -4597,7 +4600,7 @@ acquirer EPS ≤ 0; also shown as a share of the target's cost base (revenue −
 pct_stock in [0, 1]; issue price > 0; exactly one plug source (plug debt: exactly one tranche
 without an amount and no solve; plug equity: every amount entered unless solved, then exactly
 one missing); tranche rates, fees in [0, 1), fee years ≥ 1, repayments length N and ≥ 0; acquirer
-cash used ≥ 0 and within its balance sheet cash; securities with positive counts and prices and
+cash used ≥ 0 and within its cash at the close (§29.12); securities with positive counts and prices and
 target shares present; the premium driver needs its reference price; purchase accounting needs
 both balance sheets tying, fees expensed and year-0 cash not carried; lives ≥ 1; write-ups ≥ 0;
 tax goodwill life for an asset purchase; f in (0, 1] and year-0 cash not carried when f < 1;

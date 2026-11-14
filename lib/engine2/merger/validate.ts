@@ -2,6 +2,7 @@
  * lib/engine2/merger/validate.ts — Build rejections (SPEC §29.8, §29.19). Each is a RangeError whose
  * message the analyst can act on; nothing is defaulted or clamped silently.
  */
+import { standaloneRows } from './standalone';
 import type { CompanyYear0, MergerAssumptions, MergerFacts, MergerSide, StandaloneForecast } from './types';
 
 const fin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -106,9 +107,11 @@ export function validateMerger(facts: MergerFacts, a: MergerAssumptions): void {
     }
   }
   need(fin(fu.acquirer_cash_used) && fu.acquirer_cash_used >= 0, 'The acquirer cash used must be zero or more.');
-  if (facts.acquirer.balance && fin(facts.acquirer.balance.cash)) {
-    need(fu.acquirer_cash_used <= facts.acquirer.balance.cash + 1e-9, 'The acquirer cannot use more cash than it has on its balance sheet.');
-  }
+  // the cash the acquirer has at the close: its balance sheet when given, else its year-0 cash roll
+  const acqCash = facts.acquirer.balance && fin(facts.acquirer.balance.cash)
+    ? facts.acquirer.balance.cash
+    : standaloneRows(facts.acquirer, a.standalone.acquirer, n, { debtFree: false, countShares: true, fraction1: 1, year1OpenCash: null })[0].cash_end;
+  need(fu.acquirer_cash_used <= acqCash + 1e-9, `The acquirer cannot use more cash than it has at the close (${acqCash.toFixed(1)}).`);
   if (fu.leverage_cap) {
     need(fin(fu.leverage_cap.max) && fu.leverage_cap.max > 0, 'The leverage cap must be above zero.');
     need(Number.isInteger(fu.leverage_cap.test_year) && fu.leverage_cap.test_year >= 0 && fu.leverage_cap.test_year <= n,

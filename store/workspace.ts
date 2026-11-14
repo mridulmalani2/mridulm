@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 import { cleaningStore } from './cleaning';
 import { engine2Store, type FieldBasis } from './engine2Model';
-import { restoreSession, serialiseSession, type DealType } from './session';
+import { restoreSession, serialiseSession, sessionDealType, type DealType } from './session';
 import { suggestionsFor } from '../lib/engine2/suggest';
 import type { DealAssumptions } from '../lib/engine2/types';
 
@@ -129,6 +129,8 @@ export const workspaceStore = createStore<WorkspaceStore>()((set, get) => ({
   openFromLibrary: (id) => {
     const e = get().library.find((x) => x.id === id);
     if (!e) return false;
+    // a deal of another type opens in its own flow: refuse BEFORE anything on screen is touched
+    if ((e.dealType ?? 'lbo') !== 'lbo' || sessionDealType(e.session) !== 'lbo') return false;
     // the deal on screen is kept before it is replaced: opening another never loses work
     if (get().libraryId !== id) get().saveToLibrary();
     engine2Store.getState().reset();
@@ -149,9 +151,11 @@ export const workspaceStore = createStore<WorkspaceStore>()((set, get) => ({
     return JSON.stringify({ kind: 'deal-engine-deal', v: 1, dealType: 'lbo', name: dealName(), savedAt: now(), session, workspace: encode(workOf(get())) }, null, 1);
   },
   importDealFile: (text) => {
-    let file: { kind?: string; v?: number; session?: string; workspace?: string };
+    let file: { kind?: string; v?: number; dealType?: DealType; session?: string; workspace?: string };
     try { file = JSON.parse(text); } catch { return false; }
     if (file?.kind !== 'deal-engine-deal' || file.v !== 1 || typeof file.session !== 'string') return false;
+    // a deal of another type imports into its own flow: refuse BEFORE anything on screen is touched
+    if ((file.dealType ?? 'lbo') !== 'lbo' || sessionDealType(file.session) !== 'lbo') return false;
     get().saveToLibrary(); // keep the deal on screen before the file replaces it
     engine2Store.getState().reset();
     cleaningStore.getState().reset();

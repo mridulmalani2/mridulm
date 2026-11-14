@@ -1,29 +1,194 @@
 [
- ["lib/engine2/merger/standalone.ts", "if (t > 0) fullRevenue *= 1 + f.revenue_growth[t - 1];", "if (t > 0) fullRevenue = (t === 1 ? fullRevenue : prev.revenue) * (1 + f.revenue_growth[t - 1]);", "part-year: year 2 grows from the SCALED year-1 revenue"],
- ["lib/engine2/merger/consideration.ts", "d += P > 0 ? Math.max(0, s.count * (1 - s.strike / P)) : 0;", "d += P > s.strike ? s.count : 0;", "options counted gross, not by the treasury stock method"],
- ["lib/engine2/merger/consideration.ts", "else if (P > s.conversion_price) d += s.principal / s.conversion_price;", "else d += s.principal / s.conversion_price;", "convertibles always convert"],
- ["lib/engine2/merger/consideration.ts", "return { offer_per_share: P, diluted: dil, equity_value: eqv, enterprise_value: eqv + nd - conv,", "return { offer_per_share: P, diluted: dil, equity_value: eqv, enterprise_value: eqv + nd,", "converted principal stays in net debt (double count)"],
- ["lib/engine2/merger/sourcesUses.ts", "const S = a.consideration.pct_stock * eqv;", "const S = a.consideration.pct_stock * ev;", "stock consideration on EV, not equity value"],
- ["lib/engine2/merger/sourcesUses.ts", "E = (eqv + refinanced + fees + ff + other - S - D - cashUsed) / (1 - eqPct);", "E = eqv + refinanced + fees + ff + other - S - D - cashUsed;", "equity plug ignores its own issuance fee"],
- ["lib/engine2/merger/sourcesUses.ts", "const Dp = (eqv + refinanced + fees + ffOthers + other + eqPct * E - S - dOthers - E - cashUsed) / (1 - tp.fee_pct);", "const Dp = eqv + refinanced + fees + ffOthers + other + eqPct * E - S - dOthers - E - cashUsed;", "debt plug ignores its own financing fee"],
- ["lib/engine2/merger/ppa.ts", "const newDtl = stock ? rate * (W + I - V) : 0;", "const newDtl = 0;", "no deferred tax on stock-purchase step-ups"],
- ["lib/engine2/merger/ppa.ts", "const goodwill = deal.equity_value - ania;", "const goodwill = deal.enterprise_value - ania;", "goodwill on EV instead of equity value"],
- ["lib/engine2/merger/ppa.ts", "const dtlRemoved = stock ? 0 : tb.deferred_tax_liability;", "const dtlRemoved = 0;", "asset purchase keeps the target's old deferred tax"],
- ["lib/engine2/merger/ppa.ts", "deferred_tax: stock ? -rate * (dep + am - fv) : rate * taxAm,", "deferred_tax: stock ? rate * (dep + am - fv) : rate * taxAm,", "DTL unwind sign flipped"],
- ["lib/engine2/merger/ppa.ts", "const taxBase = stock ? 0 : Math.max(0, goodwill) + indefinite;", "const taxBase = 0;", "asset purchase: no tax amortisation of goodwill"],
- ["lib/engine2/merger/ppa.ts", "fixed_assets: p.fixed_assets - c.capex + c.da + sch.intangible_amortisation,", "fixed_assets: p.fixed_assets - c.capex + c.da,", "intangible amortisation taken off fixed assets too"],
- ["lib/engine2/merger/ppa.ts", "const view = t === 0;", "const view = false;", "the pro forma year counts against what remains"],
- ["lib/engine2/merger/ppa.ts", "other_net_assets: (refi ? deal.net_debt_used - facts.target.year0.debt + tb.cash : 0) + recv,", "other_net_assets: recv,", "other debt-like items in net debt not settled"],
- ["lib/engine2/merger/financing.ts", "return { begin, scheduled, sweep: 0, end: begin - scheduled, interest: t.rate * begin * s, fee_amortisation: feeAm };", "return { begin, scheduled, sweep: 0, end: begin - scheduled, interest: t.rate * (begin - scheduled) * s, fee_amortisation: feeAm };", "interest on the end balance"],
- ["lib/engine2/merger/financing.ts", "const feeAm = begin <= 1e-9 ? feeLeft : Math.min(feeLeft, (fee / t.fee_years) * s);", "const feeAm = Math.min(feeLeft, (fee / t.fee_years) * s);", "no fee write-off after full repayment"],
- ["lib/engine2/merger/financing.ts", "const take = Math.min(left, y.end);", "const take = left;", "sweep not capped at the outstanding"],
- ["lib/engine2/merger/adjustments.ts", "const amount = Math.min(a.sweep.pct * Math.max(0, X), Math.max(0, begin + X - a.sweep.min_cash));", "const amount = a.sweep.pct * Math.max(0, X);", "sweep ignores the cash floor"],
- ["lib/engine2/merger/adjustments.ts", "shares: t === 1 ? f * deal.new_shares : deal.new_shares,", "shares: deal.new_shares,", "new shares not weighted in a part-year 1"],
- ["lib/engine2/merger/adjustments.ts", "other_items: t === 1 ? recv : 0,", "other_items: 0,", "the advisory fee tax receivable is never collected"],
- ["lib/engine2/merger/adjustments.ts", "non_cash_interest: feeAm - fvAm,", "non_cash_interest: 0,", "fee amortisation treated as cash"],
- ["lib/engine2/merger/adjustments.ts", "one_offs: t >= 1 && syn.cost_to_achieve ? syn.cost_to_achieve[t - 1] : 0,", "one_offs: syn.cost_to_achieve ? syn.cost_to_achieve[Math.max(0, t - 1)] : 0,", "costs to achieve leak into the pro forma year"],
- ["lib/engine2/merger/facade.ts", "debtFree: refi, countShares: false, fraction1: a.timing.fraction_of_year_1,", "debtFree: refi, countShares: false, fraction1: 1,", "target not scaled in a part-year 1"],
- ["lib/engine2/merger/facade.ts", "year1OpenCash: ppa ? (refi ? 0 : facts.target.balance!.cash) : null,", "year1OpenCash: null,", "target year 1 opens from the year-0 roll, not the balance sheet"],
- ["lib/engine2/merger/facade.ts", "return eps(r.net_income_group + (1 - tr) * (am - r.one_offs), r.shares);", "return eps(r.net_income_group + (am - r.one_offs), r.shares);", "adjusted EPS adds back pre-tax amounts"],
- ["lib/engine2/merger/facade.ts", "return (s * r.shares - r.net_income_group) / (1 - tr);", "return s * r.shares - r.net_income_group;", "break-even synergies not grossed up for tax"]
+[
+"lib/engine2/merger/standalone.ts",
+"if (t > 0) fullRevenue *= 1 + f.revenue_growth[t - 1];",
+"if (t > 0) fullRevenue = (t === 1 ? fullRevenue : prev.revenue) * (1 + f.revenue_growth[t - 1]);",
+"part-year: year 2 grows from the SCALED year-1 revenue"
+],
+[
+"lib/engine2/merger/consideration.ts",
+"d += P > 0 ? Math.max(0, s.count * (1 - s.strike / P)) : 0;",
+"d += P > s.strike ? s.count : 0;",
+"options counted gross, not by the treasury stock method"
+],
+[
+"lib/engine2/merger/consideration.ts",
+"else if (P > s.conversion_price) d += s.principal / s.conversion_price;",
+"else d += s.principal / s.conversion_price;",
+"convertibles always convert"
+],
+[
+"lib/engine2/merger/consideration.ts",
+"return { offer_per_share: P, diluted: dil, equity_value: eqv, enterprise_value: eqv + nd - conv,",
+"return { offer_per_share: P, diluted: dil, equity_value: eqv, enterprise_value: eqv + nd,",
+"converted principal stays in net debt (double count)"
+],
+[
+"lib/engine2/merger/sourcesUses.ts",
+"const S = a.consideration.pct_stock * eqv;",
+"const S = a.consideration.pct_stock * ev;",
+"stock consideration on EV, not equity value"
+],
+[
+"lib/engine2/merger/sourcesUses.ts",
+"E = (eqv + refinanced + fees + ff + other - S - D - cashUsed) / (1 - eqPct);",
+"E = eqv + refinanced + fees + ff + other - S - D - cashUsed;",
+"equity plug ignores its own issuance fee"
+],
+[
+"lib/engine2/merger/sourcesUses.ts",
+"const Dp = (eqv + refinanced + fees + ffOthers + other + eqPct * E - S - dOthers - E - cashUsed) / (1 - tp.fee_pct);",
+"const Dp = eqv + refinanced + fees + ffOthers + other + eqPct * E - S - dOthers - E - cashUsed;",
+"debt plug ignores its own financing fee"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"const newDtl = stock ? rate * (W + I - V) : 0;",
+"const newDtl = 0;",
+"no deferred tax on stock-purchase step-ups"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"const goodwill = deal.equity_value - ania;",
+"const goodwill = deal.enterprise_value - ania;",
+"goodwill on EV instead of equity value"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"const dtlRemoved = stock ? 0 : tb.deferred_tax_liability;",
+"const dtlRemoved = 0;",
+"asset purchase keeps the target's old deferred tax"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"deferred_tax: stock ? -rate * (dep + am - fv) : rate * taxAm,",
+"deferred_tax: stock ? rate * (dep + am - fv) : rate * taxAm,",
+"DTL unwind sign flipped"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"const taxBase = stock ? 0 : Math.max(0, goodwill) + indefinite;",
+"const taxBase = 0;",
+"asset purchase: no tax amortisation of goodwill"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"fixed_assets: p.fixed_assets - c.capex + c.da + sch.intangible_amortisation,",
+"fixed_assets: p.fixed_assets - c.capex + c.da,",
+"intangible amortisation taken off fixed assets too"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"const view = t === 0;",
+"const view = false;",
+"the pro forma year counts against what remains"
+],
+[
+"lib/engine2/merger/ppa.ts",
+"other_net_assets: (refi ? deal.net_debt_used - facts.target.year0.debt + tb.cash : 0) + recv,",
+"other_net_assets: recv,",
+"other debt-like items in net debt not settled"
+],
+[
+"lib/engine2/merger/financing.ts",
+"return { begin, scheduled, sweep: 0, end: begin - scheduled, interest: t.rate * begin * s, fee_amortisation: feeAm };",
+"return { begin, scheduled, sweep: 0, end: begin - scheduled, interest: t.rate * (begin - scheduled) * s, fee_amortisation: feeAm };",
+"interest on the end balance"
+],
+[
+"lib/engine2/merger/financing.ts",
+"const feeAm = begin <= 1e-9 ? feeLeft : Math.min(feeLeft, (fee / t.fee_years) * s);",
+"const feeAm = Math.min(feeLeft, (fee / t.fee_years) * s);",
+"no fee write-off after full repayment"
+],
+[
+"lib/engine2/merger/financing.ts",
+"const take = Math.min(left, y.end);",
+"const take = left;",
+"sweep not capped at the outstanding"
+],
+[
+"lib/engine2/merger/adjustments.ts",
+"const amount = Math.min(a.sweep.pct * Math.max(0, X), Math.max(0, begin + X - a.sweep.min_cash));",
+"const amount = a.sweep.pct * Math.max(0, X);",
+"sweep ignores the cash floor"
+],
+[
+"lib/engine2/merger/adjustments.ts",
+"shares: t === 1 ? f * deal.new_shares : deal.new_shares,",
+"shares: deal.new_shares,",
+"new shares not weighted in a part-year 1"
+],
+[
+"lib/engine2/merger/adjustments.ts",
+"other_items: t === 1 ? recv : 0,",
+"other_items: 0,",
+"the advisory fee tax receivable is never collected"
+],
+[
+"lib/engine2/merger/adjustments.ts",
+"non_cash_interest: feeAm - fvAm,",
+"non_cash_interest: 0,",
+"fee amortisation treated as cash"
+],
+[
+"lib/engine2/merger/adjustments.ts",
+"one_offs: t >= 1 && syn.cost_to_achieve ? syn.cost_to_achieve[t - 1] : 0,",
+"one_offs: syn.cost_to_achieve ? syn.cost_to_achieve[Math.max(0, t - 1)] : 0,",
+"costs to achieve leak into the pro forma year"
+],
+[
+"lib/engine2/merger/facade.ts",
+"debtFree: refi, countShares: false, fraction1: a.timing.fraction_of_year_1,",
+"debtFree: refi, countShares: false, fraction1: 1,",
+"target not scaled in a part-year 1"
+],
+[
+"lib/engine2/merger/facade.ts",
+"year1OpenCash: ppa ? (refi ? 0 : facts.target.balance!.cash) : null,",
+"year1OpenCash: null,",
+"target year 1 opens from the year-0 roll, not the balance sheet"
+],
+[
+"lib/engine2/merger/facade.ts",
+"return ratio(r.net_income_group + (1 - tr) * (am - r.one_offs), r.shares);",
+"return ratio(r.net_income_group + (am - r.one_offs), r.shares);",
+"adjusted EPS adds back pre-tax amounts"
+],
+[
+"lib/engine2/merger/facade.ts",
+"return (s * r.shares - r.net_income_group) / (1 - tr);",
+"return s * r.shares - r.net_income_group;",
+"break-even synergies not grossed up for tax"
+],
+[
+"lib/engine2/merger/facade.ts",
+"if (hi0 <= 1e-9) return { debt: 0, binding: false, iterations: 0 };",
+"",
+"review: no room for debt is rejected instead of sized at zero"
+],
+[
+"lib/engine2/merger/rows.ts",
+"const g = ratio(fullYear[t].revenue, fullYear[t - 1].revenue);",
+"const g = ratio(rows[t].revenue, rows[t - 1].revenue);",
+"review: growth read on part-year amounts"
+],
+[
+"store/workspace.ts",
+"    if ((file.dealType ?? 'lbo') !== 'lbo' || sessionDealType(file.session) !== 'lbo') return false;\n",
+"",
+"review: a merger deal file resets the Buyout deal before it is refused"
+],
+[
+"store/workspace.ts",
+"    if ((e.dealType ?? 'lbo') !== 'lbo' || sessionDealType(e.session) !== 'lbo') return false;\n",
+"",
+"review: a merger library entry resets the Buyout deal before it is refused"
+],
+[
+"lib/engine2/merger/validate.ts",
+"need(fu.acquirer_cash_used <= acqCash + 1e-9,",
+"need(true || fu.acquirer_cash_used <= acqCash,",
+"review: acquirer cash used unchecked"
+]
 ]
