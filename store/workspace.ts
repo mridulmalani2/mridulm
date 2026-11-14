@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 import { cleaningStore } from './cleaning';
 import { engine2Store, type FieldBasis } from './engine2Model';
-import { restoreSession, serialiseSession } from './session';
+import { restoreSession, serialiseSession, type DealType } from './session';
 import { suggestionsFor } from '../lib/engine2/suggest';
 import type { DealAssumptions } from '../lib/engine2/types';
 
@@ -27,7 +27,8 @@ export interface InputSet {
 }
 export interface SavedCase extends InputSet { id: string; name: string; savedAt: string }
 export interface SavedVersion extends InputSet { id: string; builtAt: string }
-export interface LibraryEntry { id: string; name: string; savedAt: string; session: string; workspace: string }
+/** `dealType` absent ⇔ 'lbo' (entries saved before the merger model existed). */
+export interface LibraryEntry { id: string; name: string; savedAt: string; session: string; workspace: string; dealType?: DealType }
 
 interface DealWork { notes: Record<string, string>; cases: SavedCase[]; versions: SavedVersion[] }
 const emptyWork = (): DealWork => ({ notes: {}, cases: [], versions: [] });
@@ -121,7 +122,7 @@ export const workspaceStore = createStore<WorkspaceStore>()((set, get) => ({
     const session = serialiseSession();
     if (session === null) return;
     const id = get().libraryId ?? uid();
-    const entry: LibraryEntry = { id, name: (name ?? '').trim() || dealName(), savedAt: now(), session, workspace: encode(workOf(get())) };
+    const entry: LibraryEntry = { id, name: (name ?? '').trim() || dealName(), savedAt: now(), session, workspace: encode(workOf(get())), dealType: 'lbo' };
     const rest = get().library.filter((e) => e.id !== id);
     set({ library: [entry, ...rest], libraryId: id });
   },
@@ -145,7 +146,7 @@ export const workspaceStore = createStore<WorkspaceStore>()((set, get) => ({
   exportDealFile: () => {
     const session = serialiseSession();
     if (session === null) return null;
-    return JSON.stringify({ kind: 'deal-engine-deal', v: 1, name: dealName(), savedAt: now(), session, workspace: encode(workOf(get())) }, null, 1);
+    return JSON.stringify({ kind: 'deal-engine-deal', v: 1, dealType: 'lbo', name: dealName(), savedAt: now(), session, workspace: encode(workOf(get())) }, null, 1);
   },
   importDealFile: (text) => {
     let file: { kind?: string; v?: number; session?: string; workspace?: string };

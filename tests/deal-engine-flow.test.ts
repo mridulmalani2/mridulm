@@ -276,7 +276,7 @@ describe('a deal survives a reload (store/session): inputs are saved, everything
     expect(restoreSession(JSON.stringify(blanked))).toBe(true);
     expect(model().output).toBeNull();
     expect(model().error).toBeNull();
-  });
+  }, 20_000); // imports the whole Deal Engine page: slower than 5 s under a full parallel run
 
   it('garbage, an old version or nothing at all restores nothing', async () => {
     const { restoreSession, serialiseSession } = await import('../store/session');

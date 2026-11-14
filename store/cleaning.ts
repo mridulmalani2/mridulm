@@ -8,7 +8,7 @@
  *
  * Nothing leaves the browser.
  */
-import { useSyncExternalStore } from 'react';
+import { createContext, useContext, useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 import type { RawHistoricals } from '../lib/edgar/types';
 import { computeTradingAnchor, type TradingAnchor } from '../lib/edgar/quote';
@@ -54,7 +54,23 @@ function anchorOn(market: TradingAnchor | null, netDebt: number | null | undefin
   return computeTradingAnchor(market.price, market.shares_millions * 1e6, netDebt, ebitda, market.multi_class)?.ev_ebitda ?? null;
 }
 
-export const cleaningStore = createStore<CleaningStore>()((set, get) => {
+/**
+ * Where the cleaned figures go. The Buyout flow sends them to the one engine2 model store; the
+ * merger flow keeps one cleaning store per company and sends each to its side of the merger.
+ */
+export interface CleanedSink {
+  /** A new import: the sourced figures, before any cleaning. */
+  imported: (raw: RawHistoricals) => void;
+  /** The figures after the ledger is applied (on every edit). */
+  cleaned: (raw: RawHistoricals, opts: { normalisation: NormalisationFacts | null; trading_anchor?: number | null }) => void;
+}
+
+const engine2Sink: CleanedSink = {
+  imported: (raw) => engine2Store.getState().importFromRaw(raw),
+  cleaned: (raw, opts) => engine2Store.getState().applyCleaned(raw, opts),
+};
+
+export const createCleaningStore = (sink: CleanedSink) => createStore<CleaningStore>()((set, get) => {
   /** Recompute from (raw, pack, ledger) and push the cleaned facts to the model store. */
   const sync = (ledger: CleaningLedger, extra: Partial<CleaningStore> = {}) => {
     const { raw, pack, market } = { ...get(), ...extra };
@@ -71,7 +87,7 @@ export const cleaningStore = createStore<CleaningStore>()((set, get) => {
       shares_millions: market?.shares_millions ?? null,
     };
     const untouched = ledger.as_reported || ledgerIsEmpty(ledger);
-    engine2Store.getState().applyCleaned(cleaned.raw, {
+    sink.cleaned(cleaned.raw, {
       normalisation,
       // the anchor is restated on the adjusted basis (plan §11); without a quote it can only be
       // kept while the figures are the sourced ones
@@ -84,7 +100,7 @@ export const cleaningStore = createStore<CleaningStore>()((set, get) => {
     raw: null, pack: null, ledger: emptyLedger(), cleaned: null, flags: [], market: null, done: false, dismissed: [],
 
     load: (raw, pack) => {
-      engine2Store.getState().importFromRaw(raw);
+      sink.imported(raw);
       set({ raw, pack, market: null, done: false, dismissed: [] });
       sync(emptyLedger());
     },
@@ -116,7 +132,7 @@ export const cleaningStore = createStore<CleaningStore>()((set, get) => {
 
     hydrate: (snap) => {
       if (!snap.raw || !snap.pack) return;
-      engine2Store.getState().importFromRaw(snap.raw);
+      sink.imported(snap.raw);
       set({ raw: snap.raw, pack: snap.pack, market: snap.market, dismissed: snap.dismissed, done: false });
       sync(snap.ledger);
       set({ done: snap.done && blockers(get().flags).length === 0 });
@@ -126,11 +142,20 @@ export const cleaningStore = createStore<CleaningStore>()((set, get) => {
   };
 });
 
+/** The Buyout flow's cleaning store (feeds the engine2 model store). */
+export const cleaningStore = createCleaningStore(engine2Sink);
+export type CleaningStoreApi = typeof cleaningStore;
+
+/** Which cleaning store the Clean screen reads. Default: the Buyout store, so nothing outside a
+ *  provider changes. The merger flow wraps the screen in a provider per company. */
+export const CleaningStoreContext = createContext<CleaningStoreApi>(cleaningStore);
+
 export function useCleaning<T>(selector: (s: CleaningStore) => T): T {
+  const store = useContext(CleaningStoreContext);
   return useSyncExternalStore(
-    cleaningStore.subscribe,
-    () => selector(cleaningStore.getState()),
-    () => selector(cleaningStore.getState()),
+    store.subscribe,
+    () => selector(store.getState()),
+    () => selector(store.getState()),
   );
 }
 useCleaning.getState = cleaningStore.getState;

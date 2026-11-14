@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v2.6.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v2.7.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -4345,10 +4345,126 @@ both flow-to-equity recursions, NPV, required return; identity of everything bef
 with and without the statement; the WARN; the gates), the parity cases above, and
 `tests/deal-engine-flow.test.ts` (open choice → blank inputs → Build gate).
 
+## §29 The merger model: two public companies, five blocks [v2.7.0 — implemented 2026-11-14 on the owner's instruction (Phase 1 of `rebuild/MA_MODEL_PLAN.md`); **NOT yet through an independent sign-off round**; Tier A, NEW engine arithmetic in `lib/engine2/merger/` only — no LBO module touched, every LBO golden byte-identical]
+
+**Why.** A second deal type: a public acquirer buys a public target, and the analyst needs the
+pro forma combined company (EPS accretion or dilution, pro forma leverage, the funding mix).
+Phase 1 is the course reference model (Prof. Petra's M&A workbook, golden GM1) expressed in a
+GENERAL schema: every reference convention is an assumption setting, none is a code path. The
+full-feature scope (diluted shares at the offer, purchase accounting, phased costs to achieve,
+multi-tranche debt, partial-year close) lands in later phases as amendments to this section.
+
+**Entry point.** `runMerger(facts, assumptions)` in `lib/engine2/merger/facade.ts`. It is a
+sibling of `runModel`, not a branch inside it: none of the sponsor-return machinery applies.
+
+### §29.1 Layout and sign convention
+Five blocks, each a column of years t = 0..N: ACQUIRER (standalone), TARGET (as acquired), SUM,
+IMPACT (the transaction adjustments), COMBINED. Year 0 is the last actual year shown as if the
+deal had closed at its start ("pro forma"); 1..N are forecasts. Every merger amount is SIGNED as
+it appears in a statement (income and cash in positive; costs and cash out negative) — the
+opposite choice to the LBO side's positive magnitudes, made because it turns the five-block law
+(§29.6) into a plain element-wise sum for every line. The display adapter, not the engine, is
+where any sign flip for presentation would live.
+
+### §29.2 The row (identical in every block — `rows.ts buildRow`)
+EBIT = EBITDA + D&A; PBT = EBIT + net interest; tax = − PBT × rate; NI = PBT + tax;
+NI group = NI + minority interest. Net cash before WC = EBITDA + net interest + other cash items
++ tax; FCF before financing = that + ΔNWC + acquisition + capex. Cash change = FCF + other items
++ dividends + minority dividends + debt raised/(repaid) + equity issued; cash end = begin +
+change. Total debt = acquisition debt + bank debt; net debt = total debt − cash counted in net debt.
+
+### §29.3 Standalone blocks (`standalone.ts`)
+Year 0 from the cleaned actuals (`MergerSide.year0`). Forecast t ≥ 1: revenue = previous × (1 +
+growth); EBITDA = revenue × margin; capex = − pct × revenue; dividends = − payout × NI group;
+minority dividends = minority payout × minority interest; debt flow = balance(t) − balance(t−1),
+and 0 in year 0 (its opening balance is not in the model); D&A, net interest, minority interest,
+other cash items, ΔNWC, other items are given per year. One tax rate per company, all years.
+TARGET with `target_debt = 'refinance_all'` is presented DEBT FREE AND CASH FREE: net interest 0,
+bank debt 0, opening cash 0, in every year (its net debt is a use of funds instead, §29.4).
+With `'assume_all'` its own debt, interest and cash stay. The target's shares are cancelled in the
+combination: the TARGET block carries 0 shares (EPS is shown for ACQUIRER and COMBINED only).
+
+### §29.4 Price, sources and uses (`sourcesUses.ts`)
+Driver EV: equity value = EV − target net debt; driver equity value: EV = equity value + net
+debt. Advisory fees = pct × equity value | pct × EV | an amount; treatment `'not_recognised'`
+(a use of funds only, as in the reference; expensing arrives with purchase accounting).
+Uses = equity value + refinanced net debt (all of it under refinance_all, else 0) + fees.
+Sources = acquisition debt D + new equity E, with E = uses − D (the plug). E < 0 is a Build
+rejection naming the overfunding. New shares = E / issue price. "% stock" = E / equity value
+(the reference's definition: fees are funded first), "% cash" = 1 − % stock; dilution = new
+shares / acquirer shares.
+
+### §29.5 The IMPACT block (`adjustments.ts`)
+Revenue 0; EBITDA = run-rate synergies × phasing(t) (phasing has N + 1 entries, year 0 first);
+D&A 0. Net interest = − rate × D (beginning balance, SPEC §4; D is not amortised in Phase 1, so
+the beginning balance is D every year) + `interest_on_impact_cash` × the block's beginning cash
+(null ≡ none, as in the reference). Tax at `adjustments_tax_rate`. Minority interest 0.
+Shares = new shares, every year. Cash flow: acquisition = − total uses in year 0; debt raised D
+and equity E in year 0. Dividends: 0 in year 0; for t ≥ 1,
+`− ratio(t) × (TARGET NI group(t) + IMPACT NI group(t)) − TARGET dividends(t)` — the combined
+company pays the acquirer's ratio on the group income the deal adds, and the target's own
+dividend is replaced rather than added (reference S70). The block's payout RATIO is reported as
+null (dividends / impact income is not a payout ratio; the policy ratio is the input).
+Cash: begins at 0 in year 0; year 1 begins at 0 when `year0_cash_carried = false` (the reference:
+year 0 is a pro forma income view, its cash is not carried), else at year 0's end; thereafter the
+previous end. A year-0 balance that is not carried is not counted in net debt either (reference
+R95 = 0).
+
+### §29.6 SUM, COMBINED and ratios (`rows.ts`, `facade.ts`)
+SUM = ACQUIRER + TARGET and COMBINED = SUM + IMPACT, element-wise over every additive line
+(`ADDITIVE_LINES`), every year — never recomputed bottom-up. Ratios (growth, margin, effective
+tax rate = − tax / PBT, capex %, payout, minority payout, net debt / EBITDA, EPS, DPS) are
+recomputed inside each block from its own amounts, null where the denominator is 0. Accretion(t)
+= COMBINED EPS / ACQUIRER EPS − 1, null when acquirer EPS ≤ 0 (flag `acquirer_eps_not_positive`).
+DPS uplift = COMBINED DPS − ACQUIRER DPS (the reference's impact-column DPS).
+
+### §29.7 Sizing the debt to a leverage cap (`facade.ts sizeDebtToCap`)
+`funding.solve = 'max_debt_at_cap'`: find D with COMBINED net debt / EBITDA in `test_year` equal
+to `max`. g(D) = metric(D) − max is continuous and increasing in D. Deterministic bisection on
+[0, total uses] around the pure single pass, OUTSIDE the evaluation order (SPEC §5 holds: the
+model itself never iterates), to an interval of 1e-10 × uses, at most 200 steps. Edges, never
+clamped silently: g(0) > 0 ⇒ D = 0 and `leverage_cap_breached`; g(uses) ≤ 0 ⇒ D = uses (no new
+shares) and `leverage_cap_not_binding`; g(uses) ≤ g(0) ⇒ Build rejection. The workbook's Goal
+Seek is the same root rounded.
+
+### §29.8 Build rejections (`validate.ts`)
+Each a RangeError in plain language: horizon 1..10; every year-0 fact finite; acquirer shares > 0;
+target net debt present; every forecast array of length N with no blanks; tax rates in [0, 1);
+price, fee, rate, issue price (> 0) present; plug = equity; a cap whenever the debt is solved, and
+a debt amount whenever it is not; test year in 0..N; phasing of length N + 1; payout ratio of
+length N. Combined PBT < 0 in any year is not a rejection: tax is credited at the flat rate and
+`combined_loss_flat_tax` says so (no loss pool in Phase 1).
+
+### §29.9 Invariants and goldens
+1. Sources = uses (0.005). 2. SUM = ACQUIRER + TARGET and COMBINED = SUM + IMPACT for every
+additive line and year (1e-9). 3. Cash rolls in every block; the COMBINED block rolled line by
+line equals the blocks to its left (reference row 85). 4. COMBINED shares = acquirer + new; the
+target's are 0. 5. Neutrality: a target of zero bought for nothing with nothing leaves COMBINED =
+ACQUIRER and accretion 0. 6. All stock at the acquirer's own P/E, no synergies, fees or debt:
+year-0 accretion 0. 7. The solved metric equals the cap (1e-9) when binding.
+Tests: `tests/merger-invariants.test.ts`.
+**Golden GM1** (`tests/goldens/GM1/expected.json`, extracted by `scripts/goldens/extract_gm1.py`
+from the reference workbook's own cached cells; the workbook is course material and NOT
+committed): inputs in `tests/fixtures/merger-gm1.ts`. With D fixed at the workbook's 7,759,
+every populated cell of the P&L, cash flow and debt sections in all five blocks, plus sources and
+uses, mix and dilution, matches to 1e-6 relative (`tests/merger-gm1.test.ts`). Solved, D =
+7,759.0648 and leverage 3.0 to 1e-9; leverage is exactly linear in D for GM1, and the bisection
+root equals the closed form.
+
+### §29.10 Deliberately not in Phase 1 (each a later amendment to this section)
+Offer price per share, diluted shares by the treasury stock method and the exchange ratio;
+purchase accounting (goodwill, write-ups, new intangibles and their amortisation, deferred tax,
+the opening balance sheet) and fee expensing; revenue synergies, costs to achieve,
+dis-synergies; amortising and multi-tranche acquisition debt with fees and a sweep; mid-year
+close; a tax loss pool for the combined company; buybacks; valuation of synergies against the
+premium; sensitivities; the formula workbook. Until then the UI must say what is not modelled.
+
+
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v2.7.0 | 2026-11-14 | **THE MERGER MODEL, PHASE 1 (§29).** A second deal type in its own module, `lib/engine2/merger/`, behind its own entry point `runMerger`: acquirer, target, sum, transaction impact and combined blocks; sources and uses with an equity plug; synergies with phasing; acquisition debt at a fixed rate, optionally sized to a combined leverage cap by an outer bisection; accretion/dilution and DPS uplift. SIGNED amounts on the merger side (§29.1). Golden GM1 (the course reference workbook) matches every populated cell; seven invariants. No LBO module touched; every LBO golden byte-identical. | Owner direction 2026-11-13; `rebuild/MA_MODEL_PLAN.md`. Independent sign-off pending. |
 | v2.5.0 | 2026-11-10 | **NORMALISED FIGURES AND THE TWO EBITDA BASES (§27).** Deals now reach the engine through the Clean step (`lib/cleaning/`, a pure layer in front of `factsAdapter`; no engine arithmetic changed, every golden byte-identical). `fy_ebitda` is adjusted EBITDA (price and leverage basis); `fy_ebitda_margin` is formed on adjusted EBITDA LESS the add-backs the analyst marks `continues`, so a cost that keeps being paid never becomes forecast cash flow. Required per-row choice, no default. `DealFacts.normalisation` added (display only — the workbook's Normalisation sheet and the results screen; a boundary test forbids engine reads). Data-layer rules tightened: the effective tax rate is the true ratio or null (no clamp, no statutory stand-in); net debt needs both legs; alias chains resolve per period; the US size band and financing conventions are proposed for USD deals only. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-10; `rebuild/CLEANING_AND_SUITE_PLAN.md` §4.4 |
 | v2.6.0 | 2026-11-11 | **THE TERMINAL YEAR STATED IN STEADY STATE (§28).** `valuation.terminal` (optional; null ≡ v2.0.0, every golden numerically identical) lets the analyst state terminal capex as a multiple of D&A and a terminal increase in NWC; the §25.2 year N+1 cash flow reads them in place of year N's own. Only the fundamentals exit (case b) and its break-evens move. New WARN `terminal_not_steady_state` — prescribed by §24.5 since v2.0.0 but never emitted until now. Workbook formulas mirror it (parity cases EA_OOS, G2_VAL_TERMINAL). Found by an OUT-OF-SAMPLE workbook the engine was never built against, which also now stands as a golden. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-11; `tests/goldens-ea-oos.test.ts` |
 | v2.4.0 | 2026-11-10 | **TAX CHARACTER AND TIMING OF DEBT RETIRED OR REFINANCED (§7.1).** Researched against the standard and applied as a rule, not a setting (owner direction 2026-11-10: "nothing should be hardcoded — if there's a standard, use that, else make it a setting"). Unamortized OID and any call premium are repurchase premium (Treas. Reg. §1.163-7(c)) — §163(j) INTEREST, the capped pool; unamortized debt-issuance costs are not interest under the final §163(j) regulations — uncapped. The exit and a scheduled refinancing deduct in their own year (§18.5 no longer defers to R+1); a sweep-driven early retirement keeps the one-year lag, now split by character, because a same-year deduction would make its year circular (§5). Replaces the v1.0.3/v1.3.0 treatment (everything uncapped, refinancing deferred), which over-deducted where §163(j) binds. Goldens re-derived by `spec_calc.py` first: G3, G3-DIST, G4, G6-REFI, G8-PIKT, G9-SWEET, G10-RATCHET move (sponsor IRR within ±0.74bp), every other golden byte-identical — measured leaf-by-leaf in DERIVATION.md. Workbook: the write-off rows split by character; parity extended to a refi-with-OID under a binding cap and an OID-bearing sweep retirement. | owner direction 2026-11-10; Treas. Reg. §1.163-7(c), §1.163(j)-1(b)(22), §1.446-5, §1.1001-3 |

@@ -1,6 +1,13 @@
 # M&A (merger) model: build plan
 
-Status: PLAN ONLY, written 2026-11-14 against main @ 60b7280 (after PR #129). Nothing is built.
+Status (2026-11-14): Phase 0 and Phase 1 BUILT on branch claude/ma-model-planning-e78905; Phases 2 to 6 not
+started. Phase 1 lives in `lib/engine2/merger/` behind `runMerger`, specified in SPEC §29 (v2.7.0,
+independent sign-off pending); GM1 matches every populated reference cell. Phase 0 shipped as:
+`createCleaningStore(sink)` + `CleaningStoreContext` (the Clean screen reads whichever store its
+provider names; the Buyout flow is the default and is unchanged) and `dealType` on sessions,
+library entries and deal files. The "shared store helpers" item moves to Phase 4, where the merger
+store becomes their second user (extracting them with one user would be guesswork).
+Plan written 2026-11-14 against main @ 60b7280 (after PR #129).
 Verification pass done the same day: the GM1 solve was recomputed independently, every reuse
 claim in §3.2 and §3.3 was checked against the code (three corrections, marked VERIFIED), and
 the §4 tag chains were checked against six live filers.
@@ -155,10 +162,10 @@ merger flow holds TWO. Do not duplicate the stores and do not make the existing 
   suggest -> badged edits -> ATOMIC build), not the code: extract the shared pieces
   (basis bookkeeping, undo stack, suggestion accept/dismiss) into a small helper module used by
   both stores, behind tests, in its own preparatory commit that leaves LBO tests green.
-- `CleanScreen` (513 lines) VERIFIED to read `useCleaning` directly (18 call sites) and
-  `useDealUi`. Refactor it to take
-  `{ raw, pack, ledger, onLedger }` as props with a thin LBO wrapper that binds the existing
-  store. The merger Clean screen renders it twice behind an Acquirer | Target switch.
+- `CleanScreen` (513 lines) reads `useCleaning` directly (18 call sites). DONE (Phase 0) without
+  touching it: `useCleaning` reads the store named by `CleaningStoreContext` (default: the Buyout
+  store), and `createCleaningStore(sink)` makes one store per company. The merger Clean screen
+  renders it twice, each inside a provider, behind an Acquirer | Target switch.
 - `store/session.ts` and `store/workspace.ts` gain a `dealType: 'lbo' | 'merger'` discriminator.
   Old saves have no field and mean 'lbo'. Add a round-trip test for both.
 - Entry: `SourceScreen` gets a deal-type choice first (Buyout | Merger). `DealShell` steps stay
@@ -540,10 +547,10 @@ must turn at least one test red.
   the sheet (write `scripts/goldens/extract_gm1.py` in the style of `extract_g12prof.py`; the
   cached values in the xlsx are the expected numbers). Solve check (VERIFIED 2026-11-14 by independent
   recomputation): with every other GM1 input fixed, combined 2025E ND/EBITDA is exactly linear in
-  the debt raised D, and the exact root at 3.0x is D* = 7759.0647 (equity issued 554.9353). The
+  the debt raised D, and the exact root at 3.0x is D* = 7759.0648 (equity issued 554.9352). The
   sheet's 7759 is that root rounded to a whole number, giving 2.99998 (shown as 3.0). So pin two
   runs: (a) debt FIXED at 7759 reproduces every cached cell of the sheet to 1e-4; (b) the solve
-  run returns D* = 7759.0647 to 1e-4 and leverage 3.0 to 1e-9.
+  run returns D* = 7759.0648 to 1e-4 and leverage 3.0 to 1e-9.
 - GM2 (full-feature, hand-derived in `scripts/goldens/spec_calc.py` style, independent Python):
   60% stock, premium driver, option table, two tranches (amortising term loan plus bond with
   fees), PPA with write-up and two intangibles, phased synergies with cost to achieve, mid-year
@@ -639,8 +646,9 @@ law and the solve before any complexity is added, and gives something demonstrab
 ## 15. Owner decisions needed (recommended default in brackets; none blocks Phase 0 or 1)
 
 1. Name on the UI: "Merger" or "M&A" [Merger model].
-2. Engine sign convention for merger typed fields [positive magnitudes like the LBO engine;
-   reference signs only in the five-block view and workbook].
+2. Engine sign convention for merger typed fields. DECIDED IN PHASE 1 (SPEC §29.1), against the
+   earlier recommendation: merger amounts are SIGNED as in a statement, because that makes the
+   five-block law a plain element-wise sum for every line. The owner can still overrule.
 3. Forecast source: analyst inputs with history-based suggestions only [yes; no consensus feed].
 4. Partial vs full goodwill when the target has minorities [partial, NCI at book].
 5. Combined-company tax losses in v1 [flat rate with a flag; tax-state machine later].
