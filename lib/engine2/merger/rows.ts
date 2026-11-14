@@ -14,18 +14,23 @@ export interface RowInputs {
   cash_begin: number; acquisition_debt: number; bank_debt: number;
   /** Dividends depend on this year's income, so they are a function of the computed row. */
   dividends: (netIncomeGroup: number) => number;
+  /** §29.10: zero in the standalone blocks. */
+  one_offs?: number; non_cash_interest?: number; deferred_tax?: number;
   /** Cash counted in net debt, given the year-end cash. Default: all of it. */
   cashInNetDebt?: (cashEnd: number) => number;
 }
 
-/** §29.2: EBIT = EBITDA + D&A; PBT = EBIT + net interest; tax = − PBT × rate; and so on down. */
+/** §29.2 (§29.10): EBIT = EBITDA + one-offs + D&A; PBT = EBIT + net interest; tax = − PBT × rate; and so on down. */
 export function buildRow(x: RowInputs): Amounts {
-  const ebit = x.ebitda + x.da;
+  const one_offs = x.one_offs ?? 0;
+  const non_cash_interest = x.non_cash_interest ?? 0;
+  const deferred_tax = x.deferred_tax ?? 0;
+  const ebit = x.ebitda + one_offs + x.da;
   const pbt = ebit + x.net_interest;
   const tax = -pbt * x.tax_rate;
   const net_income = pbt + tax;
   const net_income_group = net_income + x.nci;
-  const net_cash_before_wc = x.ebitda + x.net_interest + x.other_cash_items + tax;
+  const net_cash_before_wc = x.ebitda + one_offs + x.net_interest + non_cash_interest + x.other_cash_items + tax + deferred_tax;
   const fcf = net_cash_before_wc + x.delta_nwc + x.acquisition + x.capex;
   const dividends = x.dividends(net_income_group);
   const cash_change = fcf + x.other_items + dividends + x.nci_dividends + x.debt_flow + x.equity_issuance;
@@ -33,8 +38,8 @@ export function buildRow(x: RowInputs): Amounts {
   const cash_in_net_debt = x.cashInNetDebt ? x.cashInNetDebt(cash_end) : cash_end;
   const total_debt = x.acquisition_debt + x.bank_debt;
   return {
-    revenue: x.revenue, ebitda: x.ebitda, da: x.da, ebit, net_interest: x.net_interest, pbt, tax, net_income,
-    nci: x.nci, net_income_group, shares: x.shares, other_cash_items: x.other_cash_items, net_cash_before_wc,
+    revenue: x.revenue, ebitda: x.ebitda, one_offs, da: x.da, ebit, net_interest: x.net_interest, non_cash_interest, pbt, tax,
+    net_income, nci: x.nci, net_income_group, shares: x.shares, other_cash_items: x.other_cash_items, deferred_tax, net_cash_before_wc,
     delta_nwc: x.delta_nwc, acquisition: x.acquisition, capex: x.capex, fcf, other_items: x.other_items,
     dividends, nci_dividends: x.nci_dividends, debt_flow: x.debt_flow, equity_issuance: x.equity_issuance,
     cash_begin: x.cash_begin, cash_change, cash_end, acquisition_debt: x.acquisition_debt, bank_debt: x.bank_debt,

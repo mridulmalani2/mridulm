@@ -1,0 +1,344 @@
+{
+ "facts": {
+  "acquirer": {
+   "entity_name": "Acquirer Co",
+   "currency": "USD",
+   "fiscal_year": 2025,
+   "year0": {
+    "revenue": 20000,
+    "ebitda": 3600,
+    "da": -800,
+    "net_interest": -200,
+    "nci": -50,
+    "other_cash_items": -100,
+    "delta_nwc": -60,
+    "capex": -900,
+    "other_items": -50,
+    "dividends": -700,
+    "nci_dividends": -20,
+    "debt": 5000,
+    "opening_cash": 1500
+   },
+   "shares": 1000,
+   "share_price": 40,
+   "net_debt": null,
+   "securities": [],
+   "reported_dilutive_increment": null,
+   "balance": {
+    "cash": 1600,
+    "nwc": 1200,
+    "fixed_assets": 9000,
+    "goodwill": 4000,
+    "other_net_assets": 500,
+    "deferred_tax_liability": 600,
+    "equity_parent": 10400,
+    "nci_equity": 300
+   }
+  },
+  "target": {
+   "entity_name": "Target Two",
+   "currency": "USD",
+   "fiscal_year": 2025,
+   "year0": {
+    "revenue": 6000,
+    "ebitda": 900,
+    "da": -250,
+    "net_interest": -60,
+    "nci": 0,
+    "other_cash_items": -30,
+    "delta_nwc": -20,
+    "capex": -280,
+    "other_items": -10,
+    "dividends": -150,
+    "nci_dividends": 0,
+    "debt": 1500,
+    "opening_cash": 300
+   },
+   "shares": 200,
+   "share_price": 18,
+   "net_debt": 1200,
+   "securities": [
+    {
+     "kind": "option",
+     "count": 10,
+     "strike": 12
+    },
+    {
+     "kind": "option",
+     "count": 6,
+     "strike": 25
+    },
+    {
+     "kind": "rsu",
+     "count": 2
+    }
+   ],
+   "reported_dilutive_increment": 5,
+   "balance": {
+    "cash": 300,
+    "nwc": 500,
+    "fixed_assets": 2600,
+    "goodwill": 400,
+    "other_net_assets": -100,
+    "deferred_tax_liability": 150,
+    "equity_parent": 2050,
+    "nci_equity": 0
+   }
+  }
+ },
+ "assumptions": {
+  "deal_name": "GM2 full feature",
+  "horizon_years": 3,
+  "standalone": {
+   "acquirer": {
+    "revenue_growth": [
+     0.04,
+     0.04,
+     0.035
+    ],
+    "ebitda_margin": [
+     0.18,
+     0.185,
+     0.19
+    ],
+    "da": [
+     -830,
+     -860,
+     -890
+    ],
+    "net_interest": [
+     -190,
+     -180,
+     -170
+    ],
+    "tax_rate": 0.25,
+    "nci": [
+     -55,
+     -60,
+     -65
+    ],
+    "nci_payout": [
+     0.4,
+     0.4,
+     0.4
+    ],
+    "other_cash_items": [
+     -100,
+     -100,
+     -100
+    ],
+    "delta_nwc": [
+     -60,
+     -62,
+     -64
+    ],
+    "capex_pct_revenue": [
+     0.045,
+     0.045,
+     0.045
+    ],
+    "other_items": [
+     -50,
+     -50,
+     -50
+    ],
+    "payout": [
+     0.35,
+     0.35,
+     0.35
+    ],
+    "debt": [
+     4800,
+     4600,
+     4400
+    ]
+   },
+   "target": {
+    "revenue_growth": [
+     0.05,
+     0.05,
+     0.045
+    ],
+    "ebitda_margin": [
+     0.155,
+     0.16,
+     0.165
+    ],
+    "da": [
+     -260,
+     -270,
+     -280
+    ],
+    "net_interest": [
+     -60,
+     -55,
+     -50
+    ],
+    "tax_rate": 0.27,
+    "nci": [
+     0,
+     0,
+     0
+    ],
+    "nci_payout": [
+     0,
+     0,
+     0
+    ],
+    "other_cash_items": [
+     -30,
+     -30,
+     -30
+    ],
+    "delta_nwc": [
+     -22,
+     -24,
+     -25
+    ],
+    "capex_pct_revenue": [
+     0.047,
+     0.047,
+     0.047
+    ],
+    "other_items": [
+     -10,
+     -10,
+     -10
+    ],
+    "payout": [
+     0.4,
+     0.4,
+     0.4
+    ],
+    "debt": [
+     1400,
+     1300,
+     1200
+    ]
+   }
+  },
+  "price": {
+   "driver": "premium",
+   "premium": 0.35,
+   "premium_to": "current"
+  },
+  "unaffected_price": 17,
+  "timing": {
+   "fraction_of_year_1": 0.75
+  },
+  "consideration": {
+   "pct_stock": 0.6
+  },
+  "target_debt": "refinance_all",
+  "fees": {
+   "advisory": {
+    "basis": "pct_enterprise_value",
+    "value": 0.015,
+    "treatment": "expensed",
+    "tax_deductible": true
+   },
+   "equity_issuance_pct": 0.03,
+   "other_one_off": 10
+  },
+  "funding": {
+   "tranches": [
+    {
+     "name": "Term loan",
+     "amount": 1200,
+     "rate": 0.06,
+     "repayment": [
+      100,
+      150,
+      150
+     ],
+     "fee_pct": 0.02,
+     "fee_years": 5,
+     "sweep": false
+    },
+    {
+     "name": "Notes",
+     "amount": 800,
+     "rate": 0.07,
+     "repayment": [
+      0,
+      0,
+      0
+     ],
+     "fee_pct": 0.015,
+     "fee_years": 7,
+     "sweep": true
+    }
+   ],
+   "issue_price": 40,
+   "plug": "equity",
+   "acquirer_cash_used": 400,
+   "equity_raise": 0,
+   "leverage_cap": {
+    "max": 3.5,
+    "test_year": 2
+   },
+   "solve": "none"
+  },
+  "synergies": {
+   "run_rate": 120,
+   "phasing": [
+    1,
+    0.4,
+    0.8,
+    1
+   ],
+   "revenue": {
+    "run_rate": 200,
+    "phasing": [
+     0,
+     0.3,
+     0.7,
+     1
+    ],
+    "flow_through_margin": 0.3
+   },
+   "cost_to_achieve": [
+    -80,
+    -40,
+    -10
+   ],
+   "dis_synergies": null
+  },
+  "ppa": {
+   "structure": "stock_purchase",
+   "ppe_writeup": 300,
+   "ppe_life_years": 10,
+   "intangibles": [
+    {
+     "name": "Customer relationships",
+     "amount": 600,
+     "life_years": 8
+    },
+    {
+     "name": "Brand",
+     "amount": 250,
+     "life_years": null
+    }
+   ],
+   "writeoff_existing_goodwill": true,
+   "debt_fair_value_adjustment": 0,
+   "debt_fv_years": 1,
+   "tax_goodwill_life_years": null
+  },
+  "adjustments_tax_rate": 0.26,
+  "interest_on_impact_cash": 0.03,
+  "combined_dividends": {
+   "mode": "acquirer_payout_on_group_income",
+   "ratio": [
+    0.35,
+    0.35,
+    0.35
+   ]
+  },
+  "sweep": {
+   "pct": 0.5,
+   "min_cash": 1000
+  },
+  "year0_cash_carried": false
+ }
+}

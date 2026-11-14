@@ -1,8 +1,20 @@
 # M&A (merger) model: build plan
 
-Status (2026-11-14): Phase 0 and Phase 1 BUILT on branch claude/ma-model-planning-e78905; Phases 2 to 6 not
-started. Phase 1 lives in `lib/engine2/merger/` behind `runMerger`, specified in SPEC §29 (v2.7.0,
-independent sign-off pending); GM1 matches every populated reference cell. Phase 0 shipped as:
+Status (2026-11-14): Phases 0, 1 and 2 BUILT on branch claude/ma-model-planning-e78905 (PR #130);
+Phases 3 to 6 not started. The engine lives in `lib/engine2/merger/` behind `runMerger`, specified
+in SPEC §29 (v2.8.0; §29.10 to §29.21 are Phase 2; independent sign-off still pending for all of
+§29). GM1 matches every populated reference cell; GM2 and GM3 match an independent Python
+derivation (`scripts/goldens/merger_calc.py`) on every line; invariants 8 to 14 in
+`tests/merger-phase2.test.ts`; 27 named mutants in `scripts/adversarial/merger-phase2-mutants.json`,
+all killed (`node scripts/adversarial/mutate.mjs tests/merger < that file`).
+Phase 2 departures from this plan, each written into the SPEC: one tax rate on all deal
+adjustments (no separate rate on write-ups, so the DTL unwinds exactly); costs to achieve are a
+`one_offs` line below EBITDA (leverage stays on recurring EBITDA); purchase accounting closes the
+deal at the end of year 0 and every block's year 1 then opens from the closing balance sheet;
+the unamortised financing fee is written off the year AFTER full repayment (keeps the sweep free
+of circularity); break-even offer price and maximum premium moved to Phase 5 with the
+sensitivities; GM2 has no valuation block (Phase 5).
+Phase 0 shipped as:
 `createCleaningStore(sink)` + `CleaningStoreContext` (the Clean screen reads whichever store its
 provider names; the Buyout flow is the default and is unchanged) and `dealType` on sessions,
 library entries and deal files. The "shared store helpers" item moves to Phase 4, where the merger

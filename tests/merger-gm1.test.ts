@@ -59,7 +59,7 @@ describe('GM1: the reference workbook, with the debt fixed at its 7,759', () => 
 });
 
 describe('GM1: the leverage cap sizes the debt', () => {
-  const solved = runMerger(GM1_FACTS, { ...GM1_ASSUMPTIONS, funding: { ...GM1_ASSUMPTIONS.funding, acquisition_debt: { amount: null, rate: 0.04 }, solve: 'max_debt_at_cap' } });
+  const solved = runMerger(GM1_FACTS, { ...GM1_ASSUMPTIONS, funding: { ...GM1_ASSUMPTIONS.funding, tranches: [{ ...GM1_ASSUMPTIONS.funding.tranches[0], amount: null }], solve: 'max_debt_at_cap' } });
 
   it('lands exactly on 3.0x in 2025E; the workbook\'s 7,759 is this root rounded', () => {
     expect(solved.leverage.solve!.binding).toBe(true);
@@ -69,7 +69,7 @@ describe('GM1: the leverage cap sizes the debt', () => {
   });
 
   it('leverage is linear in the debt for GM1, so the bisection root equals the closed form', () => {
-    const lev = (d: number) => runMerger(GM1_FACTS, { ...GM1_ASSUMPTIONS, funding: { ...GM1_ASSUMPTIONS.funding, acquisition_debt: { amount: d, rate: 0.04 } } }).leverage.cap!.actual!;
+    const lev = (d: number) => runMerger(GM1_FACTS, { ...GM1_ASSUMPTIONS, funding: { ...GM1_ASSUMPTIONS.funding, tranches: [{ ...GM1_ASSUMPTIONS.funding.tranches[0], amount: d }] } }).leverage.cap!.actual!;
     const l0 = lev(0);
     const l1 = lev(8000);
     const closedForm = (3 - l0) / ((l1 - l0) / 8000);

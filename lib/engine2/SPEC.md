@@ -1,4 +1,4 @@
-# engine2 Financial Specification — v2.7.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
+# engine2 Financial Specification — v2.8.0 (SIGNED lineage; Phase A gate passed 2026-07-05)
 
 **This is the governing document for every calculation in `lib/engine2/`.** Code may never
 deviate from the current spec version; disputes are adjudicated by this document plus the
@@ -4451,19 +4451,192 @@ uses, mix and dilution, matches to 1e-6 relative (`tests/merger-gm1.test.ts`). S
 7,759.0648 and leverage 3.0 to 1e-9; leverage is exactly linear in D for GM1, and the bisection
 root equals the closed form.
 
-### §29.10 Deliberately not in Phase 1 (each a later amendment to this section)
-Offer price per share, diluted shares by the treasury stock method and the exchange ratio;
-purchase accounting (goodwill, write-ups, new intangibles and their amortisation, deferred tax,
-the opening balance sheet) and fee expensing; revenue synergies, costs to achieve,
-dis-synergies; amortising and multi-tranche acquisition debt with fees and a sweep; mid-year
-close; a tax loss pool for the combined company; buybacks; valuation of synergies against the
-premium; sensitivities; the formula workbook. Until then the UI must say what is not modelled.
+### §29.10 Phase 2: the real model [v2.8.0 — implemented 2026-11-14 on the owner's instruction (Phase 2 of `rebuild/MA_MODEL_PLAN.md`); **NOT yet through an independent sign-off round**]
+Phase 2 amends §29.3 to §29.9 by ADDING settings; with every new setting at its neutral value
+(no securities, one bullet tranche with no fee, no purchase accounting, cost synergies only, a
+start-of-year close) the model is the Phase 1 model and GM1 stays green cell for cell. Inputs
+that are statement lines stay SIGNED (§29.1: costs to achieve and dis-synergies are negative);
+inputs that are sizes or parameters (tranche amounts, scheduled repayments, write-ups, fees,
+lives) are positive magnitudes.
+
+New additive lines in the row (§29.2), zero in both standalone blocks: `one_offs` (costs to
+achieve; below EBITDA, so EBIT = EBITDA + one-offs + D&A, and leverage is on recurring EBITDA);
+`non_cash_interest` (the add-back of the non-cash part of net interest: financing fee
+amortisation positive, debt fair value amortisation negative); `deferred_tax` (book tax less cash
+tax: positive when less tax is paid than booked). Net cash before WC = EBITDA + one-offs + net
+interest + non-cash interest + other cash items + tax + deferred tax.
+
+### §29.11 Price and diluted shares (`consideration.ts`)
+Target securities (`MergerSide.securities`): options (count n, strike K), RSUs (count), convertibles
+(principal B, conversion price C; n_c = B / C shares). At an offer price P per share:
+diluted(P) = basic + Σ options max(0, n × (1 − K / P)) + Σ RSUs + Σ convertibles with P > C of n_c
+(the treasury stock method at the OFFER price, never the market price). With no securities
+entered and a reported dilutive increment present, diluted = basic + that increment at every P,
+and the note `dilution_from_reported_increment` says it was measured at the average market price.
+A convertible that converts leaves net debt: net debt used = target net debt − Σ B of the
+converted (note `convertible_converts`).
+Drivers: `offer_per_share` gives P; `premium` gives P = reference × (1 + premium), the reference
+being the target's current price or the analyst's unaffected price; `equity_value` solves
+P × diluted(P) = V; `enterprise_value` solves P × diluted(P) − Σ converted B = EV − net debt (the
+left side is continuous: a conversion at P = C adds n_c × C = B on both terms). Each is solved
+segment by segment between the sorted strikes and conversion prices, where it is affine, and the
+root is verified to 1e-9; no root (an equity value that falls in a conversion jump) is a Build
+rejection. Without target basic shares the EV and equity-value drivers work as in Phase 1 and P,
+diluted shares, the exchange ratio and premiums are null; securities then need shares.
+Equity value = P × diluted(P); EV = equity value + net debt used. Implied multiples: EV over
+target EBITDA in year 0 and in year 1 at a full year, each with and without run-rate synergies
+(cost run-rate + revenue run-rate × flow-through). Premiums to the current and the unaffected
+price when each is known.
+
+### §29.12 Consideration, sources and uses (`sourcesUses.ts`)
+Stock to target holders S = pct_stock × equity value (pct_stock in [0, 1]; GM1: 0).
+Uses = equity value + refinanced net debt (§29.4) + advisory fee + Σ tranche financing fees
+(fee_pct × amount) + equity issuance fee (pct × new equity raised for cash) + other one-off
+costs. Sources = S + Σ tranche amounts + new equity raised for cash E + acquirer cash used.
+Exactly one source balances the table (`plug`): `'equity'`: E = (uses excluding the issuance fee
+− other sources) / (1 − issuance pct); `'debt'`: the one tranche entered without an amount,
+D = (uses excluding its own fee − other sources) / (1 − its fee pct). A negative plug is a Build
+rejection naming the overfunding. New shares = (S + E) / issue price. Exchange ratio = pct_stock ×
+P / issue price. "% stock" stays the share of the equity value funded by new shares,
+(S + E) / equity value (GM1's definition). Ownership: acquirer holders, target holders (S / issue
+price) and the placing (E / issue price), each over acquirer shares + new shares; they sum to 1.
+Acquirer cash used cannot exceed the acquirer's balance sheet cash (when given).
+`solve = 'max_debt_at_cap'` (§29.7) sizes the one tranche without an amount, with plug equity; its
+bracket upper end is the debt that makes E = 0.
+
+### §29.13 Acquisition debt (`financing.ts`)
+Each tranche: amount, fixed rate, scheduled repayments per forecast year (capped at the
+outstanding), a financing fee (fee_pct × amount, a use of funds, capitalised and amortised
+straight line over `fee_years`, the unamortised rest written off in the first year that
+begins with the tranche fully repaid, which keeps the sweep free of circularity), and whether it takes part in the sweep. Year 0 (the pro forma view): every tranche
+outstanding at its amount, a full year of interest and of fee amortisation. Year t ≥ 1: begin =
+previous end (year 1: the amount); interest = rate × begin × s(t), with s(1) = the owned fraction
+f (§29.17) and 1 after; fee amortisation = fee / fee_years × s(t), capped at the unamortised
+balance; end = begin − scheduled − sweep. Impact net interest = − Σ interest − Σ fee amortisation
++ debt fair value amortisation (§29.14) + `interest_on_impact_cash` × the block's beginning cash
+(the forgone yield on acquirer cash used shows here: that cash leaves the block's balance).
+Non-cash interest = fee amortisation − fair value amortisation. Sweep (`combined_policy.sweep`,
+optional): after scheduled repayments, the pre-sweep COMBINED cash change X (everything but the
+sweep) gives sweep = min(pct × max(0, X), max(0, combined cash begin + X − min cash)),
+applied to sweeping tranches in their listed order, each capped at its outstanding. No
+circularity: interest is on beginning balances and dividends do not depend on the sweep.
+
+### §29.14 Purchase accounting and the opening balance sheet (`ppa.ts`), only when `ppa` is set
+Requires both sides' balance sheets at the end of year 0 (`MergerSide.balance`: cash, NWC, fixed
+assets incl. book intangibles, goodwill, other net assets, net deferred tax liability, equity
+attributable to the parent, minority equity; debt is `year0.debt`), each tying to 0.01; advisory
+fees `'expensed'`; `year0_cash_carried = false`. The deal closes at the end of year 0.
+Adjusted net identifiable assets (ANIA) = target equity − its goodwill (when written off) + PP&E
+write-up W + Σ new intangibles I − debt fair value uplift V − new DTL, plus, in an ASSET purchase,
+the target's existing net DTL (the tax basis is stepped up, so it goes). New DTL = adjustments
+tax rate × (W + Σ I − V) for a STOCK purchase, 0 for an asset purchase. Goodwill = equity value −
+ANIA (partial goodwill: minorities stay at book). Negative goodwill is not clamped: flag
+`bargain_purchase`.
+Opening combined balance sheet = acquirer + target + adjustments, where the adjustments are:
+cash − acquirer cash used, and under refinance_all − target cash; fixed assets + W; acquired
+intangibles + Σ I; goodwill + new goodwill − target goodwill written off; deferred financing fees +
+Σ fees; other net assets + (net debt used − target debt + target cash) under refinance_all (other
+debt-like items in net debt are settled) + advisory fee × tax rate when the fee is tax deductible
+(a receivable recovered in year 1 through impact other items); debt + Σ tranches, and − target
+debt under refinance_all; debt fair value + V; DTL + new DTL (asset purchase: − the target's);
+parent equity − target equity + S + E − issuance fee − advisory fee − other one-off costs (+ the
+receivable when deductible); minorities unchanged. It balances to 0.005 (invariant 8).
+Annual amounts, each × s(t) and capped at what remains: depreciation of W over its life;
+amortisation of each finite intangible over its life (indefinite: none); amortisation of V over
+`debt_fv_years` (reduces interest). Impact D&A = −(depreciation + amortisation). Deferred tax:
+STOCK purchase, book amortisation and depreciation of the step-ups is not deductible, so
+deferred tax = − rate × (depreciation + amortisation − V amortisation), which unwinds the DTL; ASSET
+purchase, step-ups are deductible as booked and goodwill plus indefinite intangibles (floored at 0)
+are amortised for tax over `tax_goodwill_life_years`, so deferred tax = + rate × that amount, which
+builds the DTL. The pro forma year 0 shows a full year of each and is not counted against what
+remains.
+Forecast combined balance sheet, t = 1..N, rolled from the opening one with COMBINED flows: cash
++= cash change; NWC −= ΔNWC; fixed assets += − capex + D&A − (−amortisation of acquired
+intangibles); acquired intangibles −= their amortisation; deferred financing fees −= fee
+amortisation; other net assets −= other cash items + other items; debt += debt flow; debt fair
+value −= its amortisation; DTL += deferred tax; parent equity += NI group + dividends + equity
+issued; minorities += − minority interest + minority dividends. Assets − liabilities − equity = 0
+(0.005) every year, and balance sheet cash and debt equal the COMBINED block's (invariant 8).
+In this mode every block's year 1 OPENS FROM THE CLOSING BALANCE SHEET: the acquirer at its
+reported cash, the target at its reported cash (0 under refinance_all), the impact block at −
+acquirer cash used. Without purchase accounting year 1 opens as in §29.5 (the Phase 1 roll), the
+impact block at − acquirer cash used (0 in GM1).
+
+### §29.15 Synergies, costs to achieve, dis-synergies (`adjustments.ts`)
+Impact revenue = revenue run-rate × revenue phasing(t) × s(t). Impact EBITDA = cost run-rate ×
+cost phasing(t) × s(t) + revenue synergies × flow-through margin + dis-synergies(t) × s(t)
+(signed, N + 1 values, year 0 first, like the phasings). Costs to achieve (signed, N values) are
+`one_offs` in years 1..N, not scaled (entered as the year's amount), never in the pro forma year.
+
+### §29.16 Fees by treatment
+`'not_recognised'`: a use of funds only (GM1); only allowed without purchase accounting.
+`'expensed'`: charged to parent equity at the close (after tax when deductible, the tax as a
+receivable recovered in year 1), never in a forecast year's P&L. Financing fees: capitalised
+(§29.13). Equity issuance fees: against the equity raised. Other one-off costs at close: charged
+to equity, not deductible.
+
+### §29.17 Partial-year close
+`timing.fraction_of_year_1 = f` in (0, 1] (1 = start of year 1, GM1). Year 1 flows of the TARGET
+block (every P&L and cash line except debt flows, which follow the balance schedule) and of the
+IMPACT block (synergies, dis-synergies, interest, fee and fair value amortisation, step-up D&A
+and their deferred tax) are × f; the target's year 2 grows from its FULL year 1 revenue. Year 1
+impact shares = f × new shares (weighted for EPS); year 2 on, all of them. Requires
+`year0_cash_carried = false`. The output also carries year 1 at a full year (the same run with
+f = 1 and the same debt), the figure analysts quote. f = 1 reproduces the start-of-year run
+exactly (invariant 14).
+
+### §29.18 Adjusted EPS and break-even synergies (`facade.ts`)
+Adjusted combined NI = NI group − (1 − adjustments tax rate) × (amortisation of acquired
+intangibles + one-offs), both signed, so they are added back. Adjusted accretion uses the same
+acquirer standalone EPS, null when it is ≤ 0. Break-even synergies in year t (pre-tax, booked in
+that year) = cost synergy EBITDA(t) + (acquirer EPS(t) × COMBINED shares(t) − COMBINED NI
+group(t)) / (1 − adjustments tax rate); extra needed = max(0, the second term); both null when
+acquirer EPS ≤ 0; also shown as a share of the target's cost base (revenue − EBITDA) that year.
+
+### §29.19 Build rejections added
+pct_stock in [0, 1]; issue price > 0; exactly one plug source (plug debt: exactly one tranche
+without an amount and no solve; plug equity: every amount entered unless solved, then exactly
+one missing); tranche rates, fees in [0, 1), fee years ≥ 1, repayments length N and ≥ 0; acquirer
+cash used ≥ 0 and within its balance sheet cash; securities with positive counts and prices and
+target shares present; the premium driver needs its reference price; purchase accounting needs
+both balance sheets tying, fees expensed and year-0 cash not carried; lives ≥ 1; write-ups ≥ 0;
+tax goodwill life for an asset purchase; f in (0, 1] and year-0 cash not carried when f < 1;
+phasings and dis-synergies of length N + 1, costs to achieve of length N, signed ≤ 0; flow-through
+in [0, 1]; sweep pct in [0, 1].
+
+### §29.20 Invariants added and goldens GM2, GM3
+(Numbered after §29.9's seven.) 8. The opening balance sheet balances; the forecast balance sheet
+balances every year; its cash and debt equal the COMBINED block's. 9. Goodwill = equity value −
+ANIA, recomputed independently. 10. Amortisation over a life inside the horizon totals the
+amount, and the stock-purchase DTL on finite items unwinds to zero. 11. Debt roll per tranche:
+end = begin − scheduled − sweep, never negative. 12. Ownership sums to 1; COMBINED shares =
+acquirer + new (weighted in a partial year 1). 13. 100% cash, no placing: no new shares.
+14. f = 1 equals the start-of-year run.
+**GM2** (full feature, stock purchase, premium driver, 60% stock, option table, two tranches, a
+term loan amortising with fees and a sweeping bond-like tranche, PPA with a write-up and two
+intangibles, phased cost and revenue synergies, costs to achieve, a 0.75 close fraction) and
+**GM3** (asset purchase, all cash funded by debt plug and acquirer cash, target debt assumed with
+a fair value uplift, a loss-making target, dis-synergies) are derived by
+`scripts/goldens/merger_calc.py`, a SPEC-literal Python implementation that imports nothing from
+the repo, into `tests/goldens/GM2|GM3/expected.json`; `tests/merger-gm2-gm3.test.ts` compares every
+line of every block, the price, sources and uses, PPA, the balance sheet and EPS to 1e-6
+relative.
+
+### §29.21 Deliberately not in Phase 2 (each a later amendment)
+Break-even offer price and maximum premium (Phase 5, with sensitivities); valuation of synergies
+against the premium and contribution analysis; buybacks; a tax loss pool for the combined
+company; fixed-ratio versus fixed-value behaviour (only differs when the acquirer price is
+flexed, Phase 5); OID; deferred revenue haircuts (not modelled: current standards carry acquired
+contract liabilities at book); full goodwill; target year ends and currencies different from the
+acquirer's (Phase 3 aligns the data before it reaches the engine). Until then the UI must say what
+is not modelled.
 
 
 ## Changelog
 
 | Ver | Date | Change | Basis |
 |---|---|---|---|
+| v2.8.0 | 2026-11-14 | **THE MERGER MODEL, PHASE 2 (§29.10 to §29.21).** The real model as settings on top of Phase 1: the offer price per share and diluted target shares by the treasury stock method at the offer (options, RSUs, convertibles that leave net debt when they convert), premium and per-share drivers solved segment by segment; stock consideration, an equity or debt plug, acquirer cash used, equity issuance and other one-off fees; multi-tranche acquisition debt with scheduled repayments, capitalised financing fees and a cash sweep; purchase accounting (write-ups, intangibles, deferred tax for stock and asset purchases, goodwill, bargain-purchase flag), the opening and forecast combined balance sheet; revenue synergies, dis-synergies and costs to achieve; a partial-year close with a full-year view; adjusted EPS and break-even synergies. Three new additive lines (one-offs, non-cash interest, deferred tax). Goldens GM2 and GM3 from an independent Python derivation; GM1 unchanged cell for cell. No LBO module touched. | owner direction 2026-11-14 (Phase 2 of the M&A plan) |
 | v2.7.0 | 2026-11-14 | **THE MERGER MODEL, PHASE 1 (§29).** A second deal type in its own module, `lib/engine2/merger/`, behind its own entry point `runMerger`: acquirer, target, sum, transaction impact and combined blocks; sources and uses with an equity plug; synergies with phasing; acquisition debt at a fixed rate, optionally sized to a combined leverage cap by an outer bisection; accretion/dilution and DPS uplift. SIGNED amounts on the merger side (§29.1). Golden GM1 (the course reference workbook) matches every populated cell; seven invariants. No LBO module touched; every LBO golden byte-identical. | Owner direction 2026-11-13; `rebuild/MA_MODEL_PLAN.md`. Independent sign-off pending. |
 | v2.5.0 | 2026-11-10 | **NORMALISED FIGURES AND THE TWO EBITDA BASES (§27).** Deals now reach the engine through the Clean step (`lib/cleaning/`, a pure layer in front of `factsAdapter`; no engine arithmetic changed, every golden byte-identical). `fy_ebitda` is adjusted EBITDA (price and leverage basis); `fy_ebitda_margin` is formed on adjusted EBITDA LESS the add-backs the analyst marks `continues`, so a cost that keeps being paid never becomes forecast cash flow. Required per-row choice, no default. `DealFacts.normalisation` added (display only — the workbook's Normalisation sheet and the results screen; a boundary test forbids engine reads). Data-layer rules tightened: the effective tax rate is the true ratio or null (no clamp, no statutory stand-in); net debt needs both legs; alias chains resolve per period; the US size band and financing conventions are proposed for USD deals only. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-10; `rebuild/CLEANING_AND_SUITE_PLAN.md` §4.4 |
 | v2.6.0 | 2026-11-11 | **THE TERMINAL YEAR STATED IN STEADY STATE (§28).** `valuation.terminal` (optional; null ≡ v2.0.0, every golden numerically identical) lets the analyst state terminal capex as a multiple of D&A and a terminal increase in NWC; the §25.2 year N+1 cash flow reads them in place of year N's own. Only the fundamentals exit (case b) and its break-evens move. New WARN `terminal_not_steady_state` — prescribed by §24.5 since v2.0.0 but never emitted until now. Workbook formulas mirror it (parity cases EA_OOS, G2_VAL_TERMINAL). Found by an OUT-OF-SAMPLE workbook the engine was never built against, which also now stands as a golden. **Not yet through an independent sign-off round.** | Owner instruction 2026-11-11; `tests/goldens-ea-oos.test.ts` |

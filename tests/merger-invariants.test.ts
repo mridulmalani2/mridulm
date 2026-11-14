@@ -11,10 +11,10 @@ const F = (patch: (f: MergerFacts) => void): MergerFacts => { const f = structur
 
 const variants: [string, MergerFacts, MergerAssumptions][] = [
   ['GM1', GM1_FACTS, GM1_ASSUMPTIONS],
-  ['debt assumed', GM1_FACTS, A((a) => { a.target_debt = 'assume_all'; a.funding.acquisition_debt.amount = 3000; })],
+  ['debt assumed', GM1_FACTS, A((a) => { a.target_debt = 'assume_all'; a.funding.tranches[0].amount = 3000; })],
   ['year-0 cash carried, interest on deal cash', GM1_FACTS, A((a) => { a.year0_cash_carried = true; a.interest_on_impact_cash = 0.03; })],
   ['phased synergies, priced on equity value', GM1_FACTS, A((a) => { a.synergies.phasing = [0, 0.5, 0.9, 1]; a.price = { driver: 'equity_value', equity_value: 5700 }; })],
-  ['solved debt', GM1_FACTS, A((a) => { a.funding.acquisition_debt.amount = null; a.funding.solve = 'max_debt_at_cap'; })],
+  ['solved debt', GM1_FACTS, A((a) => { a.funding.tranches[0].amount = null; a.funding.solve = 'max_debt_at_cap'; })],
 ];
 
 describe.each(variants)('%s', (_name, facts, a) => {
@@ -51,7 +51,7 @@ describe('neutrality and break-even identities', () => {
       const z = [0, 0, 0];
       a.standalone.target = { ...a.standalone.target, revenue_growth: z, ebitda_margin: z, da: z, other_cash_items: z, delta_nwc: z, capex_pct_revenue: z, other_items: z };
       a.price = { driver: 'enterprise_value', enterprise_value: 0 };
-      a.funding.acquisition_debt.amount = 0;
+      a.funding.tranches[0].amount = 0;
       a.synergies.run_rate = 0;
     });
     const o = runMerger(facts, a);
@@ -68,7 +68,7 @@ describe('neutrality and break-even identities', () => {
       a.price = { driver: 'equity_value', equity_value: (tgtNi0 / acqEps0) * price };
       a.target_debt = 'assume_all';
       a.fees.advisory.value = 0;
-      a.funding.acquisition_debt.amount = 0;
+      a.funding.tranches[0].amount = 0;
       a.synergies.run_rate = 0;
     });
     const o = runMerger(GM1_FACTS, a);
@@ -94,7 +94,7 @@ describe('neutrality and break-even identities', () => {
 
   it('assumed debt: nothing refinanced, and the target keeps its own interest', () => {
     const facts = F((f) => { f.target.year0.net_interest = -60; f.target.year0.debt = 2500; });
-    const o = runMerger(facts, A((a) => { a.target_debt = 'assume_all'; a.funding.acquisition_debt.amount = 3000; a.standalone.target.net_interest = [-60, -60, -60]; a.standalone.target.debt = [2500, 2500, 2500]; }));
+    const o = runMerger(facts, A((a) => { a.target_debt = 'assume_all'; a.funding.tranches[0].amount = 3000; a.standalone.target.net_interest = [-60, -60, -60]; a.standalone.target.debt = [2500, 2500, 2500]; }));
     expect(o.deal.refinanced_net_debt).toBe(0);
     expect(o.deal.total_uses).toBeCloseTo(5700 + 114, 9);
     expect(o.blocks.target[1].net_interest).toBe(-60);
@@ -103,7 +103,7 @@ describe('neutrality and break-even identities', () => {
 });
 
 describe('the leverage sizing at its edges', () => {
-  const solve = (max: number) => runMerger(GM1_FACTS, A((a) => { a.funding.acquisition_debt.amount = null; a.funding.solve = 'max_debt_at_cap'; a.funding.leverage_cap = { max, test_year: 2 }; }));
+  const solve = (max: number) => runMerger(GM1_FACTS, A((a) => { a.funding.tranches[0].amount = null; a.funding.solve = 'max_debt_at_cap'; a.funding.leverage_cap = { max, test_year: 2 }; }));
   it('a cap that never binds: all debt, no new shares, and it says so', () => {
     const o = solve(50);
     expect(o.deal.equity_issued).toBeCloseTo(0, 9);
@@ -126,8 +126,8 @@ describe('Build rejections name what is missing', () => {
     rejects(F((f) => { f.acquirer.year0.capex = Number.NaN; }), GM1_ASSUMPTIONS, /missing capex/);
     rejects(GM1_FACTS, A((a) => { a.standalone.target.da = [1, 2]; }), /da needs one value/);
     rejects(GM1_FACTS, A((a) => { a.synergies.phasing = [1, 1, 1]; }), /phasing/);
-    rejects(GM1_FACTS, A((a) => { a.funding.acquisition_debt.amount = null; }), /acquisition debt/);
+    rejects(GM1_FACTS, A((a) => { a.funding.tranches[0].amount = null; }), /Enter every tranche amount/);
     rejects(GM1_FACTS, A((a) => { a.funding.solve = 'max_debt_at_cap'; a.funding.leverage_cap = null; }), /needs a leverage cap/);
-    rejects(GM1_FACTS, A((a) => { a.funding.acquisition_debt.amount = 9000; }), /more than the total uses/);
+    rejects(GM1_FACTS, A((a) => { a.funding.tranches[0].amount = 9000; }), /more than the deal needs/);
   });
 });
